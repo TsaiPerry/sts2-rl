@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\beating_remnant.py",
-    "sha256": "33dd62d3739e30b693cf92848eb2ce814dfe4310324074884ec277bc8f76c8f8"
+    "sha256": "a7982272530c5a5968b2050d42bab8fa92c32a6c1012fa61ee485c610219fa53"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     }
   ],

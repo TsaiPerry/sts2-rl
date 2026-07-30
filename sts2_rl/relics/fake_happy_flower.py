@@ -24,7 +24,7 @@ class FakeHappyFlower(Relic):
         super().__init__()
         self.turns_seen = 0
 
-    def on_player_turn_started(self, player: PlayerCombatState) -> None:
+    def after_side_turn_start(self, player: PlayerCombatState) -> None:
         self.turns_seen = (self.turns_seen + 1) % self.TURNS
         if self.turns_seen == 0:
             from ..cmds import EnergyCmd

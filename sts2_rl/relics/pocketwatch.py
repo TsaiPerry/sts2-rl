@@ -30,7 +30,7 @@ class Pocketwatch(Relic):
                        is_auto_play: bool = False) -> None:
         self._played_this_turn += 1
 
-    def on_player_turn_start(self, player: PlayerCombatState) -> None:
+    def before_side_turn_start(self, player: PlayerCombatState) -> None:
         # Pre-draw: snapshot last turn's count so modify_hand_draw can read it.
         self._played_last_turn = self._played_this_turn
         self._played_this_turn = 0

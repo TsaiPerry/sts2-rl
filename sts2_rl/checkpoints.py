@@ -105,6 +105,13 @@ def check_checkpoint(ckpt: dict, spec: ModelSpec,
         if (ckpt.get("obs_schema") == 3 and spec.env_kind in RUN_SCALE_ENVS):
             hint = (" v3 → v4 only added features, so a lossless migration "
                     "exists: py migrate_ckpt.py <this checkpoint> <new path>.")
+        # v6 left the observation alone and appended the out-of-combat potion
+        # block to the END of the action layout, so the policy head is the only
+        # thing that grows — the same one-hop migration tool.
+        elif (ckpt.get("obs_schema") == 5 and spec.env_kind in RUN_SCALE_ENVS):
+            hint = (" v5 → v6 changed only the action layout (a new potion "
+                    "block, appended last), so a migration exists: "
+                    "py migrate_ckpt.py <this checkpoint> <new path>.")
         raise SystemExit(
             f"checkpoint obs schema {ckpt.get('obs_schema')} != current "
             f"{obs_schema_version(spec)};" + hint)
@@ -217,8 +224,9 @@ def migrate_checkpoint(ckpt: dict, card_obs: str = "hybrid") -> dict:
             f"{ckpt.get('obs_schema')}.")
     # This migration targets the v3 -> v4 feature-only bump. v5 widened the
     # leading phase segment (a new DecisionKind), which shifts every later
-    # index and so needs its own migration rather than a column splice.
-    assert RUN_OBS_SCHEMA_VERSION == 5, "migration written against the v4 layout"
+    # index and so needs its own migration rather than a column splice; v6
+    # changed the ACTION layout only (migrate_checkpoint_actions).
+    assert RUN_OBS_SCHEMA_VERSION == 6, "migration written against the v4 layout"
 
     segments = run_obs_segments(card_obs)
     added = sum(w for n, w in segments if n in _V4_NEW_SEGMENTS)
@@ -275,6 +283,93 @@ def migrate_checkpoint(ckpt: dict, card_obs: str = "hybrid") -> dict:
     model.load_state_dict(state)   # sanity: exact fit, no missing/extra keys
     new_ckpt["obs_dim"] = new_obs_dim
     new_ckpt["obs_schema"] = 4
+    return new_ckpt
+
+
+# ── v5 → v6 migration (the out-of-combat potion action block) ────────────
+
+def _actor_head_key(state: dict) -> str:
+    """The policy head's weight key — ``actor.<last>.weight``, whose ROWS are
+    the actions. Both architectures build the head with ``models._mlp``, so it
+    is the highest-numbered ``actor.N.weight``; the entity arch's encoder
+    parameters are ``actor_encoder.*`` and do not match the prefix."""
+    keys = [k for k in state
+            if k.startswith("actor.") and k.endswith(".weight")]
+    if not keys:
+        raise SystemExit("checkpoint has no actor head to grow")
+    return max(keys, key=lambda k: int(k.split(".")[1]))
+
+
+def _append_zero_rows(mat, rows: int):
+    """Append `rows` zero rows to a 1-D or 2-D tensor."""
+    import torch
+
+    pad = mat.new_zeros((rows,) + tuple(mat.shape[1:]))
+    return torch.cat([mat, pad], dim=0)
+
+
+def migrate_checkpoint_actions(ckpt: dict, card_obs: str = "hybrid") -> dict:
+    """Migrate a v5 run-scale checkpoint to the v6 ACTION layout (either arch).
+
+    v6 changes no observation at all — it appends a MAX_POTION_SLOTS-wide
+    out-of-combat potion block at the END of the action layout
+    (``run_env.POTION_BASE``), so every pre-existing action keeps its index.
+    Migration therefore appends zero rows to the policy head and its Adam
+    moments and touches nothing else: the whole critic, both trunks and (for
+    the entity arch) every embedding table are carried over bit-for-bit.
+
+    Function-preserving where it can be. The value function is exactly
+    preserved, and so are the policy's logits over the old actions — so in
+    every state the old policy could reach while holding no AnyTime potion (the
+    new block masked off) the migrated model is bit-identical. Where a belt
+    potion *is* drinkable the new action enters at logit 0, which is the
+    neutral prior for an option the old policy never had; no weight could
+    encode a preference it was never able to express.
+
+    Returns a new checkpoint dict (the input is not mutated) with updated
+    ``n_actions``/``obs_schema`` stamps.
+    """
+    import copy
+
+    from .run_env import MAX_POTION_SLOTS, N_ACTIONS, RUN_OBS_SCHEMA_VERSION
+
+    env_kind = ckpt.get("env_kind", "combat")
+    if env_kind not in RUN_SCALE_ENVS:
+        raise SystemExit(
+            f"the v5 -> v6 migration covers run-scale checkpoints only; this "
+            f"one was trained on the {env_kind!r} env.")
+    if ckpt.get("obs_schema") != 5:
+        raise SystemExit(
+            f"can only migrate obs schema 5 -> 6; checkpoint has schema "
+            f"{ckpt.get('obs_schema')}.")
+    assert RUN_OBS_SCHEMA_VERSION == 6, (
+        "migration written against the v6 action layout")
+    old_n = N_ACTIONS - MAX_POTION_SLOTS
+    if ckpt.get("n_actions") != old_n:
+        raise SystemExit(
+            f"checkpoint has {ckpt.get('n_actions')} actions, expected the v5 "
+            f"width {old_n}; it doesn't match the layout this migration grows.")
+
+    spec = spec_from_checkpoint(ckpt, env_kind, card_obs)
+    model = make_model(spec, ckpt["obs_dim"], N_ACTIONS)
+    param_names = [n for n, _ in model.named_parameters()]
+
+    new_ckpt = copy.deepcopy(ckpt)
+    state = new_ckpt["model"]
+    head_w = _actor_head_key(state)
+    head_b = head_w[:-len("weight")] + "bias"
+    for key in (head_w, head_b):
+        state[key] = _append_zero_rows(state[key], MAX_POTION_SLOTS)
+        pstate = new_ckpt.get("optim", {}).get("state", {}).get(
+            param_names.index(key))
+        if pstate is not None:
+            for moment in ("exp_avg", "exp_avg_sq"):
+                if moment in pstate:
+                    pstate[moment] = _append_zero_rows(
+                        pstate[moment], MAX_POTION_SLOTS)
+    model.load_state_dict(state)   # sanity: exact fit, no missing/extra keys
+    new_ckpt["n_actions"] = N_ACTIONS
+    new_ckpt["obs_schema"] = 6
     return new_ckpt
 
 

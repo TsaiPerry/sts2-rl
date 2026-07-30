@@ -16,7 +16,7 @@ class RedMask(Relic):
     name = "Red Mask"
     rarity = RelicRarity.COMMON
 
-    def on_player_turn_started(self, player: PlayerCombatState) -> None:
+    def before_side_turn_start(self, player: PlayerCombatState) -> None:
         if self.turn <= 1:
             from ..cmds import PowerCmd
             from ..powers import WeakPower

@@ -464,19 +464,32 @@ class TestRitual:
         cs.end_turn()
         assert cs.player.strength == 6
 
-    def test_skips_first_trigger_when_applied_by_enemy(self):
+    def test_skips_the_first_trigger_on_an_ENEMY_owner(self):
+        # MOVED 2026-07-29 (round 7, power/ritual/AfterApplied). It used to be
+        # `test_skips_first_trigger_when_applied_by_enemy` and pass
+        # `applier=cs.enemy` onto the PLAYER, encoding an applier-side test.
+        # RitualPower.cs:36-43 consults `base.Owner.IsEnemy` and never looks at
+        # the applier -- and every ported Ritual source is a monster buffing
+        # itself, which is exactly the case the old test could not express.
+        from sts2_rl.monsters import Encounter
+        from sts2_rl.monsters.overgrowth.slimes import LeafSlimeS
+        cs = CombatState(rng=random.Random(0),
+                         encounter=Encounter("test", [LeafSlimeS]))
+        enemy = cs.enemy
+        PowerCmd.apply(cs.hooks, enemy, RitualPower, 2, applier=enemy)
+        cs.end_turn()
+        assert enemy.strength == 0    # first trigger skipped
+        cs.end_turn()
+        assert enemy.strength == 2    # second trigger fires
+
+    def test_does_not_skip_on_a_PLAYER_owner(self):
+        # MOVED with the test above: the player-side direction is unchanged,
+        # because C#'s Owner.IsEnemy is false there and so was the old
+        # applier-side test -- including when an ENEMY is the applier.
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.player, RitualPower, 2, applier=cs.enemy)
         cs.end_turn()
-        assert cs.player.strength == 0  # first trigger skipped
-        cs.end_turn()
-        assert cs.player.strength == 2  # second trigger fires
-
-    def test_does_not_skip_when_applied_by_self(self):
-        cs = fresh()
-        PowerCmd.apply(cs.hooks, cs.player, RitualPower, 2, applier=cs.player)
-        cs.end_turn()
-        assert cs.player.strength == 2  # no skip when applied by same side
+        assert cs.player.strength == 2
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -622,36 +635,62 @@ class TestRupture:
 # ══════════════════════════════════════════════════════════════════════════
 
 class TestCurlUp:
-    def test_gains_block_on_first_hit(self):
+    # MOVED WHOLESALE 2026-07-29 (round 7, power/curl_up/AfterDamageReceived).
+    # Every test in this class used to drive `DamageCmd.deal` directly and
+    # assert the block appeared inside the damage hook. CurlUpPower.cs:34-54
+    # only LATCHES the triggering card there and grants NOTHING; the block
+    # lands in AfterCardPlayed (:56-70), once the whole card play has resolved
+    # -- which is what stops the second and later hits of a multi-hit attack
+    # being absorbed by block the game has not handed out yet. So the stimulus
+    # is now a card PLAY, and the three C# guards the latch carries (a powered
+    # attack, a non-null cardSource, no re-latch onto a different card) are
+    # pinned alongside.
+
+    @staticmethod
+    def _play(cs, card):
+        card.on_play(cs._ctx(), target_idx=0)
+        cs.hooks.on_card_played(card)
+
+    def test_gains_block_once_the_card_play_finishes(self):
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.enemy, CurlUpPower, 8)
         hp_before = cs.enemy.hp
-        DamageCmd.deal(cs.hooks, cs.enemy, 1, dealer=cs.player)
-        # STS2: damage resolves first (no block yet), then block appears via on_damage_received
+        strike = make_card("strike")
+        self._play(cs, strike)
         assert cs.enemy.block == 8
-        assert cs.enemy.hp == hp_before - 1
+        assert cs.enemy.hp == hp_before - 6      # the hit took full damage
 
-    def test_one_shot_expires_after_first_hit(self):
+    def test_a_multi_hit_attack_is_not_absorbed_mid_card(self):
+        # The whole point of the deferral: Twin Strike's second hit must not
+        # meet block the game grants only after the card resolves.
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.enemy, CurlUpPower, 8)
-        DamageCmd.deal(cs.hooks, cs.enemy, 1, dealer=cs.player)
+        hp_before = cs.enemy.hp
+        self._play(cs, make_card("twin_strike"))
+        assert cs.enemy.hp == hp_before - 10     # 5 + 5, neither blocked
+        assert cs.enemy.block == 8
+
+    def test_one_shot_expires_after_the_card_play(self):
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.enemy, CurlUpPower, 8)
+        self._play(cs, make_card("strike"))
         assert "curl_up" not in cs.enemy.powers
 
-    def test_does_not_grant_block_on_second_hit(self):
+    def test_a_bare_damage_instance_grants_nothing(self):
+        # `cardSource == null -> return` (CurlUpPower.cs:44-47): poison, thorns
+        # and relic damage never latch.
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.enemy, CurlUpPower, 8)
-        DamageCmd.deal(cs.hooks, cs.enemy, 1, dealer=cs.player)  # hp-1, then block+8 → block=8
-        DamageCmd.deal(cs.hooks, cs.enemy, 1, dealer=cs.player)  # no CurlUp → block absorbs 1 → 7
-        assert cs.enemy.block == 7
+        DamageCmd.deal(cs.hooks, cs.enemy, 1, dealer=cs.player)
+        assert cs.enemy.block == 0
+        assert "curl_up" in cs.enemy.powers
 
-    def test_triggers_even_when_block_absorbs_hit(self):
-        # on_damage_received fires even when hp_lost==0 (dealer is not None check suffices)
+    def test_latches_even_when_block_absorbs_the_hit(self):
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.enemy, CurlUpPower, 8)
         cs.enemy.block = 100
-        DamageCmd.deal(cs.hooks, cs.enemy, 1, dealer=cs.player)
-        # block absorbs 1 → block=99; then on_damage_received → +8 → block=107
-        assert cs.enemy.block == 107
+        self._play(cs, make_card("strike"))
+        assert cs.enemy.block == 100 - 6 + 8
         assert "curl_up" not in cs.enemy.powers
 
 
@@ -700,7 +739,7 @@ class TestInteractions:
 class TestDebuffTickTiming:
     """Vulnerable/Weak/Frail/Intangible tick at on_enemy_side_end (once per round)
     for BOTH the player and the enemy, regardless of who owns each stack.
-    They never tick at on_player_turn_end or on_enemy_turn_end.
+    They never tick at on_player_turn_end or before_enemy_side_end.
 
     Debuffs applied to the player skip their FIRST side-end tick (mirrors
     PowerCmd setting SkipNextDurationTick for player-side debuffs); Intangible
@@ -722,11 +761,14 @@ class TestDebuffTickTiming:
             assert cs.player.powers[pid].amount == 3, pid
             assert cs.enemy.powers[pid].amount == 3, pid
 
-    def test_no_tick_at_per_enemy_turn_end(self):
-        # on_enemy_turn_end fires per-enemy; debuffs must NOT tick here.
+    def test_no_tick_at_the_enemy_side_end_before_pass(self):
+        # EndEnemyTurnInternal opens with Hook.BeforeTurnEnd
+        # (CombatManager.cs:1251) and only then dispatches AfterTurnEnd
+        # (:1256), which is where AfterSideTurnEnd -- and so every duration
+        # tick -- actually lives.
         cs = fresh()
         self._apply_all(cs, 3)
-        cs.hooks.on_enemy_turn_end(cs.enemy)
+        cs.hooks.before_enemy_side_end()
         for pid in self._IDS:
             assert cs.player.powers[pid].amount == 3, pid
             assert cs.enemy.powers[pid].amount == 3, pid

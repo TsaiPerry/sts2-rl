@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/cards/event_cards.py",
-      "sha256": "e2252c0e6b225be22f1da3051e67dc0f235f6b82ec2ccf0ea6158a20701730df",
+      "sha256": "57208afe6ae70f9dd177e57aee53a7f5b5624a5ba5d830a46de5263c8732e691",
       "side": "sim"
     },
     {
@@ -51,7 +51,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -68,8 +68,8 @@
   "guards": [
     {
       "what": "DEFERRED PORT, leg 1 -- THE ENTRY. `IsAllowed => false` does not mean the game never runs this event: LanternKey.cs:21-36 injects it. ModifyUnknownMapPointRoomTypes narrows every '?' node in act index 2 to RoomType.Event, and ModifyNextEvent returns ModelDb.Event<WarHistorianRepy>() for that act, so any run that carries a Lantern Key into Act 3 is routed here. The sim ports NEITHER hook on its Lantern Key",
-      "verdict": "gap",
-      "issue": "EXECUTED (`py audit/tools/event_probes_c.py repy`): the card 'lantern_key' IS ported (cards/event_cards.py:366-387) and the ported event 'the_lantern_key' hands it over as a reward extra (events/the_lantern_key.py:44); the sim has ZERO implementations of the ModifyNextEvent hook anywhere under sts2_rl/ (the hook does not exist), and LanternKeyCard does not override modify_unknown_map_point_room_types even though the sim DOES dispatch that hook over the deck and the relics (run.py:1045-1049; relics/golden_compass.py:42 is a working implementer). LIVE: the trigger is ordinary run state with ported content -- hold a Lantern Key, reach act index 2 -- and the observable is that the game turns a '?' node into this event and the sim cannot. The card's docstring justifies the omission with 'the sim has no map, so it is an inert unplayable card' (cards/event_cards.py:371), which is false in two ways: the sim has a map, and the hook it would need is already dispatched. Under rule 1 an unported C# side is a gap, never a waiver."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 8): `Hook.ModifyNextEvent` exists and the Lantern Key implements both halves. The hook is `AbstractModel.ModifyNextEvent` (AbstractModel.cs:1892), dispatched by Hook.cs:1830-1836, and its ONE call site is `ActModel.PullNextEvent` (ActModel.cs:437-443): `EnsureNextEventIsValid`, then the chain, then `AddVisitedEvent(eventModel)` -- so the hook sits between the pull and the visited-set add and the event RECORDED as visited is the MODIFIED one. Shipped as `Card.modify_next_event` / `Relic.modify_next_event` no-ops plus a dispatcher at exactly that position in `RunState.enter_point`'s EVENT arm, walking the same `_map_listeners()` (relics + deck) the companion map hook already used. `LanternKeyCard.modify_next_event` returns 'war_historian_repy' when `act_index == 2` (LanternKey.cs:29-36) and passes the incoming event through otherwise. EXECUTED 2026-07-29: walking an act with `act_index = 2` and a Lantern Key in the deck, the first event room serves `war_historian_repy` and the id lands in `visited_event_ids`; without the card the same walk serves an ordinary event. The other half of the deferred port was ALREADY present and is re-pinned so the pair cannot drift: `modify_unknown_map_point_room_types` REPLACES the set with {Event} in act 2 and passes it through elsewhere. That WarHistorianRepy's own `IsAllowed` is False is the POINT, not an obstacle -- IsAllowed gates the random pool and this hook bypasses it. The card's docstring, which justified the omission with 'the sim has no map' and called ModifyNextEvent 'not a listener category the sim has', is corrected: both were false, and rule 1 makes an unported C# side a gap, never a waiver.  Pinned by test/test_tier1_last_five.py.  NOT CLOSED: nothing at this site.  The text it replaced read: EXECUTED (`py audit/tools/event_probes_c.py repy`): the card 'lantern_key' IS ported (cards/event_cards.py:366-387) and the ported event 'the_lantern_key' hands it over as a reward extra (events/the_lantern_key.py:44); the sim has ZERO implementations of the ModifyNextEvent hook anywhere under sts2_rl/ (the hook does not exist), and LanternKeyCard does not override modify_unknown_map_point_room_types even though the sim DOES dispatch that hook over the deck and the relics (run.py:1045-1049; relics/golden_compass.py:42 is a working implementer). LIVE: the trigger is ordinary run state with ported content -- hold a Lantern Key, reach act index 2 -- and the observable is that the game turns a '?' node into this event and the sim cannot. The card's docstring justifies the omission with 'the sim has no map, so it is an inert unplayable card' (cards/event_cards.py:371), which is false in two ways: the sim has a map, and the hook it would need is already dispatched. Under rule 1 an unported C# side is a gap, never a waiver."
     },
     {
       "what": "DEFERRED PORT, leg 2 -- THE BODY. Nothing below GenerateInitialOptions is ported: events/war_historian_repy.py:34-36 returns []. Unported: the two initial options UNLOCK_CAGE / UNLOCK_CHEST (WarHistorianRepy.cs:35-42); the second-reward page that offers the OTHER option (:44-70); UnlockCage's `RelicCmd.Obtain<HistoryCourse>` and `ExtraFields.FreedRepy = true` (:96-100); UnlockChest's RewardsCmd.OfferCustom of 2 PotionRewards + 2 RelicRewards (:86-94); and the Lantern-Key consumption (PlayerCmd.CompleteQuest + CardPileCmd.RemoveFromDeck, :102-132)",

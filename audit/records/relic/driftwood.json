@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\driftwood.py",
-    "sha256": "9cec68bc3f83de97430a84b3ea7c0c2a8ffeced8ad8314ac55e134724bf249fb"
+    "sha256": "be6f9c49180b3427ac11ec5d074401a147e1fcacf7896ab7116fc4cdc67e95d7"
   },
   "extra_sources": [
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "8baf28896c58e846435a5e208bb9014f7306cf4b1051f582d7b6347cfedc697a",
+      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/orobas.py",
-      "sha256": "593bb12027e04cdd82a50805712d823e8a42b687b35a9ba98eb2934a80b7436c",
+      "sha256": "40d1ee18e733e045c9e952210275f15f282d60854a15a362a290dc043f80d973",
       "side": "sim"
     },
     {
@@ -46,17 +46,17 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "9f8f94386154df9acfd780c8e5549419bffd7d5ed2448495595c9aa33fce4e83",
+      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -74,8 +74,9 @@
   "guards": [
     {
       "what": "G1 (LIVE): C# dispatches TryModifyRewardsLate for EVERY reward screen (Hook.ModifyRewards is called from RewardsSet.GenerateWithoutOffering); the sim's modify_combat_rewards is dispatched only by generate_combat_rewards, so rest-site and custom reward screens are never made rerollable",
-      "verdict": "gap",
-      "issue": "MECHANISM: Hook.ModifyRewards (Hook.cs:1981-1999) runs a plain TryModifyRewards pass and then a full TryModifyRewardsLate pass, and its single caller is RewardsSet.GenerateWithoutOffering (RewardsSet.cs:136) -- which every RewardsSet goes through, including the ones built by RewardsCmd.OfferCustom for a rest-site heal (HealRestSiteOption.cs:111-113) and for event rewards. So in the game Driftwood marks any CardReward on any screen rerollable. In the sim the hook has exactly one dispatch site, rewards.py:499-500 inside generate_combat_rewards; RunState.rest_heal_rewards (run.py:1097-1110) builds its CombatRewards and dispatches only modify_rest_site_heal_rewards. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b04.py dream-driftwood): with relics=[dream_catcher] the rest screen offers 3 cards with can_reroll=False, and adding driftwood leaves it can_reroll=False, while the MONSTER combat screen with driftwood alone comes back can_reroll=True -- so the relic works on one screen type and not the other, where C# has no such distinction. Both sides ported and independently obtainable: Driftwood is an Orobas shrine option (events/orobas.py:21) and Dream Catcher a Trash Heap event relic (events/trash_heap.py:15), two different nodes, and driver.py:521 already offers the rest screen with the same reroll-aware code path (driver.py:140 reads rewards.can_reroll). The player simply loses a reroll they paid an Ancient relic for. RULE 7: rewards.py, run.py, driver.py, events/orobas.py, RewardsSet.cs, Hook.cs and HealRestSiteOption.cs are not hashed here."
+      "verdict": "faithful",
+      "maps_to": "Relic.modify_combat_rewards_late (sts2_rl/relics/driftwood.py), dispatched by rewards.apply_reward_modifiers -- which every reward-screen generator calls, not just generate_combat_rewards",
+      "rationale": "CLOSED 2026-07-28 by the gap-queue continuation's section-A fix pass (this is a CODE change, not a re-reading of the old code). Hook.ModifyRewards' two passes were factored into `rewards.apply_reward_modifiers(run, rewards)` and are now dispatched from BOTH screen generators: generate_combat_rewards and RunState.rest_heal_rewards, mirroring the single C# caller RewardsSet.GenerateWithoutOffering (RewardsSet.cs:136) that every RewardsSet goes through. What keeps the room-gated relics off a custom screen is a new `CombatRewards.room` field -- the RewardsSet.Room analogue, None for a set built by RewardsCmd.OfferCustom (RewardsSet.cs:106-110) -- which AmethystAubergine, BlackStar, LavaRock and WongosMysteryTicket now read instead of `room_type` (that field remains the screen's card-ODDS table, which for a rest heal is Monster with no room at all). Driftwood itself has no room gate in the source and now has none in the sim, so it flags every card group on any screen. EXECUTED: test_driftwood_makes_the_rest_site_card_reward_rerollable_too and test_room_gated_reward_relics_stay_off_the_rest_site_screen.  The gap it replaced read: MECHANISM: Hook.ModifyRewards (Hook.cs:1981-1999) runs a plain TryModifyRewards pass and then a full TryModifyRewardsLate pass, and its single caller is RewardsSet.GenerateWithoutOffering (RewardsSet.cs:136) -- which every RewardsSet goes through, including the ones built by RewardsCmd.OfferCustom for a rest-site heal (HealRestSiteOption.cs:111-113) and for event rewards. So in the game Driftwood marks any CardReward on any screen rerollable. In the sim the hook has exactly one dispatch site, rewards.py:499-500 inside generate_combat_rewards; RunState.rest_heal_rewards (run.py:1097-1110) builds its CombatRewards and dispatches only modify_rest_site_heal_rewards. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b04.py dream-driftwood): with relics=[dream_catcher] the rest screen offers 3 cards with can_reroll=False, and adding driftwood leaves it can_reroll=False, while the MONSTER combat screen with driftwood alone comes back can_reroll=True -- so the relic works on one screen type and not the other, where C# has no such distinction. Both sides ported and independently obtainable: Driftwood is an Orobas shrine option (events/orobas.py:21) and Dream Catcher a Trash Heap event relic (events/trash_heap.py:15), two different nodes, and driver.py:521 already offers the rest screen with the same reroll-aware code path (driver.py:140 reads rewards.can_reroll). The player simply loses a reroll they paid an Ancient relic for. RULE 7: rewards.py, run.py, driver.py, events/orobas.py, RewardsSet.cs, Hook.cs and HealRestSiteOption.cs are not hashed here."
     },
     {
       "what": "G2 (DORMANT): the hook is TryModifyRewards**Late** and the sim collapses the plain and Late passes into one flat walk over run.relics, so Driftwood's guaranteed 'after everyone else' position becomes registration-order luck (PROMPT.md class 15)",

@@ -94,6 +94,22 @@ class SpoilsMapCard(Card):
         if point is not None:
             point.add_quest(self)
 
+    def before_card_removed(self, run, card) -> None:
+        """SpoilsMap.cs:100-116 — the whole game's ONE implementer of
+        Hook.BeforeCardRemoved. When THIS card leaves the deck during its own
+        act, unpin the quest marker it planted, so a removed Spoils Map does
+        not leave a payable treasure node behind. Three guards in source
+        order: it is this card, the act matches, and a coord was recorded."""
+        if card is not self:
+            return
+        if self.spoils_act_index != run.act_index:
+            return
+        if self.spoils_coord is None or run.map is None:
+            return
+        point = run.map.get_point(*self.spoils_coord)
+        if point is not None:
+            point.remove_quest(self)
+
     # ── Quest completion (entering the treasure node) ─────────────────────
 
     def on_quest_complete(self, run) -> int:
@@ -104,5 +120,5 @@ class SpoilsMapCard(Card):
             if point is not None:
                 point.remove_quest(self)
         if self in run.deck:
-            run.deck.remove(self)
+            run.remove_cards([self])   # CardPileCmd.RemoveFromDeck (:122)
         return self.GOLD

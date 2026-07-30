@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/events/welcome_to_wongos.py",
-      "sha256": "bb654fc90b58c17ee0573381dc1859c91e72cf6a89e97f8934db58801612a946",
+      "sha256": "12d10fe0120fd1db28b8ded9f938c5246e3b466faa3127a84d8aae91c5b0d92f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     }
   ],

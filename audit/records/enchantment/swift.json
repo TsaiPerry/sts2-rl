@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\enchantments.py",
-    "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31"
+    "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369"
   },
   "extra_sources": [
     {
@@ -61,27 +61,27 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/trash_heap_cards.py",
-      "sha256": "89ec1d15e3dd0db928e3c3a4a04aa21564c5d9b04dc5008761242025e88db7db",
+      "sha256": "f93265bdcd41fa82dd09ab914501270537ae907e02f97679dd58dd2345183e20",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/reflections.py",
-      "sha256": "80a1def7cd4014f2b74098038e1845bde9fda4874f0ea95fff7b775630cdfb05",
+      "sha256": "944bc8f2a1aabee7893510cd9663ca48d02770011227912a55d12f446f3b233a",
       "side": "sim"
     },
     {
@@ -96,12 +96,12 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     },
     {
@@ -121,7 +121,7 @@
     },
     {
       "path": "sts2_rl/relics/music_box.py",
-      "sha256": "e1ac228baf22f662da3a9ebdf62bf538dbc5d7a1802368bc58101863238fc867",
+      "sha256": "a22104f22cd2cd0ed4345b115321d3ee8efb5421f1ee5bffccfe2718dc2fb9a8",
       "side": "sim"
     },
     {
@@ -131,7 +131,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -147,16 +147,16 @@
       "rationale": "presentation only: read solely by EnchantmentModel.DynamicExtraCardText (EnchantmentModel.cs:60-81) and the card-UI nodes; no game-state reader. Out of scope per the shared contract's 'presentation/animation' waiver."
     },
     "OnPlay": {
-      "maps_to": "SwiftEnchantment.on_card_played (enchantments.py:389-395) -- still the Hook.AfterCardPlayed slot, NOT the direct EnchantmentModel.OnPlay slot that now exists (combat.py:595-596). `DrawCmd.draw(player, amount)` then `disabled = True`, guarded on `not disabled`, matching Swift.cs:15-22's `if (Status == Normal) { CardPileCmd.Draw(Amount, Owner); Status = Disabled; }`. The count and the once-per-combat latch are right (grant amount 3 from Beautiful Bracelet, relics/beautiful_bracelet.py:22-29, and 2 from Self Help Book's READ_ENTIRE_BOOK, events/self_help_book.py:13,19)",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-28. The COUNT leg is closed: Hook.AfterCardPlayed now fires once per replay iteration (combat.py:574, 600) and Swift's latch keeps the draw at [amount] (`py audit/tools/enchantment_probes.py replay`: Swift(3) + Throwing Axe draws sim=3 C#=3). What REMAINS is the SLOT, and Swift is the one of the three EnchantmentModel.OnPlay ports that was NOT moved. Swift.cs:16-22 is an `OnPlay` override; the sim now HAS the matching direct in-loop slot -- `card.enchantment.on_play(card, played_target)` at combat.py:595-596, after the card's own on_play and BEFORE Hook.AfterCardPlayed, the port of CardModel.cs:1937-1945 -- and Corrupted (enchantments.py:517-527) and Sown (enchantments.py:149-155) both use it, but SwiftEnchantment is still on `on_card_played` (enchantments.py:389-395). So the draw happens during the AfterCardPlayed dispatch, in the CAT_CARD slot, AFTER every power/relic/potion/orb listener and after Affliction.OnPlay (CardModel.cs:1946-1955); C# draws before all of them. Observable with ported content at the 10-card hand cap (player.py:56 MAX_HAND_SIZE = 10, enforced by _draw at player.py:319-321 and by CardPileCmd.add_to_hand at cmds.py:623-626): Music Box's AfterCardPlayed copy (relics/music_box.py:40-51) and Juggling's copies (powers.py:883-893) land BEFORE Swift's draw in the sim and AFTER it in the game, so a near-full hand keeps a different card in each engine."
+      "maps_to": "SwiftEnchantment.on_play (enchantments.py) -- the direct EnchantmentModel.OnPlay slot, dispatched at combat.py:880-881 inside the play-count loop",
+      "verdict": "faithful",
+      "issue": "STALE ENTRY, CLOSED 2026-07-29 (round 10, the Tier 1 residue). The move the entry says did not happen HAD happened: `SwiftEnchantment.on_play` (sts2_rl/enchantments.py) is the direct EnchantmentModel.OnPlay slot, dispatched at combat.py:880-881 -- `card.enchantment.on_play(card, played_target)` inside the play-count loop, after the card's own on_play and before Hook.AfterCardPlayed, the port of CardModel.cs:1937-1945 -- and `on_card_played` is gone from the class. Settled by the entry's OWN stated observable rather than by the method name: with Music Box held and a Swift(3) Strike played, the recorded order is [swift_draw, music_box_copy]; patched back onto `on_card_played` the same combat gives [music_box_copy, swift_draw], which is the divergence this entry described. Pinned by test/test_tier1_residue.py::test_swift_draws_before_the_after_card_played_listeners and ::test_swift_is_on_the_direct_onplay_slot_not_after_card_played. Re-executed: `py audit/tools/enchantment_probes.py` -- onplay-slot and replay both MATCH, Swift(3) + Throwing Axe sim=3 C#=3. WAS: NARROWED 2026-07-28. The COUNT leg is closed: Hook.AfterCardPlayed now fires once per replay iteration (combat.py:574, 600) and Swift's latch keeps the draw at [amount] (`py audit/tools/enchantment_probes.py replay`: Swift(3) + Throwing Axe draws sim=3 C#=3). What REMAINS is the SLOT, and Swift is the one of the three EnchantmentModel.OnPlay ports that was NOT moved. Swift.cs:16-22 is an `OnPlay` override; the sim now HAS the matching direct in-loop slot -- `card.enchantment.on_play(card, played_target)` at combat.py:595-596, after the card's own on_play and BEFORE Hook.AfterCardPlayed, the port of CardModel.cs:1937-1945 -- and Corrupted (enchantments.py:517-527) and Sown (enchantments.py:149-155) both use it, but SwiftEnchantment is still on `on_card_played` (enchantments.py:389-395). So the draw happens during the AfterCardPlayed dispatch, in the CAT_CARD slot, AFTER every power/relic/potion/orb listener and after Affliction.OnPlay (CardModel.cs:1946-1955); C# draws before all of them. Observable with ported content at the 10-card hand cap (player.py:56 MAX_HAND_SIZE = 10, enforced by _draw at player.py:319-321 and by CardPileCmd.add_to_hand at cmds.py:623-626): Music Box's AfterCardPlayed copy (relics/music_box.py:40-51) and Juggling's copies (powers.py:883-893) land BEFORE Swift's draw in the sim and AFTER it in the game, so a near-full hand keeps a different card in each engine."
     }
   },
   "guards": [
     {
       "what": "EG1: EnchantmentModel.OnPlay is a DIRECT call inside the per-Replay loop, placed after the card's own OnPlay and before Hook.AfterCardPlayed (CardModel.cs:1904 `for (i < playCount)`, 1931 `await OnPlay(...)`, 1937-1945 `await Enchantment.OnPlay(...)`, 1959 `Hook.AfterCardPlayed`). The sim has no such slot: the three OnPlay ports hang off before_card_played / on_card_played, both of which fire ONCE per card play, outside the replay loop (combat.py:466 and combat.py:514)",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-28. The MECHANISM is closed -- combat._resolve_card_play now calls `card.enchantment.on_play(...)` directly inside the `for play_index in range(play_count)` loop, after the card's own on_play and before Hook.AfterCardPlayed (combat.py:574/589/595-596/600 vs CardModel.cs:1904/1931/1937-1945/1959) -- and Corrupted and Sown were both moved onto it. What REMAINS is THIS unit: Swift is still wired to `on_card_played` (enchantments.py:389-395), the far side of the loop body, rather than the new slot, so its draw runs after every non-card listener's AfterCardPlayed instead of before all of them. The count leg is fine (the latch plus per-replay dispatch: `py audit/tools/enchantment_probes.py replay` gives sim=3 C#=3); the position leg is not. Reachability unchanged: the ported Beautiful Bracelet relic (relics/beautiful_bracelet.py:22-29) and the ported Self Help Book event (events/self_help_book.py:19)."
+      "verdict": "faithful",
+      "issue": "STALE ENTRY, CLOSED 2026-07-29 (round 10, the Tier 1 residue). The move the entry says did not happen HAD happened: `SwiftEnchantment.on_play` (sts2_rl/enchantments.py) is the direct EnchantmentModel.OnPlay slot, dispatched at combat.py:880-881 -- `card.enchantment.on_play(card, played_target)` inside the play-count loop, after the card's own on_play and before Hook.AfterCardPlayed, the port of CardModel.cs:1937-1945 -- and `on_card_played` is gone from the class. Settled by the entry's OWN stated observable rather than by the method name: with Music Box held and a Swift(3) Strike played, the recorded order is [swift_draw, music_box_copy]; patched back onto `on_card_played` the same combat gives [music_box_copy, swift_draw], which is the divergence this entry described. Pinned by test/test_tier1_residue.py::test_swift_draws_before_the_after_card_played_listeners and ::test_swift_is_on_the_direct_onplay_slot_not_after_card_played. Re-executed: `py audit/tools/enchantment_probes.py` -- onplay-slot and replay both MATCH, Swift(3) + Throwing Axe sim=3 C#=3. WAS: NARROWED 2026-07-28. The MECHANISM is closed -- combat._resolve_card_play now calls `card.enchantment.on_play(...)` directly inside the `for play_index in range(play_count)` loop, after the card's own on_play and before Hook.AfterCardPlayed (combat.py:574/589/595-596/600 vs CardModel.cs:1904/1931/1937-1945/1959) -- and Corrupted and Sown were both moved onto it. What REMAINS is THIS unit: Swift is still wired to `on_card_played` (enchantments.py:389-395), the far side of the loop body, rather than the new slot, so its draw runs after every non-card listener's AfterCardPlayed instead of before all of them. The count leg is fine (the latch plus per-replay dispatch: `py audit/tools/enchantment_probes.py replay` gives sim=3 C#=3); the position leg is not. Reachability unchanged: the ported Beautiful Bracelet relic (relics/beautiful_bracelet.py:22-29) and the ported Self Help Book event (events/self_help_book.py:19)."
     },
     {
       "what": "BR-2 (blast radius): audit/records/seam/hook_dispatch.json gap G4 -- the game builds a fresh CardPlay and fires Hook.BeforeCardPlayed / Hook.AfterCardPlayed once per Replay iteration (CardModel.cs:1919-1964), the sim fires before_card_played / on_card_played once per card play (combat.py:466, 514)",
@@ -175,6 +175,6 @@
       "rationale": "The copy carries the enchantment (cards/base.py:77-78 = CardModel.cs:1204-1209) and its `combat` is now set by `_enter_combat` (cmds.py:589), so Swift's draw fires on the copy through the direct per-replay call at combat.py:595-596 - the port of C#'s in-loop EnchantmentModel.OnPlay (CardModel.cs:1937-1945, Swift.cs:15-22). Executed via `add_to_hand`, the path Dual Wield uses at trash_heap_cards.py:149: the copy drew 2 and disabled itself. The residual text's premise ('Swift's draw leg is on_card_played, a HOOK') no longer describes the code - the leg is `on_play` at enchantments.py:400-409, and it is dispatched to the copy.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: Closed 2026-07-28: all five rebuild copy sites now route through `create_clone` (cards/base.py:57-83), which rebuilds the card AND re-attaches a `clone_preserving_mutability()` copy of the source's enchantment (enchantments.py:109-117 + attach at :119-125) and a copy of its affliction -- the port of CardModel.DeepCloneFields (CardModel.cs:1204-1215). The five: cards/trash_heap_cards.py:20-24 `_clone` (Dual Wield), powers.py:883-893 (JugglingPower), relics/music_box.py:44-49, cards/anger.py:36-38 and relics/burning_sticks.py:33-37. WAS: each was a bare `type(card)()` rebuild carrying only the upgrade level, so the copy lost the enchantment entirely. The false `_clone` docstring is fixed too (trash_heap_cards.py:20-23 now says it carries the enchantment and the affliction, and it does). The enchantment now RIDES ALONG on the copy and every DIRECT-CALL leg works (DamageCmd/BlockCmd read `card.enchantment` straight off the card, cmds.py:115-118 and :219-222; `attach` re-runs modify_card so static keywords/cost are on the copy). What REMAINS is that the copy's enchantment is never made a LISTENER: CardPileCmd._enter_combat (cmds.py:569-576) registers only the card, not `card.enchantment`, and never sets `enchantment.combat`. C# has no such step -- CombatState.IterateHookListeners re-enumerates from the piles on every dispatch and adds `cardModel.Enchantment` (CombatState.cs:449-467, the add at :462-465) -- so the game's copy is a full listener. RESIDUAL FOR THIS UNIT: Swift's draw leg is `on_card_played` (enchantments.py:389-395), a HOOK, so the copy's own enchantment is never dispatched. EXECUTED 2026-07-28: playing a `create_clone` copy of a Swift(2) Strike draws 0 cards. LIVE via Dual Wield for the Status reason already recorded."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-28"
 }

@@ -113,35 +113,35 @@
   "sim_sources": [
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc"
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582"
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead"
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb"
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
     },
     {
       "path": "sts2_rl/history.py",
-      "sha256": "1316e36e8662c05fabd3ecbe6e13d4548e61a47af966568b46016e036744d25e"
+      "sha256": "d0716956d1ca2374c001887accb895d93d9589e16221098239cb2522f9a8b048"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d"
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f"
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "e4a89332099b3f25fcec72eed648058e9edcacca209b76f28c20255295e61a2f"
+      "sha256": "b52d8d15ba11856c157ae544d7837db5c35df881260a0065cf1d2b97917bd392"
     },
     {
       "path": "sts2_rl/afflictions.py",
@@ -153,11 +153,11 @@
     },
     {
       "path": "sts2_rl/relics/brilliant_scarf.py",
-      "sha256": "017a33b28d3702ee813c43a6d0dd25aad84de3d0bab8f19ac691f8ca952b3847"
+      "sha256": "ed49589ae906accc00dee801b102c37b5c89c66c431a332fd40921a38517b4b2"
     },
     {
       "path": "sts2_rl/relics/pen_nib.py",
-      "sha256": "4caec40e7abbd569a8bf3e141c9360011d5fe2fd0e3533911c603dad5240de1a"
+      "sha256": "155157f36c78fc82e57cd38c6285f3d083d4d0e81b09f6ff8975826f6f2ea1e1"
     },
     {
       "path": "sts2_rl/relics/throwing_axe.py",
@@ -173,7 +173,7 @@
     },
     {
       "path": "sts2_rl/cards/mad_science.py",
-      "sha256": "96aa8380efc11a6dfd1846039947289400ba25e856a9337196b13c2faf582557"
+      "sha256": "2ede1a12f1aa80dfde0f095c34997387210e6856011a40c954199fe33aa37c73"
     },
     {
       "path": "sts2_rl/events/tanx.py",
@@ -185,11 +185,11 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "9f8f94386154df9acfd780c8e5549419bffd7d5ed2448495595c9aa33fce4e83"
+      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681"
     },
     {
       "path": "sts2_rl/previews.py",
-      "sha256": "610483acf1c40cde7a8d62fd94e9dc4991efe5244494c612527686dc961839d5"
+      "sha256": "7b07d17672f3bb530df0491e0beadd48d94aca5be39087d577aaa6b637bf42de"
     },
     {
       "path": "sts2_rl/env.py",
@@ -197,7 +197,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b"
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da"
     },
     {
       "path": "sts2_rl/relics/paels_eye.py",
@@ -205,7 +205,7 @@
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31"
+      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369"
     },
     {
       "path": "sts2_rl/events/tinker_time.py",
@@ -225,7 +225,7 @@
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "72840c98dd4eb14b3f77142dc08078d535fb5f223a14b5d7fea981010502b1a7"
+      "sha256": "06f9d38ecefba5bb61280da2dae7e92350e163a00481f23bfe8443b722327ad8"
     },
     {
       "path": "sts2_rl/cards/whirlwind.py",
@@ -329,18 +329,18 @@
     },
     {
       "what": "19. Hook.IterateCombatHookListeners: `if (IsOverOrEnding && !IsStarting) yield break;` -- a dispatch that BEGINS after combat started ending reaches nobody (Hook.cs:55-58)",
-      "verdict": "gap",
-      "issue": "gap G8 (no IsOverOrEnding gate): Hook.IterateCombatHookListeners (Hook.cs:53-63) yields NOTHING to a dispatch that begins after combat started ending, and 73 of the 147 dispatchers go through it. The sim has no gate -- combat.py flips Phase.COMBAT_OVER only inside _end_combat and no dispatcher consults the phase. Executed: with the ported relic Daughter of the Wind (relics/daughter_of_the_wind.py:23-33) a lethal Strike still grants its 1 Block from on_card_played after _all_enemies_dead() is true. DORMANT because every effect currently reachable there is combat-scoped state the combat then discards. Concrete trigger: porting a listener on a guarded dispatcher that mutates run-level state (HP, gold, deck) from AfterCardPlayed/AfterCardDrawn/AfterCardExhausted/AfterShuffle/AfterEnergySpent; the conformance exporter is the near-term risk."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. `HookSystem._each` now implements the gate. A per-hook map `_COMBAT_GATED_HOOKS` (sts2_rl/hooks.py) names the 41 sim dispatchers whose C# counterpart is in the guarded bucket, each mapped to the C# dispatcher it IS, and `_each` returns immediately for one of those once `HookSystem.combat_is_over` -- `CombatState.phase == Phase.COMBAT_OVER`, which is set in `_end_combat`, i.e. the moment the ending begins, covering both IsEnding and IsOver. The run-side and bypass buckets are deliberately NOT gated, which is what keeps the kill/death/combat-end sequence working: the record's own executed witness, Daughter of the Wind paying out from on_card_played after a lethal Strike, is `Hook.AfterCardPlayed` -- one of the ten deliberate bypasses (Hook.cs:278) -- so that behaviour is CORRECT and is now pinned as such. Also fixed here: the inverse mismatch, `Hook.BeforeCardPlayed`, which IS guarded in C# and was ungated in the sim. EXECUTED: test/test_combat_over_hook_gate.py (9 tests).  The gap it replaced read: gap G8 (no IsOverOrEnding gate): Hook.IterateCombatHookListeners (Hook.cs:53-63) yields NOTHING to a dispatch that begins after combat started ending, and 73 of the 147 dispatchers go through it. The sim has no gate -- combat.py flips Phase.COMBAT_OVER only inside _end_combat and no dispatcher consults the phase. Executed: with the ported relic Daughter of the Wind (relics/daughter_of_the_wind.py:23-33) a lethal Strike still grants its 1 Block from on_card_played after _all_enemies_dead() is true. DORMANT because every effect currently reachable there is combat-scoped state the combat then discards. Concrete trigger: porting a listener on a guarded dispatcher that mutates run-level state (HP, gold, deck) from AfterCardPlayed/AfterCardDrawn/AfterCardExhausted/AfterShuffle/AfterEnergySpent; the conformance exporter is the near-term risk."
     },
     {
       "what": "20. The guard is evaluated ONCE at enumeration start, not per listener, so a dispatch that began while combat was live still runs every listener even if one of them ends combat; combat setup (IsStarting) is exempt (Hook.cs:31-51)",
-      "verdict": "gap",
-      "issue": "gap G8 (no IsOverOrEnding gate): Hook.IterateCombatHookListeners (Hook.cs:53-63) yields NOTHING to a dispatch that begins after combat started ending, and 73 of the 147 dispatchers go through it. The sim has no gate -- combat.py flips Phase.COMBAT_OVER only inside _end_combat and no dispatcher consults the phase. Executed: with the ported relic Daughter of the Wind (relics/daughter_of_the_wind.py:23-33) a lethal Strike still grants its 1 Block from on_card_played after _all_enemies_dead() is true. DORMANT because every effect currently reachable there is combat-scoped state the combat then discards. Concrete trigger: porting a listener on a guarded dispatcher that mutates run-level state (HP, gold, deck) from AfterCardPlayed/AfterCardDrawn/AfterCardExhausted/AfterShuffle/AfterEnergySpent; the conformance exporter is the near-term risk."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. The once-per-dispatch semantics come for free and are pinned. `Hook.IterateCombatHookListeners` is a C# iterator, so its guard runs when enumeration starts; `_each` is a Python generator, so the test at the top of it runs at the same point. A listener that ends the combat mid-dispatch therefore does not cut off the listeners after it, and the NEXT dispatch reaches nobody. IsStarting needs no counterpart: CombatState back-references itself into HookSystem early in __init__ and assigns `phase` further down, so setup dispatches find no phase at all and the gate is inert -- the exemption for free. EXECUTED: test/test_combat_over_hook_gate.py::test_the_guard_is_read_once_per_dispatch_not_once_per_listener.  The gap it replaced read: gap G8 (no IsOverOrEnding gate): Hook.IterateCombatHookListeners (Hook.cs:53-63) yields NOTHING to a dispatch that begins after combat started ending, and 73 of the 147 dispatchers go through it. The sim has no gate -- combat.py flips Phase.COMBAT_OVER only inside _end_combat and no dispatcher consults the phase. Executed: with the ported relic Daughter of the Wind (relics/daughter_of_the_wind.py:23-33) a lethal Strike still grants its 1 Block from on_card_played after _all_enemies_dead() is true. DORMANT because every effect currently reachable there is combat-scoped state the combat then discards. Concrete trigger: porting a listener on a guarded dispatcher that mutates run-level state (HP, gold, deck) from AfterCardPlayed/AfterCardDrawn/AfterCardExhausted/AfterShuffle/AfterEnergySpent; the conformance exporter is the near-term risk."
     },
     {
       "what": "21. Bucketing all 147 public dispatchers by how each one enumerates listeners (`py audit/tools/dormancy_probes.py hook-buckets`, brace-matched bodies): 73 go through the IterateCombatHookListeners guard, 63 call runState.IterateHookListeners directly (that iterator never consults the guard), 10 are combat-side dispatchers that bypass the guard deliberately by calling <x>.IterateHookListeners() themselves -- AfterBlockBroken (107), AfterCardPlayed (278), AfterCreatureAddedToCombat (362), AfterDamageGiven (389), AfterDiedToDoom (484), ModifyKeywordsInCombat (1595), ModifyUnblockedDamageTarget (2048), ShouldCreatureBeRemovedFromCombatAfterDeath (2214), ShouldStopCombatFromEnding (2442), ShouldPowerBeRemovedOnDeath (2495) -- and 1 enumerates nothing itself: ModifyDamage (1486), which delegates its whole walk to the private ModifyDamageInternal (2511, run-side). 73 + 63 + 10 + 1 = 147. Counting ModifyDamage's delegated walk as run-side instead gives the 73/64/10 the record first stated; both are stated so the arithmetic is checkable either way. FIX-PASS CORRECTION: the first pass's list of 10 was right but its 64 double-counted ModifyDamage.",
-      "verdict": "gap",
-      "issue": "gap G8 (no IsOverOrEnding gate): Hook.IterateCombatHookListeners (Hook.cs:53-63) yields NOTHING to a dispatch that begins after combat started ending, and 73 of the 147 dispatchers go through it. The sim has no gate -- combat.py flips Phase.COMBAT_OVER only inside _end_combat and no dispatcher consults the phase. Executed: with the ported relic Daughter of the Wind (relics/daughter_of_the_wind.py:23-33) a lethal Strike still grants its 1 Block from on_card_played after _all_enemies_dead() is true. DORMANT because every effect currently reachable there is combat-scoped state the combat then discards. Concrete trigger: porting a listener on a guarded dispatcher that mutates run-level state (HP, gold, deck) from AfterCardPlayed/AfterCardDrawn/AfterCardExhausted/AfterShuffle/AfterEnergySpent; the conformance exporter is the near-term risk."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. The census IS the fix. `_COMBAT_GATED_HOOKS` is the sim-name -> C#-name map for exactly the guarded bucket this step counted, re-derived with `py audit/tools/dormancy_probes.py hook-buckets`; the 63 run-side dispatchers, the 10 deliberate bypasses and ModifyDamage's delegated walk are all absent from it on purpose, each with the reason recorded next to the map. Sim hooks with no `public static` in Hook.cs at all (modify_damage_cap, modify_strength_given, on_attacked, on_card_retained, on_hp_changed, on_power_applied, on_creature_escaped, on_stunned, on_extra_turn) and the sim's per-enemy turn hooks (which have no C# counterpart to bucket until turn_structure's G5 is fixed) are ungated, the safe direction. Pinned by test_the_map_only_names_hooks_the_system_dispatches and test_the_map_is_the_size_the_census_says.  The gap it replaced read: gap G8 (no IsOverOrEnding gate): Hook.IterateCombatHookListeners (Hook.cs:53-63) yields NOTHING to a dispatch that begins after combat started ending, and 73 of the 147 dispatchers go through it. The sim has no gate -- combat.py flips Phase.COMBAT_OVER only inside _end_combat and no dispatcher consults the phase. Executed: with the ported relic Daughter of the Wind (relics/daughter_of_the_wind.py:23-33) a lethal Strike still grants its 1 Block from on_card_played after _all_enemies_dead() is true. DORMANT because every effect currently reachable there is combat-scoped state the combat then discards. Concrete trigger: porting a listener on a guarded dispatcher that mutates run-level state (HP, gold, deck) from AfterCardPlayed/AfterCardDrawn/AfterCardExhausted/AfterShuffle/AfterEnergySpent; the conformance exporter is the near-term risk."
     },
     {
       "what": "22. Base per-listener protocol: `await model.<Hook>(args); model.InvokeExecutionFinished();` (AbstractModel.cs:191-194)",

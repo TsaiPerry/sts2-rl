@@ -257,7 +257,8 @@ class TestBloodVial:
         relic = BloodVial()
         cs = fresh(relics=[relic])
         cs.player.hp = 50
-        relic.on_player_turn_started(cs.player)  # turn is still 1
+        # AfterPlayerTurnStartLate (BloodVial.cs:17), so the LATE pass.
+        relic.on_player_turn_started_late(cs.player)  # turn is still 1
         assert cs.player.hp == 52
 
 
@@ -639,10 +640,14 @@ class TestBurningBlood:
         assert cs.player.hp == 56
 
     def test_no_heal_on_defeat(self):
+        # A loss runs ProcessPendingLoss (CombatManager.cs:956-965), which
+        # fires no hook at all -- so the heal cannot happen because nothing
+        # dispatches, not because the relic tests a flag (turn_structure G10).
         cs = fresh(relics=[BurningBlood()])
         cs.player.hp = 30
         CreatureCmd.kill(cs.hooks, cs.player)
-        cs.hooks.on_combat_end(False)
+        cs._check_win_condition()
+        assert cs.is_over and not cs.result.player_won
         assert cs.player.hp <= 30
 
 
@@ -783,24 +788,37 @@ class TestCumulativeCounters:
         from sts2_rl.valueprops import DamageProps
         powered = DamageProps.CARD
 
+        # MOVED 2026-07-29 (round 7, relic/pen_nib/g2): the multiplier is now
+        # asked with the card marked as BEING PLAYED, which is what a real play
+        # does. PenNib.cs:120-128's `AttackToDouble == null` arm doubles a
+        # cardSource that is NOT in PileType.Play once AttacksPlayed == 9 — the
+        # preview of the pending tenth Attack — so calling the hook with a
+        # pile-less card, as this test used to, is a state the game answers 2 for
+        # too. `player._playing_card` is the sim's PileType.Play analogue, set for
+        # the duration of the play by _resolve_card_play.
         relic = PenNib()
         cs = fresh(relics=[relic])
         cards = [make_card("strike") for _ in range(10)]
+
+        def mult(card, props=powered):
+            cs.player._playing_card = card
+            try:
+                return relic.modify_damage_multiplicative(
+                    cs.enemy, 6, cs.player, card, props)
+            finally:
+                cs.player._playing_card = None
+
         for c in cards[:9]:
             relic.before_card_played(c)
-            assert relic.modify_damage_multiplicative(
-                cs.enemy, 6, cs.player, c, powered) == 1.0
+            assert mult(c) == 1.0
             relic.on_card_played(c)
         relic.before_card_played(cards[9])
-        assert relic.modify_damage_multiplicative(
-            cs.enemy, 6, cs.player, cards[9], powered) == 2.0
-        assert relic.modify_damage_multiplicative(
-            cs.enemy, 6, cs.player, cards[0], powered) == 1.0
+        assert mult(cards[9]) == 2.0
+        assert mult(cards[0]) == 1.0
         # ...and it does NOT double an UNPOWERED attack, which the pipeline used
         # to hide by never dispatching at all.
         relic.before_card_played(cards[9])
-        assert relic.modify_damage_multiplicative(
-            cs.enemy, 6, cs.player, cards[9], DamageProps.CARD_UNPOWERED) == 1.0
+        assert mult(cards[9], DamageProps.CARD_UNPOWERED) == 1.0
         relic.on_card_played(cards[9])
         assert relic.modify_damage_multiplicative(
             cs.enemy, 6, cs.player, cards[9], powered) == 1.0
@@ -930,7 +948,12 @@ class TestDefensiveRelics:
         DamageCmd.deal(cs.hooks, cs.player, 5, dealer=cs.enemy)
         DamageCmd.deal(cs.hooks, cs.player, 5, dealer=cs.enemy)
         assert cs.player.block == 0  # not yet
-        relic.on_player_turn_started(cs.player)
+        # MOVED 2026-07-29 (round 7, relic/self_forming_clay/g2): this drove
+        # `on_player_turn_started`, the LAST turn-start slot.
+        # SelfFormingClayPower.AfterBlockCleared (SelfFormingClayPower.cs:19-25)
+        # is the BLOCK-CLEAR pass — turn_structure step ~11, before the energy
+        # reset, ModifyHandDraw and the whole AfterPlayerTurnStart region.
+        relic.on_block_cleared(cs.player)
         assert cs.player.block == 6  # 3 per HP-loss event
 
     def test_vambrace_doubles_first_card_block(self):
@@ -996,7 +1019,8 @@ class TestStrengthRelics:
         relic = SparklingRouge()
         cs = fresh(relics=[relic])
         cs.turn = 3
-        relic.on_player_turn_started(cs.player)
+        # AfterBlockCleared (SparklingRouge.cs:29) — a PRE-draw slot.
+        relic.on_block_cleared(cs.player)
         assert cs.player.powers["strength"].amount == 1
         assert cs.player.powers["dexterity"].amount == 1
 
@@ -1054,18 +1078,21 @@ class TestCardManipulationRelics:
         relic._played_last_turn = 0
         assert relic.modify_hand_draw(cs.player, 5) == 5
 
+    # UnceasingTop.cs:16 is `AfterHandEmptied`, so these drive
+    # CombatManager.CheckForEmptyHand rather than the `on_card_played`
+    # condition the sim used to hand-roll (turn_structure G16).
     def test_unceasing_top_draws_on_empty_hand(self):
         relic = UnceasingTop()
         cs = fresh(relics=[relic], deck=strikes(9))
         cs.player.hand = []
-        relic.on_card_played(make_card("strike"))
+        cs._check_for_empty_hand()
         assert len(cs.player.hand) == 1
 
     def test_unceasing_top_no_draw_with_cards(self):
         relic = UnceasingTop()
         cs = fresh(relics=[relic], deck=strikes(9))
         n = len(cs.player.hand)
-        relic.on_card_played(make_card("strike"))
+        cs._check_for_empty_hand()
         assert len(cs.player.hand) == n
 
     def test_ringing_triangle_retains_turn_one_hand(self):
@@ -1353,15 +1380,18 @@ class TestStableShuffleRelics:
     def test_paels_tooth_stores_cards_in_ordinal_id_order(self):
         # PaelsTooth.cs:83 ends in .OrderBy(c => c.Id.Entry, Ordinal) and the
         # Rewards draw indexes into that store, so the ORDER is load-bearing.
+        # The deck used to hold a Regret here; it does not any more, because
+        # the candidate filter is `IsUpgradable && IsRemovable` (G1) and a
+        # Curse fails the first half.
         run = self._run(23)
         run.deck[:] = [
-            make_card("strike"), make_card("regret"), make_card("bash"),
+            make_card("strike"), make_card("feed"), make_card("bash"),
             make_card("defend"), make_card("anger"),
         ]
         run.add_relic("paels_tooth")
         tooth = next(r for r in run.relics if r.id == "paels_tooth")
         assert [c.id for c in tooth.stored_cards] == [
-            "anger", "bash", "defend", "regret", "strike"]
+            "anger", "bash", "defend", "feed", "strike"]
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -1417,3 +1447,42 @@ class TestUndoAfterObtained:
         assert (run.hp, run.max_hp) == (94, 94)
         relic.undo_after_obtained(run)
         assert (run.hp, run.max_hp) == (80, 80)
+
+
+class TestPaelsToothCandidateFilter:
+    """relic/paels_tooth/G1. `CardSelectCmd.FromDeckForRemoval(..., filter:
+    c => c.IsUpgradable)` (PaelsTooth.cs:82) and FromDeckForRemoval ANDs
+    `IsRemovable` onto that filter, so the offered set is the intersection.
+    The sim passed `run.removable_cards()` alone, so Curses, Statuses and
+    already-smithed cards could be stored — and a stored non-upgradable card
+    comes back UN-upgraded, i.e. the relic silently did nothing for it."""
+
+    @staticmethod
+    def _run(seed: int = 0):
+        import random as _random
+        from sts2_rl.run import RunState
+        return RunState(rng=_random.Random(seed))
+
+    def test_a_curse_is_never_stored(self):
+        run = self._run(24)
+        run.deck[:] = [
+            make_card("regret"), make_card("strike"), make_card("bash"),
+            make_card("defend"), make_card("anger"), make_card("thrash"),
+        ]
+        run.add_relic("paels_tooth")
+        tooth = next(r for r in run.relics if r.id == "paels_tooth")
+        assert all(c.is_upgradable for c in tooth.stored_cards)
+        assert "regret" not in [c.id for c in tooth.stored_cards]
+
+    def test_a_fully_upgraded_card_is_never_stored(self):
+        run = self._run(25)
+        smithed = make_card("strike")
+        while smithed.is_upgradable:
+            smithed.upgrade()
+        run.deck[:] = [
+            smithed, make_card("bash"), make_card("defend"),
+            make_card("anger"), make_card("body_slam"), make_card("thrash"),
+        ]
+        run.add_relic("paels_tooth")
+        tooth = next(r for r in run.relics if r.id == "paels_tooth")
+        assert smithed not in tooth.stored_cards

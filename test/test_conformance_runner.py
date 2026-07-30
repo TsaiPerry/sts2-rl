@@ -251,6 +251,70 @@ def test_multi_index_select_grid_is_one_screen_over_the_original_grid():
     assert nxt is not None and nxt.name == "ChooseEventOption"
 
 
+def test_map_use_potion_is_drunk_instead_of_skipped():
+    """`PotionUsage.AnyTime` potions can be drunk on the MAP, and the recording
+    writes a plain `UsePotion` for it between two `MoveToMapCoord`s. The runner
+    used to scan straight past it — the belt and the asserted HP then drifted
+    from the recording for the rest of the run."""
+    import random
+
+    from sts2_rl.conformance.recording import Command
+    from sts2_rl.conformance.runner import ReplayRunner
+    from sts2_rl.potions import make_potion
+    from sts2_rl.run import RunState
+
+    runner = ReplayRunner.__new__(ReplayRunner)
+    run = RunState(rng=random.Random(0))
+    run.potions = [make_potion("fruit_juice"), make_potion("fire_potion")]
+    before_max = run.max_hp
+    divergences: list = []
+    runner._use_map_potion(
+        run,
+        Command(name="UsePotion", args=["0"],
+                comment="# POTION.FRUIT_JUICE", annotation=None, lineno=7),
+        divergences, 3,
+    )
+    assert divergences == []
+    assert run.potions[0] is None            # RemoveBeforeUse nulls the slot
+    assert run.max_hp == before_max + 5      # FruitJuice.cs GainMaxHp(5)
+
+
+def test_map_use_potion_resolves_by_identity_not_slot():
+    """The recorded slot is trusted only when it holds the recorded potion —
+    the same robustness the combat driver applies, because the sim can hold a
+    different potion in that slot while potion retention is still diverging."""
+    import random
+
+    from sts2_rl.conformance.recording import Command
+    from sts2_rl.conformance.runner import ReplayRunner
+    from sts2_rl.potions import make_potion
+    from sts2_rl.run import RunState
+
+    runner = ReplayRunner.__new__(ReplayRunner)
+    run = RunState(rng=random.Random(0))
+    run.potions = [make_potion("fire_potion"), make_potion("fruit_juice")]
+    divergences: list = []
+    runner._use_map_potion(
+        run,
+        Command(name="UsePotion", args=["0"],
+                comment="# POTION.FRUIT_JUICE", annotation=None, lineno=7),
+        divergences, 3,
+    )
+    assert divergences == []
+    assert run.potions[1] is None            # slot 1, not the recorded 0
+    assert run.potions[0] is not None
+
+    # ...and a potion the sim simply is not holding is REPORTED, not guessed.
+    runner._use_map_potion(
+        run,
+        Command(name="UsePotion", args=["0"],
+                comment="# POTION.BLOOD_POTION", annotation=None, lineno=8),
+        divergences, 3,
+    )
+    assert len(divergences) == 1
+    assert divergences[0].stream == "potion"
+
+
 def test_claws_transform_screen_is_optional():
     """Claws.cs:24 builds `CardSelectorPrefs(prompt, 0, CardsVar(6))` — MinSelect
     **0**, MaxSelect 6 — with `RequireManualConfirmation`, so the player may

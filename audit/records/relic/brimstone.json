@@ -6,12 +6,12 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\brimstone.py",
-    "sha256": "c7528b48bfcfade32c9684cec8768e2f1b5642ae1cdfef403e8aae20b6b77898"
+    "sha256": "282e800a29ec3115865b366498f4c303b54f1870ad4cfc852a85d96d9e3c3746"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     }
   ],

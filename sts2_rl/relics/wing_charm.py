@@ -16,12 +16,12 @@ class WingCharm(Relic):
 
     SWIFT_AMOUNT = 1   # DynamicVar "SwiftAmount"
 
-    def modify_card_reward_options_late(self, run, cards) -> None:
+    def modify_card_reward_options_late(self, run, cards, options=None):
         from ..enchantments import SwiftEnchantment
 
         options = [c for c in cards if SwiftEnchantment.can_enchant(c)]
         if not options:
-            return
+            return False
         # WingCharm.cs:38 draws the pick on the per-player Niche stream; the
         # legacy RL path stays on the shared run rng.
         if run.rng_set is not None:
@@ -29,3 +29,4 @@ class WingCharm(Relic):
         else:
             card = run.rng.choice(options)
         SwiftEnchantment(self.SWIFT_AMOUNT).attach(card)
+        return True

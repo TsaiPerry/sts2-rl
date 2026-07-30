@@ -6,17 +6,17 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\booming_conch.py",
-    "sha256": "bfca57a42cfaf1a3dc5e70049be99405a561fbf5d8eaa069746080a31bc961b7"
+    "sha256": "6578676aa9b2c2ad768d8c710d9c6124d844baae15311c0f84b44a6001a75e67"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     }
   ],
@@ -33,7 +33,7 @@
     "AfterSideTurnStart": {
       "maps_to": "on_player_turn_start (booming_conch.py:31-34)",
       "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The energy amount and the Elite/turn-1 conditions are right (executed: Elite turn-1 energy is 4 = base 3 + 1), but the hook slot is wrong and the grant bypasses the energy-gain modifier chain."
+      "issue": "STILL OPEN on the ENERGY-GAIN CHAIN only. The HOOK SLOT is CLOSED: BoomingConch.cs:45 declares AfterSideTurnStart and the relic moved from the pre-draw slot to the new `after_side_turn_start` dispatcher (CombatManager.cs:522). WHAT REMAINS is the other guard: the grant bypasses the energy-gain modifier chain.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: Rollup of guards G1 and G2 per binding rule 4. The energy amount and the Elite/turn-1 conditions are right (executed: Elite turn-1 energy is 4 = base 3 + 1), but the hook slot is wrong and the grant bypasses the energy-gain modifier chain."
     }
   },
   "guards": [

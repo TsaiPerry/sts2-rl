@@ -16,17 +16,17 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
       "path": "test/test_hook_order.py",
-      "sha256": "b8de2a3eefeb49141245e7fede8d92b029cd6fce4e429ce6b0537c8dd80fe707",
+      "sha256": "8e1ef674257f412e91b2386d8f622109db5fc9721e9f9c1e0e66806c7869ff8f",
       "side": "sim"
     }
   ],

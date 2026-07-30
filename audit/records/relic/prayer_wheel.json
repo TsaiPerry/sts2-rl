@@ -6,17 +6,17 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\prayer_wheel.py",
-    "sha256": "73712c69abe500185ce075943da1e19afca6e883a655dea30ef135fcbff848d4"
+    "sha256": "c7dd90df2b936870b1d7f1ceb4cd7e444cfc1dcec9d2f61df1b85ac0d1b2a7c8"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "9f8f94386154df9acfd780c8e5549419bffd7d5ed2448495595c9aa33fce4e83",
+      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
       "side": "sim"
     }
   ],
@@ -35,8 +35,9 @@
   "guards": [
     {
       "what": "G1 (LIVE): normal-enemy combats offer ONE card choice instead of two, and the stub's stated premise ('an out-of-combat reward modifier, so this is a no-op stub') is false",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. The premise half is settled: rewards.py:526-527 dispatches `modify_combat_rewards` over every relic and five other relics use it. WHAT REMAINS is the structural blocker the port now names -- a second pick-one-of-THREE reward group that rewards.CombatRewards cannot express -- plus the note that the second CardReward must go through create_reward_cards so it consumes the same Rewards-stream draws."
+      "verdict": "faithful",
+      "maps_to": "PrayerWheel.modify_combat_rewards (sts2_rl/relics/prayer_wheel.py) -- appends an unpopulated CardRewardGroup on Monster rooms",
+      "rationale": "CLOSED 2026-07-28 by the gap-queue continuation's section-A fix pass (this is a CODE change, not a re-reading of the old code). The structural blocker is gone: CombatRewards models a LIST of CardRewards (`card_rewards`), so the relic's second pick-one-of-3 has somewhere to live and the driver offers it as its own decision. The group is appended UNPOPULATED and drawn by apply_reward_modifiers after both hook passes, mirroring RewardsSet.cs:137-143 (`foreach (Reward item in Rewards.Except(second)) if (!item.IsPopulated) item.Populate()`), so its three Rewards-stream draws land behind everything TryModifyRewardsLate did. The room gate reads the new `rewards.room` (RewardsSet.Room), which is None on a custom set -- `room == null || room.RoomType != Monster` (PrayerWheel.cs:20-23). EXECUTED: four tests in test/test_relic_tier1_gaps.py (two groups on Monster, one on Elite/Boss, two separate decisions, and the populate-after-the-late-pass order).  The gap it replaced read: NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. The premise half is settled: rewards.py:526-527 dispatches `modify_combat_rewards` over every relic and five other relics use it. WHAT REMAINS is the structural blocker the port now names -- a second pick-one-of-THREE reward group that rewards.CombatRewards cannot express -- plus the note that the second CardReward must go through create_reward_cards so it consumes the same Rewards-stream draws."
     },
     {
       "what": "N1: `if (player != base.Owner) return false;` (PrayerWheel.cs:16-19) and the bool return",

@@ -15,7 +15,7 @@ class Akabeko(Relic):
     name = "Akabeko"
     rarity = RelicRarity.UNCOMMON
 
-    def on_player_turn_started(self, player: PlayerCombatState) -> None:
+    def after_side_turn_start(self, player: PlayerCombatState) -> None:
         if self.turn <= 1:
             from ..cmds import PowerCmd
             from ..powers import VigorPower

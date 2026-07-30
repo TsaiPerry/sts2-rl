@@ -39,7 +39,7 @@ from .full_env import (
     apply_combat_action,
     combat_action_masks,
 )
-from .rewards import GOLD_REWARD_RANGES, CombatRewards
+from .rewards import GOLD_REWARD_RANGES, CardRewardGroup, CombatRewards
 from .rooms import SHARED_ANCIENTS, RoomType
 
 if TYPE_CHECKING:
@@ -84,9 +84,23 @@ N_REST_OPTIONS = 3
 # "gambling_chip" is GamblingChip.cs:12's `CardSelectorPrefs(prompt, 0,
 # 999999999)` — the same MinSelect-0 shape, so "discard nothing" is a
 # first-class outcome and the whole-hand offer must not be short-circuited.
+# "choose_a_card_optional" is `FromChooseACardScreen(..., canSkip: true)`
+# (CardSelectCmd.cs:216-261) — the three-card generator potions. Skippability
+# is a per-SCREEN flag in C#, not a property of the kind of screen: Toolbox.cs:28
+# and ChoicesParadox.cs:46 open the very same choose-a-card screen and forbid the
+# decline, so the two need separate purposes here (same split as
+# "transform" / "transform_optional").
 SKIPPABLE_PURPOSES = frozenset({
-    "card_reward", "gambling_chip", "obtain", "transform_optional",
+    "card_reward", "choose_a_card_optional", "gambling_chip", "obtain",
+    "transform_optional",
 })
+
+# Answer namespace for "drink the belt potion in slot N" — see
+# DecisionRequest.potion_actions. It is offset far past every decision's own
+# option indices (a shop offers 15, a map row 7, a select screen
+# len(candidates)) so the two can never collide and no kind needs to know the
+# belt exists; `RunDriver._ask` intercepts the whole range.
+POTION_ACTION_BASE = 1000
 
 
 @dataclass
@@ -112,8 +126,46 @@ class DecisionRequest:
     rest_options: "list | None" = None           # REST: this visit's option snapshot
     rest_heal_used: bool = False                 # REST
     rest_smith_used: bool = False                # REST
+    # Whether a combat is live behind this decision. Stamped by
+    # `RunDriver._ask` on every request (`self.combat is not None or the
+    # driver's current combat`), because a request raised mid-combat does not
+    # always carry the combat itself — `_reward_selector`'s offers don't. Only
+    # `potion_actions` reads it.
+    in_combat: bool = False
 
     def legal_actions(self) -> list[int]:
+        return self.own_actions() + self.potion_actions()
+
+    def potion_actions(self) -> list[int]:
+        """`POTION_ACTION_BASE + slot` for every belt potion drinkable *from
+        this screen* — i.e. every `PotionUsage.AnyTime` potion, whenever no
+        combat is live.
+
+        `NPotionPopup.RefreshButtons` (NPotionPopup.cs:322-325) enables the Use
+        button for an AnyTime potion with no screen predicate whatsoever; the
+        `IsInProgress && CurrentSide == Side && !InACardSelectScreen && ...`
+        predicate is the `else if` arm that only CombatOnly potions reach. So
+        the belt is live on the map, in a shop, at a rest site, mid-event and
+        inside a card-select screen alike.
+
+        In combat it is masked off instead: there the belt is the combat
+        block's own potion actions, which target an enemy and run the whole of
+        `OnUseWrapper`, where `RunState.use_potion` deliberately runs only its
+        two combat-less steps.
+        """
+        if self.in_combat or self.combat is not None:
+            return []
+        from .potions import USAGE_ANY_TIME
+
+        return [
+            POTION_ACTION_BASE + slot
+            for slot, potion in enumerate(self.run.potions)
+            if potion is not None and potion.usage == USAGE_ANY_TIME
+        ]
+
+    def own_actions(self) -> list[int]:
+        """The decision's own options — what the answer means to the caller
+        that raised it. `legal_actions` is this plus the belt."""
         kind = self.kind
         if kind == DecisionKind.MAP:
             return list(range(len(self.points)))
@@ -244,17 +296,32 @@ class RunDriver:
         run.card_selector = self._card_selector
         run.option_selector = self._option_selector
         run.reward_selector = self._reward_selector
+        # RewardsCmd.OfferCustom for a whole set built outside a room (Glass
+        # Eye's five CardRewards): every screen goes through the same
+        # REWARD_CARD decision as a post-combat one.
+        run.rewards_offerer = self._offer_rewards
 
     # ── The single decision seam ─────────────────────────────────────────
 
     def _ask(self, request: DecisionRequest) -> int:
-        self.decisions += 1
-        action = int(self._ask_fn(request))
-        if action not in request.legal_actions():
-            raise ValueError(
-                f"asker returned illegal action {action} for {request!r}"
-            )
-        return action
+        # Stamp the combat context the request may not carry itself, so
+        # `potion_actions` can tell a map screen from a card-select screen
+        # inside a fight (see DecisionRequest.in_combat).
+        request.in_combat = request.combat is not None or self._combat is not None
+        while True:
+            self.decisions += 1
+            action = int(self._ask_fn(request))
+            if action not in request.legal_actions():
+                raise ValueError(
+                    f"asker returned illegal action {action} for {request!r}"
+                )
+            if action < POTION_ACTION_BASE:
+                return action
+            # `NPotionPopup` is an overlay: drinking resolves the potion and
+            # leaves you on the screen underneath, which still owes an answer.
+            # Terminates — every drink empties a belt slot.
+            drunk = self.run.use_potion(action - POTION_ACTION_BASE)
+            assert drunk, "potion_actions offered a slot use_potion refused"
 
     # ── Selector adapters (RunState.card_selector / CombatState.card_selector
     #    via create_combat, RunState.option_selector) ─────────────────────
@@ -384,30 +451,24 @@ class RunDriver:
 
     def _offer_rewards(self, rewards: "CombatRewards") -> None:
         run = self.run
-        if rewards.cards:
-            while True:
-                idx = self._ask(DecisionRequest(
-                    kind=DecisionKind.REWARD_CARD, run=run, rewards=rewards,
-                ))
-                if idx == len(rewards.cards) + 1:
-                    # Driftwood's reroll: regenerate the options (one-shot —
-                    # reroll() clears can_reroll) and re-ask.
-                    rewards.reroll(run)
-                    continue
-                break
-            if idx == len(rewards.cards) + 2:
-                # Pael's Wing: sacrifice the card reward
-                # (EndSelectionAndCompleteReward — no card is taken).
-                rewards.sacrifice_relic.on_sacrifice(run)
-            elif idx < len(rewards.cards):
-                run.add_card(rewards.cards[idx])
+        # A reward set holds a LIST of Rewards, and each CardReward on it is
+        # its own pick-one-of-N screen taken separately (RewardsSet.cs:49) —
+        # Prayer Wheel puts a second one on every Monster room. Offer them in
+        # list order, each through the same one-screen REWARD_CARD decision.
+        for group in list(rewards.card_rewards):
+            if group.cards:
+                self._offer_card_group(rewards, group)
         # Extra single-card rewards queued during combat (Thieving Hopper's
         # returned card; CombatRoom.ExtraRewards -> SpecialCardReward). Each
         # is its own take-or-skip choice (SpecialCardReward.OnSelect adds it
         # to the deck; skipping loses it), surfaced through the existing
         # REWARD_CARD decision as a one-card offer.
         for card in rewards.special_cards:
-            offer = CombatRewards(room_type=rewards.room_type, cards=[card])
+            offer = CombatRewards(
+                room_type=rewards.room_type,
+                card_rewards=[CardRewardGroup(cards=[card],
+                                              room_type=rewards.room_type)],
+            )
             idx = self._ask(DecisionRequest(
                 kind=DecisionKind.REWARD_CARD, run=run, rewards=offer,
             ))
@@ -423,6 +484,31 @@ class RunDriver:
         # Each is its own take-or-skip decision, like the pity potion above.
         for potion in rewards.special_potions:
             self._offer_potion(potion, rewards.room_type)
+
+    def _offer_card_group(self, rewards: "CombatRewards", group) -> None:
+        """One CardReward: pick / skip / reroll (Driftwood) / sacrifice
+        (Pael's Wing). The screen the policy sees describes THIS group, so a
+        second group on the same set is a second, independent decision."""
+        run = self.run
+        offer = rewards if rewards.card_rewards[:1] == [group] else CombatRewards(
+            room_type=group.room_type, room=rewards.room, card_rewards=[group],
+        )
+        while True:
+            idx = self._ask(DecisionRequest(
+                kind=DecisionKind.REWARD_CARD, run=run, rewards=offer,
+            ))
+            if idx == len(group.cards) + 1:
+                # Driftwood's reroll: regenerate the options (one-shot —
+                # reroll() clears can_reroll) and re-ask.
+                group.reroll(run)
+                continue
+            break
+        if idx == len(group.cards) + 2:
+            # Pael's Wing: sacrifice the card reward
+            # (EndSelectionAndCompleteReward — no card is taken).
+            group.sacrifice_relic.on_sacrifice(run)
+        elif idx < len(group.cards):
+            run.add_card(group.cards[idx])
 
     def _offer_potion(self, potion, room_type) -> None:
         """One take-or-skip potion offer (PotionReward / RewardsCmd.
@@ -444,6 +530,17 @@ class RunDriver:
             ))
             chosen = event.choose(idx)
             assert chosen, f"locked/unknown option {idx} slipped past the mask"
+            if event.pending_rewards is not None:
+                # A reward screen the option itself awaited, mid-event: the
+                # `await RewardsCmd.OfferCustom(player, rewards)` that closes
+                # HealRestSiteOption.ExecuteRestSiteHeal (HealRestSiteOption.
+                # cs:112) on the path PlayerCmd.MimicRestSiteHeal takes for
+                # Dense Vegetation's Rest. Offered here, between the option
+                # returning and the next page being asked for, because that is
+                # where the await sits (DenseVegetation.cs:88-99 puts its
+                # SetEventState after it).
+                pending, event.pending_rewards = event.pending_rewards, None
+                self._offer_rewards(pending)
         if event.pending_encounter is not None:
             # Event fights are real combat rooms (EventModel.
             # EnterCombatWithoutExitingEvent builds a CombatRoom): every

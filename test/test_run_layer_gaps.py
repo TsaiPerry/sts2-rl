@@ -75,16 +75,11 @@ def test_run_hp_loss_with_an_empty_belt_still_kills():
     assert len(run.held_potions) == 1
 
 
-@pytest.mark.xfail(
-    reason="event/EV-1 (audit/GAP-QUEUE.md entry 13) — HANDOFF to the lead: "
-           "FairyInABottle.after_preventing_death (sts2_rl/potions.py:1250-1255) "
-           "returns early when `self.combat is None`, so the ported Fairy is "
-           "inert during an event even though RunState.lose_hp now runs the "
-           "belt death pass. Delete this marker when potions.py grows the "
-           "out-of-combat arm.",
-    strict=True,
-)
 def test_fairy_in_a_bottle_saves_a_run_out_of_combat():
+    # Was a strict xfail for event/EV-1 until 2026-07-29: the marker said to
+    # delete it "when potions.py grows the out-of-combat arm", and it has —
+    # FairyInABottle.after_preventing_death now runs OnUseWrapper's
+    # null-combat arm (RemoveBeforeUse + OnUse) instead of returning early.
     # FairyInABottle.cs:33-45 — ShouldDie is false for its owner and
     # AfterPreventingDeath heals to max(MaxHp * 0.3, 1): 80 * 0.3 = 24.
     run = fresh_run()

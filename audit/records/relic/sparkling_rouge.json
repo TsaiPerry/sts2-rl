@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\sparkling_rouge.py",
-    "sha256": "53c9b67935b66c99ef5831a3b452ec8f4cebd41209e226bdfe72a32d16e1ef96"
+    "sha256": "cd406b518b6f119b24adbda8540f93f0b581460753414c406f41dc38b4877f4a"
   },
   "extra_sources": [
     {
@@ -16,27 +16,27 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/brimstone.py",
-      "sha256": "c7528b48bfcfade32c9684cec8768e2f1b5642ae1cdfef403e8aae20b6b77898",
+      "sha256": "282e800a29ec3115865b366498f4c303b54f1870ad4cfc852a85d96d9e3c3746",
       "side": "sim"
     },
     {

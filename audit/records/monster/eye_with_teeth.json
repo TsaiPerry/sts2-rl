@@ -48,9 +48,8 @@
   "guards": [
     {
       "what": "LIVE GAP -- death is not removal. IllusionPower.cs overrides ShouldCreatureBeRemovedFromCombatAfterDeath (:108-114) and AfterDeath (:77-90), NOT ShouldDie; the sim ports it onto should_die (powers.py:1566-1570), so an Eye With Teeth never dies and no on_death listener ever fires for it",
-      "verdict": "gap",
-      "live": true,
-      "issue": "NARROWED 2026-07-28. THE on_death HALF IS CLOSED: cmds.py:30-65's `_resolve_death` now mirrors CreatureCmd.KillWithoutCheckingWinCondition's two arms (CreatureCmd.cs:506-570) -- it dispatches `hooks.on_death` on BOTH, with was_removal_prevented False on the real arm (:519) and True on the prevented one (:566), and it no longer floors the prevented creature at 1 HP. EXECUTED on a killed Eye With Teeth: hp=0, is_dead=True, retained_after_death=True, and the on_death listener fires (relics/gremlin_horn.py has no wasRemovalPrevented guard, matching GremlinHorn.cs:24-32, so it now pays out as the game does). WHAT REMAINS: IllusionPower is STILL ported onto `should_die` (powers.py:1671-1675) where IllusionPower.cs implements only ShouldCreatureBeRemovedFromCombatAfterDeath (:108-114) and AfterDeath (:77-90) and NO ShouldDie, so the sim takes the death-PREVENTION arm and two things still diverge: (a) Hook.AfterDeath is dispatched with wasRemovalPrevented TRUE where the game passes false, and (b) the prevented arm never reaches `_strip_powers_after_death` (cmds.py:67-84), so Creature.RemoveAllPowersAfterDeath (Creature.cs:668-671, called from CreatureCmd.cs:533 on the real-death arm) never runs. EXECUTED: a Eye With Teeth killed while carrying a player-applied Vulnerable 3 keeps ['illusion', 'minion', 'vulnerable']; the game strips Vulnerable, because it is a non-temporary Debuff and IllusionPower.ShouldPowerBeRemovedOnDeath returns `!(power is ITemporaryPower)` = true for it (IllusionPower.cs:59-66), and keeps only the two Buffs. STILL LIVE and still the same mechanism as relic/gremlin_horn G1 and audit/records/power/illusion.json -- not re-verdicted here. Eye With Teeth is still summoned by Fogmog's ILLUSION move (fogmog.py:93-95, Fogmog.cs:66) in a ported overgrowth NORMAL encounter (rooms.py), so the reachability argument is unchanged."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): both powers are off `should_die`. Neither AdaptablePower nor IllusionPower overrides ShouldDie in C# -- grep the decompiled sources and there is no such member on either. What they implement is `ShouldCreatureBeRemovedFromCombatAfterDeath` (AdaptablePower.cs:58-66, IllusionPower.cs:108-116) and `AfterDeath` (:32-39, :76-90), so the death is REAL: Hook.ShouldDie returns true, CreatureCmd.cs:508 computes shouldRemoveFromCombat false, and :519 dispatches Hook.AfterDeath with wasRemovalPrevented FALSE. The sim answered `should_die` False and took the PREVENTED branch, so every listener without a wasRemovalPrevented guard -- Gremlin Horn is one, GremlinHorn.cs:24-32 -- saw the wrong arm. powers.py now carries `should_remove_from_combat_after_death` on both and arms the revive from `on_death`'s `not was_removal_prevented` arm, which is where AfterDeath does it. Pinned by test_glory.py::TestDeathPreventionBranch, which asserts hp 0, retained_after_death, and a single on_death dispatch carrying False on both the Test Subject and an Eye With Teeth.  The text it replaced read: NARROWED 2026-07-28. THE on_death HALF IS CLOSED: cmds.py:30-65's `_resolve_death` now mirrors CreatureCmd.KillWithoutCheckingWinCondition's two arms (CreatureCmd.cs:506-570) -- it dispatches `hooks.on_death` on BOTH, with was_removal_prevented False on the real arm (:519) and True on the prevented one (:566), and it no longer floors the prevented creature at 1 HP. EXECUTED on a killed Eye With Teeth: hp=0, is_dead=True, retained_after_death=True, and the on_death listener fires (relics/gremlin_horn.py has no wasRemovalPrevented guard, matching GremlinHorn.cs:24-32, so it now pays out as the game does). WHAT REMAINS: IllusionPower is STILL ported onto `should_die` (powers.py:1671-1675) where IllusionPower.cs implements only ShouldCreatureBeRemovedFromCombatAfterDeath (:108-114) and AfterDeath (:77-90) and NO ShouldDie, so the sim takes the death-PREVENTION arm and two things still diverge: (a) Hook.AfterDeath is dispatched with wasRemovalPrevented TRUE where the game passes false, and (b) the prevented arm never reaches `_strip_powers_after_death` (cmds.py:67-84), so Creature.RemoveAllPowersAfterDeath (Creature.cs:668-671, called from CreatureCmd.cs:533 on the real-death arm) never runs. EXECUTED: a Eye With Teeth killed while carrying a player-applied Vulnerable 3 keeps ['illusion', 'minion', 'vulnerable']; the game strips Vulnerable, because it is a non-temporary Debuff and IllusionPower.ShouldPowerBeRemovedOnDeath returns `!(power is ITemporaryPower)` = true for it (IllusionPower.cs:59-66), and keeps only the two Buffs. STILL LIVE and still the same mechanism as relic/gremlin_horn G1 and audit/records/power/illusion.json -- not re-verdicted here. Eye With Teeth is still summoned by Fogmog's ILLUSION move (fogmog.py:93-95, Fogmog.cs:66) in a ported overgrowth NORMAL encounter (rooms.py), so the reachability argument is unchanged."
     },
     {
       "what": "The REVIVE turn: C# splices a MoveState('REVIVE_MOVE', ReviveMove, HealIntent) with FollowUpStateId = StateLog.Last().Id and MustPerformOnceBeforeTransitioning (IllusionPower.cs:77-90); the sim branches inside the monster's own take_turn (fogmog.py:44-52)",
@@ -73,7 +72,7 @@
       "rationale": "Checked as a convention, not just as constants. The GAME's range is [MinInitialHp, MaxInitialHp] INCLUSIVE, because Creature.SetUniqueMonsterHpValue compensates for the exclusive bound explicitly: `int num = Monster.MaxInitialHp + 1` (Creature.cs:378) feeds BOTH `Enumerable.Range(minInitialHp, num - minInitialHp)` (Creature.cs:379) and the fallback `rng.NextInt(minInitialHp, num)` (Creature.cs:383). The sim's parity port matches on both arms: `candidates = [v for v in range(lo, hi + 1) ...]` picked with `niche.next_int_range(0, len(candidates))`, fallback `niche.next_int_range(lo, hi + 1)` (combat.py:224-243), and `next_int_range` is itself max-exclusive (rng.py:182-186) -- so the two `+ 1`s land exactly where C# puts them. This unit's MaxInitialHp is `=> MinInitialHp`, so the range is the single value 6 and no endpoint can be lost; the check is recorded anyway because an off-by-one would turn a one-element candidate list into an empty one and change which ARM of SetUniqueMonsterHpValue runs (NextItem vs NextInt), which is a stream-position difference even when the HP is identical. Executed (`py audit/tools/monster_probes_b01.py hprange`, 400 seeded combats per unit): declared [6,6], observed [6,6], and the observed set is exactly the full inclusive range, so the top endpoint 6 does occur. All 15 units of this batch pass. NOTE the legacy (non-parity) path is also right by a different route: Monster.__init__'s `rng.randint(self.min_hp, self.max_hp)` (monsters/base.py:78) is inclusive on both ends, matching the game's inclusive range, and in parity mode it is overwritten before anything reads it. Rule 7: Creature.cs, Rng.cs, sts2_rl/combat.py and sts2_rl/rng.py are hashed in extra_sources."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-27",
   "extra_sources": [
     {
@@ -103,17 +102,17 @@
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     },
     {

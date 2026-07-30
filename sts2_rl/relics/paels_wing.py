@@ -20,8 +20,11 @@ class PaelsWing(Relic):
         self.rewards_sacrificed = 0
 
     def modify_combat_rewards(self, run, rewards) -> None:
-        if rewards.cards:
-            rewards.sacrifice_relic = self
+        # TryModifyCardRewardAlternatives is dispatched per CardReward
+        # (PaelsWing.cs:73-81), so a screen carrying two card groups offers
+        # the SACRIFICE alternative on each.
+        for group in rewards.card_rewards:
+            group.sacrifice_relic = self
 
     def on_sacrifice(self, run) -> None:
         """OnSacrifice: count it; every SACRIFICES_PER_RELIC-th pulls the next

@@ -90,10 +90,18 @@ class TestDevotedSculptor:
     def test_incantation_then_scaling_savage(self):
         cs = fresh_with(DevotedSculptor)
         assert cs.enemy.current_intent.move_type == MoveType.BUFF
-        cs.end_turn()  # Forbidden Incantation -> Ritual 9 triggers at turn end
+        # MOVED 2026-07-29 (round 7, power/ritual/AfterApplied). It used to
+        # assert Strength 9 after the FIRST turn end. RitualPower.cs:36-43 sets
+        # WasJustAppliedByEnemy from `base.Owner.IsEnemy` alone, so a monster
+        # that buffs ITSELF skips its first AfterSideTurnEnd — and the error
+        # scaled with the biggest Ritual in the game, which is this one.
+        cs.end_turn()  # Forbidden Incantation -> Ritual 9, first trigger SKIPPED
+        assert "strength" not in cs.enemy.powers
+        cs.end_turn()  # Savage 12 unbuffed, then Ritual fires
+        assert cs.player.hp == 80 - 12
         assert cs.enemy.powers["strength"].amount == 9
-        cs.end_turn()  # Savage 12 + 9 Strength = 21
-        assert cs.player.hp == 80 - 21
+        cs.end_turn()  # Savage 12 + 9 = 21
+        assert cs.player.hp == 80 - 12 - 21
         assert cs.enemy.powers["strength"].amount == 18
 
 
@@ -386,22 +394,37 @@ class TestLostAndForgotten:
         assert isinstance(cs.enemies[1], TheForgotten) and cs.enemies[1].max_hp == 106
 
     def test_lost_steals_and_returns_strength(self):
-        cs = fresh_with(TheLost)
+        """The REAL encounter, because the return is only observable there.
+
+        `PossessStrengthPower.AfterDeath` pays the Strength back with
+        `PowerCmd.Apply`, which opens on `if (IsEnding) return null`
+        (PowerCmd.cs:69-72). Kill a solo Lost and the last primary enemy is
+        gone, so the combat is already ending and the game refuses the
+        repayment too -- unobservably, since the fight is over. Kill the Lost
+        while the Forgotten still stands and the repayment lands.
+        """
+        cs = fresh_encounter(ENCOUNTERS["the_lost_and_forgotten"])
+        lost = cs.enemies[0]
+        assert isinstance(lost, TheLost)
         cs.end_turn()  # Debilitating Smog: player -2 Str, Lost +2 Str
         assert cs.player.powers["strength"].amount == -2
-        assert cs.enemy.powers["strength"].amount == 2
-        kill(cs, cs.enemy)
+        assert lost.powers["strength"].amount == 2
+        kill(cs, lost)
         s = cs.player.powers.get("strength")
         assert s is None or s.amount == 0  # Strength returned
 
     def test_forgotten_steals_dexterity_and_dread_scales(self):
-        cs = fresh_with(TheForgotten)
+        # Same reason as the Lost: PossessSpeedPower's repayment goes through
+        # PowerCmd.Apply's `IsEnding` guard, so it needs a live sibling.
+        cs = fresh_encounter(ENCOUNTERS["the_lost_and_forgotten"])
+        forgotten = cs.enemies[1]
+        assert isinstance(forgotten, TheForgotten)
         cs.end_turn()  # Miasma: player -2 Dex, self +2 Dex, gain 8 block
         assert cs.player.powers["dexterity"].amount == -2
-        assert cs.enemy.powers["dexterity"].amount == 2
+        assert forgotten.powers["dexterity"].amount == 2
         # Dread telegraphs 13 + own Dexterity (2) = 15
-        assert cs.enemy.current_intent.damage == 15
-        kill(cs, cs.enemy)
+        assert forgotten.current_intent.damage == 15
+        kill(cs, forgotten)
         d = cs.player.powers.get("dexterity")
         assert d is None or d.amount == 0
 
@@ -620,3 +643,54 @@ class TestTestSubject:
         # while reviving, further damage is ignored
         dealt = DamageCmd.deal(cs.hooks, ts, 50, dealer=cs.player, props=DamageProps.CARD)
         assert dealt == 0
+
+
+class TestDeathPreventionBranch:
+    """power/_death_prevention_branch's last two live entries. Neither
+    AdaptablePower nor IllusionPower implements `ShouldDie` in C# — grep the
+    decompiled sources and there is no override. What they DO implement is
+    `ShouldCreatureBeRemovedFromCombatAfterDeath` (AdaptablePower.cs:58-66,
+    IllusionPower.cs:108-116) and `AfterDeath` (:32-39, :76-90), which is the
+    `!wasRemovalPrevented` arm. So the death is REAL — `Hook.ShouldDie`
+    returns true, the corpse stays in combat, and `Hook.AfterDeath` fires with
+    wasRemovalPrevented FALSE."""
+
+    def test_the_test_subject_death_is_real_not_prevented(self):
+        seen = []
+
+        class _Spy:
+            id = "spy"
+
+            def on_death(self, creature, was_removal_prevented=False):
+                seen.append(was_removal_prevented)
+
+        cs = fresh_encounter(ENCOUNTERS["test_subject"])
+        cs.hooks.register(_Spy())
+        ts = cs.enemy
+        kill(cs, ts)
+        assert ts.is_dead and ts.hp == 0
+        assert ts.retained_after_death            # kept in combat
+        assert seen == [False]                    # CreatureCmd.cs:519, not :566
+        assert ts.powers["adaptable"].is_reviving
+
+    def test_an_illusion_death_is_real_not_prevented(self):
+        from sts2_rl.monsters import Encounter
+        from sts2_rl.monsters.overgrowth.fogmog import EyeWithTeeth
+
+        seen = []
+
+        class _Spy:
+            id = "spy"
+
+            def on_death(self, creature, was_removal_prevented=False):
+                seen.append(was_removal_prevented)
+
+        cs = CombatState(rng=random.Random(0),
+                         encounter=Encounter("pin_illusion", [EyeWithTeeth]))
+        cs.hooks.register(_Spy())
+        eye = cs.enemies[0]
+        kill(cs, eye)
+        assert eye.is_dead and eye.hp == 0
+        assert eye.retained_after_death
+        assert seen == [False]
+        assert eye.powers["illusion"].is_reviving

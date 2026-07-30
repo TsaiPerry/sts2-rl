@@ -81,8 +81,8 @@ Three things to expect from that output rather than be surprised by:
 > content tier's fixes still cannot prove themselves except where they sit under
 > an already-pinned seam mechanism (`damage_pipeline/G3`, `hook_dispatch/G3`,
 > `hook_dispatch/G4`, `turn_structure/G13`). Adding pins as gaps are worked is
-> the cheapest way to keep that from rotting, and `GAP-QUEUE.md` entry 51
-> (`relic/_combat_reset`, 16 sites, one parametrised test) is the highest-value
+> the cheapest way to keep that from rotting, and `GAP-QUEUE.md`'s
+> `relic/_combat_reset` (16 sites, one parametrised test) is the highest-value
 > place to start. On the ownership snag: `test/test_hook_order.py` is
 > seam-tier-owned and the potion stream's prompt overrode that explicitly,
 > confining its pins to one named class so the widening is visible and movable.
@@ -156,8 +156,9 @@ changes whenever any other pin is added.
 ## Start here if you want to FIX something
 
 **[`GAP-QUEUE.md`](GAP-QUEUE.md)** — the single actionable view. Ordered by
-seed-convergence impact first, then blast radius, then fix cost; live above
-dormant.
+seed-convergence impact first, then blast radius, then fix cost. **Nothing in
+it is labelled live any more; its Status section is where to start.** Entries
+are addressed by mechanism id, not by number.
 
 | grade | meaning |
 |---|---|

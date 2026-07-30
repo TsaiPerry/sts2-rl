@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\meat_on_the_bone.py",
-    "sha256": "eeea4165c3c7c41a936dcb46bf09b040d8bab0b14a6e8d416cd17869345ab07a"
+    "sha256": "79b72b2d5cb4216ad2d58ae75a3540172aaf0827333acb4c78c8f911c2d92b00"
   },
   "extra_sources": [
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
@@ -36,17 +36,17 @@
     },
     {
       "path": "sts2_rl/relics/black_blood.py",
-      "sha256": "254547adb216c08edb51fc54b3d39bc01ffd343615ecddf1d4bb073a8dbd684e",
+      "sha256": "01bd886db9276e72f4f092b2cd9753d389c1e1963cfe61b0b2b03a8200b5b689",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/burning_blood.py",
-      "sha256": "405e77409b015750d2a39b6b4c0c1281e3d2a003dd652d0027301b14c4309446",
+      "sha256": "0cfe83c2e28410bbeef86876b7882ac550a7f99232058530e87ec4776106f63c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/chosen_cheese.py",
-      "sha256": "67907b12c7831727ff42e1b670818565a98d0b39febe8860ba1bb28361cd89b5",
+      "sha256": "b911157377229e4b51723fdbfac4839e1442a5201991f5235a28bcf93b8e6847",
       "side": "sim"
     }
   ],
@@ -66,7 +66,7 @@
       "rationale": "MeatOnTheBone.cs:33-45 likewise assigns only `base.Status`, gated on the creature being the owner and combat being in progress. RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShouldFlashOnPlayer / ShowCounter / DisplayAmount / CanonicalVars' display side / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. It exists so the relic bar lights up live as the player's HP crosses 50%; nothing reads it."
     },
     "AfterCombatVictoryEarly": {
-      "maps_to": "on_combat_end_early (sts2_rl/relics/meat_on_the_bone.py:25-31) -- the Early phase of HookSystem's on_combat_end walk (sts2_rl/hooks.py:36, 153-180)",
+      "maps_to": "on_combat_victory_early (meat_on_the_bone.py), reached through hooks.on_combat_victory's `_early` phase pass",
       "verdict": "faithful",
       "issue": "Closed 2026-07-27: the AfterCombatVictoryEarly / AfterCombatVictory two-pass dispatch is real. On the combat side, HookSystem._each walks the phases very_early -> early -> plain -> late as COMPLETE separate passes whenever any listener declares a phase variant (sts2_rl/hooks.py:36, 153-180); on the run side RunState.finish_combat runs `after_combat_end_early` over every relic and only then `after_combat_end` (sts2_rl/run.py:1371-1381). Both mirror Hook.AfterCombatVictory (Hook.cs:340-352). sts2_rl/relics/meat_on_the_bone.py:25-31 rides the Early pass and its docstring pins the reasoning. WAS: the relic sat in the single flat on_combat_end walk."
     }
@@ -90,7 +90,7 @@
     {
       "what": "N3: the hook fires only on VICTORY in C#; the sim's on_combat_end fires on any conclusion and the port re-derives the restriction",
       "verdict": "faithful",
-      "rationale": "AfterCombatVictoryEarly is dispatched only from Hook.AfterCombatVictory (Hook.cs:340-351), itself called only from CombatManager.cs:999 on the victory path. The port's `if not player_won: return` (meat_on_the_bone.py:18) reconstructs exactly that. Distinct from relic/chosen_cheese, whose C# hook is the any-conclusion AfterCombatEnd and whose port therefore does NOT check player_won -- worth stating side by side, because the two ports look inconsistent and both are right."
+      "rationale": "The hook fires only on VICTORY in C#, and now only on victory in the sim too: the relic implements `on_combat_victory_early`, dispatched by `hooks.on_combat_victory` (Hook.AfterCombatVictory, CombatManager.cs:999) which only `_end_combat_internal` reaches. The port used to re-derive the restriction from a `player_won` flag on a hook that fired on both outcomes; there is no such flag and no such dispatch any more (turn_structure G10)."
     },
     {
       "what": "N4: WillHealOnCombatFinished is RE-EVALUATED inside AfterCombatVictoryEarly (MeatOnTheBone.cs:52) rather than reusing the cached RelicStatus",

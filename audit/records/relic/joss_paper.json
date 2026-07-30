@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\joss_paper.py",
-    "sha256": "837f7fdd3deb3ff71be78435ced91cbb82b698398a9b2f0d0476744578f7ef92"
+    "sha256": "8094d054cfbfa051cc19b6bd040394778d9969f0d5a5e57286ace2a570702822"
   },
   "extra_sources": [
     {
@@ -26,27 +26,27 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     },
     {
@@ -61,7 +61,7 @@
     },
     {
       "path": "test/test_hook_order.py",
-      "sha256": "b8de2a3eefeb49141245e7fede8d92b029cd6fce4e429ce6b0537c8dd80fe707",
+      "sha256": "8e1ef674257f412e91b2386d8f622109db5fc9721e9f9c1e0e66806c7869ff8f",
       "side": "sim"
     }
   ],
@@ -91,9 +91,9 @@
       "issue": "Closed 2026-07-27: the rollup's only gap was G1, the inferred cause. sts2_rl/relics/joss_paper.py's on_card_exhausted now takes `caused_by_ethereal` and branches on it (JossPaper.cs:102-114). The counting arithmetic was already exact."
     },
     "AfterSideTurnEnd": {
-      "maps_to": "on_hand_emptied (joss_paper.py:42-45), whose ONLY dispatch site is the bottom of PlayerCombatState.discard_hand (player.py:197)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G2 per binding rule 4. C#'s AfterSideTurnEnd (JossPaper.cs:116-124) fires unconditionally for the player side after the hand flush -- turn_structure spec step 64, the slot the sim exposes as after_player_turn_end (hooks.py:303-310, combat.py:663) -- and the port instead listens on on_hand_emptied, which combat.py:661-662 skips entirely whenever any listener vetoes the flush."
+      "maps_to": "after_player_turn_end (joss_paper.py), the player-side leg of hooks' Hook.AfterTurnEnd pair",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 5): guard G2. The text it replaced read: Rollup of guard G2 per binding rule 4. C#'s AfterSideTurnEnd (JossPaper.cs:116-124) fires unconditionally for the player side after the hand flush -- turn_structure spec step 64, the slot the sim exposes as after_player_turn_end (hooks.py:303-310, combat.py:663) -- and the port instead listens on on_hand_emptied, which combat.py:661-662 skips entirely whenever any listener vetoes the flush."
     },
     "AfterCombatEnd": {
       "maps_to": "reset_for_combat (sts2_rl/relics/joss_paper.py:29-32) -- clears _ethereal_pending only, mirroring JossPaper.cs:144-148",
@@ -109,8 +109,8 @@
     },
     {
       "what": "G2 (LIVE): the deferred credit is flushed from on_hand_emptied, which the sim fires only from inside discard_hand -- so a vetoed hand flush strands it permanently, where C#'s AfterSideTurnEnd fires unconditionally",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. The STRANDING half is CLOSED: CombatState.end_turn now calls `self.player.discard_hand(flush=self.hooks.should_flush_hand())` (sts2_rl/combat.py:806) instead of skipping the call, and PlayerCombatState.discard_hand fires `on_hand_emptied` even when `flush=False` (sts2_rl/player.py:223-240), which is FlushPlayerHand's tail (CombatManager.cs:1327-1346). A vetoed flush no longer strands the deferred Ethereal credit. WHAT REMAINS is the SLOT itself: JossPaper.AfterSideTurnEnd (JossPaper.cs:116-124) is turn_structure step 64, which the sim exposes as `after_player_turn_end`, and sts2_rl/relics/joss_paper.py still listens on `on_hand_emptied` -- which CombatState.check_for_empty_hand (sts2_rl/combat.py:748-758) also fires after every card play and potion use, so the credit can now be taken MID-TURN where C# takes it once, after the flush."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 5): the deferred credit is on `after_player_turn_end`, the sim's leg of Hook.AfterTurnEnd -- which is what JossPaper.cs:116 actually overrides (`AfterSideTurnEnd`, dispatched by Hook.cs:1267-1278 from CombatManager.cs:1307, AFTER FlushPlayerHand). It used to hang on `on_hand_emptied`, a different hook that only happened to fire from inside the flush; the sim has stopped firing it there at all (turn_structure G16), and the relic's own comment (:71-75) asks for exactly this position: \"we want to give the resulting cards to the player after the flush occurs\".  The text it replaced read: NARROWED 2026-07-27. The STRANDING half is CLOSED: CombatState.end_turn now calls `self.player.discard_hand(flush=self.hooks.should_flush_hand())` (sts2_rl/combat.py:806) instead of skipping the call, and PlayerCombatState.discard_hand fires `on_hand_emptied` even when `flush=False` (sts2_rl/player.py:223-240), which is FlushPlayerHand's tail (CombatManager.cs:1327-1346). A vetoed flush no longer strands the deferred Ethereal credit. WHAT REMAINS is the SLOT itself: JossPaper.AfterSideTurnEnd (JossPaper.cs:116-124) is turn_structure step 64, which the sim exposes as `after_player_turn_end`, and sts2_rl/relics/joss_paper.py still listens on `on_hand_emptied` -- which CombatState.check_for_empty_hand (sts2_rl/combat.py:748-758) also fires after every card play and potion use, so the credit can now be taken MID-TURN where C# takes it once, after the flush."
     },
     {
       "what": "N1: CardsExhausted is a [SavedProperty] (JossPaper.cs:60-74) that AfterCombatEnd does NOT reset, and the port likewise never resets cards_exhausted -- both carry across combats",
@@ -138,6 +138,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

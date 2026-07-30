@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
@@ -71,16 +71,16 @@
       "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Third-file citations, not hashed here."
     },
     "BeforeDamageReceived": {
-      "maps_to": "powers.py:339-353 ThornsPower.on_damage_received (hooks.py:453-467)",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27, RE-OPENED 2026-07-28. CLOSED (both recorded divergences): the sim has a real `before_damage_received` dispatch, fired at cmds.py:150 after the modifier passes and before block absorption (CreatureCmd.cs:263), and ThornsPower implements it (powers.py:369-392) with ThornsPower.cs:19's `dealer != null` and IsPoweredAttack guards, so the reflect is no longer subject to the killing-blow skip (CreatureCmd.cs:392) and no longer fires off Poison / Juggernaut / Flame Barrier damage. STILL OPEN: the reflect is dealt by NOBODY. ThornsPower.cs:22 is `CreatureCmd.Damage(choiceContext, dealer, base.Amount, ValueProp.Unpowered | ValueProp.SkipHurtAnim, base.Owner, null)` -- dealt BY base.Owner -- while powers.py:390-392 is `DamageCmd.deal(self.hooks, dealer, self.amount, props=DamageProps.NON_CARD_UNPOWERED)`, whose 2nd positional is the TARGET and whose own `dealer` parameter (cmds.py:92) is left None. Two consequences survive: hooks.on_damage_dealt is gated on `dealer is not None` (cmds.py:187-188), so Hook.AfterDamageGiven (CreatureCmd.cs:390) never fires for a Thorns reflect and no Thorns-on-Thorns chain is possible; and C#'s `if (dealer != null && dealer.IsDead) return` (CreatureCmd.cs:242-245) has no sim counterpart on this path. FlameBarrierPower, the same shape one power over, DOES pass dealer=self.owner (powers.py:739-742), so this is an inconsistency inside the sim as well. This is the SAME omission that keeps power/constrict's AfterSideTurnEnd entry at `gap`, so binding rule 3 requires the same verdict here. This record's guard on ThornsPower.cs:22 has carried the fact in its rationale since the original audit and is still verdicted `faithful`; read the two together -- the divergence is recorded here."
+      "maps_to": "powers.py ThornsPower.before_damage_received (hooks.py before_damage_received, fired at cmds.py after the modifier passes and before block absorption)",
+      "verdict": "faithful",
+      "issue": "CLOSED 2026-07-29 (round 10, the Tier 1 residue). The last open leg was the DEALER: ThornsPower.cs:22 passes `base.Owner` as CreatureCmd.Damage's 5th argument and the port left it None. It now passes `dealer=self.owner`, matching FlameBarrierPower one power over, which removes both recorded consequences: Hook.AfterDamageGiven (CreatureCmd.cs:390) now fires for a reflect -- `on_damage_dealt` is gated on `dealer is not None` (cmds.py) -- so a Thorns-on-Thorns chain is possible, and the dead-dealer early return has something to test. That return is ported too: `DamageCmd.deal` now opens with CreatureCmd.cs:242-245's `if (dealer != null && dealer.IsDead) return`, which this fix is what makes reachable (a multi-hit attacker killed by the first hit's reflect must not land the rest of the attack). EXECUTED: a 4-damage enemy hit into Thorns 3 records on_damage_dealt(player -> enemy, 3) where the old port recorded nothing, and a dealer at 0 HP deals 0. Pinned by test/test_tier1_residue.py (3 tests). WAS: NARROWED 2026-07-27, RE-OPENED 2026-07-28. CLOSED (both recorded divergences): the sim has a real `before_damage_received` dispatch, fired at cmds.py:150 after the modifier passes and before block absorption (CreatureCmd.cs:263), and ThornsPower implements it (powers.py:369-392) with ThornsPower.cs:19's `dealer != null` and IsPoweredAttack guards, so the reflect is no longer subject to the killing-blow skip (CreatureCmd.cs:392) and no longer fires off Poison / Juggernaut / Flame Barrier damage. STILL OPEN: the reflect is dealt by NOBODY. ThornsPower.cs:22 is `CreatureCmd.Damage(choiceContext, dealer, base.Amount, ValueProp.Unpowered | ValueProp.SkipHurtAnim, base.Owner, null)` -- dealt BY base.Owner -- while powers.py:390-392 is `DamageCmd.deal(self.hooks, dealer, self.amount, props=DamageProps.NON_CARD_UNPOWERED)`, whose 2nd positional is the TARGET and whose own `dealer` parameter (cmds.py:92) is left None. Two consequences survive: hooks.on_damage_dealt is gated on `dealer is not None` (cmds.py:187-188), so Hook.AfterDamageGiven (CreatureCmd.cs:390) never fires for a Thorns reflect and no Thorns-on-Thorns chain is possible; and C#'s `if (dealer != null && dealer.IsDead) return` (CreatureCmd.cs:242-245) has no sim counterpart on this path. FlameBarrierPower, the same shape one power over, DOES pass dealer=self.owner (powers.py:739-742), so this is an inconsistency inside the sim as well. This is the SAME omission that keeps power/constrict's AfterSideTurnEnd entry at `gap`, so binding rule 3 requires the same verdict here. This record's guard on ThornsPower.cs:22 has carried the fact in its rationale since the original audit and is still verdicted `faithful`; read the two together -- the divergence is recorded here."
     }
   },
   "guards": [
     {
       "what": "ThornsPower.cs:19 `props.IsPoweredAttack() || cardSource is Omnislice`",
-      "verdict": "gap",
-      "issue": "Absent entirely -- see consequence 2 of the BeforeDamageReceived entry. Carried as its own guard because it survives a hook-slot fix: moving the sim to a before-damage slot would still reflect off Poison and power damage without this test. The Omnislice arm is separately dormant (Omnislice is unported)."
+      "verdict": "faithful",
+      "issue": "STALE, re-verdicted 2026-07-29 (round 10). 'Absent entirely' was already false when written and is contradicted by this record's own BeforeDamageReceived text: powers.py ThornsPower.before_damage_received tests `is_powered_attack(props)` and returns if it fails, so the reflect does not fire off Poison, Juggernaut, Panache, Inferno, Rolling Boulder, The Bomb or Flame Barrier. The Omnislice arm of the disjunct stays dormant: Omnislice is unported, so the second clause has no site. Absent entirely -- see consequence 2 of the BeforeDamageReceived entry. Carried as its own guard because it survives a hook-slot fix: moving the sim to a before-damage slot would still reflect off Poison and power damage without this test. The Omnislice arm is separately dormant (Omnislice is unported)."
     },
     {
       "what": "ThornsPower.cs:19 `dealer != null`",
@@ -98,6 +98,6 @@
       "rationale": "Thorns is one of only five powers the whole C# source ever applies negatively -- SpinyToad.cs:-5 and Toadpole.cs:-SpikenAmount spend the Thorns they built up (executed: `py audit/tools/power_census.py neg-appliers`) -- and it is NOT AllowNegative, so ShouldRemoveDueToAmount (PowerModel.cs:478-489) removes it at <= 0. The sim agrees: ThornsPower leaves allow_negative False and cmds.py:317-319 expires the power at amount == 0 or below. Both ported spenders subtract exactly what they added (spiny_toad.py:45,51; toadpole.py:66,75), so the amount lands on 0 and both sides remove. Sign-aware typing is inert here for a third reason: with AllowNegative false and Type Buff, NEITHER GetTypeForAmount arm fires, so the type is Buff for every sign on both sides. Third-file citations, not hashed here."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

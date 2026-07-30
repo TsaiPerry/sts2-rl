@@ -96,8 +96,9 @@ def test_dense_vegetation_rest_fires_after_rest_site_heal():
 
 
 def test_dense_vegetation_rest_builds_the_heal_rewards():
-    """...and then Hook.ModifyRestSiteHealRewards, so Dream Catcher's
-    3-card choice is offered before the ambush."""
+    """...and then Hook.ModifyRestSiteHealRewards, which is what BUILDS Dream
+    Catcher's 3-card choice. That the driver then offers it is
+    test_driver.py::test_mimicked_rest_heal_offers_its_rewards_too."""
     run = fresh_run(16)
     run.add_relic(make_relic("dream_catcher"))
     event, rest = _rest_option(run)

@@ -6,17 +6,17 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\lords_parasol.py",
-    "sha256": "3fa52e5c94dc53084eec197be02dbb1b6736afd4d1e7ad63ad27775d23f2e876"
+    "sha256": "3ee47e9df6d5d0ff5fd0d3d9e420ca5e522929abc4f0d8bf2c55d7101eba3777"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     },
     {
@@ -39,8 +39,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): the free CARD REMOVAL is never taken, and the port's docstring claims the game does not take it",
-      "verdict": "gap",
-      "issue": "MECHANISM: LordsParasol.cs:102-107 is `if (inventory.CardRemovalEntry != null) { NMapScreen...SetTravelEnabled(false); await inventory.CardRemovalEntry.OnTryPurchaseWrapper(inventory, ignoreCost: true, cancelable: false); ... }` -- outside the try/finally, after the card / relic / potion loops, with cancelable:false so the player MUST remove a card. lords_parasol.py:20-24 iterates `shop.all_entries` and `continue`s past any MerchantCardRemovalEntry, and lords_parasol.py:10-11 asserts 'the card-removal service is not an item and is not bought'. That claim is false against the source. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b08.py b08-parasol): entering a stocked merchant with the relic buys 7 cards, 4 relics and 3 potions for 0 gold, and leaves `removal_used=False` -- where the game would also remove one deck card, leaving the deck at 16 rather than 17. Both sides are fully ported: the relic is granted by the ported Vakuu shrine (events/vakuu.py), MerchantInventory.create always builds a MerchantCardRemovalEntry (shop.py:381-382), its `_buy` is implemented end to end (shop.py:343-353: select a removable card, lose the gold, remove it, bump card_shop_removals_used) and MerchantEntry.purchase already honours ignore_cost by zeroing the cost around the buy (shop.py:173-194). So the fix is to stop skipping the entry, not to build anything. The observable is a permanently larger deck AND a missed 75+25n gold-priced service, in every merchant room the relic sees -- and deck contents are what conformance/runner.py compares as (id, upgrade_level) pairs. Rule 7: shop.py, run.py, relics/base.py, events/vakuu.py and conformance/runner.py are not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The free card removal is taken. LordsParasol.cs:102-107 is `if (inventory.CardRemovalEntry != null) { NMapScreen...SetTravelEnabled(false); await inventory.CardRemovalEntry.OnTryPurchaseWrapper(inventory, ignoreCost: true, cancelable: false); ... }` -- OUTSIDE the try/finally, AFTER the card, relic and potion loops, and with `cancelable: false`, so the player MUST remove a card. relics/lords_parasol.py `continue`d past any MerchantCardRemovalEntry and its docstring asserted 'the card-removal service is not an item and is not bought', which is false against the source (bug class 12). It now HOLDS the entry back rather than skipping it -- preserving C#'s ordering, last and outside the loop -- and purchases it with `ignore_cost=True` at the end. Nothing had to be built: MerchantInventory.create always makes a MerchantCardRemovalEntry, its `_buy` is implemented end to end (select a removable card, lose the gold, remove it, bump card_shop_removals_used) and MerchantEntry.purchase already honours ignore_cost by zeroing the cost around the buy. The observable was a permanently LARGER deck plus a missed 75+25n gold-priced service in every merchant room the relic saw -- and deck contents are what conformance/runner.py compares as (id, upgrade_level) pairs. NOT CLOSED: nothing at this site.  The text it replaced read: MECHANISM: LordsParasol.cs:102-107 is `if (inventory.CardRemovalEntry != null) { NMapScreen...SetTravelEnabled(false); await inventory.CardRemovalEntry.OnTryPurchaseWrapper(inventory, ignoreCost: true, cancelable: false); ... }` -- outside the try/finally, after the card / relic / potion loops, with cancelable:false so the player MUST remove a card. lords_parasol.py:20-24 iterates `shop.all_entries` and `continue`s past any MerchantCardRemovalEntry, and lords_parasol.py:10-11 asserts 'the card-removal service is not an item and is not bought'. That claim is false against the source. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b08.py b08-parasol): entering a stocked merchant with the relic buys 7 cards, 4 relics and 3 potions for 0 gold, and leaves `removal_used=False` -- where the game would also remove one deck card, leaving the deck at 16 rather than 17. Both sides are fully ported: the relic is granted by the ported Vakuu shrine (events/vakuu.py), MerchantInventory.create always builds a MerchantCardRemovalEntry (shop.py:381-382), its `_buy` is implemented end to end (shop.py:343-353: select a removable card, lose the gold, remove it, bump card_shop_removals_used) and MerchantEntry.purchase already honours ignore_cost by zeroing the cost around the buy (shop.py:173-194). So the fix is to stop skipping the entry, not to build anything. The observable is a permanently larger deck AND a missed 75+25n gold-priced service, in every merchant room the relic sees -- and deck contents are what conformance/runner.py compares as (id, upgrade_level) pairs. Rule 7: shop.py, run.py, relics/base.py, events/vakuu.py and conformance/runner.py are not hashed by this record."
     },
     {
       "what": "N1: the PURCHASE ORDER -- C# buys character cards, then colorless cards, then relics, then potions, then the card removal",

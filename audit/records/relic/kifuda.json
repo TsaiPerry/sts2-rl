@@ -6,12 +6,12 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\kifuda.py",
-    "sha256": "c8fc93018873d018bbad4834f7c1cc7c5bda190668e4ab0b993c59915578422b"
+    "sha256": "bdd4cb3f0c16c45b4333fd19763e120289bc80502b3800092caeea52b6c0bf0d"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -59,8 +59,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): the whole AfterObtained effect is missing, and the port's stated premise -- 'no enchantments in the sim' (kifuda.py:7-8) -- is FALSE",
-      "verdict": "gap",
-      "issue": "MECHANISM: Kifuda.cs:24-37 builds a CardSelectorPrefs with min 0 / max `DynamicVars.Cards.IntValue` == 3, Cancelable = false, then `CardSelectCmd.FromDeckForEnchantment(Owner, ModelDb.Enchantment<Adroit>(), 3, prefs)` and, for each pick, `CardCmd.Enchant(canonical.ToMutable(), item, 3m)` -- three deck cards permanently gain Adroit at amount 3. PREMISE CHECK (PROMPT.md bug class 12, and the shared sweep-stubs already flags this stub's premise as false): the sim HAS enchantments (`sts2_rl/enchantments.py`, 17 ported), HAS the relic-side attach idiom, and HAS the selection verb -- `py audit/tools/relic_probes_b08.py b08-kifuda` enumerates TWELVE live `run.select_cards(\"enchant\", ...)` call sites, four of them relics doing exactly this shape (relics/beautiful_bracelet.py:26, relics/electric_shrymp.py:20, relics/paels_growth.py:22, relics/tri_boomerang.py:26). run.py:552 dispatches after_obtained. REACHABILITY (LIVE): Kifuda is Shop rarity in the transcribed grab bag (relic_probes_b08.py b08-pool: bag=Shop), the trigger is simply buying it, and the divergence is observable in every such run -- EXECUTED: add_relic('kifuda') leaves all 10 starting deck cards at enchantment=None where the game leaves three carrying Adroit(3). NOT dormant: the relic and the trigger are both ported and the code path is taken; what is missing is the relic's effect. FIX PREREQUISITE (named, per rule 6's spirit): the specific enchantment is unported -- `'adroit' in ALL_ENCHANTMENTS` is False, and src/Core/Models/Enchantments/Adroit.cs (OnPlay -> CreatureCmd.GainBlock(Amount), RecalculateValues sets Block.BaseValue = Amount) must be ported before this relic can be, so the gap cannot be closed by editing kifuda.py alone. Rule 7: enchantments.py, run.py, relics/beautiful_bracelet.py, relics/electric_shrymp.py, relics/paels_growth.py, relics/tri_boomerang.py and src/Core/Models/Enchantments/Adroit.cs are not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `after_obtained` is implemented: a `run.select_cards('enchant', ...)` screen over the cards Adroit can enchant, up to CardsVar 3, then attach at amount 3 -- Kifuda.cs:24-37. The screen is non-cancelable with min 0 in C#; `select_cards` returning fewer than 3 when fewer are eligible is the same shape.  The stub's premise was checked before the code (PROMPT.md bug class 12) and was false, which is the fifth round running that has held. The sim has 17 ported enchantments, the relic-side attach idiom and the selection verb.  Pinned by test/test_false_premise_stubs.py.  THE NAMED PREREQUISITE IS DISCHARGED: `AdroitEnchantment` is ported (enchantments.py) -- Adroit.cs's OnPlay is `CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, cardPlay)` and RecalculateValues keeps `Block.BaseValue = Amount`, so the block is the ENCHANTMENT's amount, not the card's printed block, and there is no CanEnchantCardType override so the base CanEnchant is the whole filter. It has its own test. NOT CLOSED: nothing at this site.  The text it replaced read: MECHANISM: Kifuda.cs:24-37 builds a CardSelectorPrefs with min 0 / max `DynamicVars.Cards.IntValue` == 3, Cancelable = false, then `CardSelectCmd.FromDeckForEnchantment(Owner, ModelDb.Enchantment<Adroit>(), 3, prefs)` and, for each pick, `CardCmd.Enchant(canonical.ToMutable(), item, 3m)` -- three deck cards permanently gain Adroit at amount 3. PREMISE CHECK (PROMPT.md bug class 12, and the shared sweep-stubs already flags this stub's premise as false): the sim HAS enchantments (`sts2_rl/enchantments.py`, 17 ported), HAS the relic-side attach idiom, and HAS the selection verb -- `py audit/tools/relic_probes_b08.py b08-kifuda` enumerates TWELVE live `run.select_cards(\"enchant\", ...)` call sites, four of them relics doing exactly this shape (relics/beautiful_bracelet.py:26, relics/electric_shrymp.py:20, relics/paels_growth.py:22, relics/tri_boomerang.py:26). run.py:552 dispatches after_obtained. REACHABILITY (LIVE): Kifuda is Shop rarity in the transcribed grab bag (relic_probes_b08.py b08-pool: bag=Shop), the trigger is simply buying it, and the divergence is observable in every such run -- EXECUTED: add_relic('kifuda') leaves all 10 starting deck cards at enchantment=None where the game leaves three carrying Adroit(3). NOT dormant: the relic and the trigger are both ported and the code path is taken; what is missing is the relic's effect. FIX PREREQUISITE (named, per rule 6's spirit): the specific enchantment is unported -- `'adroit' in ALL_ENCHANTMENTS` is False, and src/Core/Models/Enchantments/Adroit.cs (OnPlay -> CreatureCmd.GainBlock(Amount), RecalculateValues sets Block.BaseValue = Amount) must be ported before this relic can be, so the gap cannot be closed by editing kifuda.py alone. Rule 7: enchantments.py, run.py, relics/beautiful_bracelet.py, relics/electric_shrymp.py, relics/paels_growth.py, relics/tri_boomerang.py and src/Core/Models/Enchantments/Adroit.cs are not hashed by this record."
     },
     {
       "what": "G2 (DORMANT): CardSelectorPrefs' `Cancelable = false` and the min-0/max-3 range, vs run.select_cards' fixed count",

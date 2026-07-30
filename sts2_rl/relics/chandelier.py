@@ -15,7 +15,7 @@ class Chandelier(Relic):
     name = "Chandelier"
     rarity = RelicRarity.RARE
 
-    def on_player_turn_started(self, player: PlayerCombatState) -> None:
+    def after_side_turn_start(self, player: PlayerCombatState) -> None:
         if self.turn == 3:
             from ..cmds import EnergyCmd
             EnergyCmd.gain(self.hooks, player, 3)

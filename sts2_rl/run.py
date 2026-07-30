@@ -407,14 +407,22 @@ class RunState:
     # ── Gold ─────────────────────────────────────────────────────────────
 
     def gain_gold(self, amount: float) -> None:
-        """PlayerCmd.GainGold: truncate toward zero; no-op unless positive.
+        """PlayerCmd.GainGold (PlayerCmd.cs:140-170): truncate toward zero;
+        no-op unless positive.
 
-        Hook.ModifyGoldGained runs first (Ectoplasm zeroes it)."""
+        Hook.ModifyGoldGained runs first (Ectoplasm zeroes it), and the
+        `if (!(amount > 0m)) return;` bail at :146-149 tests the MODIFIED
+        amount — so a zeroed gain skips the whole tail, `AfterGoldGained`
+        included. The hook then fires AFTER the balance moves (:168-169), so
+        Dragon Fruit reads the new total.
+        """
         for relic in list(self.relics):
             amount = relic.modify_gold_gained(self, amount)
         gained = int(amount)
         if amount > 0:
             self.gold += gained
+            for relic in list(self.relics):
+                relic.after_gold_gained(self, gained)
 
     def lose_gold(self, amount: float) -> None:
         """PlayerCmd.LoseGold: truncate; gold never goes below 0."""
@@ -438,8 +446,23 @@ class RunState:
         return card
 
     def remove_cards(self, cards: list[Card]) -> None:
+        """CardPileCmd.RemoveFromDeck (CardPileCmd.cs:52-70) — one card at a
+        time, each firing `Hook.BeforeCardRemoved` BEFORE it is unlinked."""
         for card in cards:
+            self.before_card_removed(card)
             self.deck.remove(card)
+
+    def before_card_removed(self, card: Card) -> None:
+        """Hook.BeforeCardRemoved (Hook.cs:299-305) over
+        RunState.IterateHookListeners — which yields the DECK as well as the
+        relics, because the hook's only implementer in the whole decompiled
+        game is a card: SpoilsMap.cs:100-116 unpins its treasure-node quest
+        when the card leaves the deck. Called by every deck removal, so a
+        removal path that bypasses it silently strands the quest marker."""
+        for listener in list(self.deck) + list(self.relics):
+            fn = getattr(listener, "before_card_removed", None)
+            if fn is not None:
+                fn(self, card)
 
     def removable_cards(self) -> list[Card]:
         """CardModel.IsRemovable: everything except Eternal cards."""
@@ -496,6 +519,28 @@ class RunState:
             if 0 <= idx < count:
                 return idx
         return self.rng.randrange(count)
+
+    def offer_rewards(self, rewards) -> None:
+        """`RewardsSet.Offer` for a whole reward set built outside a room —
+        `RewardsCmd.OfferCustom` (RewardsCmd.cs:47-50).
+
+        Each `CardReward` on the set is its own pick-one-of-N screen taken
+        separately, so a set with five of them (Glass Eye) is five decisions.
+        Delegates to `self.rewards_offerer` — the callable the driver installs,
+        which surfaces every screen through the REWARD_CARD decision and knows
+        about Driftwood's reroll and Pael's Wing's sacrifice. With no offerer
+        attached (bare RunState, unit tests) it falls back to the same
+        pick-one-per-group loop through `select_cards`.
+        """
+        offerer = getattr(self, "rewards_offerer", None)
+        if offerer is not None:
+            offerer(rewards)
+            return
+        for group in list(rewards.card_rewards):
+            if not group.cards:
+                continue
+            for card in self.select_cards("card_reward", list(group.cards), 1):
+                self.add_card(card)
 
     def offer_relic(self, relic: Relic | str) -> Relic | None:
         """RewardsCmd.OfferCustom with a RelicReward — a take-or-SKIP screen.
@@ -610,14 +655,28 @@ class RunState:
 
     # ── Potions ──────────────────────────────────────────────────────────
 
-    def add_potion(self, potion: Potion) -> bool:
+    def add_potion(self, potion: Potion, slot: int | None = None) -> bool:
         """Fill the first open belt slot. Returns whether it was kept.
 
         Hook.ShouldProcurePotion gates it first (Sozu refuses every potion).
         Mirrors Player.cs AddPotionInternal: `slotIndex =
-        _potionSlots.IndexOf(null)` — fails if no slot is null (belt full)."""
+        _potionSlots.IndexOf(null)` — fails if no slot is null (belt full).
+
+        `slot` names an EXPLICIT belt index, which is the other form
+        `PotionCmd.TryToProcure` takes: Alchemical Coffer snapshots the belt size
+        before growing it and procures into `originalSlotCount + i`
+        (AlchemicalCoffer.cs:22-27), so its four potions land in the NEW slots and
+        leave the old ones empty. Slot identity is observable — a UsePotion replay
+        command names a slot and the conformance runner diffs `floor_potions` slot
+        by slot.
+        """
         if not all(r.should_procure_potion(self, potion) for r in self.relics):
             return False
+        if slot is not None:
+            if not (0 <= slot < len(self.potions)) or self.potions[slot] is not None:
+                return False
+            self.potions[slot] = potion
+            return True
         if not self.has_open_potion_slot:
             return False
         self.potions[self.potions.index(None)] = potion
@@ -1071,6 +1130,22 @@ class RunState:
         act_map = base
         for listener in listeners:  # Hook.ModifyGeneratedMap
             act_map = listener.modify_generated_map(self, act_map, self.act_index)
+        # Hook.ModifyGeneratedMapLate. NOTE THE MISMATCH, because it is a real one
+        # and it is not this function's to resolve: `grep -rn
+        # ModifyGeneratedMapLate src/` outside AbstractModel.cs/Hook.cs returns
+        # three lines — the two implementers (SpoilsMap.cs:63, FurCoat.cs:58) and
+        # ONE dispatch, at RunManager.cs:740, inside `if (SavedMapsToLoad != null
+        # && ...)`, the branch that DESERIALIZES a saved ActMap. The branch that
+        # GENERATES a map (RunManager.cs:743-747) runs ModifyGeneratedMap and
+        # AfterMapGenerated ONLY; the Late hook exists to re-attach quests/shape
+        # to a loaded map, and the sim has no save-load at all.
+        #
+        # The pass is kept because card/spoils_map folds work into this hook that
+        # the sim needs on a fresh generation (it records the Treasure coord that
+        # `after_map_generated` then pins its quest to), and how that should be
+        # reconciled with the source is the CARD stream's entry, not Fur Coat's.
+        # Fur Coat instead no longer OVERRIDES the hook — see relics/fur_coat.py,
+        # where relic/fur_coat/g2 is closed.
         for listener in listeners:  # Hook.ModifyGeneratedMapLate
             act_map = listener.modify_generated_map_late(
                 self, act_map, self.act_index
@@ -1207,6 +1282,15 @@ class RunState:
         elif room_type == RoomType.EVENT:
             self.room_set.ensure_next_event_is_valid(self)
             event_id = self.room_set.next_event_id
+            # `Hook.ModifyNextEvent` (Hook.cs:1830-1836). Its ONE call site is
+            # ActModel.PullNextEvent (ActModel.cs:437-443), which is exactly this
+            # shape: EnsureNextEventIsValid, then the hook chain, then
+            # `AddVisitedEvent(eventModel)` -- so the hook sits between the pull
+            # and the visited-set add, and the event RECORDED as visited is the
+            # MODIFIED one. The Lantern Key is the source's only implementer, and
+            # it is why an event whose own IsAllowed is False can still be served.
+            for listener in self._map_listeners():
+                event_id = listener.modify_next_event(self, event_id)
             if event_id is not None:
                 resolution.event = make_event(event_id, self)
                 self.visited_event_ids.add(event_id)
@@ -1324,6 +1408,15 @@ class RunState:
         rewards = CombatRewards(room_type=RoomType.MONSTER)
         for relic in list(self.relics):
             relic.modify_rest_site_heal_rewards(self, rewards)
+        # ...and then RewardsCmd.OfferCustom hands the list to a RewardsSet,
+        # whose GenerateWithoutOffering runs Hook.ModifyRewards over it like
+        # any other screen (RewardsSet.cs:136) — that is how Driftwood's
+        # reroll reaches a rest-site card choice. `rewards.room` stays None
+        # here, which is what keeps the room-gated relics out (a custom set
+        # never sets RewardsSet.Room).
+        from .rewards import apply_reward_modifiers
+
+        apply_reward_modifiers(self, rewards)
         return rewards
 
     def rest_upgrade(self) -> Card | None:
@@ -1429,6 +1522,30 @@ class RunState:
         # Carry any post-combat extras (a dead hopper's returned card) into
         # the run for generate_combat_rewards to surface.
         self.pending_reward_extras.extend(combat.pending_reward_extras)
+        # Hook.AfterCombatEnd (CombatManager.cs:988 -> Hook.cs:328-335) walks
+        # the RUN's listeners, which include the deck -- and it fires before
+        # Hook.AfterCombatVictory and regardless of the outcome. Guilty's
+        # countdown is the sim's only deck-side implementer, and it is exactly
+        # why the walk has to reach the deck at all.
+        for card in list(self.deck):
+            card.after_combat_end(self)
+        # ...and then the COMBAT's listeners: while `childCombatState` is still
+        # set, `RunState.IterateHookListeners(combatState)` appends the whole
+        # combat listener list to the run walk (RunState.cs:588+;
+        # seam/hook_dispatch step 18), which is how a POWER gets to see
+        # AfterCombatEnd. Order within the combat list is allies before enemies
+        # and, per creature, powers before relics (CombatState.cs:410-435 —
+        # steps 1 and 2), so the player's powers come first.
+        #
+        # Powers only: the run's own relics are walked below under
+        # AfterCombatVictory, and no ported potion, card-in-pile or orb
+        # implements this hook. ImprovementPower is the one implementer, and it
+        # needs the run because the pile it upgrades is the RUN deck.
+        for creature in [combat.player, *combat.enemies]:
+            for power in list(creature.powers.values()):
+                fn = getattr(power, "after_combat_end", None)
+                if fn is not None:
+                    fn(self)
         if room_type is not None and not self.is_dead:
             # Hook.AfterCombatVictory (Hook.cs:340-352) makes TWO complete
             # passes over the listeners — AfterCombatVictoryEarly over all of

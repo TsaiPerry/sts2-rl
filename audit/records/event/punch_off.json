@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\punch_off.py",
-    "sha256": "7561453270c1ba7a382c88bf5f21c33a5409f8b1b0f1a0993d76d05afd69c6d9"
+    "sha256": "6bcf771f0d6a512a39ce3ca96105cb9fe783a15fa905c92f7b3afda838224741"
   },
   "extra_sources": [
     {
@@ -61,17 +61,17 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c41cb03e5a2d36200abfccf13a43b0b7da84780102fcd6b2e6ae57265d7e351",
+      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "e4a89332099b3f25fcec72eed648058e9edcacca209b76f28c20255295e61a2f",
+      "sha256": "b52d8d15ba11856c157ae544d7837db5c35df881260a0065cf1d2b97917bd392",
       "side": "sim"
     },
     {
@@ -81,7 +81,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     },
     {
@@ -151,13 +151,13 @@
     },
     {
       "what": "PunchConstruct.StartingHpReduction is applied to the wrong HP value and in the wrong lifecycle slot. PunchOffEventEncounter.cs:15-19 rolls `StartingHpReduction = base.Rng.NextInt(2, 10)` per construct, and PunchConstruct.AfterAddedToRoom (PunchConstruct.cs:71-78) spends it as `Creature.SetCurrentHpInternal(Math.Max(1, CurrentHp - StartingHpReduction))` -- CURRENT HP only, MaxHp untouched, and AFTER the Niche max-HP roll that CreateCreature already did",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-28 -- STILL A GAP. The LEGACY leg is CLOSED: _PunchOffEncounter.create_monsters (events/punch_off.py:26-33) now spends the reduction as `m.hp = max(1, m.hp - reduction)` and leaves `max_hp` at the model's 55, which is PunchConstruct.AfterAddedToRoom's `SetCurrentHpInternal(Max(1, CurrentHp - StartingHpReduction))` (PunchConstruct.cs:71-78). EXECUTED 2026-07-28 (`py audit/tools/event_probes_a.py punchhp`): legacy constructs come out (50, 55) and (49, 55) -- both max-HP checks and the damaged-count check MATCH. What REMAINS is the PARITY leg and the lifecycle SLOT: the reduction is still applied inside create_monsters, i.e. BEFORE CombatState._assign_parity_monster_hp (combat.py:266-278), whose _roll_parity_hp does `creature.hp = creature.max_hp = hp` (combat.py:263) and erases it; PregeneratedEncounter.create_monsters (events/_combat_layout.py:71-75) erases it a second time on the room-entry path. PunchConstruct still has no `adjust_hp_after_added` (monsters/underdocks/punch_construct.py), which is the AfterAddedToRoom slot the source uses. Same probe: 'constructs still carrying a starting HP reduction in parity mode: sim=0 C#=2'."
+      "verdict": "faithful",
+      "issue": "CLOSED 2026-07-29 (round 10, the Tier 1 residue). Clause 2b, both halves. (a) THE STREAM: `_PunchOffEncounter.create_monsters` (events/punch_off.py) now rolls `selection_rng.next_int_range(2, 10)` twice on the per-encounter Rng it was already being handed and ignoring, matching PunchOffEventEncounter.cs:17,:19's two `base.Rng.NextInt(2, 10)` draws (EncounterModel.cs:259-270). It takes 2 draws there and 0 on the shared combat rng, where it took 0 and 2. (b) THE LIFECYCLE SLOT: the reduction is no longer spent at construction. It is stored as `PunchConstruct.starting_hp_reduction` -- the port of the `StartingHpReduction` FIELD (PunchConstruct.cs:60-69) -- and spent by `PunchConstruct.adjust_hp_after_added`, the sim's port of `AfterAddedToRoom`, as `hp = max(1, hp - reduction)` with max_hp untouched (PunchConstruct.cs:71-79). That override now actually RUNS, because `CombatState.after_creature_added` -- built this round as the port of CombatManager.cs:858-867 -- calls `creature.adjust_hp_after_added(...)` as its first statement, which is `await creature.AfterAddedToRoom()`. It used to hang off `_assign_parity_monster_hp`, so it ran on neither the legacy path nor for a mid-combat spawn. This is what unblocks the PARITY path the entry says erased the reduction outright: `_roll_parity_hp`'s `hp = max_hp = rolled` and `PregeneratedEncounter.create_monsters`' identical re-assignment both run BEFORE the fix-up now instead of after it. EXECUTED end to end -- a string-seeded run enters punch_off at floor 7, `GenerateInternalCombatState` pre-rolls [55, 55] (max HP; AfterAddedToRoom has not run on those throwaway creatures), and the rebuilt fight comes out 50/55 and 49/55 with reductions 5 and 6. Exactly once: the per-encounter Rng is re-seeded identically in both passes (`make_encounter_rng(seed, floor, entry)`), so no draw is double-spent. `py audit/tools/monster_probes_b03.py punchoff-hp` still reports hp=53/49 with max_hp=55. Pinned by test/test_tier1_residue.py (4 tests). WAS: NARROWED 2026-07-28 -- STILL A GAP. The LEGACY leg is CLOSED: _PunchOffEncounter.create_monsters (events/punch_off.py:26-33) now spends the reduction as `m.hp = max(1, m.hp - reduction)` and leaves `max_hp` at the model's 55, which is PunchConstruct.AfterAddedToRoom's `SetCurrentHpInternal(Max(1, CurrentHp - StartingHpReduction))` (PunchConstruct.cs:71-78). EXECUTED 2026-07-28 (`py audit/tools/event_probes_a.py punchhp`): legacy constructs come out (50, 55) and (49, 55) -- both max-HP checks and the damaged-count check MATCH. What REMAINS is the PARITY leg and the lifecycle SLOT: the reduction is still applied inside create_monsters, i.e. BEFORE CombatState._assign_parity_monster_hp (combat.py:266-278), whose _roll_parity_hp does `creature.hp = creature.max_hp = hp` (combat.py:263) and erases it; PregeneratedEncounter.create_monsters (events/_combat_layout.py:71-75) erases it a second time on the room-entry path. PunchConstruct still has no `adjust_hp_after_added` (monsters/underdocks/punch_construct.py), which is the AfterAddedToRoom slot the source uses. Same probe: 'constructs still carrying a starting HP reduction in parity mode: sim=0 C#=2'."
     },
     {
       "what": "EV-3: BOTH of Punch-Off's draw groups: CalculateVars' NextInt(91, 99) (PunchOff.cs:103), which the sim takes off `self.rng` (events/punch_off.py:61) instead of the per-event base.Rng; AND the encounter's two `base.Rng.NextInt(2, 10)` reduction draws (PunchOffEventEncounter.cs:17, :19), which come off the ENCOUNTER's own Rng in the source but off the shared combat rng in the sim (events/punch_off.py:26 uses create_monsters' `rng` argument, not its `selection_rng` argument, which run.create_combat:1141-1146 seeds with make_encounter_rng -- exactly EncounterModel.base.Rng). EXECUTED (`py audit/tools/event_probes_a.py punchhp`). The second group is not literally the per-event Rng, but it is the same defect shape and takes EV-3's verdict per rule 3, exactly as the room_full_of_cheese record did for its PlayerRng.Rewards draws rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): every event module is on its named stream. The mechanism's own executed probe (`py audit/tools/event_probes.py eventrng`) now reports **0 modules rolling only on the shared rng** where it reported 4. Three were real and are fixed: dense_vegetation's gold is `base.Rng.NextInt(61, 100)` (DenseVegetation.cs:37), punch_off's unused GoldVar is `base.Rng.NextInt(91, 99)` (PunchOff.cs:103) -- a draw that exists only to advance the stream -- and potion_courier's Ransack pick is `base.Owner.PlayerRng.Rewards.NextItem(items)` (PotionCourier.cs:52), the per-player Rewards stream rather than the event's own Rng. The fourth, wood_carvings, was a PROBE DEFECT, not a port defect: the probe counted any `run.transform_card(` as a draw, but Wood Carvings passes `into=` (C#'s `CardCmd.TransformTo<Peck>` / `<ToricToughness>`, WoodCarvings.cs:58,:83), which names the replacement and rolls nothing in either language. The probe also demanded the literal `event_rng`, so Potion Courier would still have read off-stream after being routed to the CORRECT named stream. Both were fixed in audit/tools/event_probes.py with the reasoning inline.  The text it replaced read: MECHANISM EV-3, one verdict at every site (rule 3). Each C# EventModel gets its own Rng seeded from the run seed + event id, and the sim already models it: Event.__init__ builds `self.event_rng` from make_event_rng(seed, ID) for string-seeded runs (events/base.py:84-88), and 6 modules branch on it. EXECUTED (`py audit/tools/event_probes.py eventrng`): 28 of the 34 event modules that roll anything roll ONLY on `self.rng`. LIVE for the parity path that the conformance harness grades -- a shared-rng draw both takes a number the game never takes off that stream and fails to advance the event stream, desyncing the rest of the run. In legacy (RL) mode both are the same random.Random, so the observable is parity-only -- which is an exercised sim mode, not an unreachable one."
     },
     {
       "what": "`foreach (Player player in base.Owner.RunState.Players)` in Fight (PunchOff.cs:129-133), which emits one RelicReward + one PotionReward PER PLAYER",
@@ -170,6 +170,6 @@
       "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

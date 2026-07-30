@@ -20,6 +20,6 @@ class Bread(Relic):
             return amount
         return amount + 1
 
-    def on_player_turn_started(self, player: PlayerCombatState) -> None:
+    def after_side_turn_start(self, player: PlayerCombatState) -> None:
         if self.turn == 1:
             player.energy = max(0, player.energy - 2)

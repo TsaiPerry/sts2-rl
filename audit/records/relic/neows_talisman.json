@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\neows_talisman.py",
-    "sha256": "65c105ff6558e23225e1266917b8171a59e8a3ff3b2250072f73c84cc652263c"
+    "sha256": "27ae60a9365543fc7e2826492523fc71ac2870b331f1a05f11e907f042a25557"
   },
   "extra_sources": [
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -64,8 +64,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): unguarded Card.upgrade() -- an already-upgraded last Basic Strike or Defend is pushed to upgrade_level 2, past its max_upgrade_level of 1",
-      "verdict": "gap",
-      "issue": "MECHANISM: CardCmd.Upgrade(IEnumerable) opens with `if (!card.IsUpgradable) continue;` (CardCmd.cs:271-276), and IsUpgradable is `CurrentUpgradeLevel < MaxUpgradeLevel` (CardModel.cs:785-795) -- C# additionally THROWS if CurrentUpgradeLevel is ever set above MaxUpgradeLevel (CardModel.cs:773-776), so the state the sim produces is one the source treats as impossible. neows_talisman.py:32 calls `card.upgrade()`, which is a bare `self.upgrade_level += 1` (cards/base.py:146-148) with no filter. This is PROMPT.md bug class 14 and is the third of Sweep D's three unaudited unguarded sites (.superpowers/sdd/content-relic-sweeps.md, `neows_talisman.py:29 after_obtained`) -- confirmed here, not re-derived. EXECUTED (py audit/tools/relic_probes_b10.py neows-talisman): with the deck's last Basic Strike and last Basic Defend already at level 1, the relic takes both to level 2 and `is_upgradable` then reads False on both; C# leaves both at 1. REACHABILITY (LIVE, and it took work, because Neow's Talisman is only granted at floor 0 where the deck is pristine): relic/neows_bones grants TWO relics from the same Neow option pool IN SEQUENCE (neows_bones.py:28-29), and relic/pomander -- 'upgrade a chosen card' (pomander.py:14-16) -- is in that pool. Executed: `pomander` and `neows_talisman` are both in neow_relic_pool, string seed B10BONES0136 makes Neow's Bones grant pomander FIRST and neows_talisman second, and running that exact pair through add_relic with a selector that picks the last Basic Strike produces ('strike', 2) where C# produces ('strike', 1). The observable is not cosmetic: conformance/runner.py compares the deck as (id, upgrade_level) pairs, and an over-upgraded Strike also prints wrong damage. Rule 7: CardCmd.cs, CardModel.cs, cards/base.py, relics/neows_bones.py, relics/pomander.py, events/neow.py, conformance/runner.py and the sweeps document are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `CardCmd.upgrade(hooks, card)` exists (cmds.py) and is CardCmd.cs:265-290's per-card body: the verb sits inside `if (!IsEnding)` and skips any card whose `IsUpgradable` is false, i.e. `CurrentUpgradeLevel < MaxUpgradeLevel` (CardModel.cs:785-789). 35 of the 203 ported cards are at MaxUpgradeLevel 0 (18 Curse, 14 Status, 3 Quest), and C# THROWS if CurrentUpgradeLevel is ever set above MaxUpgradeLevel (CardModel.cs:773-776) -- so the bare `card.upgrade()` was producing a state the source treats as impossible, and one conformance compares against the save as an (id, upgrade_level) pair. neows_talisman.py routes both Basic picks through it. EXECUTED: with the deck's last Basic Strike and Defend already smithed, both stay at 1 where they used to reach 2 and then read `is_upgradable` False.  Pinned by test/test_procure_and_upgrade_verbs.py.  NOT CLOSED: nothing at this site.  The text it replaced read: MECHANISM: CardCmd.Upgrade(IEnumerable) opens with `if (!card.IsUpgradable) continue;` (CardCmd.cs:271-276), and IsUpgradable is `CurrentUpgradeLevel < MaxUpgradeLevel` (CardModel.cs:785-795) -- C# additionally THROWS if CurrentUpgradeLevel is ever set above MaxUpgradeLevel (CardModel.cs:773-776), so the state the sim produces is one the source treats as impossible. neows_talisman.py:32 calls `card.upgrade()`, which is a bare `self.upgrade_level += 1` (cards/base.py:146-148) with no filter. This is PROMPT.md bug class 14 and is the third of Sweep D's three unaudited unguarded sites (.superpowers/sdd/content-relic-sweeps.md, `neows_talisman.py:29 after_obtained`) -- confirmed here, not re-derived. EXECUTED (py audit/tools/relic_probes_b10.py neows-talisman): with the deck's last Basic Strike and last Basic Defend already at level 1, the relic takes both to level 2 and `is_upgradable` then reads False on both; C# leaves both at 1. REACHABILITY (LIVE, and it took work, because Neow's Talisman is only granted at floor 0 where the deck is pristine): relic/neows_bones grants TWO relics from the same Neow option pool IN SEQUENCE (neows_bones.py:28-29), and relic/pomander -- 'upgrade a chosen card' (pomander.py:14-16) -- is in that pool. Executed: `pomander` and `neows_talisman` are both in neow_relic_pool, string seed B10BONES0136 makes Neow's Bones grant pomander FIRST and neows_talisman second, and running that exact pair through add_relic with a selector that picks the last Basic Strike produces ('strike', 2) where C# produces ('strike', 1). The observable is not cosmetic: conformance/runner.py compares the deck as (id, upgrade_level) pairs, and an over-upgraded Strike also prints wrong damage. Rule 7: CardCmd.cs, CardModel.cs, cards/base.py, relics/neows_bones.py, relics/pomander.py, events/neow.py, conformance/runner.py and the sweeps document are NOT hashed by this record."
     },
     {
       "what": "N1: `source.LastOrDefault(c => c.Tags.Contains(CardTag.Strike))` over Basic-rarity DECK cards (NeowsTalisman.cs:18-23)",

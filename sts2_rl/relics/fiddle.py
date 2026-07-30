@@ -28,6 +28,14 @@ class Fiddle(Relic):
         return count + self.CARDS
 
     def should_draw(self, player: PlayerCombatState, from_hand_draw: bool) -> bool:
-        # Only the turn-start hand draw is allowed; card-effect draws during
-        # the player's own turn are prevented.
-        return from_hand_draw
+        # Fiddle.cs:24-39 has THREE bails and the port had one. The substantive
+        # missing one is `player.Creature.Side != CombatState.CurrentSide ->
+        # return true` (:34-37): the downside is scoped to the owner's OWN
+        # turn, so an OFF-turn draw is untouched. The port forbade every
+        # non-hand-draw draw for the whole combat.
+        if from_hand_draw:
+            return True
+        combat = self.combat
+        if combat is not None and combat.current_side != player.side:
+            return True
+        return False

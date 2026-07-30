@@ -66,11 +66,35 @@ class FakeMerchant(Event):
         er = self.event_rng
         (er if er is not None else self.rng).shuffle(stock)
         self.stock: list[Relic] = [make_relic(r) for r in stock[:_STOCK]]
+        # MerchantRelicEntry.CalcCost (MerchantRelicEntry.cs:42-45) —
+        # `(int)Math.Round(Model.MerchantCost * PlayerRng.Shops.NextFloat(0.85f,
+        # 1.15f))`, ONE Shops-stream draw per stocked entry, taken when the
+        # inventory is built. Every knock-off declares `MerchantCost => 50`
+        # (FakeAnchor.cs:15 and its eight siblings), so 50 is the base — but
+        # `FakeMerchant.relicCost = 50` (FakeMerchant.cs:23), which the port
+        # charged flat, is a DEAD CONSTANT: grep finds only its own declaration.
+        # Two things were wrong: the price was off by up to +/-15% on every
+        # purchase (so the affordability lock locked the wrong options), and six
+        # Shops draws were never taken, desyncing the stream for the rest of the
+        # run in parity mode. shop.py:362-365 is the same expression for the real
+        # merchant's relic entries.
+        from ..shop import _next_float
+
+        self._prices: dict[int, int] = {
+            id(relic): round(relic.merchant_cost
+                             * _next_float(self.run.shops_rng, 0.85, 1.15))
+            for relic in self.stock
+        }
+
+    def price_of(self, relic: "Relic") -> int:
+        """The jittered price this entry was stocked at (MerchantEntry.Cost)."""
+        return self._prices[id(relic)]
 
     def _page_options(self) -> list[EventOption]:
         options: list[EventOption] = []
         for relic in self.stock:
-            if self.run.gold >= _RELIC_COST:
+            # The lock is per-entry and must use THAT entry's jittered price.
+            if self.run.gold >= self.price_of(relic):
                 options.append(EventOption(
                     relic.id, lambda r=relic: self._buy(r)))
             else:
@@ -84,7 +108,7 @@ class FakeMerchant(Event):
         return self._page_options()
 
     def _buy(self, relic: Relic) -> None:
-        self.run.lose_gold(_RELIC_COST)
+        self.run.lose_gold(self.price_of(relic))
         self.run.add_relic(relic)
         self.stock.remove(relic)
         # The stall stays open until you leave or blow it up.

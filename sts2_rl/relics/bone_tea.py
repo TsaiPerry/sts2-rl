@@ -28,9 +28,14 @@ class BoneTea(Relic):
     def is_used_up(self) -> bool:   # IsUsedUp => CombatsLeft <= 0
         return self.combats_left <= 0
 
-    def on_player_turn_started(self, player: PlayerCombatState) -> None:
+    def after_side_turn_start(self, player: PlayerCombatState) -> None:
         if self.is_used_up or self.turn > 1:
             return
+        # BoneTea.cs:53-56 upgrades the hand through CardCmd.Upgrade, which
+        # skips a card whose IsUpgradable is false -- and Statuses reach the
+        # opening hand routinely (Blessed Antler shuffles three Dazed into the
+        # turn-1 draw pile, and Bone Tea fires post-draw).
+        from ..cmds import CardCmd
         for card in player.hand:
-            card.upgrade()
+            CardCmd.upgrade(self.hooks, card)
         self.combats_left -= 1

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\red_mask.py",
-    "sha256": "627b83b4e0b0fd564b25d313c85a5df3413c6e49c94a33e6f4e2b0815ae24768"
+    "sha256": "f7ae8885f164eae96a70f71a18065bd78594cdaab8576e52831967c97390a7d1"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     }
   ],
@@ -44,7 +44,7 @@
     "BeforeSideTurnStart": {
       "maps_to": "on_player_turn_started (red_mask.py:19-24) -- the POST-draw slot, two positions later than the C# hook names",
       "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The effect is right -- 1 Weak (PowerVar<WeakPower>(1m), RedMask.cs:19) to every enemy on turn 1, applier = the player -- but the hook slot and the enemy set are both off. This relic is the same shape as batch 1's relic/bag_of_marbles, which reached the same two verdicts; per binding rule 3 they are cited and matched, not re-derived."
+      "issue": "STILL OPEN on the ENEMY SET only -- same shape as relic/bag_of_marbles, same pass. The HOOK SLOT is CLOSED: RedMask.cs:23 declares BeforeSideTurnStart and the relic is on the sim's new `before_side_turn_start` dispatcher (CombatManager.cs:458).  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: Rollup of guards G1 and G2 per binding rule 4. The effect is right -- 1 Weak (PowerVar<WeakPower>(1m), RedMask.cs:19) to every enemy on turn 1, applier = the player -- but the hook slot and the enemy set are both off. This relic is the same shape as batch 1's relic/bag_of_marbles, which reached the same two verdicts; per binding rule 3 they are cited and matched, not re-derived."
     },
     "ExtraHoverTips": {
       "maps_to": "no counterpart",

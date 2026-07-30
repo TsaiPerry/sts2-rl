@@ -256,7 +256,8 @@ class GamblersBrew(Potion):
         # screen is always shown (CardSelectCmd.cs:708-711) and confirming
         # none is legal.
         chosen = ctx.combat.select_cards(
-            "discard_any", list(player.hand), len(player.hand)
+            "discard_any", list(player.hand), len(player.hand),
+            min_select=0,   # GamblersBrew.cs:26 CardSelectorPrefs(prompt, 0, ...)
         )
         if not chosen:
             return
@@ -992,7 +993,9 @@ class Ashwater(Potion):
         # Its own purpose label keeps it off "exhaust", which is the
         # exhaust-exactly-N screens (Burning Pact, Fiend Fire).
         chosen = ctx.combat.select_cards(
-            "exhaust_any", list(player.hand), len(player.hand))
+            "exhaust_any", list(player.hand), len(player.hand),
+            min_select=0,   # Ashwater.cs:30 CardSelectorPrefs(prompt, 0, ...)
+        )
         for card in chosen:
             ExhaustCmd.exhaust(ctx.hooks, player, card)
 
@@ -1337,6 +1340,19 @@ class FairyInABottle(Potion):
     def after_preventing_death(self, creature: Creature) -> None:
         combat = self.combat
         if combat is None:
+            # The OUT-OF-COMBAT arm. `AfterPreventingDeath` is dispatched by
+            # CreatureCmd's Kill tail over RunState.IterateHookListeners
+            # (RunState.cs:545-596) as well as the combat walk, so `creature`
+            # here is the RunState — every event HP loss reaches it. The
+            # wrapper is written for a null combat state: :294 reads it, and
+            # :298/:334/:336/:340 null-check it, so out of combat OnUseWrapper
+            # reduces to :293 RemoveBeforeUse and :327 OnUse. AfterPotionUsed
+            # dispatches too, but both C# implementers (BeltBuckle.cs:79-85,
+            # ReptileTrinket.cs:22-30) open on IsInProgress, so it has no
+            # listener here — the same reasoning RunState.use_potion records.
+            run = creature
+            run.discard_potion(self)            # RemoveBeforeUse
+            self.use_out_of_combat(run)
             return
         # OnUseWrapper (PotionModel.cs:291-342), not a bare OnUse: :293
         # RemoveBeforeUse, :327 OnUse, :338 Hook.AfterPotionUsed. Reptile
@@ -1351,6 +1367,14 @@ class FairyInABottle(Potion):
         creature = target or ctx.player
         heal_to = max(creature.max_hp * self.HEAL_PERCENT // 100, 1)
         CreatureCmd.heal(ctx.hooks, creature, heal_to - creature.hp)
+
+    def use_out_of_combat(self, run) -> None:
+        """`OnUse`'s null-combat arm — `CreatureCmd.Heal(target,
+        Max(MaxHp * 0.3m, 1m))` with the RunState as the target. The heal is
+        BY that amount in C# and TO it here, which is the same number because
+        CreatureCmd.cs:565 leaves a prevented death sitting on 0 HP; this
+        potion is never executed by any other path (FairyInABottle.cs:19-22)."""
+        run.heal(max(run.max_hp * self.HEAL_PERCENT // 100, 1) - run.hp)
 
 
 def _choose_a_card_screen(ctx: CombatCtx, cards: list) -> None:
@@ -1369,7 +1393,13 @@ def _choose_a_card_screen(ctx: CombatCtx, cards: list) -> None:
     combat.offer_screen_selection(cards)
     if combat.combat_rng.is_parity:
         return
-    picked = combat.select_cards("choose_a_card", cards, 1)
+    # `Selector.GetSelectedCards(cards, 0, 1)` + `ShowScreen(..., canSkip:
+    # true)` (CardSelectCmd.cs:230,239): MinSelect 0, MaxSelect 1. The
+    # `_optional` purpose is what puts the decline in front of a driver-mediated
+    # policy (driver.SKIPPABLE_PURPOSES); `min_select=0` is what lets the
+    # selectorless engine default reach it. Toolbox and Choices Paradox keep the
+    # plain "choose_a_card" purpose — their screens forbid the decline.
+    picked = combat.select_cards("choose_a_card_optional", cards, 1, min_select=0)
     combat.resolve_screen_selection(cards.index(picked[0]) if picked else None)
 
 

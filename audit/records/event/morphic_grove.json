@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\morphic_grove.py",
-    "sha256": "0d9a837427dfc9aa49e41c562695d67da2bb4149e636bafbe79b6ea94ee5648c"
+    "sha256": "df7287ffd04d4cf5ea31bc20a2d879b81ee43c65b2a0bd7d0e69c258e940b554"
   },
   "extra_sources": [
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c41cb03e5a2d36200abfccf13a43b0b7da84780102fcd6b2e6ae57265d7e351",
+      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     },
     {
@@ -93,8 +93,8 @@
     },
     {
       "what": "EV-10 (site): run.transformable_cards (run.py:364-366) reuses the REMOVAL predicate for the TRANSFORM screen, so Quest cards are offered where CardSelectCmd.FromDeckForTransformation (CardSelectCmd.cs:487) filters `c.Type != CardType.Quest && c.IsTransformable`. This unit calls it twice -- once as the IsAllowed gate (events/morphic_grove.py:30) and once as the GROUP selection (events/morphic_grove.py:41)",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-28 AND REVERSED IN DIRECTION -- STILL A GAP. The SELECTION leg is CLOSED: RunState.transformable_cards (run.py:423-435) now filters `card_type != CardType.QUEST`, matching CardSelectCmd.FromDeckForTransformation (CardSelectCmd.cs:487), so events/morphic_grove.py:41's GROUP screen offers what the game offers. The GATE leg is now WRONG THE OTHER WAY, which is fresh damage from that fix: MorphicGrove.cs:26 counts `c.IsTransformable` with NO Quest clause, but events/morphic_grove.py:30 still calls `run.transformable_cards()`, which now EXCLUDES Quest cards -- and run.py:430-432 says so in as many words ('A gate that counts IsTransformable directly (MorphicGrove.cs:26) has no Quest clause and must use removable_cards instead'). EXECUTED 2026-07-28 (ad-hoc, repo root): deck [strike, spoils_map] with gold 100 -> sim MorphicGrove.is_allowed False, game `Count(c => c.IsTransformable) >= 2` True (count 2). The sim now REFUSES an event node the game serves, which shifts every later event pick -- the exact consequence this record had correctly disproven in the opposite direction. LIVE with ported content: spoils_map is granted by events/the_legends_were_true.py:40 on an act-1 event. The fix is one word: `removable_cards()` at events/morphic_grove.py:30."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The GATE now uses the predicate the gate wants. MorphicGrove.cs:26 counts `c.IsTransformable` and has NO Quest clause; CardSelectCmd.FromDeckForTransformation (CardSelectCmd.cs:487) is `c.Type != CardType.Quest && c.IsTransformable`. They are DIFFERENT predicates and this unit calls both: the GROUP screen wants the Quest-filtered one (`run.transformable_cards()`, closed in an earlier round) and the IsAllowed gate wants the bare one. events/morphic_grove.py:30 now calls `run.removable_cards()`, which is the IsTransformable half alone -- and run.py's own docstring said so in as many words. EXECUTED: deck [strike, spoils_map] with 100 gold is now ALLOWED, matching the game's `Count(c => c.IsTransformable) >= 2` of 2, where the sim REFUSED an event node the game serves and shifted every later event pick. The selection leg is re-pinned alongside it, so the two cannot drift back into using one predicate for both.  Pinned by test/test_event_live_tail.py.  NOT CLOSED: nothing at this site.  The text it replaced read: NARROWED 2026-07-28 AND REVERSED IN DIRECTION -- STILL A GAP. The SELECTION leg is CLOSED: RunState.transformable_cards (run.py:423-435) now filters `card_type != CardType.QUEST`, matching CardSelectCmd.FromDeckForTransformation (CardSelectCmd.cs:487), so events/morphic_grove.py:41's GROUP screen offers what the game offers. The GATE leg is now WRONG THE OTHER WAY, which is fresh damage from that fix: MorphicGrove.cs:26 counts `c.IsTransformable` with NO Quest clause, but events/morphic_grove.py:30 still calls `run.transformable_cards()`, which now EXCLUDES Quest cards -- and run.py:430-432 says so in as many words ('A gate that counts IsTransformable directly (MorphicGrove.cs:26) has no Quest clause and must use removable_cards instead'). EXECUTED 2026-07-28 (ad-hoc, repo root): deck [strike, spoils_map] with gold 100 -> sim MorphicGrove.is_allowed False, game `Count(c => c.IsTransformable) >= 2` True (count 2). The sim now REFUSES an event node the game serves, which shifts every later event pick -- the exact consequence this record had correctly disproven in the opposite direction. LIVE with ported content: spoils_map is granted by events/the_legends_were_true.py:40 on an act-1 event. The fix is one word: `removable_cards()` at events/morphic_grove.py:30."
     },
     {
       "what": "`runState.Players.All(...)` (MorphicGrove.cs:26)",
@@ -107,6 +107,6 @@
       "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

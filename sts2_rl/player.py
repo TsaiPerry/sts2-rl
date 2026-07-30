@@ -12,8 +12,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .cmds import is_over_or_ending as _is_over_or_ending
 from .creatures import Creature
 from .hooks import HookSystem
+from .turn_phase import PlayerTurnPhase
 
 if TYPE_CHECKING:
     from .cards import Card
@@ -34,19 +36,25 @@ def _compare_to_key(card: "Card") -> "tuple[str, int]":
     return (card.id.upper(), card.upgrade_level)
 
 
-def stable_shuffled_cards(cards: "list[Card]", combat_rng) -> "list[Card]":
-    """`cards.ToList().StableShuffle(Rng.Shuffle)` — a shuffled COPY, in the
+def stable_shuffled_cards(cards: "list[Card]", combat_rng,
+                          stream=None) -> "list[Card]":
+    """`cards.ToList().StableShuffle(rng)` — a shuffled COPY, in the
     game's own orientation (index 0 is the game's `First()`).
 
     Content that picks a card at random by shuffling a pile and taking the
     front (Catastrophe) must burn the shuffle's N-1 draws, not one. The
     stabilizing sort is the same CardModel.CompareTo key `_shuffle_draw_pile`
     uses, and is parity-only for the same reason: legacy stays byte-for-byte.
+
+    `stream` names the Rng the call site's C# passes to StableShuffle, because
+    it is NOT always Rng.Shuffle: Catastrophe and Beat Down use Shuffle,
+    Seeker Strike uses CombatCardSelection (SeekerStrike.cs:36). Defaults to
+    Shuffle, which is what every earlier caller means.
     """
     out = list(cards)
     if combat_rng.is_parity:
         out.sort(key=_compare_to_key)
-    combat_rng.shuffle.shuffle(out)
+    (stream if stream is not None else combat_rng.shuffle).shuffle(out)
     return out
 
 
@@ -85,6 +93,9 @@ class PlayerCombatState(Creature):
         self._combat_rng = combat_rng
         self._hooks = hooks
         self._first_turn = True
+        # PlayerCombatState.Phase. `None` until StartTurn runs; content reads
+        # it (UnceasingTop.cs:18). See sts2_rl/turn_phase.py.
+        self.turn_phase = PlayerTurnPhase.NONE
         # The card currently mid-OnPlay, if any. The game holds a card being
         # played in PileType.Play (limbo), not the discard, so a reshuffle its
         # own effect triggers must not shuffle it back into the draw pile
@@ -101,6 +112,31 @@ class PlayerCombatState(Creature):
         """Every card the player owns in this combat, across all piles
         (mirrors STS2's PlayerCombatState.AllCards)."""
         return self.hand + self.draw_pile + self.discard_pile + self.exhaust_pile
+
+    def pile_type_of(self, card: Card) -> str | None:
+        """`CardModel.Pile?.Type` — which pile holds this card RIGHT NOW, or
+        None for a card that is in no combat pile (a Power mid-play, which
+        CardCmd removes from the combat entirely, or a run-deck card that was
+        never dealt in).
+
+        `PileType.Play` is checked first and is NOT a fifth list: the sim
+        parks a card being played in the discard pile and marks it with
+        `_playing_card` (see `Combat._resolve_card_play`), so a membership test
+        alone would report Discard for a card the game has in Play limbo.
+
+        Several C# models guard on the pile — `FreeAttackPower.cs:26-39` and
+        `:48-59` want `Hand` or `Play` — and the sim had no way to ask."""
+        if self._playing_card is card:
+            return "play"
+        if card in self.hand:
+            return "hand"
+        if card in self.draw_pile:
+            return "draw"
+        if card in self.discard_pile:
+            return "discard"
+        if card in self.exhaust_pile:
+            return "exhaust"
+        return None
 
     # ── Potions ──────────────────────────────────────────────────────────
 
@@ -150,9 +186,21 @@ class PlayerCombatState(Creature):
 
     def start_turn(self) -> None:
         """Reset block/energy, fire turn-start hooks, then draw."""
-        # "This turn" card-cost modifiers (Stomp, Infernal Blade) expire.
-        for card in self.all_cards:
-            card.reset_turn_cost_modifiers()
+        # CombatManager.cs:429 — StartTurn opens by putting EVERY player back
+        # to PlayerTurnPhase.None, on both sides, before any hook fires.
+        self.turn_phase = PlayerTurnPhase.NONE
+        # No card reset here. "This turn" card state expires at the END of the
+        # turn, in PlayerCombatState.EndOfTurnCleanup, which C# runs at two
+        # sites and neither is a turn START (turn_structure G7). Resetting here
+        # instead kept every modifier alive through the whole enemy turn.
+
+        # Hook.BeforeSideTurnStart (CombatManager.cs:458) — the side's first
+        # hook, after each participant's Creature.BeforeTurnStart (the loop
+        # above) and BEFORE the enemies' next-move roll and the block clear.
+        self._hooks.before_side_turn_start(self)
+        # CombatManager.cs:464 — Start is entered on the player-side branch,
+        # strictly AFTER Hook.BeforeSideTurnStart.
+        self.turn_phase = PlayerTurnPhase.START
 
         # Creature.AfterTurnStart (Creature.cs:681-692) returns BEFORE
         # ClearBlock for a player whose TurnNumber == 1 — that is what lets
@@ -174,6 +222,31 @@ class PlayerCombatState(Creature):
         # a Barricaded player never re-armed Anchor or Fake Anchor.
         self._hooks.on_block_cleared(self)
 
+        # SetupPlayerTurn (CombatManager.cs:629-676) opens on
+        # `if (player.Creature.IsDead) return;` (:631-634), so a dead player
+        # gets no energy, no draw and no Hook.AfterPlayerTurnStart. The SIDE
+        # hooks around it still run: the block clear above is StartTurn's own
+        # loop (:492-507) and Hook.AfterSideTurnStart below is :522.
+        if not self.is_dead:
+            self._setup_player_turn()
+        # Hook.AfterSideTurnStart (CombatManager.cs:522) — once for the side,
+        # after every SetupPlayerTurn has returned. A separate, later hook that
+        # this slot used to be fused with; see HookSystem.after_side_turn_start.
+        self._hooks.after_side_turn_start(self)
+        # PlayerTurnPhase.AutoPrePlay (CombatManager.cs:556-572): entered
+        # strictly AFTER Hook.AfterSideTurnStart and the orb queue.
+        # RunAutoPrePlayPhase (:613-619) brackets the hook and nothing else:
+        # AutoPrePlay at :616, the hook at :617, Play at :618. :566 skips the
+        # whole phase for a dead player.
+        if not self.is_dead:
+            self.turn_phase = PlayerTurnPhase.AUTO_PRE_PLAY
+            self._hooks.after_auto_pre_play_phase_entered(self)
+            self.turn_phase = PlayerTurnPhase.PLAY
+
+    def _setup_player_turn(self) -> None:
+        """SetupPlayerTurn's body (CombatManager.cs:640-675): energy reset,
+        Hook.BeforeHandDraw, the hand draw with its turn-1 pile moves, and
+        Hook.AfterPlayerTurnStart."""
         # Energy reset — or add-to-current when a listener vetoes the reset
         # (mirrors ShouldPlayerResetEnergy → ResetEnergy / AddMaxEnergyToCurrent).
         gained = self._hooks.modify_max_energy(self, self.ENERGY_PER_TURN)
@@ -213,12 +286,9 @@ class PlayerCombatState(Creature):
                 self.draw_pile.extend(innates)  # end of list = top of pile
                 draw_count = max(draw_count, len(innates))
         self._draw(draw_count, from_hand_draw=True)
-        # Post-draw turn-start slot (the game's AfterPlayerTurnStart /
-        # player-side AfterSideTurnStart, both of which run after the draw).
+        # Hook.AfterPlayerTurnStart (CombatManager.cs:675) — SetupPlayerTurn's
+        # last line, so per player and immediately after that player's draw.
         self._hooks.on_player_turn_started(self)
-        # PlayerTurnPhase.AutoPrePlay (CombatManager.cs:556-572): entered
-        # strictly AFTER Hook.AfterSideTurnStart and the orb queue.
-        self._hooks.after_auto_pre_play_phase_entered(self)
 
     def discard_hand(self, flush: bool = True) -> None:
         """FlushPlayerHand (CombatManager.cs:1327-1346).
@@ -227,30 +297,72 @@ class PlayerCombatState(Creature):
         Hook.ShouldFlush returning false, which C# treats as "every card is
         retained": `cardsToFlush` is empty and the batched Add is skipped, but
         the TAIL — Hook.AfterFlush and PlayerCombatState.EndOfTurnCleanup —
-        still runs. The sim used to skip the whole call, which dropped the
-        `on_hand_emptied` that Joss Paper credits its deferred Ethereal
-        exhausts from.
+        still runs. The sim used to skip the whole call.
+
+        No `on_hand_emptied` here. CombatManager.cs:880-883 excludes the flush
+        from CheckForEmptyHand in as many words ("besides ending turn, which
+        should not trigger an empty hand check"), and the flush is the one site
+        the sim used to fire it from (turn_structure G16).
         """
-        flushed = [c for c in self.hand if not c.retain] if flush else []
+        # CardCmd.cs:174-177 -- Discard/DiscardAndDraw open on
+        # `IsOverOrEnding -> return`, so the end-of-turn flush of a combat that
+        # has just been won leaves the hand alone.
+        if _is_over_or_ending(self._hooks):
+            return
+        # CombatManager.cs:1330 partitions on `!flag || card.ShouldRetainThisTurn`
+        # — the Retain KEYWORD or a single-turn grant (CardModel.cs:590-600).
+        flushed = [c for c in self.hand if not c.should_retain_this_turn] if flush else []
         for card in flushed:
             self._hooks.on_card_discarded(card)
         self.discard_pile.extend(flushed)
         if flush:
-            self.hand = [c for c in self.hand if c.retain]
-        self._hooks.on_hand_emptied(self)
+            self.hand = [c for c in self.hand if c.should_retain_this_turn]
+        # CombatManager.cs:1346 — FlushPlayerHand's last line, after
+        # Hook.AfterFlush. One of EndOfTurnCleanup's two sites.
+        self.end_of_turn_cleanup()
+
+    def end_of_turn_cleanup(self) -> None:
+        """PlayerCombatState.EndOfTurnCleanup (PlayerCombatState.cs:268-274) —
+        `foreach (CardModel allCard in AllCards) allCard.EndOfTurnCleanup()`.
+        Every pile, not just the hand."""
+        for card in self.all_cards:
+            card.end_of_turn_cleanup()
+
+    def shuffle_if_necessary(self) -> None:
+        """`CardPileCmd.ShuffleIfNecessary` (CardPileCmd.cs:972-981) in full —
+        `if (!draw.Cards.Any() && discard.Cards.Any()) await Shuffle(...)`. The
+        guard is the whole method: an empty discard or a non-empty draw pile is a
+        no-op, and the reshuffle it delegates to is the STABLE one. Callers that
+        inlined `if not draw and discard: reshuffle` were right; callers that
+        inlined their own unstable shuffle (Havoc did) were not."""
+        if not self.draw_pile and self.discard_pile:
+            self.reshuffle_discard_into_draw()
 
     def reshuffle_discard_into_draw(self) -> None:
         """Shuffle the discard pile into the empty draw pile (mirrors
         CardPileCmd.ShuffleIfNecessary's reshuffle step)."""
+        if _is_over_or_ending(self._hooks):
+            return          # CardPileCmd.cs:866-869
         held = self._playing_card
-        if self._combat_rng.is_parity and held is not None and held in self.discard_pile:
+        if held is not None and held in self.discard_pile:
             # A card mid-OnPlay lives in PileType.Play (limbo), not the discard,
             # so a reshuffle its own effect triggers (e.g. Pommel Strike drawing
             # the draw pile empty) must NOT shuffle it into the draw pile — the
             # game reshuffles discard+draw WITHOUT the being-played card, then
             # the card lands in the (now-empty) discard as its result pile after
             # OnPlay. Hold it back so the shuffled set matches the game exactly.
-            # Legacy keeps the old byte-for-byte behavior (whole discard).
+            #
+            # UNCONDITIONAL as of 2026-07-29 (round 7, card/havoc/OnPlay). This
+            # used to be gated on `_combat_rng.is_parity`, keeping the old
+            # byte-for-byte legacy behaviour (reshuffle the WHOLE discard). That
+            # gate was not a fidelity choice with two defensible sides — it made
+            # legacy mode reshuffle a card the game holds in limbo — and once
+            # Havoc was routed through the real CardPileCmd.AutoPlayFromDrawPile
+            # it became an infinite recursion: Havoc sat in the discard, the
+            # reshuffle handed it back to the draw pile, and the verb picked it as
+            # the top card and played it again. Measured before removing the gate:
+            # the whole suite passes either way apart from the six tests this
+            # round moved for other reasons, so nothing depended on it.
             self.draw_pile = [c for c in self.discard_pile if c is not held]
             self.discard_pile = [held]
         else:
@@ -270,9 +382,11 @@ class PlayerCombatState(Creature):
         list.StableShuffle(Rng.Shuffle)`), so the draw pile's contents survive
         into the new order. Same PileType.Play limbo rule as the reshuffle: a
         card mid-OnPlay is in neither pile."""
+        if _is_over_or_ending(self._hooks):
+            return          # CardPileCmd.cs:866-869
         held = self._playing_card
         discard = self.discard_pile
-        if self._combat_rng.is_parity and held is not None and held in discard:
+        if held is not None and held in discard:
             discard = [c for c in discard if c is not held]
             self.discard_pile = [held]
         else:
@@ -315,8 +429,19 @@ class PlayerCombatState(Creature):
         self._combat_rng.shuffle.shuffle(self.draw_pile)
         if self._combat_rng.is_parity:
             self.draw_pile.reverse()
+        # Hook.ModifyShuffleOrder fires HERE — after the Fisher-Yates and before
+        # the pile is repopulated (CardPileCmd.cs:877 for the mid-combat shuffle,
+        # CardPile.cs:73 for RandomizeOrderInternal). `stable` distinguishes the
+        # two exactly as `isInitialShuffle` does, inverted: the initial shuffle is
+        # the UNSTABLE one.
+        self._hooks.modify_shuffle_order(self, self.draw_pile,
+                                         is_initial_shuffle=not stable)
 
     def _draw(self, n: int, from_hand_draw: bool = False) -> None:
+        # CardPileCmd.cs:800-803 -- `IsOverOrEnding -> empty`, before
+        # Hook.ShouldDraw is even consulted.
+        if _is_over_or_ending(self._hooks):
+            return
         for _ in range(n):
             if len(self.hand) >= self.MAX_HAND_SIZE:
                 break

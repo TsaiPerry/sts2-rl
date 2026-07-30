@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\wongos_mystery_ticket.py",
-    "sha256": "96609ff5af7c63884e18e3f6e1c5d743ab042272110858a0b283ee60dae96325"
+    "sha256": "2f11671d6220c5457891563149ede71a2412bbc10e9e35ada2954b72a0d6fd0b"
   },
   "extra_sources": [
     {
@@ -76,32 +76,32 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
+      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
       "side": "sim"
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "8baf28896c58e846435a5e208bb9014f7306cf4b1051f582d7b6347cfedc697a",
+      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/welcome_to_wongos.py",
-      "sha256": "bb654fc90b58c17ee0573381dc1859c91e72cf6a89e97f8934db58801612a946",
+      "sha256": "12d10fe0120fd1db28b8ded9f938c5246e3b466faa3127a84d8aae91c5b0d92f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/black_star.py",
-      "sha256": "4bdc2f6cd45203104534a13d45096b23ac06761b441573da9c6d8d2e1ccb6ea3",
+      "sha256": "d13f5b32dd7c27bfe03c6ab907c1cbd4472cd0643ada4da561b8023bff84924d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/driftwood.py",
-      "sha256": "9cec68bc3f83de97430a84b3ea7c0c2a8ffeced8ad8314ac55e134724bf249fb",
+      "sha256": "be6f9c49180b3427ac11ec5d074401a147e1fcacf7896ab7116fc4cdc67e95d7",
       "side": "sim"
     },
     {
@@ -111,12 +111,12 @@
     },
     {
       "path": "sts2_rl/relics/lava_rock.py",
-      "sha256": "bb3fe861db8b65fbc7a74e5dc601f53fc1f83a612b1d1e961456839abb6414b8",
+      "sha256": "5e521cd7696d9f38544b6a95d4f8be82f49455ddd17d910f1cc81be656827a44",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/paels_wing.py",
-      "sha256": "6ebcf3b54cc79d720b2869c72565daae501c78764d99531bbba464a6805556ff",
+      "sha256": "2359c124386237f661a9ce2f2ed0324f9298c9f79bf32346257a476ec3805bc4",
       "side": "sim"
     },
     {
@@ -126,12 +126,12 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "9f8f94386154df9acfd780c8e5549419bffd7d5ed2448495595c9aa33fce4e83",
+      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     },
     {
@@ -213,8 +213,8 @@
     },
     "TryModifyRewards": {
       "maps_to": "modify_combat_rewards (wongos_mystery_ticket.py:35-52), dispatched over run.relics at rewards.py:499-500",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1, N2, N5, N6, N7, N10 and N13 per binding rule 4 -- worst is G1, LIVE. The arithmetic and the latch match clause for clause (WongosMysteryTicket.cs:80-104: owner check, `!(room is CombatRoom)`, GaveRelic, `5 - CombatsFinished > 0`, then `DynamicVars.Repeat.IntValue` == 3 RelicRewards), and EXECUTED (`b18-ticket`) the sim pays exactly 3 relics on the fifth Monster screen, 4 on an Elite screen (the elite's own relic plus these three), 3 on a non-final Boss screen, and nothing on screens 6+. The divergence is WHERE the sim's dispatch loop can be reached from: rewards.py:440-441 returns before the loop on the final act's boss, so a ripe ticket silently pays nothing there while C# pays its three (G1)."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 8): STALE, not open. The rollup's worst clause, G1, said the sim's dispatch loop is unreachable on the final act's boss because \"rewards.py:440-441 returns before the loop\". Those line numbers no longer point at anything, and the branch they described -- `generate_combat_rewards`'s `room_type == RoomType.BOSS and run.is_final_act` guard -- now calls `apply_reward_modifiers(run, rewards)` BEFORE returning, which IS the TryModifyRewards + TryModifyRewardsLate dispatch loop. The code's own comment already carries the argument the entry wanted: RewardsSet.WithRewardsFromRoom returns early there (RewardsSet.cs:85-91) WITHOUT the room's gold/potion/card rewards, but it has already set `Room`, and GenerateWithoutOffering still runs Hook.ModifyRewards over the empty list -- AmethystAubergine.cs:33-35's explicit final-act guard would be dead code otherwise. EXECUTED 2026-07-29 with a ripe ticket (GaveRelic false, CombatsFinished 5): the final act's BOSS screen pays 3 relics and sets GaveRelic, with `rewards.room` = BOSS. The six clauses the entry recorded as already matching were re-executed alongside it rather than assumed: 4 combats -> 0 relics, 5 -> 3, 6 -> 3, an ELITE screen -> 4 (its own relic plus these three), already-spent -> 0, and a CUSTOM screen (room None, WongosMysteryTicket.cs:86's `!(room is CombatRoom)`) -> 0 with the charge preserved.  Pinned by test/test_tier1_last_five.py.  NOT CLOSED: nothing at this site.  The text it replaced read: Rollup of guards G1, N2, N5, N6, N7, N10 and N13 per binding rule 4 -- worst is G1, LIVE. The arithmetic and the latch match clause for clause (WongosMysteryTicket.cs:80-104: owner check, `!(room is CombatRoom)`, GaveRelic, `5 - CombatsFinished > 0`, then `DynamicVars.Repeat.IntValue` == 3 RelicRewards), and EXECUTED (`b18-ticket`) the sim pays exactly 3 relics on the fifth Monster screen, 4 on an Elite screen (the elite's own relic plus these three), 3 on a non-final Boss screen, and nothing on screens 6+. The divergence is WHERE the sim's dispatch loop can be reached from: rewards.py:440-441 returns before the loop on the final act's boss, so a ripe ticket silently pays nothing there while C# pays its three (G1)."
     },
     "AfterModifyingRewards": {
       "maps_to": "no separate counterpart; the sim performs the latch inline at the end of modify_combat_rewards (`self.gave_relic = True`, wongos_mystery_ticket.py:52)",
@@ -225,8 +225,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): on the FINAL act's boss the sim returns from generate_combat_rewards BEFORE the modify_combat_rewards dispatch, so a ripe ticket pays nothing; C# skips only the room's OWN rewards there and still runs Hook.ModifyRewards, so the ticket pays its 3 relics",
-      "verdict": "gap",
-      "issue": "MECHANISM: both codebases special-case the last act's boss, but at different depths. The sim: `generate_combat_rewards` returns an empty CombatRewards at rewards.py:440-441 (`if room_type == RoomType.BOSS and run.is_final_act: return rewards`) -- above the gold/potion/card rolls AND above the relic hook loop at rewards.py:499-500, so no relic's modify_combat_rewards is called at all. C#: `RewardsSet.WithRewardsFromRoom` returns early at RewardsSet.cs:85-89 without adding a GoldReward/PotionReward/CardReward, but it has already set `Room`, and the separate `GenerateWithoutOffering` (RewardsSet.cs:125-146) then runs `Hook.ModifyRewards(Player.RunState, Player, Rewards, Room)` on the empty list regardless. TryModifyRewards' own guards all pass (`room is CombatRoom` is true; there is no act filter), so the ticket appends 3 RelicRewards, they Populate in the `Rewards.Except(second)` pass at RewardsSet.cs:137-144, AfterModifyingRewards latches GaveRelic, and `Offer()` shows the screen -- its `if (Rewards.Count <= 0 && !flag && !_allowEmptyRewards) return;` cannot fire because `flag` is `Room is CombatRoom` (RewardsSet.cs:155-166). The screen is reached for the final boss like any other win: NCombatUi.OnCombatWon -> ShowRewards -> room.OfferRoomEndRewards (NCombatUi.cs:180-226), gated only on Encounter.ShouldGiveRewards. OBSERVABLE: the player who beats the run's last boss with a ripe ticket is offered three relics in the game and none in the sim; three grab-bag pulls and three Rewards-stream rarity draws also do not happen, and the run's final relic list -- which conformance/runner.py compares against the save -- is short by three. EXECUTED, sim side (`py audit/tools/relic_probes_b18.py b18-ticket-final`): with 5 combats finished, a BOSS screen at is_final_act=False gives ['parrying_shield', 'game_piece', 'bellows'], run.relics 1->4, bag 96->93, gave_relic=True; the SAME state at is_final_act=True gives [], run.relics 1->1, bag 96->96, gave_relic=False -- the ticket is left armed for a screen that will never come. The C# half is established by reading the three files cited above, not by execution. REACHABILITY (LIVE, both sides ported): the relic is bought at the ported Welcome to Wongo's mystery box (events/welcome_to_wongos.py:82-83); `is_final_act` is set for real by run.py:676 and run.py:750, so a driven run reaches it (driver.py:296-298); and the relic carries NO act, room-type or floor restriction, so any run whose 5th reward-giving combat after the purchase is the last act's boss lands here. It is the ONLY ported relic that can: the other four sim modify_combat_rewards implementers are relics/black_star.py:15-23 (Elite only), relics/lava_rock.py:20-35 (act 0 only), relics/driftwood.py:17-19 and relics/paels_wing.py:22-24 (both gate on rewards.cards, which is empty on that screen). This is the concrete observable of the structural note audit/records/relic/lava_rock.json guard N7 recorded and correctly called harmless AT ITS OWN SITE ('it means a future act-3 reward relic would never see the hook') -- no cross-record disagreement, the same fact reaching a relic that is exposed to it. Rule 7: src/Core/Rewards/RewardsSet.cs, src/Core/Nodes/Combat/NCombatUi.cs, sts2_rl/rewards.py, sts2_rl/run.py, sts2_rl/driver.py, sts2_rl/conformance/runner.py, sts2_rl/events/welcome_to_wongos.py and the four sibling relic modules are not hashed by this record."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 by the gap-queue continuation's section-A fix pass (this is a CODE change, not a re-reading of the old code). generate_combat_rewards' final-act-boss early return now runs apply_reward_modifiers before returning, so the hook passes fire on the run's last boss with an otherwise-empty reward list -- which is what RewardsSet does: WithRewardsFromRoom returns early at RewardsSet.cs:85-91 WITHOUT the room's own Gold/Potion/Card rewards, but it has already set Room and the separate GenerateWithoutOffering still calls Hook.ModifyRewards. AmethystAubergine.cs:33-35's explicit `RoomType.Boss && CurrentActIndex >= Acts.Count - 1` guard would be dead code otherwise, which is the independent confirmation. EXECUTED: test_a_ripe_ticket_still_pays_on_the_final_acts_boss (3 relics, ticket spent, and the room's own rewards still absent) and test_the_final_boss_screen_still_pays_no_aubergine_gold.  The gap it replaced read: MECHANISM: both codebases special-case the last act's boss, but at different depths. The sim: `generate_combat_rewards` returns an empty CombatRewards at rewards.py:440-441 (`if room_type == RoomType.BOSS and run.is_final_act: return rewards`) -- above the gold/potion/card rolls AND above the relic hook loop at rewards.py:499-500, so no relic's modify_combat_rewards is called at all. C#: `RewardsSet.WithRewardsFromRoom` returns early at RewardsSet.cs:85-89 without adding a GoldReward/PotionReward/CardReward, but it has already set `Room`, and the separate `GenerateWithoutOffering` (RewardsSet.cs:125-146) then runs `Hook.ModifyRewards(Player.RunState, Player, Rewards, Room)` on the empty list regardless. TryModifyRewards' own guards all pass (`room is CombatRoom` is true; there is no act filter), so the ticket appends 3 RelicRewards, they Populate in the `Rewards.Except(second)` pass at RewardsSet.cs:137-144, AfterModifyingRewards latches GaveRelic, and `Offer()` shows the screen -- its `if (Rewards.Count <= 0 && !flag && !_allowEmptyRewards) return;` cannot fire because `flag` is `Room is CombatRoom` (RewardsSet.cs:155-166). The screen is reached for the final boss like any other win: NCombatUi.OnCombatWon -> ShowRewards -> room.OfferRoomEndRewards (NCombatUi.cs:180-226), gated only on Encounter.ShouldGiveRewards. OBSERVABLE: the player who beats the run's last boss with a ripe ticket is offered three relics in the game and none in the sim; three grab-bag pulls and three Rewards-stream rarity draws also do not happen, and the run's final relic list -- which conformance/runner.py compares against the save -- is short by three. EXECUTED, sim side (`py audit/tools/relic_probes_b18.py b18-ticket-final`): with 5 combats finished, a BOSS screen at is_final_act=False gives ['parrying_shield', 'game_piece', 'bellows'], run.relics 1->4, bag 96->93, gave_relic=True; the SAME state at is_final_act=True gives [], run.relics 1->1, bag 96->96, gave_relic=False -- the ticket is left armed for a screen that will never come. The C# half is established by reading the three files cited above, not by execution. REACHABILITY (LIVE, both sides ported): the relic is bought at the ported Welcome to Wongo's mystery box (events/welcome_to_wongos.py:82-83); `is_final_act` is set for real by run.py:676 and run.py:750, so a driven run reaches it (driver.py:296-298); and the relic carries NO act, room-type or floor restriction, so any run whose 5th reward-giving combat after the purchase is the last act's boss lands here. It is the ONLY ported relic that can: the other four sim modify_combat_rewards implementers are relics/black_star.py:15-23 (Elite only), relics/lava_rock.py:20-35 (act 0 only), relics/driftwood.py:17-19 and relics/paels_wing.py:22-24 (both gate on rewards.cards, which is empty on that screen). This is the concrete observable of the structural note audit/records/relic/lava_rock.json guard N7 recorded and correctly called harmless AT ITS OWN SITE ('it means a future act-3 reward relic would never see the hook') -- no cross-record disagreement, the same fact reaching a relic that is exposed to it. Rule 7: src/Core/Rewards/RewardsSet.cs, src/Core/Nodes/Combat/NCombatUi.cs, sts2_rl/rewards.py, sts2_rl/run.py, sts2_rl/driver.py, sts2_rl/conformance/runner.py, sts2_rl/events/welcome_to_wongos.py and the four sibling relic modules are not hashed by this record."
     },
     {
       "what": "N1: Sweep A flags `combats_finished` and `gave_relic` as fields the sim never resets -- both are [SavedProperty] per-RUN state in C#, so the port is correct (PROMPT.md bug class 13 reader trace, plus bug class 24)",

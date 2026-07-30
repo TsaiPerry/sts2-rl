@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
@@ -72,8 +72,8 @@
     },
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:2169-2171 on_enemy_turn_end -> _count_down(woke_from_damage=False)",
-      "verdict": "gap",
-      "issue": "SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called ONCE for the whole enemy side (CombatManager.cs:1256) after every enemy has moved; the sim implements it with the PER-ENEMY slot on_enemy_turn_end (combat.py:341), which fires immediately after each enemy's own move. The sim HAS the side-scoped slot and does not use it here: on_enemy_side_end (combat.py:345). turn_structure gap G5 (the enemy side is per-enemy in the sim, per-side in the game) is the owning record and carries the identical `gap` verdict; not re-verdicted here per binding rule 3. DORMANT, and the dormancy is EXECUTED rather than asserted -- see `py audit/tools/power_slot_probes.py rosters` and `enemy-hook-order`. This is the SECOND of the three units the power report's section 6 said would settle turn_structure G5, and the interesting one, because SLUMBERING_BEETLE_NORMAL is a THREE-enemy encounter -- executed: `rosters` gives order=['BowlbugRock', 'BowlbugSilk', 'SlumberingBeetle']. It still settles DORMANT, for a reason G5 does not give: the Slumber owner is the LAST creature in the enemy list, so its per-creature turn-end slot is immediately adjacent to the side-end slot and no other enemy acts in between. `enemy-hook-order` records the sim's actual dispatch as ['clear:BowlbugRock', 'start:BowlbugRock', 'end:BowlbugRock', 'clear:BowlbugSilk', ..., 'end:SlumberingBeetle', 'side_end']. The BLOCK-clear half of G5 is separately dormant here: neither Bowlbug move grants block to an ally (monsters/hive/bowlbugs.py:87 gains block on `self`), so the sim clearing the beetle's block only after the Bowlbugs have moved cannot lose block the game kept. Trigger: reordering the encounter so the beetle is not last, or a Bowlbug-style ally-block move."
+      "verdict": "faithful",
+      "issue": "CLOSED. The unit is on `on_enemy_side_end`, which is Hook.AfterTurnEnd for the enemy side (CombatManager.cs:1256) -- ONE dispatch after every enemy has moved, which is where AbstractModel.AfterSideTurnEnd is dispatched from (Hook.cs:1267-1292). The sim's per-creature enemy slots no longer exist; turn_structure G5 is closed and this entry follows it per binding rule 3. `participants.Contains(Owner)` is `self.owner.side == \"enemy\"`, the idiom the other nineteen `on_enemy_side_end` listeners already used. EXECUTED: test/test_enemy_side_per_side.py.  FIXED 2026-07-28 (round 4). The text it replaced read: SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called ONCE for the whole enemy side (CombatManager.cs:1256) after every enemy has moved; the sim implements it with the PER-ENEMY slot on_enemy_turn_end (combat.py:341), which fires immediately after each enemy's own move. The sim HAS the side-scoped slot and does not use it here: on_enemy_side_end (combat.py:345). turn_structure gap G5 (the enemy side is per-enemy in the sim, per-side in the game) is the owning record and carries the identical `gap` verdict; not re-verdicted here per binding rule 3. DORMANT, and the dormancy is EXECUTED rather than asserted -- see `py audit/tools/power_slot_probes.py rosters` and `enemy-hook-order`. This is the SECOND of the three units the power report's section 6 said would settle turn_structure G5, and the interesting one, because SLUMBERING_BEETLE_NORMAL is a THREE-enemy encounter -- executed: `rosters` gives order=['BowlbugRock', 'BowlbugSilk', 'SlumberingBeetle']. It still settles DORMANT, for a reason G5 does not give: the Slumber owner is the LAST creature in the enemy list, so its per-creature turn-end slot is immediately adjacent to the side-end slot and no other enemy acts in between. `enemy-hook-order` records the sim's actual dispatch as ['clear:BowlbugRock', 'start:BowlbugRock', 'end:BowlbugRock', 'clear:BowlbugSilk', ..., 'end:SlumberingBeetle', 'side_end']. The BLOCK-clear half of G5 is separately dormant here: neither Bowlbug move grants block to an ally (monsters/hive/bowlbugs.py:87 gains block on `self`), so the sim clearing the beetle's block only after the Bowlbugs have moved cannot lose block the game kept. Trigger: reordering the encounter so the beetle is not last, or a Bowlbug-style ally-block move."
     }
   },
   "guards": [
@@ -98,6 +98,6 @@
       "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

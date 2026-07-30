@@ -227,10 +227,13 @@ def test_neows_bones():
     before = len(run.deck)
     run.add_relic("neows_bones")
     ids = [r.id for r in run.relics]
-    assert len(ids) == 3                       # bones + 2 pool relics
-    assert "neows_bones" in ids
-    assert all(rid in neow_relic_pool(run) or rid == "neows_bones"
-               for rid in ids if rid != "neows_bones" or True)
+    assert ids[0] == "neows_bones"
+    # NeowsBones.cs:40-42 -- Shuffle(pool).Take(2). The two picks come next;
+    # anything after them was granted by their OWN AfterObtained (this seed
+    # draws Cursed Pearl, which pulls a relic of its own), so the count is not
+    # fixed at 3. This used to assert `len(ids) == 3`, which held only because
+    # the pool's trailing six were in the wrong order (relic/neows_bones/g1).
+    assert all(rid in neow_relic_pool(run) for rid in ids[1:3])
     curses = [c for c in run.deck[before:] if c.card_type.value == "curse"]
     assert len(curses) >= 1                    # plus a random curse
 
@@ -626,3 +629,15 @@ def test_fragrant_mushroom_pickup_effect_fires_on_obtain():
     run.add_relic("fragrant_mushroom")
     assert run.hp == hp - 15
     assert sum(1 for c in run.deck if c.upgrade_level > 0) == 2
+
+
+def test_neow_pool_tail_is_the_six_singleton_options_in_declaration_order():
+    """relic/_off_stream_draw, relic/neows_bones/g1. Neow.AllPossibleOptions
+    (Neow.cs:53-62) appends the six non-paired relics ONE AT A TIME in the
+    order LavaRock, NeowsTalisman, NutritiousOyster, Pomander, SmallCapsule,
+    StoneHumidifier — not as the three coin-flip pairs. Neow's Bones shuffles
+    this list (NeowsBones.cs:40-42) and a Fisher-Yates shuffle's swap indices
+    depend only on the RNG, so the INPUT ORDER decides the output."""
+    pool = neow_relic_pool(fresh_run(0))
+    assert pool[-6:] == ["lava_rock", "neows_talisman", "nutritious_oyster",
+                         "pomander", "small_capsule", "stone_humidifier"]

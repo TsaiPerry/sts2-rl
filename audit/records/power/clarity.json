@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -31,22 +31,22 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potion_pools.py",
-      "sha256": "7755c9d3ead187a051c3b1b9e98f94d7de551673ce9e71d3af695b46cb933b90",
+      "sha256": "d3a31cbdd8277a5ea1c3ea274d295ca22ca3b431a6a6eec5abc0aa6b06e81fad",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "72840c98dd4eb14b3f77142dc08078d535fb5f223a14b5d7fea981010502b1a7",
+      "sha256": "06f9d38ecefba5bb61280da2dae7e92350e163a00481f23bfe8443b722327ad8",
       "side": "sim"
     },
     {
@@ -56,7 +56,7 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
+      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
       "side": "sim"
     }
   ],
@@ -77,8 +77,8 @@
     },
     "AfterSideTurnStart": {
       "maps_to": "powers.py:3900-3902 on_player_turn_started -> Power._tick (hooks.py:285-295, player.py:186)",
-      "verdict": "gap",
-      "issue": "The SLOT is right and the group's usual slot gap does not apply here: Hook.AfterSideTurnStart (CombatManager.cs:522) is post-draw, and the sim's on_player_turn_started (player.py:186) is the post-draw slot -- confirmed by the ordering table in this record's source comments and by py audit/tools/power_census.py slots (which flags the unit only as NO-SIM-SIDE-START-SLOT, i.e. no side-scoped dispatch, not as a wrong slot). What IS a gap is the phase collapse: PHASE COLLAPSE. The sim's on_player_turn_started (player.py:186) is a single slot serving THREE distinct C# phases that the game runs in a fixed order: Hook.AfterPlayerTurnStart (CombatManager.cs:675, inside the SetupPlayerTurn task launched at :514), then Hook.AfterSideTurnStart (:522), then Hook.AfterAutoPrePlayPhaseEntered (:568 -> RunAutoPrePlayPhase, :613-619). Collapsing them makes the relative order of this power and every other turn-start power a function of hook-REGISTRATION order, i.e. of which card the player happened to play first. Same shape as hook_dispatch's G3 (the Early/Late phase passes do not exist) one level up, and the AutoPrePlay/AutoPostPlay half of it is turn_structure's G8; neither is re-verdicted here per binding rule 3, but see this record's Mayhem guard for the executed consequence."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. The phase collapse this entry was filed for is gone. `on_player_turn_started` served THREE distinct C# phases; it now serves exactly one (Hook.AfterPlayerTurnStart), with `after_side_turn_start` for :522 and `after_auto_pre_play_phase_entered` for the AutoPrePlay phase, dispatched in that order from PlayerCombatState.start_turn. ClarityPower.cs declares AfterSideTurnStart, so it is on the middle one. The Late sub-pass is already covered by HookSystem._each's suffix machinery (`after_side_turn_start_late` dispatches if any listener declares it).  The gap it replaced read: The SLOT is right and the group's usual slot gap does not apply here: Hook.AfterSideTurnStart (CombatManager.cs:522) is post-draw, and the sim's on_player_turn_started (player.py:186) is the post-draw slot -- confirmed by the ordering table in this record's source comments and by py audit/tools/power_census.py slots (which flags the unit only as NO-SIM-SIDE-START-SLOT, i.e. no side-scoped dispatch, not as a wrong slot). What IS a gap is the phase collapse: PHASE COLLAPSE. The sim's on_player_turn_started (player.py:186) is a single slot serving THREE distinct C# phases that the game runs in a fixed order: Hook.AfterPlayerTurnStart (CombatManager.cs:675, inside the SetupPlayerTurn task launched at :514), then Hook.AfterSideTurnStart (:522), then Hook.AfterAutoPrePlayPhaseEntered (:568 -> RunAutoPrePlayPhase, :613-619). Collapsing them makes the relative order of this power and every other turn-start power a function of hook-REGISTRATION order, i.e. of which card the player happened to play first. Same shape as hook_dispatch's G3 (the Early/Late phase passes do not exist) one level up, and the AutoPrePlay/AutoPostPlay half of it is turn_structure's G8; neither is re-verdicted here per binding rule 3, but see this record's Mayhem guard for the executed consequence."
     }
   },
   "guards": [
@@ -103,6 +103,6 @@
       "rationale": "RE-VERDICTED 2026-07-26 (potion-scope re-verdict pass), from waiver. The shared contract's 'Out of scope everywhere: potions (deferred by Perry)' has been DELETED on Perry's instruction (\"don't ignore potions anymore\"). `potion` is now an ordinary audit kind -- 51 sim units, audit/records/potion/, `harness.py roster potion` -- and it is UNAUDITED, exactly like `monster`. The previous pass had already narrowed this guard until the only thing left standing on the clause was 'there is no audit/records/potion/ tier for this potion to live in'. That sentence is no longer a scope statement, it is a coverage statement, and coverage is not a waiver. So the guard is re-derived on its merits: the applier potion is read in full against its C# model and verdicted here.\nTHE APPLIER IS FAITHFUL, INCLUDING ITS INTERNAL ORDER. src/Core/Models/Potions/Clarity.cs:23-27 declares two vars, new PowerVar<ClarityPower>(3m) and new CardsVar(1), with no AscensionHelper.GetValueIfAscension in the file, so 3 and 1 are the pinned non-ascension values; sts2_rl/potions.py:769-770 pins CARDS = 1 and CLARITY = 3. The ORDER is load-bearing and correct: Clarity.cs:33 draws FIRST and Clarity.cs:34 applies the power SECOND, so the immediate card is not itself boosted by the power that was just applied -- sts2_rl/potions.py:775-778 keeps that order (DrawCmd.draw then PowerCmd.apply). Reversing it would draw one extra card on turn 1. APPLIER: C#'s fourth argument to PowerCmd.Apply is `base.Owner.Creature` (src/Core/Commands/PowerCmd.cs:101 declares that parameter as `Creature? applier`), matching the sim's `applier=ctx.player`. TargetType.AnyPlayer (Clarity.cs:21) and AssertValidForTargetedPotion (Clarity.cs:31) are the multiplayer target-validity path, waived as multiplayer; NCombatRoom.PlaySplashVfx (Clarity.cs:32) is presentation. REACHABILITY IS ESTABLISHED, NOT WAIVED (binding rule 6): @register_potion puts it in ALL_POTIONS and it is in the generation pool at sts2_rl/potion_pools.py:44 (uncommon); the conformance runner asserts the belt slot by slot (sts2_rl/conformance/runner.py:625-631). WHAT IS STILL NOT JUDGED HERE is a coverage fact, not a verdict: `potion/clarity` has no record yet because the whole potion kind is unaudited. Nothing in this record depends on it."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

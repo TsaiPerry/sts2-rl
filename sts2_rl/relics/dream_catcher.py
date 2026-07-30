@@ -20,6 +20,15 @@ class DreamCatcher(Relic):
     rarity = RelicRarity.EVENT
 
     def modify_rest_site_heal_rewards(self, run, rewards) -> None:
-        from ..rewards import RarityOddsType, create_reward_cards
+        # `rewards.Add(new CardReward(...))` — its OWN pick-one-of-3 screen,
+        # not an extension of whatever else is on the set. Two relics adding
+        # rest rewards therefore give the player two separate choices, which
+        # is what Tiny Mailbox's potions already ride alongside.
+        from ..rewards import CardRewardGroup, RarityOddsType, create_reward_cards
+        from ..rooms import RoomType
 
-        rewards.cards.extend(create_reward_cards(run, RarityOddsType.REGULAR))
+        rewards.card_rewards.append(CardRewardGroup(
+            cards=create_reward_cards(run, RarityOddsType.REGULAR,
+                                      is_card_reward=True),
+            room_type=RoomType.MONSTER,   # CardCreationOptions.ForRoom(.., Monster)
+        ))

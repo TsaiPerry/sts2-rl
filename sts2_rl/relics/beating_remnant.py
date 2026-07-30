@@ -46,5 +46,5 @@ class BeatingRemnant(Relic):
         if target is self.player:
             self._received_this_turn += amount
 
-    def on_player_turn_start(self, player: PlayerCombatState) -> None:
+    def before_side_turn_start(self, player: PlayerCombatState) -> None:
         self._received_this_turn = 0

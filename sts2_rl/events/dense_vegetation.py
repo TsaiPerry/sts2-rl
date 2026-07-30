@@ -9,7 +9,6 @@ from .base import Event, EventOption, register_event
 
 if TYPE_CHECKING:
     from ..hooks import HookSystem
-    from ..rewards import CombatRewards
 
 _HP_LOSS = 8  # HpLossVar(8)
 
@@ -48,13 +47,13 @@ class DenseVegetation(Event):
     def __init__(self, run) -> None:
         super().__init__(run)
         self.gold = 0
-        # The rest-site heal's reward screen (HealRestSiteOption.
-        # ExecuteRestSiteHeal's RewardsCmd.OfferCustom — Dream Catcher's
-        # 3-card choice). Set by REST; the driver offers it.
-        self.pending_rewards: "CombatRewards | None" = None
 
     def calculate_vars(self) -> None:
-        self.gold = self.rng.randint(61, 99)  # Rng.NextInt(61, 100)
+        # `base.Rng.NextInt(61, 100)` (DenseVegetation.cs:37) — the event's
+        # OWN Rng, not the shared run stream (event/EV-3).
+        er = self.event_rng
+        self.gold = (er.next_int_range(61, 100) if er is not None
+                     else self.rng.randint(61, 99))
 
     def initial_options(self) -> list[EventOption]:
         return [

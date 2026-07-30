@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\iron_club.py",
-    "sha256": "140fe3471fb2b3c875806f8df2edaec72566b2a3fa9491f0aa32da83f011b03a"
+    "sha256": "978af5c8a7b6f51073481d87fd29361d8ebe8eea06374ea46b8088f9fcbcd4d5"
   },
   "extra_sources": [
     {
@@ -31,17 +31,17 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
       "path": "test/test_hook_order.py",
-      "sha256": "b8de2a3eefeb49141245e7fede8d92b029cd6fce4e429ce6b0537c8dd80fe707",
+      "sha256": "8e1ef674257f412e91b2386d8f622109db5fc9721e9f9c1e0e66806c7869ff8f",
       "side": "sim"
     }
   ],
@@ -74,8 +74,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): the threshold is `new CardsVar(4)` in the source and `CARDS = 6` in the port -- Iron Club draws on every 4th card played in the game and every 6th in the sim",
-      "verdict": "gap",
-      "issue": "MECHANISM: IronClub.cs:38 declares `CanonicalVars => ... new CardsVar(4)`, and every consumer reads it -- DisplayAmount (line 32), UpdateDisplay (line 77) and the draw condition `CardsPlayed % intValue == 0` (lines 88-89). The port pins `CARDS = 6` (iron_club.py:20) and its own docstring asserts the source says otherwise: 'IronClub.cs -- every 6th card you play, draw 1 card (CardsVar(6); ...)'. There is no ascension branch to explain it: no AscensionHelper.GetValueIfAscension appears anywhere in IronClub.cs, so 4 is the pinned non-ascension value, and the numeric-constant check the per-unit procedure requires is what caught it. Nor is there a second source file -- executed: `grep -rn 'IronClub' src/ --include=*.cs` returns only Relics/IronClub.cs, the AbstractModelSubtypes registry line, Events/Tanx.cs and RelicPools/EventRelicPool.cs. LIVE, no dormancy question at all: EXECUTED (py audit/tools/relic_probes_b07.py club-count) the sim reports CARDS = 6 and draws on plays 6 and 12 where the game draws on 4, 8 and 12 -- so the relic gives roughly a third fewer cards over a run, and every draw it does give arrives two plays late. Both sides ported and obtainable: Iron Club is offered by the ported Tanx shrine (events/tanx.py; Tanx.cs:33 `RelicOption<IronClub>()`), which is the same grant path relic/throwing_axe uses, and it is Event rarity so it is not in the grab bag (executed by probe `pool`: bag=-, granted_by=events/tanx.py). Rule 7: events/tanx.py is not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `CARDS = 4`. IronClub.cs:38 declares `CanonicalVars => ... new CardsVar(4)` and every consumer reads it -- DisplayAmount (:32), UpdateDisplay (:77) and the draw condition `CardsPlayed % intValue == 0` (:88-89). There is no `AscensionHelper.GetValueIfAscension` anywhere in the file and no second source file, so 4 is the pinned non-ascension value; the port's 6 was a transcription error and its own docstring asserted 6 against a source that says 4. LEGACY TEST MOVED (non-negotiable 5): test_ancients.py's `test_iron_club_every_sixth_card_draws` is now `test_iron_club_every_fourth_card_draws`, with the citation inline.  Pinned by test/test_relic_residue_gaps.py.  NOT CLOSED: nothing at this site.  The text it replaced read: MECHANISM: IronClub.cs:38 declares `CanonicalVars => ... new CardsVar(4)`, and every consumer reads it -- DisplayAmount (line 32), UpdateDisplay (line 77) and the draw condition `CardsPlayed % intValue == 0` (lines 88-89). The port pins `CARDS = 6` (iron_club.py:20) and its own docstring asserts the source says otherwise: 'IronClub.cs -- every 6th card you play, draw 1 card (CardsVar(6); ...)'. There is no ascension branch to explain it: no AscensionHelper.GetValueIfAscension appears anywhere in IronClub.cs, so 4 is the pinned non-ascension value, and the numeric-constant check the per-unit procedure requires is what caught it. Nor is there a second source file -- executed: `grep -rn 'IronClub' src/ --include=*.cs` returns only Relics/IronClub.cs, the AbstractModelSubtypes registry line, Events/Tanx.cs and RelicPools/EventRelicPool.cs. LIVE, no dormancy question at all: EXECUTED (py audit/tools/relic_probes_b07.py club-count) the sim reports CARDS = 6 and draws on plays 6 and 12 where the game draws on 4, 8 and 12 -- so the relic gives roughly a third fewer cards over a run, and every draw it does give arrives two plays late. Both sides ported and obtainable: Iron Club is offered by the ported Tanx shrine (events/tanx.py; Tanx.cs:33 `RelicOption<IronClub>()`), which is the same grant path relic/throwing_axe uses, and it is Event rarity so it is not in the grab bag (executed by probe `pool`: bag=-, granted_by=events/tanx.py). Rule 7: events/tanx.py is not hashed by this record."
     },
     {
       "what": "G2 (LIVE): C# fires Hook.AfterCardPlayed INSIDE the play-count loop, so a replayed card advances CardsPlayed once per iteration; the sim fires on_card_played once for the whole play",

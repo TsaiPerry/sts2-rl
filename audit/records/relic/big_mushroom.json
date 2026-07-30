@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\big_mushroom.py",
-    "sha256": "d2cc32319de1f178d350da05fb8d26bd6a693b5ae3ff17955780103936e78d6e"
+    "sha256": "c98f37b90a18d0c0b5ba50f23e86947d86865ba54c64c27f7374ced0b90c3314"
   },
   "extra_sources": [
     {
@@ -16,27 +16,27 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
+      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/hungry_for_mushrooms.py",
-      "sha256": "a4e4d128eec5f074343ab46cd4d3c7edd50ce072a2aaa619ebbe9bc43243e9b6",
+      "sha256": "7ee36211d04c44c1bacf6e5e1ed8289ea662c15775adf5b00643b25cb98bc7c9",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -51,8 +51,8 @@
     },
     "AfterObtained": {
       "maps_to": "no counterpart on the relic; the +20 Max HP lives in the granting event instead (events/hungry_for_mushrooms.py:34)",
-      "verdict": "gap",
-      "issue": "MECHANISM: BigMushroom.cs:24-28 raises Max HP by 20 (MaxHpVar(20m)) in AfterObtained. The sim's relic implements no after_obtained and its docstring justifies that with 'RunState has no run-level AfterObtained dispatch' (big_mushroom.py:19) -- which is FALSE: RunState.add_relic calls relic.after_obtained(self) (run.py:552), and the sibling relic from the very same event, fragrant_mushroom, uses it (events/hungry_for_mushrooms.py:38-40 says so explicitly). REACHABILITY (LIVE, executed -- py audit/tools/relic_probes.py mushroom-hp): run.add_relic('big_mushroom') leaves max_hp at 80, while run.add_relic('fragrant_mushroom') correctly drops hp 80 -> 65 through its own after_obtained. The event path happens to be whole (max_hp 80 -> 100) because the event re-applies the +20 itself, so ordinary play is unaffected -- but the conformance runner grants relics by id straight through add_relic (conformance/runner.py:465, 698, 751) when it resyncs the player's relics against the save, and that path silently loses 20 Max HP. Since DETECTOR 3 asserts player HP and max HP at act boundaries, this surfaces as a parity failure on any seed whose player took Big Mushroom. The same misplacement also defeats Relic.undo_after_obtained (relics/base.py:143-150), which exists precisely so a swapped-out max-HP relic unwinds its bonus: Big Mushroom's +20 is not the relic's to unwind, so a runner swap leaves it behind."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): the relic carries its own pickup effect. BigMushroom.cs:24-28's `CreatureCmd.GainMaxHp(Owner.Creature, DynamicVars.MaxHp.BaseValue)` is `after_obtained` on relics/big_mushroom.py now. The docstring's excuse -- 'RunState has no run-level AfterObtained dispatch' -- was false, as this entry said: RunState.add_relic calls `relic.after_obtained(self)` and the sibling relic from the very same event already used it. events/hungry_for_mushrooms.py no longer applies the +20 itself, so the gain reaches the relic however it is granted rather than only through that one option. Pinned by test_big_mushroom_gains_its_max_hp_on_pickup.  The text it replaced read: MECHANISM: BigMushroom.cs:24-28 raises Max HP by 20 (MaxHpVar(20m)) in AfterObtained. The sim's relic implements no after_obtained and its docstring justifies that with 'RunState has no run-level AfterObtained dispatch' (big_mushroom.py:19) -- which is FALSE: RunState.add_relic calls relic.after_obtained(self) (run.py:552), and the sibling relic from the very same event, fragrant_mushroom, uses it (events/hungry_for_mushrooms.py:38-40 says so explicitly). REACHABILITY (LIVE, executed -- py audit/tools/relic_probes.py mushroom-hp): run.add_relic('big_mushroom') leaves max_hp at 80, while run.add_relic('fragrant_mushroom') correctly drops hp 80 -> 65 through its own after_obtained. The event path happens to be whole (max_hp 80 -> 100) because the event re-applies the +20 itself, so ordinary play is unaffected -- but the conformance runner grants relics by id straight through add_relic (conformance/runner.py:465, 698, 751) when it resyncs the player's relics against the save, and that path silently loses 20 Max HP. Since DETECTOR 3 asserts player HP and max HP at act boundaries, this surfaces as a parity failure on any seed whose player took Big Mushroom. The same misplacement also defeats Relic.undo_after_obtained (relics/base.py:143-150), which exists precisely so a swapped-out max-HP relic unwinds its bonus: Big Mushroom's +20 is not the relic's to unwind, so a runner swap leaves it behind."
     },
     "AfterRoomEntered": {
       "maps_to": "no counterpart (Grow() only)",
@@ -82,6 +82,6 @@
       "rationale": "Multiplayer per-player filter on a hook the sim dispatches for its single player only; out of scope under the shared contract."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

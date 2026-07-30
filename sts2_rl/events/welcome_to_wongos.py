@@ -89,10 +89,12 @@ class WelcomeToWongos(Event):
         # `base.Rng.NextItem(upgraded)` — the event's own Rng
         # (WelcomeToWongos.cs:158).
         er = self.event_rng
+        # WelcomeToWongos.cs:161 -- CardCmd.Downgrade, out of combat.
+        from ..cmds import CardCmd
         if er is not None:
             card = er.next_item(upgraded)
             if card is not None:
-                card.downgrade()
+                CardCmd.downgrade(None, card)
         elif upgraded:
-            self.rng.choice(upgraded).downgrade()
+            CardCmd.downgrade(None, self.rng.choice(upgraded))
         self._finish("LEAVE")

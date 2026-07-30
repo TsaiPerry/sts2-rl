@@ -366,16 +366,20 @@ def probe_glass_eye() -> None:
           f"   (C#: every Glam-eligible option carries Glam, because "
           f"CreateForReward fires TryModifyCardRewardOptions(+Late))")
 
-    combat_pool = set(pool_card_ids())
+    # Both pool helpers now REQUIRE an explicit character pool (the Wave 0
+    # character refactor); passing run2's is what the relic itself does.
+    combat_pool = set(pool_card_ids(pool=run2.card_pool))
     dropped = sorted(
-        cid for cid in reward_pool_card_ids()
+        cid for cid in reward_pool_card_ids(run2.card_pool)
         if cid not in combat_pool
         and _CARD_CLASSES[cid].rarity in (CardRarity.COMMON,
                                           CardRarity.UNCOMMON,
                                           CardRarity.RARE))
-    print(f"  (4) glass_eye.py:22 uses pool_card_ids() (FilterForCombat); the "
-          f"reward pool is GetUnlockedCards. Reward-eligible ids it drops: "
-          f"{[(d, _CARD_CLASSES[d].rarity.name) for d in dropped]}")
+    print(f"  (4) the reward pool is GetUnlockedCards, not FilterForCombat; "
+          f"reward-eligible ids the combat filter drops: "
+          f"{[(d, _CARD_CLASSES[d].rarity.name) for d in dropped]}. Glass Eye "
+          f"now draws through rewards.create_reward_cards, which uses "
+          f"reward_pool_card_ids on the parity path — so these are offerable.")
 
 
 # ── b06-isallowed ─────────────────────────────────────────────────────────

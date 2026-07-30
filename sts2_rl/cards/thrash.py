@@ -25,6 +25,13 @@ class ThrashCard(Card):
     rarity = CardRarity.RARE
     target_type = TargetType.ANY_ENEMY
 
+    # `_extraDamage*`, the private field (Thrash.cs:20, :72). `DowngradeInternal` rebuilds
+    # the damage var from canonical and does NOT touch this, which is the
+    # whole point: `AfterDowngraded` then re-adds it. Deliberately a CLASS
+    # default rather than an `_init_vars` line, because `_init_vars` is what
+    # the downgrade re-runs.
+    _extra_damage = 0
+
     def _init_vars(self) -> None:
         self._energy_cost = 1
         self._damage = 4
@@ -42,7 +49,7 @@ class ThrashCard(Card):
         else:
             amount = getattr(victim, "_damage", 0)
         props = DamageProps.CARD_UNPOWERED if victim.is_unpowered else DamageProps.CARD
-        amount = amount + ctx.hooks.modify_damage_additive(
+        amount = ctx.hooks.modify_damage_additive(
             None, amount, ctx.player, victim, None, props)
         amount = int(ctx.hooks.modify_damage_multiplicative(
             None, amount, ctx.player, victim, None, props))
@@ -66,5 +73,10 @@ class ThrashCard(Card):
                 victim = crng.card_selection.choice(attacks)
             else:
                 victim = ctx.combat._rng.choice(attacks)
-            self._damage += self._absorbed_damage(ctx, victim)
+            absorbed = self._absorbed_damage(ctx, victim)
+            self._damage += absorbed
+            self._extra_damage += absorbed   # Thrash.cs:71-72
             ExhaustCmd.exhaust(ctx.hooks, ctx.player, victim)
+
+    def _after_downgraded(self) -> None:
+        self._damage += self._extra_damage   # Thrash.cs:77-81

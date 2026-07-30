@@ -50,10 +50,27 @@ class DustyTome(Relic):
             self.ancient_card = run.rng.choice(options)
 
     def after_obtained(self, run) -> None:
+        """AfterObtained (DustyTome.cs:58-64) READS the SavedProperty; it does
+        not roll. The roll is SetupForPlayer's, at offer time, so it happens
+        whether or not the player takes the relic and can never happen twice.
+
+        A relic granted without an offer — the conformance runner's relic
+        resync does exactly that — has no AncientCard. C# cannot reach that
+        state, so there is no source behaviour to copy; the sim resolves it
+        WITHOUT a draw rather than rolling at pickup, which used to move the
+        PlayerRng.Rewards counter at the wrong moment and shift every later
+        Rewards consumer in the run. The identity is unaffected today because
+        `candidates` has exactly one member in the ported pool; porting a
+        second Ancient Ironclad card makes this fallback observable and the
+        offer-time roll mandatory on that path too.
+        """
         from ..cards import make_card
 
         if self.ancient_card is None:
-            self.setup_for_player(run)
+            options = self.candidates(run.card_pool)
+            if not options:
+                return
+            self.ancient_card = options[0]
         if self.ancient_card is None:
             return
         card = make_card(self.ancient_card)

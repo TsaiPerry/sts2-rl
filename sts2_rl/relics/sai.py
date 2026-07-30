@@ -20,7 +20,7 @@ class Sai(Relic):
 
     BLOCK = 7
 
-    def on_player_turn_started(self, player: PlayerCombatState) -> None:
+    def after_side_turn_start(self, player: PlayerCombatState) -> None:
         from ..cmds import BlockCmd
 
         BlockCmd.apply(

@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/cards/spoils_map.py",
-      "sha256": "cd4880769f90dd631b9b39102faa291f5b600e1f2763ee77b05706b4289c184c",
+      "sha256": "5dfefa066d40393aca4a8dd154d5e2d90cd5b178614aab1d767286a4576d0e3f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
@@ -51,12 +51,12 @@
     },
     {
       "path": "sts2_rl/relics/preserved_fog.py",
-      "sha256": "3990b9562be96f93d62f71b22b8b0471beefaaada390b3b589b581744afdeb2a",
+      "sha256": "256f8a90f6693385ab7f728b047c5045619dffefee52fa504b5b3f3300a26675",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -73,15 +73,15 @@
     },
     "AfterObtained": {
       "maps_to": "after_obtained (precise_scissors.py:15-17), dispatched by RunState.add_relic (run.py:552)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The relic's own arithmetic is faithful -- one removable deck card chosen and removed, executed at b12-cutters (deck 10 -> 9) with the candidate filter matching CardModel.IsRemovable (guard N1) -- but the removal goes through a bare `deck.remove` instead of the game's CardPileCmd.RemoveFromDeck, which drops the Hook.BeforeCardRemoved dispatch that verb exists to make (G1)."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): `Hook.BeforeCardRemoved` exists and every deck removal fires it. `RunState.remove_cards` now has CardPileCmd.RemoveFromDeck's shape (CardPileCmd.cs:52-70): one card at a time, `before_card_removed` BEFORE the unlink. `RunState.before_card_removed` is the dispatcher (Hook.cs:299-305) and walks the DECK as well as the relics, because RunState.IterateHookListeners yields the deck and the hook's only implementer in the whole decompiled game is a CARD -- SpoilsMap.cs:100-116, now ported on sts2_rl/cards/spoils_map.py with its three guards in source order. The four relics that bypassed the verb -- preserved_fog (which called `run.deck.remove` directly), biiig_hug, meat_cleaver and paels_tooth -- go through `remove_cards` now, so precarious_shears and precise_scissors get the dispatch through the path they already used. EXECUTED: with the old bare removal a removed Spoils Map left its treasure-node quest pinned and the node still payable; test_shop_and_map_mods.py::test_spoils_map_unpins_its_quest_when_removed_from_the_deck pins it. NOT closed: the `HasBeenRemovedFromState` marking this entry also named -- no sim card carries the flag and nothing reads it.  The text it replaced read: Rollup of guard G1 per binding rule 4. The relic's own arithmetic is faithful -- one removable deck card chosen and removed, executed at b12-cutters (deck 10 -> 9) with the candidate filter matching CardModel.IsRemovable (guard N1) -- but the removal goes through a bare `deck.remove` instead of the game's CardPileCmd.RemoveFromDeck, which drops the Hook.BeforeCardRemoved dispatch that verb exists to make (G1)."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): `Hook.BeforeCardRemoved` has NO sim dispatch anywhere, so removing a Spoils Map leaves its map quest armed and the treasure node still pays 600 gold",
-      "verdict": "gap",
-      "issue": "MECHANISM: PreciseScissors.cs:22 calls `await CardPileCmd.RemoveFromDeck(item)`, which fires `await Hook.BeforeCardRemoved(card.Owner.RunState, card)` BEFORE unlinking the card (src/Core/Commands/CardPileCmd.cs:61). `grep -rn 'before_card_removed' sts2_rl/` returns ZERO hits -- neither a Relic base method nor a dispatcher -- and RunState.remove_cards (run.py:356-358) is a bare `for card in cards: self.deck.remove(card)`. The whole decompiled game has exactly ONE implementer of the hook, SpoilsMap.BeforeCardRemoved (src/Core/Models/Cards/SpoilsMap.cs:100-115), which calls `Map.GetPoint(SpoilsCoord)?.RemoveQuest(this)` -- so removing a Spoils Map from the deck is what un-arms its treasure-node payout. The sim's port substitutes an `_active_in` deck-membership test (cards/spoils_map.py:46-49) for the map-GENERATION hooks, but the payout path does not consult it: RunState._complete_map_point_quests (run.py:1052-1058) iterates `point.quests` and calls on_quest_complete with no deck check, and nothing removes the marker that after_map_generated added (cards/spoils_map.py:89-95). REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b12.py b12-cardremoved): with a Spoils Map in the act-2 deck, entering the marked treasure node pays 600 gold BOTH when the card is still in the deck and when it has been removed (in_deck=False, marker still present, gold 99 -> 699). C# pays nothing in the second case. Both sides ported and obtainable: Spoils Map is granted by the ported event The Legends Were True (events/the_legends_were_true.py), it is NOT eternal so it passes CardModel.IsRemovable and appears in run.removable_cards() (executed), and FromDeckForRemoval -- unlike FromDeckForTransformation (CardSelectCmd.cs:487) -- does NOT exclude Quest cards, so the game will offer it on the removal screen too. This is a CROSS-RELIC finding: relic/precarious_shears and relic/preserved_fog in this same batch take the identical path, as does every other deck-removal site in the sim (the merchant's card-removal service, Magic Pot). Reported as a candidate pool-wide shape in .superpowers/sdd/relic-batch-12-lessons.md. NOTE per binding rule 7: CardPileCmd.cs, SpoilsMap.cs, CardSelectCmd.cs, run.py, cards/spoils_map.py and events/the_legends_were_true.py are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): `Hook.BeforeCardRemoved` exists and every deck removal fires it. `RunState.remove_cards` now has CardPileCmd.RemoveFromDeck's shape (CardPileCmd.cs:52-70): one card at a time, `before_card_removed` BEFORE the unlink. `RunState.before_card_removed` is the dispatcher (Hook.cs:299-305) and walks the DECK as well as the relics, because RunState.IterateHookListeners yields the deck and the hook's only implementer in the whole decompiled game is a CARD -- SpoilsMap.cs:100-116, now ported on sts2_rl/cards/spoils_map.py with its three guards in source order. The four relics that bypassed the verb -- preserved_fog (which called `run.deck.remove` directly), biiig_hug, meat_cleaver and paels_tooth -- go through `remove_cards` now, so precarious_shears and precise_scissors get the dispatch through the path they already used. EXECUTED: with the old bare removal a removed Spoils Map left its treasure-node quest pinned and the node still payable; test_shop_and_map_mods.py::test_spoils_map_unpins_its_quest_when_removed_from_the_deck pins it. NOT closed: the `HasBeenRemovedFromState` marking this entry also named -- no sim card carries the flag and nothing reads it.  The text it replaced read: MECHANISM: PreciseScissors.cs:22 calls `await CardPileCmd.RemoveFromDeck(item)`, which fires `await Hook.BeforeCardRemoved(card.Owner.RunState, card)` BEFORE unlinking the card (src/Core/Commands/CardPileCmd.cs:61). `grep -rn 'before_card_removed' sts2_rl/` returns ZERO hits -- neither a Relic base method nor a dispatcher -- and RunState.remove_cards (run.py:356-358) is a bare `for card in cards: self.deck.remove(card)`. The whole decompiled game has exactly ONE implementer of the hook, SpoilsMap.BeforeCardRemoved (src/Core/Models/Cards/SpoilsMap.cs:100-115), which calls `Map.GetPoint(SpoilsCoord)?.RemoveQuest(this)` -- so removing a Spoils Map from the deck is what un-arms its treasure-node payout. The sim's port substitutes an `_active_in` deck-membership test (cards/spoils_map.py:46-49) for the map-GENERATION hooks, but the payout path does not consult it: RunState._complete_map_point_quests (run.py:1052-1058) iterates `point.quests` and calls on_quest_complete with no deck check, and nothing removes the marker that after_map_generated added (cards/spoils_map.py:89-95). REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b12.py b12-cardremoved): with a Spoils Map in the act-2 deck, entering the marked treasure node pays 600 gold BOTH when the card is still in the deck and when it has been removed (in_deck=False, marker still present, gold 99 -> 699). C# pays nothing in the second case. Both sides ported and obtainable: Spoils Map is granted by the ported event The Legends Were True (events/the_legends_were_true.py), it is NOT eternal so it passes CardModel.IsRemovable and appears in run.removable_cards() (executed), and FromDeckForRemoval -- unlike FromDeckForTransformation (CardSelectCmd.cs:487) -- does NOT exclude Quest cards, so the game will offer it on the removal screen too. This is a CROSS-RELIC finding: relic/precarious_shears and relic/preserved_fog in this same batch take the identical path, as does every other deck-removal site in the sim (the merchant's card-removal service, Magic Pot). Reported as a candidate pool-wide shape in .superpowers/sdd/relic-batch-12-lessons.md. NOTE per binding rule 7: CardPileCmd.cs, SpoilsMap.cs, CardSelectCmd.cs, run.py, cards/spoils_map.py and events/the_legends_were_true.py are NOT hashed by this record."
     },
     {
       "what": "N1: the candidate filter -- `FromDeckForRemoval` takes `c.IsRemovable` (CardSelectCmd.cs:621-625) vs `run.removable_cards()`",
@@ -104,6 +104,6 @@
       "rationale": "Prompt text, the card-fly-away animation and the preview container are presentation only; the sim has no UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. The `showPreview` parameter defaults true and this relic does not override it, so nothing behavioural hangs on it."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "e4a89332099b3f25fcec72eed648058e9edcacca209b76f28c20255295e61a2f",
+      "sha256": "b52d8d15ba11856c157ae544d7837db5c35df881260a0065cf1d2b97917bd392",
       "side": "sim"
     },
     {
@@ -100,9 +100,8 @@
   "guards": [
     {
       "what": "IllusionPower: death is not removal (PROMPT.md bug class 21)",
-      "verdict": "gap",
-      "issue": "CARRIED FROM power/illusion PER RULE 3 -- still not re-derived. NARROWED 2026-07-28. THE on_death HALF IS CLOSED: cmds.py:30-65's `_resolve_death` now mirrors CreatureCmd.KillWithoutCheckingWinCondition's two arms (CreatureCmd.cs:506-570) -- it dispatches `hooks.on_death` on BOTH, with was_removal_prevented False on the real arm (:519) and True on the prevented one (:566), and it no longer floors the prevented creature at 1 HP. EXECUTED on a killed Parafright: hp=0, is_dead=True, retained_after_death=True, and the on_death listener fires (relics/gremlin_horn.py has no wasRemovalPrevented guard, matching GremlinHorn.cs:24-32, so it now pays out as the game does). WHAT REMAINS: IllusionPower is STILL ported onto `should_die` (powers.py:1671-1675) where IllusionPower.cs implements only ShouldCreatureBeRemovedFromCombatAfterDeath (:108-114) and AfterDeath (:77-90) and NO ShouldDie, so the sim takes the death-PREVENTION arm and two things still diverge: (a) Hook.AfterDeath is dispatched with wasRemovalPrevented TRUE where the game passes false, and (b) the prevented arm never reaches `_strip_powers_after_death` (cmds.py:67-84), so Creature.RemoveAllPowersAfterDeath (Creature.cs:668-671, called from CreatureCmd.cs:533 on the real-death arm) never runs. EXECUTED: a Parafright killed while carrying a player-applied Vulnerable 3 keeps ['illusion', 'minion', 'vulnerable']; the game strips Vulnerable, because it is a non-temporary Debuff and IllusionPower.ShouldPowerBeRemovedOnDeath returns `!(power is ITemporaryPower)` = true for it (IllusionPower.cs:59-66), and keeps only the two Buffs. STILL LIVE and still the same mechanism as relic/gremlin_horn G1 and audit/records/power/illusion.json -- not re-verdicted here. Parafright (the_obscura.py:28-39) remains one of the two ported appliers, so this unit is still a live site. NOTE: the SEPARATE Wail-onto-a-reviving-Parafright divergence (PowerCmd having no CanReceivePowers gate) IS closed -- cmds.py:394 now calls hooks.should_allow_hitting -- see monster/the_obscura g1.",
-      "live": true
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): STALE, not open -- both halves closed in code before this round and the entry's own text was the last thing describing the old shape. (a) IllusionPower is NOT on `should_die`: powers.py's IllusionPower implements `should_remove_from_combat_after_death` (returning `creature is not self.owner`, IllusionPower.cs:108-114) and NO should_die, so a killed Parafright takes the REAL-death arm and `hooks.on_death(target, False)` fires with was_removal_prevented False, as CreatureCmd.cs:519 does. (b) the real arm reaches `_strip_powers_after_death` (cmds.py), the port of Creature.RemoveAllPowersAfterDeath (Creature.cs:668-671) called from CreatureCmd.cs:533. EXECUTED 2026-07-29 on a Parafright carrying a player-applied Vulnerable 3 and killed beside a live slime: powers go ['illusion','minion','vulnerable'] -> ['illusion','minion'], hp 0, is_dead True, retained_after_death True, illusion.is_reviving True -- the Vulnerable is stripped because it is a non-temporary Debuff (IllusionPower.cs:59-66) and the two Buffs are kept. The corpse is also absent from `CombatState.hittable_enemies`, which this round added. NOT CLOSED: nothing -- this entry carried no residue; power/illusion and relic/gremlin_horn are separate records with their own entries.  The text it replaced read: CARRIED FROM power/illusion PER RULE 3 -- still not re-derived. NARROWED 2026-07-28. THE on_death HALF IS CLOSED: cmds.py:30-65's `_resolve_death` now mirrors CreatureCmd.KillWithoutCheckingWinCondition's two arms (CreatureCmd.cs:506-570) -- it dispatches `hooks.on_death` on BOTH, with was_removal_prevented False on the real arm (:519) and True on the prevented one (:566), and it no longer floors the prevented creature at 1 HP. EXECUTED on a killed Parafright: hp=0, is_dead=True, retained_after_death=True, and the on_death listener fires (relics/gremlin_horn.py has no wasRemovalPrevented guard, matching GremlinHorn.cs:24-32, so it now pays out as the game does). WHAT REMAINS: IllusionPower is STILL ported onto `should_die` (powers.py:1671-1675) where IllusionPower.cs implements only ShouldCreatureBeRemovedFromCombatAfterDeath (:108-114) and AfterDeath (:77-90) and NO ShouldDie, so the sim takes the death-PREVENTION arm and two things still diverge: (a) Hook.AfterDeath is dispatched with wasRemovalPrevented TRUE where the game passes false, and (b) the prevented arm never reaches `_strip_powers_after_death` (cmds.py:67-84), so Creature.RemoveAllPowersAfterDeath (Creature.cs:668-671, called from CreatureCmd.cs:533 on the real-death arm) never runs. EXECUTED: a Parafright killed while carrying a player-applied Vulnerable 3 keeps ['illusion', 'minion', 'vulnerable']; the game strips Vulnerable, because it is a non-temporary Debuff and IllusionPower.ShouldPowerBeRemovedOnDeath returns `!(power is ITemporaryPower)` = true for it (IllusionPower.cs:59-66), and keeps only the two Buffs. STILL LIVE and still the same mechanism as relic/gremlin_horn G1 and audit/records/power/illusion.json -- not re-verdicted here. Parafright (the_obscura.py:28-39) remains one of the two ported appliers, so this unit is still a live site. NOTE: the SEPARATE Wail-onto-a-reviving-Parafright divergence (PowerCmd having no CanReceivePowers gate) IS closed -- cmds.py:394 now calls hooks.should_allow_hitting -- see monster/the_obscura g1."
     },
     {
       "what": "SlamDamage",
@@ -125,6 +124,6 @@
       "rationale": "Parafright is summoned only by The Obscura's ILLUSION move (TheObscura.cs:84, the_obscura.py:94-96), and `the_obscura` is in the Hive's normal_keys (rooms.py:163). Both sides reachable with ported content."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-27"
 }

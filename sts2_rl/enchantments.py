@@ -96,6 +96,11 @@ class Enchantment:
             return False
         return card.enchantment is None
 
+    def modify_shuffle_order(self, player, cards: list,
+                             is_initial_shuffle: bool) -> None:
+        """`AbstractModel.ModifyShuffleOrder` — mutate the shuffled list IN
+        PLACE. No-op by default; Perfect Fit is the sim's only implementer."""
+
     def modify_card(self) -> None:
         """Mirrors EnchantmentModel.ModifyCard (EnchantmentModel.cs:355-364)
         -> OnEnchant: run this enchantment's modification logic on its card.
@@ -117,12 +122,39 @@ class Enchantment:
         return clone
 
     def attach(self, card: Card) -> None:
-        """Attach this enchantment to a card for the rest of the run."""
+        """`CardCmd.Enchant` -> `CardModel.EnchantInternal` (CardModel.cs:1491-1498)
+        PLUS `ModifyCard` — the normal enchant path, which is the only one that
+        checks CanEnchant."""
         if not self.can_enchant(card):
             raise ValueError(f"{self.name} cannot enchant {card!r}")
+        self.attach_internal(card)
+        self.modify_card()
+
+    def attach_internal(self, card: Card) -> None:
+        """`CardModel.EnchantInternal` alone (CardModel.cs:1491-1498), i.e.
+        `Enchantment = e; e.ApplyInternal(this, amount)` — no CanEnchant test
+        and NO `ModifyCard`.
+
+        This is the form `DeepCloneFields` uses (CardModel.cs:1204-1209), and
+        `EnchantmentModel.ModifyCard`'s own doc comment says why in as many
+        words: "It is NOT called when a card is cloned, because the
+        enchantment's effects will already be reflected in the card's values."
+        Re-running it on a clone is not merely redundant — it is unreachable
+        for the enchantments whose `CanEnchant` tests a property their own
+        `ModifyCard` clears, which is Souls (it removes Exhaust from a card
+        that must have had it).
+        """
         self.card = card
         card.enchantment = self
-        self.modify_card()
+        # The game's enchantment has NO combat field: it reaches the combat
+        # through `base.Card.Owner.Creature` (Adroit.cs:21), i.e. off the card
+        # it is attached to. The sim caches the pointer instead, so the cache
+        # has to be re-derived whenever the attachment moves — otherwise a
+        # mid-combat clone's enchantment copy (cards/base.py's `create_clone`
+        # -> `attach_internal`) is left with `combat = None` and every OnPlay
+        # that needs the combat raises. A run-level enchant sets it to None,
+        # which is right; combat setup then fills it in (combat.py).
+        self.combat = card.combat
 
     def reset(self) -> None:
         """Reset per-combat status (called by CombatState at setup)."""
@@ -175,7 +207,14 @@ class SlitherEnchantment(Enchantment):
     def on_card_drawn(self, card: Card, from_hand_draw: bool = False) -> None:
         if card is not self.card:
             return
-        card.set_cost_this_combat(self.combat._rng.randrange(4))
+        # Slither.cs:55-62 rolls on `Owner.RunState.Rng.CombatEnergyCosts.
+        # NextInt(4)`. The port used `combat._rng`, the shared combat Random, so a
+        # parity run both took a number off a stream the game never touches AND
+        # failed to advance CombatEnergyCosts — desyncing every later cost roll,
+        # Snecko Oil included. potions.py already uses `combat_rng.energy` for
+        # Snecko Oil, which is the SAME C# call. Legacy maps every accessor onto
+        # the one shared Random, so nothing changes for RL play.
+        card.set_cost_this_combat(self.combat.combat_rng.energy.randrange(4))
 
 
 @register_enchantment
@@ -236,10 +275,23 @@ class PerfectFitEnchantment(Enchantment):
     id = "perfect_fit"
     name = "Perfect Fit"
 
-    def on_shuffle(self, player) -> None:
-        if self.card is not None and self.card in player.draw_pile:
-            player.draw_pile.remove(self.card)
-            player.draw_pile.append(self.card)  # list end = top of draw pile
+    def modify_shuffle_order(self, player, cards: list,
+                             is_initial_shuffle: bool) -> None:
+        # PerfectFit.cs:10-16 — `if (!isInitialShuffle && cards.Contains(Card))
+        # { cards.Remove(Card); cards.Insert(0, Card); }`. The initial-shuffle
+        # early return is the source's, and the sim's list is top-at-END, so
+        # C#'s Insert(0) is an append here.
+        #
+        # This used to be `on_shuffle` = Hook.AfterShuffle, a DIFFERENT hook
+        # (CardPileCmd.cs:917, after the pile is rebuilt). The substitution
+        # worked for a lone enchanted card and broke for two, because which of
+        # two competing listeners lands its card on top is decided by DISPATCH
+        # ORDER — see HookSystem.modify_shuffle_order.
+        if is_initial_shuffle or self.card is None:
+            return
+        if self.card in cards:
+            cards.remove(self.card)
+            cards.append(self.card)
 
 
 @register_enchantment
@@ -453,6 +505,33 @@ class SharpEnchantment(Enchantment):
 
 
 @register_enchantment
+class AdroitEnchantment(Enchantment):
+    """Adroit — playing the enchanted card also gains [amount] Block.
+
+    Source: Adroit.cs — CanonicalVars BlockVar(0, Move); RecalculateValues sets
+    `Block.BaseValue = Amount`; OnPlay is `CreatureCmd.GainBlock(Owner.Creature,
+    DynamicVars.Block, cardPlay)`. There is NO CanEnchantCardType override, so
+    the base CanEnchant is the whole filter. Granted by Kifuda (amount 3).
+    """
+
+    id = "adroit"
+    name = "Adroit"
+
+    def on_play(self, card: Card, target: Creature | None = None) -> None:
+        # `DynamicVars.Block` is the enchantment's own Block var, which
+        # RecalculateValues keeps equal to Amount -- so the block is the
+        # enchantment's amount, not the card's printed block. It is a
+        # ValueProp.Move gain, i.e. the block modifiers apply, which is what
+        # BlockCmd.apply already does.
+        if card is not self.card:
+            return
+        from .cmds import BlockCmd
+
+        BlockCmd.apply(self.combat.hooks, self.combat.player, self.amount,
+                       card=card)
+
+
+@register_enchantment
 class NimbleEnchantment(Enchantment):
     """Nimble — the enchanted card gains +[amount] Block.
 
@@ -549,6 +628,37 @@ class CloneEnchantment(Enchantment):
 
     id = "clone"
     name = "Clone"
+
+
+@register_enchantment
+class RoyallyApprovedEnchantment(Enchantment):
+    """Royally Approved — the enchanted Attack or Skill gains Innate and
+    Retain.
+
+    Source: RoyallyApproved.cs — `CanEnchantCardType` is
+    `(uint)(cardType - 1) <= 1u`, i.e. exactly {Attack, Skill}; `OnEnchant`
+    adds CardKeyword.Innate and CardKeyword.Retain. Granted by Royal Stamp.
+
+    Both keywords are static card properties, so this is a `modify_card`
+    (EnchantmentModel.ModifyCard -> OnEnchant), re-applied wherever the game
+    re-derives a card from its canonical model.
+    """
+
+    id = "royally_approved"
+    name = "Royally Approved"
+
+    @classmethod
+    def can_enchant(cls, card: Card) -> bool:
+        from .cards import CardType
+
+        return super().can_enchant(card) and card.card_type in (
+            CardType.ATTACK, CardType.SKILL)
+
+    def modify_card(self) -> None:
+        if self.card is None:
+            return
+        self.card.innate = True
+        self.card.retain = True
 
 
 ALL_ENCHANTMENTS: dict[str, type[Enchantment]] = dict(_ENCHANTMENT_CLASSES)

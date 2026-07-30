@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     }
   ],
@@ -37,8 +37,8 @@
     },
     "AfterPlayerTurnStart": {
       "maps_to": "powers.py:638-648 CrimsonMantlePower.on_player_turn_start",
-      "verdict": "gap",
-      "issue": "SLOT. AfterPlayerTurnStart is a POST-draw hook -- hook_dispatch step 27 lists Hook.AfterPlayerTurnStart (882-908) among the multi-pass dispatchers and it runs after SetupPlayerTurn -- but the sim uses on_player_turn_start, which is pre-draw. The sim's on_player_turn_start (player.py:169) fires BEFORE the hand draw (player.py:171-186); C#'s side-turn-start dispatchers run at CombatManager.cs:458 (Before) and :522 (After), i.e. either side of SetupPlayerTurn at :514. EXECUTED: a spy records [on_player_turn_start hand=5, 4x on_card_drawn, on_player_turn_started hand=9]. Third-file citations, not hashed here. Live consequence: Crimson Mantle deals self-damage and then gains block at turn start, and the sim does both BEFORE the hand is drawn. A lethal self-damage tick therefore cancels a hand draw the game has already made, which is conformance-visible even when nothing dies because the draw consumes rng; and Hellraiser's draw-triggered auto-plays (powers.py:707-713) see the block in the sim and not in the game. The sim also has the correct slot available and unused: on_player_turn_started (player.py:186), which is where the phase-aware relics live."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. The turn-start split landed. `Hook.AfterPlayerTurnStart` (CombatManager.cs:675, SetupPlayerTurn's last line) and `Hook.AfterSideTurnStart` (:522, once per side after every SetupPlayerTurn) are now two sim dispatchers -- `on_player_turn_started` and the new `after_side_turn_start` -- and `Hook.BeforeSideTurnStart` (:458) has its own `before_side_turn_start`, fired before the block clear. 50 listeners moved to the hook they actually override, read off the C# `public override` in each unit's own file. CrimsonMantlePower declares AfterPlayerTurnStart, so it is on `on_player_turn_started`: post-draw, as the game has it. EXECUTED: test/test_turn_start_split.py::test_crimson_mantle_now_fires_after_the_hand_is_drawn -- all five draws happen with no block and no HP lost, and only then does the mantle resolve; test_hook_order.py::TestTurnStructureOrder pins the whole sequence.  The gap it replaced read: SLOT. AfterPlayerTurnStart is a POST-draw hook -- hook_dispatch step 27 lists Hook.AfterPlayerTurnStart (882-908) among the multi-pass dispatchers and it runs after SetupPlayerTurn -- but the sim uses on_player_turn_start, which is pre-draw. The sim's on_player_turn_start (player.py:169) fires BEFORE the hand draw (player.py:171-186); C#'s side-turn-start dispatchers run at CombatManager.cs:458 (Before) and :522 (After), i.e. either side of SetupPlayerTurn at :514. EXECUTED: a spy records [on_player_turn_start hand=5, 4x on_card_drawn, on_player_turn_started hand=9]. Third-file citations, not hashed here. Live consequence: Crimson Mantle deals self-damage and then gains block at turn start, and the sim does both BEFORE the hand is drawn. A lethal self-damage tick therefore cancels a hand draw the game has already made, which is conformance-visible even when nothing dies because the draw consumes rng; and Hellraiser's draw-triggered auto-plays (powers.py:707-713) see the block in the sim and not in the game. The sim also has the correct slot available and unused: on_player_turn_started (player.py:186), which is where the phase-aware relics live."
     }
   },
   "guards": [

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -41,12 +41,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     }
   ],
@@ -62,15 +62,15 @@
     },
     "AfterSideTurnStart": {
       "maps_to": "powers.py:221-229 on_enemy_turn_start / on_player_turn_start",
-      "verdict": "gap",
-      "issue": "LIVE. The player leg is one slot too early. The sim's on_player_turn_start (player.py:169) fires BEFORE the hand draw (player.py:171-186), where C#'s AfterSideTurnStart is dispatched at CombatManager.cs:522, AFTER SetupPlayerTurn (:514) has reset energy and drawn the hand. The sim's matching post-draw slot is on_player_turn_started (player.py:186). EXECUTED: a spy listener records [on_player_turn_start hand=5, 4x on_card_drawn, on_player_turn_started hand=9]. Third-file citations, not hashed here. EXECUTED co-occurrence witness with two ported Ironclad cards: Hellraiser (cards/hellraiser.py:36) auto-plays every Strike as it is DRAWN, and Demon Form (cards/demon_form_card.py:35) grants Strength at turn start. On the turn after Demon Form 2 is played, the sim grants the Strength first and the auto-played Strikes take it with them -- enemy HP 41 -> 17 -- where the game draws (and auto-plays) first and only then grants Strength, leaving those Strikes un-Strengthened at 41 -> 23. Six damage the game never deals. The enemy leg (powers.py:221-224) has the separate per-creature problem recorded in its own guard entry."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. DemonFormPower.cs:21 declares AfterSideTurnStart and the power is now on the new `after_side_turn_start` dispatcher (CombatManager.cs:522), which the sim fires AFTER the hand draw and after `on_player_turn_started`. The executed Hellraiser witness inverts back to the game's answer: the Strikes are drawn and auto-played before the Strength lands, so they go out un-Strengthened. See power/crimson_mantle's entry for the split itself. The enemy leg keeps its own guard entry.  The gap it replaced read: LIVE. The player leg is one slot too early. The sim's on_player_turn_start (player.py:169) fires BEFORE the hand draw (player.py:171-186), where C#'s AfterSideTurnStart is dispatched at CombatManager.cs:522, AFTER SetupPlayerTurn (:514) has reset energy and drawn the hand. The sim's matching post-draw slot is on_player_turn_started (player.py:186). EXECUTED: a spy listener records [on_player_turn_start hand=5, 4x on_card_drawn, on_player_turn_started hand=9]. Third-file citations, not hashed here. EXECUTED co-occurrence witness with two ported Ironclad cards: Hellraiser (cards/hellraiser.py:36) auto-plays every Strike as it is DRAWN, and Demon Form (cards/demon_form_card.py:35) grants Strength at turn start. On the turn after Demon Form 2 is played, the sim grants the Strength first and the auto-played Strikes take it with them -- enemy HP 41 -> 17 -- where the game draws (and auto-plays) first and only then grants Strength, leaving those Strikes un-Strengthened at 41 -> 23. Six damage the game never deals. The enemy leg (powers.py:221-224) has the separate per-creature problem recorded in its own guard entry."
     }
   },
   "guards": [
     {
       "what": "DemonFormPower.cs:23 `participants.Contains(base.Owner)`",
-      "verdict": "gap",
-      "issue": "Enemy leg: the sim uses the per-creature on_enemy_turn_start (combat.py:301), which runs immediately before THIS enemy's move, where Hook.AfterSideTurnStart runs once at CombatManager.cs:522 before ANY enemy moves. Worse than the AfterSideTurnEnd family, because the sim has no enemy-side-START slot at all to move it to -- that absence is turn_structure gap G5's other half. Per rule 3 the same verdict, cross-referenced. Observable with two or more enemies: an enemy holding Demon Form gains its Strength after earlier enemies have already acted in the sim, and before all of them in the game. Reproduce the population with `py audit/tools/power_census.py slots`. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "CLOSED. The enemy leg is `after_enemy_side_start` -- Hook.AfterSideTurnStart (CombatManager.cs:522), once for the side BEFORE any enemy moves, which is exactly the reading this entry said was missing. turn_structure G5 is closed. EXECUTED: test/test_enemy_side_per_side.py (the two-enemy Poison trace is the same dispatch).  FIXED 2026-07-28 (round 4). The text it replaced read: Enemy leg: the sim uses the per-creature on_enemy_turn_start (combat.py:301), which runs immediately before THIS enemy's move, where Hook.AfterSideTurnStart runs once at CombatManager.cs:522 before ANY enemy moves. Worse than the AfterSideTurnEnd family, because the sim has no enemy-side-START slot at all to move it to -- that absence is turn_structure gap G5's other half. Per rule 3 the same verdict, cross-referenced. Observable with two or more enemies: an enemy holding Demon Form gains its Strength after earlier enemies have already acted in the sim, and before all of them in the game. Reproduce the population with `py audit/tools/power_census.py slots`. Third-file citations, not hashed here."
     },
     {
       "what": "DemonFormPower.cs:26 `PowerCmd.Apply<StrengthPower>(Owner, Amount, applier: Owner)`",
@@ -83,6 +83,6 @@
       "rationale": "Presentation."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

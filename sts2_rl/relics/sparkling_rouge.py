@@ -16,7 +16,7 @@ class SparklingRouge(Relic):
     name = "Sparkling Rouge"
     rarity = RelicRarity.UNCOMMON
 
-    def on_player_turn_started(self, player: PlayerCombatState) -> None:
+    def on_block_cleared(self, player: PlayerCombatState) -> None:
         if self.turn == 3:
             from ..cmds import PowerCmd
             from ..powers import DexterityPower, StrengthPower

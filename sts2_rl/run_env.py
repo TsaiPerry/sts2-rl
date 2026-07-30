@@ -28,6 +28,17 @@ Action space (flat Discrete, three blocks):
                                  candidate (copies differing only by
                                  enchantment/cost modifiers are collapsed —
                                  documented approximation).
+  [POTION_BASE .. +MAX_POTION_SLOTS)
+                                 out-of-combat belt block: drink the
+                                 `PotionUsage.AnyTime` potion in slot p
+                                 (NPotionPopup.cs:322-325 leaves the Use
+                                 button live on every non-combat screen). It
+                                 crosses every phase rather than sitting in
+                                 any one decision's option slots, because
+                                 that is what "any time" means — and, like
+                                 the game's overlay, drinking does NOT answer
+                                 the screen underneath: the same decision
+                                 comes straight back.
 
 Observation (flat Box, probe-verified at construction): a run block (phase
 one-hot, vitals, gold, act/floor, potion belt, deck histogram, relic
@@ -64,7 +75,13 @@ from gymnasium import spaces
 from .actmap import ACT_MAP_CONFIGS, MapPointType, _MAP_WIDTH
 from .characters import DEFAULT_CHARACTER
 from .combat import CombatState
-from .driver import DecisionKind, DecisionRequest, RunDriver, RunResult
+from .driver import (
+    POTION_ACTION_BASE,
+    DecisionKind,
+    DecisionRequest,
+    RunDriver,
+    RunResult,
+)
 from .events import ALL_EVENTS
 from .full_env import (
     CARD_IDS,
@@ -97,7 +114,11 @@ from .vocab import capacity as vocab_capacity, frozen_ids
 # v5: DecisionKind gained REWARD_RELIC (the take-or-skip relic offer,
 # relic/_auto_keep), so PHASES = list(DecisionKind) is one wider and every run-
 # obs index after the leading ("phase", N_PHASES) segment shifts.
-RUN_OBS_SCHEMA_VERSION = 5
+# v6: the ACTION layout only — a MAX_POTION_SLOTS-wide out-of-combat belt block
+# (potion/_any_time_usage). The observation is byte-identical to v5, so v5
+# checkpoints migrate losslessly by growing the actor head alone
+# (checkpoints.migrate_checkpoint_actions).
+RUN_OBS_SCHEMA_VERSION = 6
 
 # ── Fixed-size bounds ────────────────────────────────────────────────────
 # Potion belt headroom: base 3 slots + Phial Holster's +1.
@@ -132,7 +153,11 @@ REWARD_CARD_SLOTS = 3
 N_COMBAT_ACTIONS = combat_action_count(MAX_POTION_SLOTS)      # 85
 CHOICE_BASE = N_COMBAT_ACTIONS
 SELECT_BASE = CHOICE_BASE + CHOICE_SLOTS
-N_ACTIONS = SELECT_BASE + 2 * N_CARDS
+# The out-of-combat belt (driver.POTION_ACTION_BASE). Its own block rather
+# than extra slots on each decision: an AnyTime potion is usable from every
+# screen, and a shop already offers 15 of CHOICE_SLOTS' 16.
+POTION_BASE = SELECT_BASE + 2 * N_CARDS
+N_ACTIONS = POTION_BASE + MAX_POTION_SLOTS
 
 # ── Stable vocabularies (frozen append-only + capacity-padded; vocab.py) ──
 RELIC_IDS: list[str] = frozen_ids("relics", ALL_RELICS)
@@ -155,6 +180,11 @@ PURPOSE_IDS: list[str] = frozen_ids("purposes", [
     # driver.SKIPPABLE_PURPOSES, so these needed their own purpose rather than
     # reusing "obtain". Appended, never reordered — the registry is frozen.
     "choose_a_card",
+    # ...and its canSkip:true twin, the generator potions' screen
+    # (CardSelectCmd.cs:216-261 `FromChooseACardScreen(..., canSkip: true)`).
+    # Skippability is per-screen in the source, so the same screen shape needs
+    # both purposes here.
+    "choose_a_card_optional",
 ])
 PURPOSE_INDEX: dict[str, int] = {p: i for i, p in enumerate(PURPOSE_IDS)}
 N_PURPOSES = vocab_capacity("purposes")
@@ -486,7 +516,12 @@ class STS2RunEnv(gym.Env):
         """Env action → the driver's answer for the pending request; None if
         the action is illegal for the current phase."""
         kind = request.kind
-        legal = request.legal_actions()
+        # The belt block crosses every phase (an AnyTime potion is usable from
+        # any screen), so it is decoded before the per-kind blocks.
+        if POTION_BASE <= action < POTION_BASE + MAX_POTION_SLOTS:
+            answer = POTION_ACTION_BASE + (action - POTION_BASE)
+            return answer if answer in request.potion_actions() else None
+        legal = request.own_actions()
         if kind == DecisionKind.COMBAT:
             return action if action < N_COMBAT_ACTIONS and action in legal else None
         if kind == DecisionKind.SELECT_CARDS:
@@ -515,7 +550,9 @@ class STS2RunEnv(gym.Env):
             mask[0] = True   # terminal/truncated: one harmless no-op
             return mask
         kind = request.kind
-        legal = request.legal_actions()
+        for answer in request.potion_actions():
+            mask[POTION_BASE + (answer - POTION_ACTION_BASE)] = True
+        legal = request.own_actions()
         if kind == DecisionKind.COMBAT:
             mask[legal] = True
         elif kind == DecisionKind.SELECT_CARDS:

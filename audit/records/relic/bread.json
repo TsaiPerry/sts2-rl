@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\bread.py",
-    "sha256": "f12afdef614c0691c469458be556b32d9c9560731d60ef6f6d9c1a49514df844"
+    "sha256": "5dfa60a91cacf1e1dd479f1f3c1967c7001e12e2d1091206d0fab6298eb5f68d"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     }
   ],

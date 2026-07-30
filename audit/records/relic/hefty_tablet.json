@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\hefty_tablet.py",
-    "sha256": "ee37d371f76da13da978cd4c415816043bb4419b4ffa3c0cee41064203458ea7"
+    "sha256": "1f8b932ef02d1671e83b9a902dc39bf2c6e1c39393b43151e6ff958b0f398d10"
   },
   "extra_sources": [
     {
@@ -31,22 +31,22 @@
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "879d6791db6dd9ec5d35355d75e3e784be4c380fb7d0bcd65b0ede93ff8cd339",
+      "sha256": "03b13195368f9b62ffdaef867883b236c1573dd14c05724c40c439ede14a6fbf",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     },
     {
@@ -61,7 +61,7 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "8baf28896c58e846435a5e208bb9014f7306cf4b1051f582d7b6347cfedc697a",
+      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
       "side": "sim"
     }
   ],
@@ -84,8 +84,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): the port builds its Rare candidates with cards.pool.pool_card_ids() -- the FilterForCombat pool -- where CardFactory.CreateForReward draws from CardPool.GetUnlockedCards(), so two Rare cards are unreachable and every draw indexes a shorter list",
-      "verdict": "gap",
-      "issue": "MECHANISM: HeftyTablet.cs:29 builds `new CardCreationOptions(Owner.Character.CardPool, ..., CardRarityOddsType.Uniform, c => c.Rarity == CardRarity.Rare)`, and CardFactory.CreateForReward -> CreateForReward(player, blacklist, options) resolves the candidate set as `options.GetPossibleCards(player).Except(blacklist)` (CardFactory.cs:214-217), where GetPossibleCards is `CardPools.SelectMany(p => p.GetUnlockedCards(...)).Where(CardPoolFilter)` (CardCreationOptions.cs:168-178). There is NO FilterForCombat anywhere on that path -- the Uniform arm only drops Basic and Ancient (CardFactory.cs:221-224). hefty_tablet.py:20-25 uses pool_card_ids(), which cards/pool.py:100-117 documents as the FilterForCombat mirror and which drops every card with can_be_generated_in_combat = False. The sim already HAS the right helper: cards/pool.py:120-131's reward_pool_card_ids exists for exactly this path and its docstring names the two casualties. LIVE, no dormancy question, executed (py audit/tools/relic_probes_b07.py tablet-pool): the port's Rare candidate list is 23 entries and the game's is 25; the two missing are `feed` and `not_yet`, both rarity RARE with can_be_generated_in_combat = False. Two observables, not one: Feed and Not Yet -- a max-HP scaler and a revive, i.e. two of the strongest Rares in the pool -- can never be offered by Hefty Tablet in the sim, AND because Rng.NextItem indexes into the candidate list in pool order, a 23-item list returns a DIFFERENT card than a 25-item list for the same draw, so all three offered cards diverge on every seed. Both sides ported and obtainable: Hefty Tablet is offered by the ported Neow event (events/neow.py; Neow.cs:99 `RelicOption<HeftyTablet>` on the CURSED branch). Same root cause as the batch-2 finding recorded in the project's own notes for the bowlbug fight ('reward pool = full GetUnlockedCards not FilterForCombat, Feed/NotYet offerable') -- this is that shape at a relic site. Rule 7: CardFactory.cs, CardCreationOptions.cs, cards/pool.py and events/neow.py are not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The candidates come from the REWARD pool. HeftyTablet.cs:29 goes through CardFactory.CreateForReward, whose candidate set is `options.GetPossibleCards(player).Except(blacklist)` (CardFactory.cs:214-217) = `CardPools.SelectMany(p => p.GetUnlockedCards(...)).Where(CardPoolFilter)` (CardCreationOptions.cs:168-178); there is NO FilterForCombat anywhere on that path and the Uniform arm only drops Basic and Ancient (CardFactory.cs:221-224). relics/hefty_tablet.py now calls `reward_pool_card_ids(pool=run.card_pool)`, the helper cards/pool.py already had for exactly this path and whose docstring names the two casualties, in place of `pool_card_ids()` (the FilterForCombat mirror). EXECUTED: the Rare candidate set difference between the two helpers is exactly {'feed', 'not_yet'} -- both RARE with can_be_generated_in_combat False -- and over 40 seeds the relic's offers now include them, where before they were unreachable on every seed. The second observable closes with it: NextItem indexes into the candidate list in pool order, so a 23-item list returned a different card than the game's 25-item list for the same draw, and all three offers diverged. Same root cause as the batch-2 bowlbug finding ('reward pool = full GetUnlockedCards not FilterForCombat'), at a relic site.  Pinned by test/test_relic_live_tail.py.  NOT CLOSED: nothing at this site.  The text it replaced read: MECHANISM: HeftyTablet.cs:29 builds `new CardCreationOptions(Owner.Character.CardPool, ..., CardRarityOddsType.Uniform, c => c.Rarity == CardRarity.Rare)`, and CardFactory.CreateForReward -> CreateForReward(player, blacklist, options) resolves the candidate set as `options.GetPossibleCards(player).Except(blacklist)` (CardFactory.cs:214-217), where GetPossibleCards is `CardPools.SelectMany(p => p.GetUnlockedCards(...)).Where(CardPoolFilter)` (CardCreationOptions.cs:168-178). There is NO FilterForCombat anywhere on that path -- the Uniform arm only drops Basic and Ancient (CardFactory.cs:221-224). hefty_tablet.py:20-25 uses pool_card_ids(), which cards/pool.py:100-117 documents as the FilterForCombat mirror and which drops every card with can_be_generated_in_combat = False. The sim already HAS the right helper: cards/pool.py:120-131's reward_pool_card_ids exists for exactly this path and its docstring names the two casualties. LIVE, no dormancy question, executed (py audit/tools/relic_probes_b07.py tablet-pool): the port's Rare candidate list is 23 entries and the game's is 25; the two missing are `feed` and `not_yet`, both rarity RARE with can_be_generated_in_combat = False. Two observables, not one: Feed and Not Yet -- a max-HP scaler and a revive, i.e. two of the strongest Rares in the pool -- can never be offered by Hefty Tablet in the sim, AND because Rng.NextItem indexes into the candidate list in pool order, a 23-item list returns a DIFFERENT card than a 25-item list for the same draw, so all three offered cards diverge on every seed. Both sides ported and obtainable: Hefty Tablet is offered by the ported Neow event (events/neow.py; Neow.cs:99 `RelicOption<HeftyTablet>` on the CURSED branch). Same root cause as the batch-2 finding recorded in the project's own notes for the bowlbug fight ('reward pool = full GetUnlockedCards not FilterForCombat, Feed/NotYet offerable') -- this is that shape at a relic site. Rule 7: CardFactory.cs, CardCreationOptions.cs, cards/pool.py and events/neow.py are not hashed by this record."
     },
     {
       "what": "G2 (DORMANT): CardFactory.CreateForReward runs Hook.TryModifyCardRewardOptions on the three cards unless CardCreationFlags.NoModifyHooks is set, and HeftyTablet sets only NoUpgradeRoll -- the port calls no such hook",

@@ -101,13 +101,20 @@ class FisticuffsCard(Card):
         self._damage += 2
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
-        from ..cmds import BlockCmd, DamageCmd
-        dealt = DamageCmd.deal(
+        from ..cmds import BlockCmd, DamageCmd, DamageResult
+        # Fisticuffs.cs:32 sums `r.TotalDamage + r.OverkillDamage`, i.e.
+        # BlockedDamage + UnblockedDamage + Overkill — the whole post-modifier
+        # figure. `deal`'s int return is only the last two terms, so the
+        # BLOCKED portion was dropped: hitting an enemy holding 20 block for 7
+        # granted 0 block instead of 7.
+        result = DamageResult()
+        DamageCmd.deal(
             ctx.hooks, ctx.resolve_target(target_idx), self._damage,
-            dealer=ctx.player, card=self,
+            dealer=ctx.player, card=self, result=result,
         )
-        if dealt > 0:
-            BlockCmd.apply(ctx.hooks, ctx.player, dealt, card=self)
+        if result.total_plus_overkill > 0:
+            BlockCmd.apply(ctx.hooks, ctx.player,
+                           result.total_plus_overkill, card=self)
 
 
 @register_card
@@ -200,11 +207,15 @@ class HandOfGreedCard(Card):
         self._gold += 5
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
-        from ..cmds import DamageCmd
+        from ..cmds import DamageCmd, should_trigger_fatal
         target = ctx.resolve_target(target_idx)
         was_alive = not target.is_gone
+        # HandOfGreed.cs:49 — the same shape as Feed's:
+        # `Target.Powers.All(p => p.ShouldOwnerDeathTriggerFatal())`, read
+        # before the attack.
+        fatal = should_trigger_fatal(target)
         DamageCmd.deal(ctx.hooks, target, self._damage, dealer=ctx.player, card=self)
-        if was_alive and target.is_dead:
+        if fatal and was_alive and target.is_dead:
             ctx.combat.gold_gained += self._gold
 
 
@@ -248,7 +259,10 @@ class JackpotCard(Card):
             return
         for _ in range(self._cards):
             from .base import make_card
-            new_card = make_card(ctx.combat._rng.choice(options))
+            # Jackpot.cs — CardFactory.GetForCombat on
+            # Rng.CombatCardGeneration: one NextItem per card, WITH
+            # replacement, in pool order.
+            new_card = make_card(ctx.combat.combat_rng.card_gen.choice(options))
             if self.upgrade_level > 0 and new_card.is_upgradable:
                 new_card.upgrade()
             CardPileCmd.add_to_hand(ctx.hooks, ctx.player, new_card)
@@ -312,15 +326,22 @@ class OmnisliceCard(Card):
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cmds import DamageCmd
         from ..valueprops import DamageProps
+        from ..cmds import DamageResult
         target = ctx.resolve_target(target_idx)
-        dealt = DamageCmd.deal(
-            ctx.hooks, target, self._damage, dealer=ctx.player, card=self
+        # Omnislice.cs:39 splashes `damageResult.TotalDamage + OverkillDamage`,
+        # the same quantity Fisticuffs gains as block — not the HP actually
+        # removed. Into a target holding 8 block the splash is 8, not 0.
+        result = DamageResult()
+        DamageCmd.deal(
+            ctx.hooks, target, self._damage, dealer=ctx.player, card=self,
+            result=result,
         )
-        if dealt <= 0:
+        splash = result.total_plus_overkill
+        if splash <= 0:
             return
         for enemy in [e for e in ctx.enemies if e is not target and not e.is_gone]:
             DamageCmd.deal(
-                ctx.hooks, enemy, dealt, dealer=ctx.player, card=self,
+                ctx.hooks, enemy, splash, dealer=ctx.player, card=self,
                 props=DamageProps.CARD_UNPOWERED,
             )
 
@@ -437,9 +458,20 @@ class SeekerStrikeCard(Card):
             dealer=ctx.player, card=self,
         )
         player = ctx.player
-        options = ctx.combat._rng.sample(
-            player.draw_pile, min(self._cards, len(player.draw_pile))
-        )
+        # SeekerStrike.cs:36 — `PileType.Draw.GetPile(Owner).Cards.ToList()
+        # .StableShuffle(Rng.CombatCardSelection).Take(Cards.IntValue)`. Three
+        # divergences stacked: the shared rng, `sample` rather than
+        # shuffle-then-take, and no stabilising sort, so identical draw-pile
+        # CONTENTS in a different ORDER offered different cards. The pile goes
+        # over reversed, in the game's top-first orientation, for the same
+        # reason card/catastrophe reverses it.
+        from ..player import stable_shuffled_cards
+
+        options = stable_shuffled_cards(
+            list(reversed(player.draw_pile)),
+            ctx.combat.combat_rng,
+            stream=ctx.combat.combat_rng.card_selection,
+        )[:self._cards]
         chosen = ctx.combat.select_cards("from_draw", options, 1)
         for card in chosen:
             if len(player.hand) >= player.MAX_HAND_SIZE:
@@ -507,7 +539,9 @@ class VolleyCard(Card):
             living = [e for e in ctx.enemies if not e.is_gone]
             if not living or ctx.player.is_dead:
                 return
-            enemy = ctx.combat._rng.choice(living)
+            # AttackCommand.cs:601-602 — `Rng.CombatTargets.NextItem(validTargets)`
+            # per hit, with the living set re-derived each time.
+            enemy = ctx.combat.combat_rng.targets.choice(living)
             DamageCmd.deal(ctx.hooks, enemy, self._damage, dealer=ctx.player, card=self)
 
 
@@ -529,7 +563,13 @@ def _return_to_hand_if_played_last_turn(card: Card) -> None:
     player = combat.player
     if card in player.hand or len(player.hand) >= player.MAX_HAND_SIZE:
         return
-    for pile in (player.draw_pile, player.discard_pile):
+    # Bolas.cs:43-47 / ThrummingHatchet.cs:37-41 test only
+    # `pile == null || pile.Type != PileType.Hand` and then
+    # `CardPileCmd.Add(this, PileType.Hand)`, which moves the card from
+    # WHEREVER it is — the EXHAUST pile included. Searching only draw and
+    # discard silently stranded an exhausted card (Brand, Burning Pact, Second
+    # Wind and Fiend Fire all exhaust from hand with a null filter).
+    for pile in (player.draw_pile, player.discard_pile, player.exhaust_pile):
         if card in pile:
             pile.remove(card)
             player.hand.append(card)

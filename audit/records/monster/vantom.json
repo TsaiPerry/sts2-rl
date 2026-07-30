@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
@@ -51,7 +51,7 @@
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "e4a89332099b3f25fcec72eed648058e9edcacca209b76f28c20255295e61a2f",
+      "sha256": "b52d8d15ba11856c157ae544d7837db5c35df881260a0065cf1d2b97917bd392",
       "side": "sim"
     },
     {
@@ -71,12 +71,12 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/paels_legion.py",
-      "sha256": "0b3949d545d5a21af06705484f6821e7d47a08d90d444bc3aab5123c346557d3",
+      "sha256": "25577547faf4d53ebee6dff486879f28933427be49b1d57ab41ff0f220ee577c",
       "side": "sim"
     },
     {
@@ -91,7 +91,7 @@
     },
     {
       "path": "sts2_rl/relics/vambrace.py",
-      "sha256": "829070eda07da4b6999a8284b646804938643b4b96f43c3fb0025a67c5c3ca54",
+      "sha256": "ab4842b0b0e85a4a7dfc36e3862d9fd4c2472643bac06541425555cda0662c13",
       "side": "sim"
     },
     {

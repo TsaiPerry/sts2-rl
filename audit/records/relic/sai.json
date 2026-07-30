@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\sai.py",
-    "sha256": "ef7e1a202bbc1af427c4ad92e4428956fa000b98216ad55ed05a7e6062729cb3"
+    "sha256": "9afe3662815c63dc2190e0ae2c35cfbbb0f2b4cff1d5ed083940478d4328dbff"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
@@ -33,8 +33,8 @@
     },
     "AfterSideTurnStart": {
       "maps_to": "on_player_turn_started (sai.py:23-28) -- the sim's single post-draw turn-start slot, executed-confirmed as the LAST of the five turn-start hooks (py audit/tools/relic_probes.py turn-order prints on_block_cleared -> on_energy_reset -> on_player_turn_start -> modify_hand_draw -> on_player_turn_started)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The SLOT is right -- audit/records/seam/turn_structure.json step 23 maps AfterSideTurnStart (player side) to on_player_turn_started -- but the sim collapses THREE C# dispatch passes into it: step 22's Hook.AfterPlayerTurnStart, step 23's AfterSideTurnStart, and step 23's second AfterSideTurnStartLate pass. C# guarantees Sai's 7 Block lands after every AfterPlayerTurnStart listener; the sim makes that relic-registration order. That is seam guard G12, which is LIVE, and binding rule 3 requires the same verdict here. Everything else is faithful: `participants.Contains(base.Owner.Creature)` (Sai.cs:21) is structurally satisfied because on_player_turn_started is dispatched only for the player side, and CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, null) (Sai.cs:24) maps to BlockCmd.apply(hooks, player, 7, props=ValueProp.UNPOWERED) (sai.py:26-28). Rule 7: turn_structure.json, cmds.py and hooks.py are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): STALE, not open. This entry's own text says it 'stays a gap only by binding rule 3: seam guard G12 is still open for content elsewhere'. seam/turn_structure G12 was CLOSED in round 5 -- its verdict reads faithful and its note records that one third of it was itself stale (Fake Orichalcum had carried `on_player_turn_end_very_early` all along) while the other two thirds shipped: the AfterSideTurnStart leg with step 23 and SandpitPower onto `after_enemy_side_start_late`. The local half was already reconciled at this site -- Sai is on `after_side_turn_start` and the Late pass exists through HookSystem._each's suffix walk, so the 7 Block lands after every AfterPlayerTurnStart listener in every relic order -- and with the inherited half gone there is nothing left to carry.  The text it replaced read: NARROWED, and the residue is now inherited rather than local. The three-pass collapse this entry describes is gone at THIS site: step 22 (Hook.AfterPlayerTurnStart) is `on_player_turn_started`, step 23 (Hook.AfterSideTurnStart) is the new `after_side_turn_start` where Sai now sits, and the AfterSideTurnStartLate pass exists through HookSystem._each's `_late` suffix walk -- so Sai's 7 Block does land after every AfterPlayerTurnStart listener, in every relic order. It stays a gap only by binding rule 3: seam guard G12 is still open for content elsewhere (FakeOrichalcum's BeforeSideTurnEndVeryEarly snapshot and SandpitPower's enemy-side AfterSideTurnStartLate), and one verdict per mechanism.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: Rollup of guard G1 per binding rule 4. The SLOT is right -- audit/records/seam/turn_structure.json step 23 maps AfterSideTurnStart (player side) to on_player_turn_started -- but the sim collapses THREE C# dispatch passes into it: step 22's Hook.AfterPlayerTurnStart, step 23's AfterSideTurnStart, and step 23's second AfterSideTurnStartLate pass. C# guarantees Sai's 7 Block lands after every AfterPlayerTurnStart listener; the sim makes that relic-registration order. That is seam guard G12, which is LIVE, and binding rule 3 requires the same verdict here. Everything else is faithful: `participants.Contains(base.Owner.Creature)` (Sai.cs:21) is structurally satisfied because on_player_turn_started is dispatched only for the player side, and CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, null) (Sai.cs:24) maps to BlockCmd.apply(hooks, player, 7, props=ValueProp.UNPOWERED) (sai.py:26-28). Rule 7: turn_structure.json, cmds.py and hooks.py are not hashed here."
     }
   },
   "guards": [

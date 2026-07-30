@@ -36,32 +36,32 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "879d6791db6dd9ec5d35355d75e3e784be4c380fb7d0bcd65b0ede93ff8cd339",
+      "sha256": "03b13195368f9b62ffdaef867883b236c1573dd14c05724c40c439ede14a6fbf",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     }
   ],
@@ -73,8 +73,8 @@
     },
     "AfterPlayerTurnStart": {
       "maps_to": "on_player_turn_started (vexing_puzzlebox.py:20-38), dispatched by HookSystem.on_player_turn_started (hooks.py:285-295) from PlayerCombatState.start_turn (player.py:185)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The effect itself is right: one distinct combat-generated card from the character pool, set free for the turn, added to hand on turn 1 only (executed below). What is wrong is the SLOT. C#'s Hook.AfterPlayerTurnStart is audit/records/seam/turn_structure.json step 22 -- fired immediately after CardPileCmd.Draw and BEFORE step 23's AfterSideTurnStart and step 26's AutoPrePlay phase. The sim maps steps 22 and 23 onto the SAME method, on_player_turn_started, and has no AutoPrePlay phase at all (turn_structure step 26 / guard G8), so this relic and every step-23 and step-26 listener share one registration-ordered pass. That is observable with ported content -- see G1. Rule 7: hooks.py, player.py and audit/records/seam/turn_structure.json are NOT hashed by this record."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. Rollup of guard G1, the SLOT, which is now right on both counts. Steps 22 and 23 are separate sim dispatchers (`on_player_turn_started` then `after_side_turn_start`), and step 26's AutoPrePlay phase exists as `after_auto_pre_play_phase_entered`, fired after both -- so this relic no longer shares a registration-ordered pass with step-23 and step-26 listeners. VexingPuzzlebox declares AfterPlayerTurnStart and is on the first.  The gap it replaced read: Rollup of guard G1 per binding rule 4. The effect itself is right: one distinct combat-generated card from the character pool, set free for the turn, added to hand on turn 1 only (executed below). What is wrong is the SLOT. C#'s Hook.AfterPlayerTurnStart is audit/records/seam/turn_structure.json step 22 -- fired immediately after CardPileCmd.Draw and BEFORE step 23's AfterSideTurnStart and step 26's AutoPrePlay phase. The sim maps steps 22 and 23 onto the SAME method, on_player_turn_started, and has no AutoPrePlay phase at all (turn_structure step 26 / guard G8), so this relic and every step-23 and step-26 listener share one registration-ordered pass. That is observable with ported content -- see G1. Rule 7: hooks.py, player.py and audit/records/seam/turn_structure.json are NOT hashed by this record."
     }
   },
   "guards": [

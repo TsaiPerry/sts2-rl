@@ -21,22 +21,22 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -63,8 +63,8 @@
     },
     "AfterPlayerTurnStart": {
       "maps_to": "on_player_turn_started (pendulum.py:26-30), dispatched by HookSystem.on_player_turn_started (hooks.py:285-296) from PlayerCombatState.start_turn (player.py:171 draws first)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. Everything the relic itself computes is faithful -- see guard N2 for the slot, the arithmetic and the constants -- but the sim collapses C#'s THREE AfterPlayerTurnStart passes and the separate AfterSideTurnStart dispatcher onto one on_player_turn_started walk, and that collapse is observable with today's ported content (G1)."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. Rollup of guard G1, which is now closed -- see relic/pendulum's g2 entry.  The gap it replaced read: Rollup of guard G1 per binding rule 4. Everything the relic itself computes is faithful -- see guard N2 for the slot, the arithmetic and the constants -- but the sim collapses C#'s THREE AfterPlayerTurnStart passes and the separate AfterSideTurnStart dispatcher onto one on_player_turn_started walk, and that collapse is observable with today's ported content (G1)."
     },
     "AfterCombatEnd": {
       "maps_to": "no counterpart -- and none is needed",
@@ -80,8 +80,8 @@
     },
     {
       "what": "G1 (LIVE): Pendulum's C# hook is the PLAIN AfterPlayerTurnStart pass while Bone Tea's is the separate, later AfterSideTurnStart dispatcher; the sim collapses both onto on_player_turn_started, so the outcome depends on relic PICKUP ORDER where the game's is fixed",
-      "verdict": "gap",
-      "issue": "MECHANISM: Hook.AfterPlayerTurnStart (src/Core/Hooks/Hook.cs:882-905) runs three COMPLETE listener passes -- Early, plain, Late -- and audit/records/seam/turn_structure.json then puts the whole AfterSideTurnStart dispatcher after it (the C# order printed by `py audit/tools/relic_probes.py turn-order`: ... -> Draw -> AfterPlayerTurnStart -> AfterSideTurnStart). Pendulum implements the plain pass (Pendulum.cs:75) and Bone Tea implements AfterSideTurnStart (BoneTea.cs:51), so in the game Pendulum's extra card is ALWAYS in hand before Bone Tea upgrades the opening hand. hooks.py:285-296 is a single walk in listener-registration order, which for relics is RunState.relics order, i.e. acquisition order. REACHABILITY (LIVE, executed -- b12-pendulum): with turns_seen primed to 2 (the ordinary carried state entering a third combat, per N1) and a 12-Strike deck, relic order [pendulum, bone_tea] gives a 6-card hand at upgrade levels [1,1,1,1,1,1] and order [bone_tea, pendulum] gives [0,1,1,1,1,1] -- one card left un-upgraded. The game gives all six in both orders. Both relics are ported and obtainable (Pendulum Common in the grab bag; Bone Tea is a ported relic with a combats_left charge), both fire on turn 1, and nothing further is needed. This is audit/records/seam/hook_dispatch.json gap G3 (missing Early/VeryEarly/Late phase passes; 24 of Hook.cs's 147 dispatchers run 2-4 passes) at a NEW site, and that record labels the mechanism LIVE -- one verdict per mechanism, binding rule 3, so this entry matches rather than re-derives it and contributes the observable. Note the contrast with relic/happy_flower, whose C# hook IS AfterSideTurnStart and which therefore lands in the same collapsed slot from the other direction. NOTE per binding rule 7: Hook.cs, BoneTea.cs, bone_tea.py, hooks.py, turn_structure.json, hook_dispatch.json and relic_probes.py are NOT hashed by this record."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. The executed witness inverts back. Pendulum implements the plain AfterPlayerTurnStart pass (Pendulum.cs:75) and Bone Tea implements AfterSideTurnStart (BoneTea.cs:51); those are now two sim dispatchers fired in that order from PlayerCombatState.start_turn, so Pendulum's extra card is in hand before Bone Tea upgrades the opening hand REGARDLESS of relic acquisition order. The Early/plain/Late sub-passes this entry also cites were already in (HookSystem._each's suffix walk); what was missing was the coarser split between the two hooks.  The gap it replaced read: MECHANISM: Hook.AfterPlayerTurnStart (src/Core/Hooks/Hook.cs:882-905) runs three COMPLETE listener passes -- Early, plain, Late -- and audit/records/seam/turn_structure.json then puts the whole AfterSideTurnStart dispatcher after it (the C# order printed by `py audit/tools/relic_probes.py turn-order`: ... -> Draw -> AfterPlayerTurnStart -> AfterSideTurnStart). Pendulum implements the plain pass (Pendulum.cs:75) and Bone Tea implements AfterSideTurnStart (BoneTea.cs:51), so in the game Pendulum's extra card is ALWAYS in hand before Bone Tea upgrades the opening hand. hooks.py:285-296 is a single walk in listener-registration order, which for relics is RunState.relics order, i.e. acquisition order. REACHABILITY (LIVE, executed -- b12-pendulum): with turns_seen primed to 2 (the ordinary carried state entering a third combat, per N1) and a 12-Strike deck, relic order [pendulum, bone_tea] gives a 6-card hand at upgrade levels [1,1,1,1,1,1] and order [bone_tea, pendulum] gives [0,1,1,1,1,1] -- one card left un-upgraded. The game gives all six in both orders. Both relics are ported and obtainable (Pendulum Common in the grab bag; Bone Tea is a ported relic with a combats_left charge), both fire on turn 1, and nothing further is needed. This is audit/records/seam/hook_dispatch.json gap G3 (missing Early/VeryEarly/Late phase passes; 24 of Hook.cs's 147 dispatchers run 2-4 passes) at a NEW site, and that record labels the mechanism LIVE -- one verdict per mechanism, binding rule 3, so this entry matches rather than re-derives it and contributes the observable. Note the contrast with relic/happy_flower, whose C# hook IS AfterSideTurnStart and which therefore lands in the same collapsed slot from the other direction. NOTE per binding rule 7: Hook.cs, BoneTea.cs, bone_tea.py, hooks.py, turn_structure.json, hook_dispatch.json and relic_probes.py are NOT hashed by this record."
     },
     {
       "what": "N2: the slot, the arithmetic and the constants of the relic's own body",
@@ -99,6 +99,6 @@
       "rationale": "Presentation, same exclusion as FlashSfx. Worth naming for one ordering reason: DoActivateVisuals is fired with TaskHelper.RunSafely and NOT awaited, so its `await Cmd.Wait(1f)` cannot delay the draw on the following line. There is no ordering consequence to model, which is the same finding relic/fake_happy_flower N4 recorded for the same idiom."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

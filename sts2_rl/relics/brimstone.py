@@ -16,7 +16,7 @@ class Brimstone(Relic):
     name = "Brimstone"
     rarity = RelicRarity.SHOP
 
-    def on_player_turn_started(self, player: PlayerCombatState) -> None:
+    def after_side_turn_start(self, player: PlayerCombatState) -> None:
         from ..cmds import PowerCmd
         from ..powers import StrengthPower
         PowerCmd.apply(self.hooks, player, StrengthPower, 2, applier=player)

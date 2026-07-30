@@ -71,27 +71,27 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/colorless_attacks.py",
-      "sha256": "2e92a8261cb05edbecdfa9281fd940b1a96d7c5004e064d9d03204123b6be24e",
+      "sha256": "c968f51d1badb64580afa265bb1e71b26b30cb4c0aeaf5f529cd437e445a1ce2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31",
+      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
       "side": "sim"
     },
     {
@@ -106,7 +106,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
@@ -126,12 +126,12 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     }
   ],
@@ -143,8 +143,8 @@
     },
     "ModifyHpLostAfterOstyLate": {
       "maps_to": "modify_hp_lost (the_boot.py:27-41), dispatched by HookSystem.modify_hp_lost (hooks.py:126-147) from DamageCmd.deal step 5 (cmds.py:84-87)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The arithmetic is right (raise 1..4 unblocked HP loss to 5), but the sim has no LATE phase, so the relic loses the ordering guarantee its C# hook name carries (G1, LIVE), and the sim's modify_hp_lost signature has no `props`, so the port substitutes a proxy that does not mean the same thing (G2, dormant)."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): STALE, not open -- the LATE phase exists now. Hook.ModifyHpLost (Hook.cs:1742-1762) runs `ModifyHpLostAfterOsty` over every listener and THEN `ModifyHpLostAfterOstyLate` over every listener (bug class 25: count the passes), with four AfterOsty implementers and exactly two Late ones (BufferPower.cs:20, TheBoot.cs:26), so The Boot's floor is applied strictly last. The sim's HookSystem now runs the complete phase passes -- `_PHASES = ('_very_early', '_early', '', '_late')` and `_each` walks each in turn, re-enumerating the whole listener list, for any hook a current listener phases -- and relics/the_boot.py declares `modify_hp_lost_late`, with the C# hook name cited on it. EXECUTED 2026-07-29 on this entry's own witness: The Boot held, a Soul Fysh carrying IntangiblePower, 4 powered unblocked damage. The listener ORDER is still ['TheBoot', 'IntangiblePower'] -- registration order, unchanged -- and the enemy loses 5 HP, because Intangible runs in pass 1 (4 -> 1) and The Boot in pass 2 (1 -> 5). That is the game's number; the entry's recorded pre-fix result was 1 HP. The phase machinery is what fixed it, which is why the order being unchanged is not a problem: the passes, not the order, carry the guarantee the C# hook name promises. NOT CLOSED: guard G2 (the missing `props` on the sim's modify_hp_lost signature) is dormant and untouched, and seam/hook_dispatch's G2/G3 remain that record's to settle -- this closure is about this relic's observable, per rule 3.  The text it replaced read: Rollup of guards G1 and G2 per binding rule 4. The arithmetic is right (raise 1..4 unblocked HP loss to 5), but the sim has no LATE phase, so the relic loses the ordering guarantee its C# hook name carries (G1, LIVE), and the sim's modify_hp_lost signature has no `props`, so the port substitutes a proxy that does not mean the same thing (G2, dormant)."
     },
     "AfterModifyingHpLostAfterOsty": {
       "maps_to": "no counterpart; the sim HAS the hook (after_modify_hp_lost, hooks.py:149-154, used by BufferPower at powers.py:4015) and the relic simply does not implement it",
@@ -155,8 +155,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): `ModifyHpLostAfterOstyLate` is C#'s SECOND complete HP-loss pass, and The Boot is one of only two implementers of it -- the sim's single flat listener walk runs the relic BEFORE any power gained mid-combat",
-      "verdict": "gap",
-      "issue": "MECHANISM: Hook.ModifyHpLost (Hook.cs:1742-1762) runs `ModifyHpLostAfterOsty` over EVERY listener and then `ModifyHpLostAfterOstyLate` over EVERY listener -- two `foreach`es, which PROMPT.md bug class 25 says to count before verdicting any ordering question. A whole-source census of the two hooks gives four AfterOsty implementers (IntangiblePower.cs:18, SlipperyPower.cs:19, BeatingRemnant.cs:42, TungstenRod.cs:19) and exactly two Late ones (BufferPower.cs:20, TheBoot.cs:26), so in the game The Boot's floor is applied strictly LAST. hooks.py:142-146 is one pass in registration order, and combat.py:159 attaches relics at CombatState setup while cmds.py registers a power only when it is applied -- so a power gained during the fight lands AFTER the relic. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b16.py boot-order`): with The Boot held and a Soul Fysh that has used its FADE move (monsters/underdocks/soul_fysh.py:76-79 applies IntangiblePower), the sim's listener order is ['TheBoot', 'IntangiblePower'] and 4 powered unblocked damage costs the enemy **1 HP**; the game runs Intangible in pass 1 (4 -> 1) and The Boot in pass 2 (1 -> 5) for **5 HP**. Co-occurrence is explicit, not implied: The Boot is granted by the Trash Heap event, which is in the ACT-2 Underdocks pool (events/__init__.py:81), and Soul Fysh is an Underdocks monster (monsters/underdocks/). The same probe shows the divergence turns on registration order rather than on the relic: Inklet and Vantom apply SlipperyPower from their __init__ (inklets.py:33-34, vantom.py:34-35), which runs at combat.py:134 BEFORE the relics attach, so the sim accidentally agrees there (5 HP both ways). This is audit/records/seam/hook_dispatch.json gap G3 (missing Early/Late phase passes) compounded with its G2 (cross-listener order: powers first in the game, last in the sim) observed at this relic's site -- one verdict per mechanism, binding rule 3, so this entry does not re-derive them; the seam owns the machinery and this record owns The Boot's observable. Rule 7: hooks.py, cmds.py, combat.py, powers.py, the monster files and audit/records/seam/hook_dispatch.json are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): STALE, not open -- the LATE phase exists now. Hook.ModifyHpLost (Hook.cs:1742-1762) runs `ModifyHpLostAfterOsty` over every listener and THEN `ModifyHpLostAfterOstyLate` over every listener (bug class 25: count the passes), with four AfterOsty implementers and exactly two Late ones (BufferPower.cs:20, TheBoot.cs:26), so The Boot's floor is applied strictly last. The sim's HookSystem now runs the complete phase passes -- `_PHASES = ('_very_early', '_early', '', '_late')` and `_each` walks each in turn, re-enumerating the whole listener list, for any hook a current listener phases -- and relics/the_boot.py declares `modify_hp_lost_late`, with the C# hook name cited on it. EXECUTED 2026-07-29 on this entry's own witness: The Boot held, a Soul Fysh carrying IntangiblePower, 4 powered unblocked damage. The listener ORDER is still ['TheBoot', 'IntangiblePower'] -- registration order, unchanged -- and the enemy loses 5 HP, because Intangible runs in pass 1 (4 -> 1) and The Boot in pass 2 (1 -> 5). That is the game's number; the entry's recorded pre-fix result was 1 HP. The phase machinery is what fixed it, which is why the order being unchanged is not a problem: the passes, not the order, carry the guarantee the C# hook name promises. NOT CLOSED: guard G2 (the missing `props` on the sim's modify_hp_lost signature) is dormant and untouched, and seam/hook_dispatch's G2/G3 remain that record's to settle -- this closure is about this relic's observable, per rule 3.  The text it replaced read: MECHANISM: Hook.ModifyHpLost (Hook.cs:1742-1762) runs `ModifyHpLostAfterOsty` over EVERY listener and then `ModifyHpLostAfterOstyLate` over EVERY listener -- two `foreach`es, which PROMPT.md bug class 25 says to count before verdicting any ordering question. A whole-source census of the two hooks gives four AfterOsty implementers (IntangiblePower.cs:18, SlipperyPower.cs:19, BeatingRemnant.cs:42, TungstenRod.cs:19) and exactly two Late ones (BufferPower.cs:20, TheBoot.cs:26), so in the game The Boot's floor is applied strictly LAST. hooks.py:142-146 is one pass in registration order, and combat.py:159 attaches relics at CombatState setup while cmds.py registers a power only when it is applied -- so a power gained during the fight lands AFTER the relic. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b16.py boot-order`): with The Boot held and a Soul Fysh that has used its FADE move (monsters/underdocks/soul_fysh.py:76-79 applies IntangiblePower), the sim's listener order is ['TheBoot', 'IntangiblePower'] and 4 powered unblocked damage costs the enemy **1 HP**; the game runs Intangible in pass 1 (4 -> 1) and The Boot in pass 2 (1 -> 5) for **5 HP**. Co-occurrence is explicit, not implied: The Boot is granted by the Trash Heap event, which is in the ACT-2 Underdocks pool (events/__init__.py:81), and Soul Fysh is an Underdocks monster (monsters/underdocks/). The same probe shows the divergence turns on registration order rather than on the relic: Inklet and Vantom apply SlipperyPower from their __init__ (inklets.py:33-34, vantom.py:34-35), which runs at combat.py:134 BEFORE the relics attach, so the sim accidentally agrees there (5 HP both ways). This is audit/records/seam/hook_dispatch.json gap G3 (missing Early/Late phase passes) compounded with its G2 (cross-listener order: powers first in the game, last in the sim) observed at this relic's site -- one verdict per mechanism, binding rule 3, so this entry does not re-derive them; the seam owns the machinery and this record owns The Boot's observable. Rule 7: hooks.py, cmds.py, combat.py, powers.py, the monster files and audit/records/seam/hook_dispatch.json are NOT hashed by this record."
     },
     {
       "what": "G2 (DORMANT): C# gates on `props.IsPoweredAttack()`; the sim's modify_hp_lost signature carries no props at all, so the port substitutes `card is None or card.is_unpowered`",

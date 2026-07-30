@@ -53,14 +53,16 @@ class Vambrace(Relic):
             return 1.0
         return 2.0
 
-    def after_modify_block_amount(self, target: Creature,
+    def after_modify_block_amount(self, target: Creature, amount: int,
                                   card: Card | None = None) -> None:
         # Vambrace.cs:82-95 — fired only for a listener that ACTUALLY modified
         # the amount, which is what Hook.ModifyBlock's `out modifiers` list
         # carries. Latching the card here is what makes Vambrace double EVERY
         # block gain of one card play; the sim's old on_block_gained hand-roll
         # burned the once-per-combat flag on the FIRST gain instead.
-        if card is None:
+        if amount <= 0:                                 # :84
+            return
+        if card is None:                                # :88
             return
         self._triggering_card = card
 

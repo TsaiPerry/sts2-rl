@@ -313,6 +313,25 @@ def test_sea_glass_is_stub():
     assert [r.id for r in run.relics] == ["sea_glass"]
 
 
+def test_sea_glass_burns_its_fifteen_reward_draws():
+    """relic/sea_glass/g1. SeaGlass.cs:85-87 calls CardFactory.CreateForReward
+    three times with `DynamicVars.Cards.IntValue / 3` == 5 cards each. Each
+    card is one `rng.NextItem(items)` off PlayerRng.Rewards (CardFactory.cs:236)
+    and NO upgrade roll -- ForNonCombatWithUniformOdds sets NoUpgradeRoll
+    (CardCreationOptions.cs:162) and SeaGlass's WithFlags ORs onto it
+    (:212-216). So 15 Rewards draws happen whether or not the player keeps a
+    card, and every later Rewards consumer reads at the shifted position.
+
+    The CARDS stay out of scope -- they come from another character's pool,
+    which this sim does not have -- but the stream position does not depend on
+    the pool: Rng.next_int is exactly one MegaRandom draw whatever its range
+    (rng.py:178-180)."""
+    run = RunState(string_seed="89U21BV1TZ")
+    before = run.player_rng.rewards.counter
+    run.add_relic("sea_glass")
+    assert run.player_rng.rewards.counter == before + 15
+
+
 # ═════════════════════════════════════════════════════════════════════════
 # Pael — the event
 # ═════════════════════════════════════════════════════════════════════════
@@ -944,7 +963,13 @@ def test_sai_block_every_turn():
     assert combat.player.block == 7            # cleared, then re-granted
 
 
-def test_iron_club_every_sixth_card_draws():
+def test_iron_club_every_fourth_card_draws():
+    # MOVED 2026-07-29 (round 7, relic/iron_club/g1). It used to be
+    # `test_iron_club_every_sixth_card_draws` and count to 6, which was the
+    # port's pinned constant. IronClub.cs:38 declares `CardsVar(4)` and every
+    # consumer reads it -- DisplayAmount (:32), UpdateDisplay (:77) and the
+    # draw condition `CardsPlayed % intValue == 0` (:88-89) -- with no
+    # AscensionHelper branch anywhere in the file.
     deck = [make_card("strike") for _ in range(20)]
     combat = CombatState(
         starting_deck=deck, rng=random.Random(0), encounter=WURM,
@@ -955,11 +980,11 @@ def test_iron_club_every_sixth_card_draws():
         r for r in combat.hooks._listeners
         if getattr(r, "id", "") == "iron_club"
     )
-    for i in range(1, 6):
+    for i in range(1, 4):
         combat.play_card(0)
         assert club.cards_played == i
     hand_before = len(combat.player.hand)
-    combat.play_card(0)                        # 6th: draw 1
+    combat.play_card(0)                        # 4th: draw 1
     assert len(combat.player.hand) == hand_before  # -1 played +1 drawn
 
 

@@ -27,6 +27,78 @@ if TYPE_CHECKING:
     from .powers import Power, PowerType
 
 
+def is_over_or_ending(hooks: HookSystem) -> bool:
+    """`CombatManager.Instance.IsOverOrEnding` as a command sees it.
+
+    Nearly every command in the CreatureCmd / CardCmd / CardPileCmd / PowerCmd
+    seams opens with one of these two predicates and returns an empty, zero or
+    no-op result. The window they guard is real and not the same as "the combat
+    object is gone": `IsEnding` goes true the moment the last primary enemy
+    dies, which is BEFORE `CheckWinCondition` tears the fight down, so the
+    killing blow's own card is still resolving inside it.
+
+    Out of combat there is nothing to guard: C# would answer `!IsInProgress` ==
+    true, but every guard that consults it is additionally qualified by "the
+    pile is a combat pile" or is only reachable in combat, so `False` here and
+    an explicit pile test at the one asymmetric site (`CardCmd.afflict`) is the
+    faithful pair.
+    """
+    # `getattr` on the property too: `hooks.combat` is duck-typed and the
+    # event room-entry layout hangs a cut-down stand-in there (a stream bundle
+    # with no creatures) purely to roll monster HP. That object is not a combat
+    # in progress in any sense, so nothing about it is ending.
+    return getattr(getattr(hooks, "combat", None), "is_over_or_ending", False)
+
+
+def is_ending(hooks: HookSystem) -> bool:
+    """`CombatManager.Instance.IsEnding` — the narrower of the two.
+
+    PowerCmd.Apply/ModifyAmount, CardCmd.Transform and CardPileCmd.Add use this
+    one, and the difference is deliberate: `IsEnding` opens with
+    `if (!IsInProgress) return false` (CombatManager.cs:184-187), so these
+    commands still work out of combat. That is what keeps the deck transformers
+    and the event card-adds alive.
+    """
+    return getattr(getattr(hooks, "combat", None), "is_ending", False)
+
+
+def can_receive_powers(hooks: HookSystem, target: Creature) -> bool:
+    """`Creature.CanReceivePowers` (Creature.cs:308-322), both clauses.
+
+    `CombatState == null` (the corpse was REMOVED) OR a listener refusing
+    `Hook.ShouldAllowHitting`. Note what is NOT here: `IsDead`. The property's
+    doc comment spells the difference out against `IsHittable` — "a creature is
+    not hittable if it's dead, but dead creatures can still have powers applied
+    to them" — which is why a removal-vetoed corpse keeps taking debuffs.
+    """
+    return (not target.is_removed_from_combat
+            and hooks.should_allow_hitting(target))
+
+
+def should_trigger_fatal(target: Creature) -> bool:
+    """`cardPlay.Target.Powers.All(p => p.ShouldOwnerDeathTriggerFatal())`,
+    the test Feed.cs:38 and HandOfGreed.cs:49 both take BEFORE their attack.
+
+    `PowerModel.ShouldOwnerDeathTriggerFatal` defaults to true
+    (PowerModel.cs:646) and exactly two non-mock powers override it, both
+    ported: MinionPower unconditionally (MinionPower.cs:20-23) and
+    ReattachPower unless every other segment is already down
+    (ReattachPower.cs:106-109). This is NOT death prevention -- the creature
+    really dies; only the Fatal payout is suppressed -- which is why the
+    `is_dead` check the two cards already had does not cover it.
+    """
+    return all(p.should_owner_death_trigger_fatal()
+               for p in target.powers.values())
+
+
+def is_hittable(hooks: HookSystem, target: Creature) -> bool:
+    """`Creature.IsHittable` (Creature.cs:285-299) — `!IsDead &&
+    Hook.ShouldAllowHitting`. The stricter of the pair: this one DOES exclude a
+    corpse, which is what makes `CombatState.HittableEnemies` (CombatState.cs:142)
+    a smaller set than "the enemies still in the fight"."""
+    return not target.is_gone and hooks.should_allow_hitting(target)
+
+
 def _resolve_death(hooks: HookSystem, target: Creature) -> None:
     """CreatureCmd.KillWithoutCheckingWinCondition's two arms
     (CreatureCmd.cs:504-570), shared by every path that can bring a creature to
@@ -83,6 +155,32 @@ def _strip_powers_after_death(hooks: HookSystem, target: Creature) -> None:
         power.on_removed(target)
 
 
+class DamageResult:
+    """`DamageResult` (DamageResult.cs) as the two cards that read one need it.
+
+    `TotalDamage` is `BlockedDamage + UnblockedDamage` (:63-64) and
+    `OverkillDamage` is the excess beyond the target's HP, so
+    `TotalDamage + OverkillDamage` -- the quantity Fisticuffs and Omnislice
+    both sum -- is the ENTIRE post-modifier damage the attack put out.
+
+    `DamageCmd.deal`'s int return is `hp_lost`, which is the post-block,
+    post-`modify_hp_lost` amount and is never clamped to the target's HP, so it
+    already equals `UnblockedDamage + OverkillDamage`. The only missing term
+    was the BLOCKED one, and that is what this object carries back.
+    """
+
+    __slots__ = ("blocked_damage", "hp_lost")
+
+    def __init__(self) -> None:
+        self.blocked_damage = 0
+        self.hp_lost = 0
+
+    @property
+    def total_plus_overkill(self) -> int:
+        """`r.TotalDamage + r.OverkillDamage`."""
+        return self.blocked_damage + self.hp_lost
+
+
 class DamageCmd:
     @staticmethod
     def deal(
@@ -92,6 +190,7 @@ class DamageCmd:
         dealer: Creature | None = None,
         card: Card | None = None,
         props: ValueProp | None = None,
+        result: "DamageResult | None" = None,
     ) -> int:
         """Full damage pipeline. Returns actual HP lost (after block and modifiers).
 
@@ -104,6 +203,13 @@ class DamageCmd:
                 props = DamageProps.CARD_UNPOWERED
             else:
                 props = DamageProps.CARD  # == MONSTER_MOVE
+        # CreatureCmd.cs:242-245, the FIRST statement of CreatureCmd.Damage:
+        # a dead dealer deals nothing — the call returns an empty DamageResult
+        # per target rather than running the pipeline. Reachable now that
+        # ThornsPower names its dealer: a multi-hit attacker killed by the
+        # first hit's reflect must not land the rest of the attack.
+        if dealer is not None and dealer.is_dead:
+            return 0
         if not hooks.should_allow_hitting(target):
             return 0
 
@@ -125,7 +231,7 @@ class DamageCmd:
         #    Unpowered — Vambrace.cs:59-63, PaelsLegion.cs:132-134 and
         #    UnmovablePower.cs:27-30 all self-gate on Move ALONE.
         dmg_modifiers: list = []
-        amount = amount + hooks.modify_damage_additive(
+        amount = hooks.modify_damage_additive(
             target, amount, dealer, card, dmg_modifiers, props)
         amount = int(hooks.modify_damage_multiplicative(
             target, amount, dealer, card, dmg_modifiers, props))
@@ -155,6 +261,8 @@ class DamageCmd:
             absorbed = min(target.block, amount)
             target.block -= absorbed
             hp_lost -= absorbed
+            if result is not None:
+                result.blocked_damage = absorbed   # DamageResult.BlockedDamage
             # WasBlockBroken (CreatureCmd.cs): Block <= 0 && blockedDamage > 0
             # — an exact break counts; overflow damage is not required.
             if target.block == 0:
@@ -165,6 +273,8 @@ class DamageCmd:
             modifiers: list = []
             hp_lost = hooks.modify_hp_lost(target, hp_lost, dealer, card, modifiers)
             hooks.after_modify_hp_lost(modifiers, target)
+        if result is not None:
+            result.hp_lost = hp_lost
 
         # 7. Apply HP loss
         if hp_lost > 0:
@@ -212,6 +322,10 @@ class BlockCmd:
         Fasten do, while Vambrace, Pael's Legion and Unmovable deliberately
         gate on Move ALONE and so must still run for Unpowered block.
         """
+        # CreatureCmd.cs:637-640 — the whole command is skipped once the combat
+        # is over or ending, hooks and all.
+        if is_over_or_ending(hooks):
+            return 0
         if props is None:
             props = ValueProp.MOVE
         # The source card's own enchantment folds in before either listener
@@ -221,14 +335,18 @@ class BlockCmd:
             amount += ench.enchant_block_additive(amount, props)
             amount *= ench.enchant_block_multiplicative(amount, props)
         blk_modifiers: list = []
-        amount = amount + hooks.modify_block_additive(
+        amount = hooks.modify_block_additive(
             target, amount, card, blk_modifiers, props)
         amount = int(hooks.modify_block_multiplicative(
             target, amount, card, blk_modifiers, props))
         amount = max(0, amount)
-        target.block += amount
+        # CreatureCmd.cs:644-646 — Max(modifiedAmount, 0) and then
+        # Hook.AfterModifyingBlockAmount, BOTH before the `if (modifiedAmount
+        # > 0m)` block that calls GainBlockInternal (:647-651). The dispatch
+        # is unconditional; it is the LISTENERS that open on `<= 0`.
         if blk_modifiers:
-            hooks.after_modify_block_amount(blk_modifiers, target, card)
+            hooks.after_modify_block_amount(blk_modifiers, target, amount, card)
+        target.block += amount
         hooks.on_block_gained(target, amount, card)
         return amount
 
@@ -335,14 +453,24 @@ class CreatureCmd:
 
     @staticmethod
     def add(
-        hooks: HookSystem, creature: Creature, index: int | None = None
+        hooks: HookSystem, creature: Creature, index: int | None = None,
+        slot_name: str | None = None,
     ) -> None:
         """Add a creature to combat mid-fight (mirrors CreatureCmd.Add), firing
         the added-to-combat hook so powers can react.
 
-        `index` is the enemy-list slot to insert at (mirrors the game placing a
-        spawn into a named Encounter slot — e.g. Ovicopter's eggs fill the slots
-        before it); None appends (the default for spawns with no slot rule)."""
+        `slot_name` is the NAMED `Encounter.Slots` entry the spawn occupies, and
+        it is how the game decides position: CreatureCmd.cs:68-69 calls
+        CombatState.AddCreature (which APPENDS, CombatState.cs:534-547) and then
+        CombatManager.AddCreature, which runs `_state.SortEnemiesBySlotName()`
+        whenever `creature.SlotName != null` (CombatManager.cs:841-851) — sorting
+        the whole enemy list by `Encounter.Slots.IndexOf(SlotName)`
+        (CombatState.cs:495-501). Pass it and the re-sort happens here too.
+
+        `index` is the older, positional escape hatch for spawns whose position
+        the sim had to approximate before the slot row existed; None appends,
+        which is right for every spawn with no slot rule.
+        """
         combat = hooks.combat
         if combat is None:
             return
@@ -363,6 +491,15 @@ class CreatureCmd:
             combat.enemies.append(creature)
         else:
             combat.enemies.insert(index, creature)
+        if slot_name is not None:
+            creature.slot_name = slot_name
+            combat.sort_enemies_by_slot_name()
+        # CreatureCmd.cs:70 — AfterCreatureAdded runs after the slot re-sort
+        # and before Hook.AfterCreatureAddedToCombat (:80). It rolls the
+        # spawn's opening move only on the player side; a summon that happens
+        # during the enemy's own turn (every monster SUMMON move) is left on
+        # UNSET_MOVE for the next player-turn-start pass to pick up.
+        combat.after_creature_added(creature)
         hooks.on_creature_added(creature)
 
 
@@ -384,14 +521,23 @@ class PowerCmd:
         """
         from .powers import PowerType
 
+        # PowerCmd.cs:69-72 — Apply<T> opens on `IsEnding -> return null`, and
+        # ModifyAmount re-tests it for the stacking branch (:217-220). The sim
+        # has ONE code path, so the single entry guard covers both C# sites.
+        # `IsEnding`, not `IsOverOrEnding`: that is what lets the out-of-combat
+        # callers through.
+        if is_ending(hooks):
+            return
+
         # PowerCmd.Apply<T> refuses to apply anything to a creature
-        # CanReceivePowers says no to (PowerCmd.cs:73-76), and CanReceivePowers
-        # reuses Hook.ShouldAllowHitting (Creature.cs:308-322). The sim wired
-        # that predicate into DamageCmd.deal but not here, so a *debuff*
-        # landed where damage would not: Vulnerable stuck to a reviving Test
-        # Subject, and the AoE power potions applied to an Eye with Teeth
-        # mid-Illusion-revival that C#'s HittableEnemies excludes.
-        if not hooks.should_allow_hitting(target):
+        # CanReceivePowers says no to (PowerCmd.cs:73-76). Round 6 wired the
+        # ShouldAllowHitting half; the `CombatState == null` half arrived with
+        # round 7, and it is what the ten card sites in this family were
+        # standing in for with a hand-rolled `if not target.is_gone:`. That
+        # stand-in was wrong in both directions: it refused a removal-vetoed
+        # corpse the game still powers, and — for every OTHER caller, which had
+        # no guard at all — it let an ordinary corpse be powered.
+        if not can_receive_powers(hooks, target):
             return
 
         # C# PowerCmd.Apply runs the "given" power-amount modifiers
@@ -434,6 +580,15 @@ class PowerCmd:
                 return
             power = existing
         else:
+            # PowerCmd.cs:133 — CanReceivePowers is re-tested HERE, after the
+            # given/received modifier chains have run, because any listener
+            # they invoked could have changed the target's hittability in the
+            # meantime (a revival latching mid-application). The sim tested it
+            # only at the entry. C# re-tests it on the NEW-power path alone:
+            # Apply<T> routes an existing instance to ModifyAmount, which never
+            # consults CanReceivePowers at all.
+            if not can_receive_powers(hooks, target):
+                return
             power = power_cls(owner=target, amount=amount, hooks=hooks, applier=applier)
             target.powers[power_cls.id] = power
             hooks.register(power)
@@ -448,6 +603,33 @@ class PowerCmd:
             if (target.side == "player"
                     and power_cls.power_type == PowerType.DEBUFF):
                 power.skip_next_tick = True
+
+    @staticmethod
+    def modify_amount(hooks: HookSystem, power, offset: int) -> None:
+        """PowerCmd.ModifyAmount (PowerCmd.cs:215-271), as reached from
+        `Decrement` (:179-182) and so from `TickDownDuration` (:190-200).
+
+        The sim's duration ticks used to mutate `power.amount` directly, which
+        is why `ModifyAmount`'s `IsEnding` guard (:217-220) never reached them
+        (power_cmd G6's carried observation). They route through here now, so
+        a tick in the ending window is refused exactly as a fresh application
+        is.
+
+        This is the DECREMENT path only, and it deliberately does NOT run the
+        `ModifyPowerAmountGiven` / `ModifyPowerAmountReceived` chains that
+        `ModifyAmount` runs at :229-233. Wiring them in is blocked on
+        power_cmd/G2: the sim's Unsettling Lamp is missing C#'s `amount <= 0`
+        early bail, so it would double a -1 duration tick into -2. G2 is a
+        separate open entry; adding the chains before it is fixed would ship a
+        known regression.
+        """
+        if is_ending(hooks):
+            return
+        power.amount += offset
+        hooks.on_power_amount_changed(power.id, power.owner, offset)
+        # :247-250 — `if (power.ShouldRemoveDueToAmount()) await Remove(power)`.
+        if power.amount <= 0:
+            power._expire()
 
     @staticmethod
     def remove(
@@ -504,6 +686,46 @@ class ExhaustCmd:
 
 class CardCmd:
     @staticmethod
+    def downgrade(hooks: HookSystem | None, card: Card) -> None:
+        """`CardCmd.Downgrade` (CardCmd.cs:212-223).
+
+        The whole verb sits inside `if (!CombatManager.Instance.IsEnding)`, so
+        a downgrade fired by the killing blow does not land — the same window
+        `creature_card_cmds` guard G14 covers for the other commands. `IsEnding`
+        rather than `IsOverOrEnding`, so the two out-of-combat callers
+        (Reflections, Welcome to Wongo's) are unaffected; pass `hooks=None`
+        there, which answers False for exactly that reason.
+
+        The `DowngradedCards` run-history append the verb also does (:217-220)
+        is telemetry and has no sim surface.
+        """
+        if is_ending(hooks):
+            return
+        card.downgrade()
+
+    @staticmethod
+    def upgrade(hooks: HookSystem | None, card: Card) -> None:
+        """`CardCmd.Upgrade` (CardCmd.cs:265-290), the per-card body.
+
+        Two guards, and the sim's bare `card.upgrade()` had neither: the whole
+        verb sits inside `if (!IsEnding)`, and each card is skipped when
+        `IsUpgradable` is false -- `CurrentUpgradeLevel < MaxUpgradeLevel`
+        (CardModel.cs:785-789). The second one matters far more than it looks:
+        35 of the pool's cards have MaxUpgradeLevel 0 (every Curse, Status and
+        Quest card), and C# THROWS if CurrentUpgradeLevel is ever set above
+        MaxUpgradeLevel (CardModel.cs:773-776) -- so an unguarded `+= 1`
+        produced a state the source treats as impossible, and one the
+        conformance runner compares against the save as an (id, upgrade_level)
+        pair.
+
+        The `UpgradedCards` run-history append (:279-282) is telemetry;
+        `FinalizeUpgradeInternal` (:284) clears preview state the sim has none of.
+        """
+        if is_ending(hooks) or not card.is_upgradable:
+            return
+        card.upgrade()
+
+    @staticmethod
     def afflict(
         card: Card,
         affliction_cls: type[Affliction],
@@ -515,6 +737,17 @@ class CardCmd:
         instance, re-applying the same type stacks the amount, and a card
         afflicted with a different type is left untouched (returns None).
         """
+        # CardCmd.cs:627-634, the seam's one ASYMMETRIC liveness guard: refuse
+        # when the combat is over or ending AND the card sits in a combat pile,
+        # but allow it for a card that does not (a deck card being afflicted
+        # out of combat, which is the same command).
+        combat = card.combat
+        if getattr(combat, "is_over_or_ending", False):
+            player = combat.player
+            if any(card in pile for pile in (player.hand, player.draw_pile,
+                                             player.discard_pile,
+                                             player.exhaust_pile)):
+                return None
         if card.affliction is None:
             affliction = affliction_cls(amount)
             affliction.card = card
@@ -547,13 +780,22 @@ class CardCmd:
         from .cards import make_card
         from .cards.pool import transform_options_in_combat
 
+        # CardCmd.cs:371-374 — `IsEnding -> empty`. The out-of-combat deck
+        # transformers (RunState.transform_card) share the C# command and are
+        # deliberately unaffected: `IsEnding` is false with no combat running.
+        if is_ending(hooks):
+            return None
         options = transform_options_in_combat(card, hooks.combat.card_pool)
         if not options:
             return None
-        replacement = make_card(hooks.combat._rng.choice(options))
-        for pile in (
-            player.hand, player.draw_pile, player.discard_pile,
-            player.exhaust_pile,
+        # `CardCmd.TransformToRandom(item, RunState.Rng.CombatCardSelection)`
+        # (EntropyPower.cs:31) — the caller names the stream, and Entropy is
+        # the only in-combat caller.
+        replacement = make_card(
+            hooks.combat.combat_rng.card_selection.choice(options))
+        for pile_name, pile in (
+            ("hand", player.hand), ("draw", player.draw_pile),
+            ("discard", player.discard_pile), ("exhaust", player.exhaust_pile),
         ):
             if card in pile:
                 pile[pile.index(card)] = replacement
@@ -565,10 +807,51 @@ class CardCmd:
         except ValueError:
             pass
         CardPileCmd._enter_combat(hooks, replacement)
+        # CardCmd.cs:447-450, in this order, and shared by both branches of the
+        # pile-type test above them:
+        #
+        #   await Hook.AfterCardChangedPiles(runState, combatState,
+        #                                    replacement2, pile2.Type, null);
+        #   pile2.InvokeCardAddFinished();
+        #   original.AfterTransformedFrom();
+        #   replacement2.AfterTransformedTo();
+        #
+        # `clonedBy` is a literal `null` here — a transform is not a clone, so
+        # Bing Bong's `clonedBy == null` test passes for a transformed card
+        # where it fails for one Bing Bong itself added (BingBong.cs:31).
+        #
+        # InvokeCardAddFinished (:448) has NO sim counterpart and needs none:
+        # it is `CardAddFinished?.Invoke()` (CardPile.cs:179-182) and the event's
+        # only subscriber in the whole source is NCombatCardPile.cs:83-106, a
+        # presentation node that animates the card into the pile.
+        hooks.after_card_changed_piles(replacement, pile_name, None)
+        card.after_transformed_from()
+        replacement.after_transformed_to()
         return replacement
 
 
 class CardPileCmd:
+    @staticmethod
+    def _refuses_combat_add(hooks: HookSystem, player: PlayerCombatState) -> bool:
+        """CardPileCmd.Add's three refusals for a COMBAT pile, all of which sit
+        upstream of the actual pile move (the move is at CardPileCmd.cs:408+,
+        after the last of them):
+
+          :312-319  `newPile.IsCombatPile && IsEnding` -> every result
+                    success = false, so nothing is added;
+          :329-340  per card, `creature.IsDead` -> success = false. A SEPARATE
+                    refusal: a power holding the fight open leaves IsEnding
+                    false while the owner is dead, and the card is still
+                    dropped;
+          :398-401  `newPile.IsCombatPile && !IsInProgress` -> return.
+
+        The sim's three pile helpers moved the card unconditionally.
+        """
+        combat = getattr(hooks, "combat", None)
+        if combat is None:
+            return False
+        return getattr(combat, "is_over_or_ending", False) or player.is_dead
+
     @staticmethod
     def _enter_combat(hooks: HookSystem, card: Card) -> None:
         """Register a newly created card as a hook listener (cards listen for
@@ -602,6 +885,8 @@ class CardPileCmd:
     ) -> None:
         """Add a newly created card to the player's discard pile (mirrors
         CardPileCmd.AddToCombatAndPreview)."""
+        if CardPileCmd._refuses_combat_add(hooks, player):
+            return
         player.discard_pile.append(card)
         CardPileCmd._enter_combat(hooks, card)
 
@@ -621,6 +906,8 @@ class CardPileCmd:
         top at the END (the parity reshuffle reverses game order, player.py),
         so a game index ``p`` lands at sim index ``count - p``. Legacy keeps its
         byte-for-byte shared-rng insertion."""
+        if CardPileCmd._refuses_combat_add(hooks, player):
+            return
         crng = hooks.combat.combat_rng
         count = len(player.draw_pile)
         if crng.is_parity:
@@ -631,6 +918,63 @@ class CardPileCmd:
         CardPileCmd._enter_combat(hooks, card)
 
     @staticmethod
+    def auto_play_from_draw_pile(
+        hooks: HookSystem,
+        player: PlayerCombatState,
+        count: int,
+        position: str = "top",
+        force_exhaust: bool = False,
+    ) -> None:
+        """`CardPileCmd.AutoPlayFromDrawPile` (CardPileCmd.cs:931-966), and it is
+        TWO-PHASE — which is the whole reason it exists as one helper.
+
+        Phase 1 (:939-955) pulls all `count` picks out of the draw pile and into
+        `PileType.Play`, one `ShuffleIfNecessary` per pick, breaking on an empty
+        pile. Phase 2 (:956-965) plays them, setting `ExhaustOnNextPlay =
+        forceExhaust` on each first and breaking if the owner has died.
+
+        So every pick is COMMITTED before any of them resolves: a draw, a
+        reshuffle or a pile redirect the first card causes cannot change which
+        card is played second, and because the waiting cards sit in PileType.Play
+        a reshuffle the first one triggers excludes them (bug class 7, pile
+        limbo). Both sim callers interleaved instead — Havoc and Mayhem picked
+        and played one card per iteration.
+
+        `force_exhaust` is applied through `exhaust_on_next_play`, not by moving
+        the card by hand: that is what routes it through the normal result-pile
+        path, so an unplayable pick reaches `CardCmd.Exhaust`
+        (CardModel.cs:2098-2101) and a Power card still vanishes to
+        `PileType.None` (:2071-2074).
+        """
+        combat = hooks.combat
+        if is_over_or_ending(hooks) or player.is_dead:
+            return                                  # CardPileCmd.cs:933-936
+        cards: list[Card] = []
+        for _ in range(count):
+            player.shuffle_if_necessary()           # :939
+            pile = player.draw_pile
+            if not pile:
+                break                               # :949-952, `break` not continue
+            if position == "top":
+                card = pile[-1]                     # the sim stores top LAST
+            elif position == "bottom":
+                card = pile[0]
+            else:
+                # `Rng.CombatCardSelection.NextItem(drawPile.Cards)` (:942) over
+                # the game's top-first orientation, so the index means the same
+                # thing in both engines.
+                card = combat.combat_rng.card_selection.choice(list(reversed(pile)))
+            cards.append(card)
+            # `await Add(cardModel, PileType.Play)` (:954) — the card leaves the
+            # draw pile now and is in no pile a reshuffle can see.
+            pile.remove(card)
+        for card in cards:
+            if player.is_dead:
+                break                               # :958-964
+            card.exhaust_on_next_play = force_exhaust
+            combat.auto_play_card(card)
+
+    @staticmethod
     def add_to_hand(
         hooks: HookSystem,
         player: PlayerCombatState,
@@ -639,6 +983,8 @@ class CardPileCmd:
         """Add a newly created card to the player's hand (overflow goes to the
         discard pile) (mirrors CardPileCmd.AddGeneratedCardToCombat with
         PileType.Hand)."""
+        if CardPileCmd._refuses_combat_add(hooks, player):
+            return
         if len(player.hand) < player.MAX_HAND_SIZE:
             player.hand.append(card)
         else:

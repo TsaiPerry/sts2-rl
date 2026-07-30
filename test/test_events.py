@@ -648,3 +648,32 @@ def test_every_event_every_option_runs_headlessly():
                 choice = 0
                 guard += 1
             assert event.finished or guard == 10, event_id
+
+
+class TestRunLevelDeathPrevention:
+    """event/EV-1. Out-of-combat HP loss is `CreatureCmd.Damage`, whose
+    `Kill` tail runs `Hook.ShouldDie` / `Hook.AfterPreventingDeath` over
+    `RunState.IterateHookListeners` (RunState.cs:545-596) — which yields the
+    potion belt. Fairy in a Bottle (FairyInABottle.cs:33-45) is the only
+    ported listener on that walk."""
+
+    def test_a_belt_fairy_survives_a_lethal_event_hp_loss(self):
+        from sts2_rl.potions import FairyInABottle
+
+        run = fresh_run()
+        run.hp = 5
+        run.add_potion(FairyInABottle())
+        run.lose_hp(15)                      # e.g. Doll Room's EXAMINE
+        assert not run.is_dead
+        # FairyInABottle.OnUse: Heal(max(MaxHp * 0.3m, 1m)) from the 0 HP
+        # CreatureCmd.cs:565 leaves a prevented death on.
+        assert run.hp == max(run.max_hp * 30 // 100, 1)
+        assert run.held_potions == []        # RemoveBeforeUse consumed it
+
+    def test_without_the_fairy_the_run_ends(self):
+        run = fresh_run()
+        run.hp = 5
+        run.lose_hp(15)
+        assert run.is_dead
+        # Creature.LoseHpInternal (Creature.cs:450) — HP never goes negative.
+        assert run.hp == 0

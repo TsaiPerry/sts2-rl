@@ -79,10 +79,18 @@ class AnointedCard(Card):
         self.retain = True
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
+        from .pool import take_random
+
         player = ctx.player
         space = player.MAX_HAND_SIZE - len(player.hand)
-        rares = [c for c in player.draw_pile if c.rarity == CardRarity.RARE]
-        for card in ctx.combat._rng.sample(rares, min(space, len(rares))):
+        # Anointed.cs:23 -- `PileType.Draw.GetPile(Owner).Cards
+        # .Where(Rarity == Rare).TakeRandom(count, Rng.CombatCardSelection)`.
+        # `Cards` is top-first and the sim stores the top at the END, so the
+        # candidate list is handed over reversed: UnstableShuffle's output
+        # depends on the input ORDER, not just on the membership.
+        rares = [c for c in reversed(player.draw_pile)
+                 if c.rarity == CardRarity.RARE]
+        for card in take_random(rares, space, ctx.combat.combat_rng.card_selection):
             player.draw_pile.remove(card)
             player.hand.append(card)
 
@@ -113,7 +121,13 @@ class BeatDownCard(Card):
             c for c in ctx.player.discard_pile
             if c.card_type == CardType.ATTACK and c.is_playable
         ]
-        ctx.combat._rng.shuffle(candidates)
+        # BeatDown.cs:26 -- `.ToList().StableShuffle(Rng.Shuffle).Take(3)`.
+        # StableShuffle SORTS first (ListExtensions.cs:22-31, by
+        # CardModel.CompareTo), so the pick does not depend on discard-pile
+        # order, and only then Fisher-Yates on the named Shuffle stream.
+        from ..player import stable_shuffled_cards
+
+        candidates = stable_shuffled_cards(candidates, ctx.combat.combat_rng)
         for card in candidates[: self._cards]:
             if ctx.combat.is_over or ctx.player.is_dead:
                 break
@@ -155,9 +169,15 @@ class CatastropheCard(Card):
         # pile and therefore what is drawn next.
         from ..player import stable_shuffled_cards
 
+        # Catastrophe.cs has NO loop-level bail-out: the loop runs the full
+        # CardsVar iterations unconditionally and the combat-over check lives one
+        # level down, in CardCmd.AutoPlay's `if (IsOverOrEnding ||
+        # Owner.Creature.IsDead) return` (CardCmd.cs:53-56) — which is AFTER this
+        # iteration's StableShuffle pick. So when an auto-played card ends the
+        # combat, the game still burns a full StableShuffle (N-1 Shuffle draws)
+        # for every remaining iteration and the sim burned none. Under seed
+        # parity a differing draw COUNT is an observable desync.
         for _ in range(self._cards):
-            if ctx.combat.is_over or ctx.player.is_dead:
-                break
             pile = list(reversed(ctx.player.draw_pile))   # game order: top first
             playable = [c for c in pile if c.is_playable]
             options = playable or pile
@@ -219,10 +239,12 @@ class DiscoveryCard(Card):
         self.exhausts = False
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
-        from .pool import random_pool_cards
+        from .pool import get_distinct_for_combat_parity
         from ..cmds import CardPileCmd
-        options = random_pool_cards(
-            ctx.combat._rng, 3, distinct=True, pool=ctx.combat.card_pool
+        # Discovery.cs:27 -- GetDistinctForCombat on Rng.CombatCardGeneration,
+        # which is TakeRandom, i.e. shuffle-then-take rather than `sample`.
+        options = get_distinct_for_combat_parity(
+            ctx.combat.combat_rng.card_gen, 3, pool=ctx.combat.card_pool
         )
         chosen = ctx.combat.select_cards("obtain", options, 1)
         for card in chosen:
@@ -323,15 +345,21 @@ class HiddenGemCard(Card):
         options = preferred or eligible
         if not options:
             return
-        card = ctx.combat._rng.choice(options)
+        # HiddenGem.cs:53 — `Rng.CombatCardSelection.NextItem(items)`.
+        card = ctx.combat.combat_rng.card_selection.choice(options)
         card.base_replay_count += self._replay
 
     @staticmethod
     def _has_replay_enchantment(card: Card) -> bool:
-        """GetEnchantedReplayCount() >= 1: Spiral/Glam already replay it."""
-        return card.enchantment is not None and card.enchantment.id in (
-            "spiral", "glam"
-        )
+        """HiddenGem.cs's third clause is `c.GetEnchantedReplayCount() < 1`,
+        and `GetEnchantedReplayCount` is `Enchantment?.EnchantPlayCount(
+        BaseReplayCount) ?? BaseReplayCount` (CardModel.cs:1129-1132) — the
+        null branch returns BaseReplayCount, so a card already replaying for
+        ANY reason is excluded, a PREVIOUS HIDDEN GEM'S TARGET included.
+        Naming the two replay enchantments instead never looked at
+        `base_replay_count`, so two Hidden Gems could stack on one card (5
+        plays) where the game must pick two different ones."""
+        return card.enchanted_replay_count() >= 1
 
 
 @register_card
@@ -385,7 +413,7 @@ class JackOfAllTradesCard(Card):
         from .pool import COLORLESS_POOL, random_pool_cards
         from ..cmds import CardPileCmd
         for card in random_pool_cards(
-            ctx.combat._rng, self._cards, distinct=True,
+            ctx.combat.combat_rng.card_gen, self._cards, distinct=True,
             pool=COLORLESS_POOL, exclude_ids={self.id},
         ):
             CardPileCmd.add_to_hand(ctx.hooks, ctx.player, card)
@@ -701,10 +729,11 @@ class SplashCard(Card):
         self._energy_cost = 1
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
-        from .pool import random_pool_cards
+        from .pool import get_distinct_for_combat_parity
         from ..cmds import CardPileCmd
-        options = random_pool_cards(
-            ctx.combat._rng, 3, CardType.ATTACK, distinct=True,
+        # Splash.cs:30-33 -- GetDistinctForCombat on Rng.CombatCardGeneration.
+        options = get_distinct_for_combat_parity(
+            ctx.combat.combat_rng.card_gen, 3, CardType.ATTACK,
             pool=ctx.combat.card_pool,
         )
         if self.upgrade_level > 0:

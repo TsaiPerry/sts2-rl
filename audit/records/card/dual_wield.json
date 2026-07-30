@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\trash_heap_cards.py",
-    "sha256": "89ec1d15e3dd0db928e3c3a4a04aa21564c5d9b04dc5008761242025e88db7db"
+    "sha256": "f93265bdcd41fa82dd09ab914501270537ae907e02f97679dd58dd2345183e20"
   },
   "extra_sources": [
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31",
+      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
       "side": "sim"
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     }
   ],
@@ -68,8 +68,8 @@
     },
     "OnPlay": {
       "maps_to": "DualWieldCard.on_play (trash_heap_cards.py:140-149)",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27 (partly closed). CLOSED: the enchantment and affliction halves. `trash_heap_cards.py:_clone` (lines 20-25) is now a one-line delegate to `create_clone` (cards/base.py:57-83), which re-attaches a `clone_preserving_mutability()` copy of the source's enchantment and a copy of its affliction -- CardModel.DeepCloneFields' two blocks (CardModel.cs:1204-1215). The record's headline observable -- duplicate a Spiral-enchanted Attack and the copy is vanilla -- is gone, which is the whole point of this card. STILL OPEN: `create_clone` rebuilds from the class (`type(card)()` + replayed upgrades) where C#'s CreateClone is a MEMBERWISE copy plus DeepCloneFields (CardModel.cs:2168-2181 -> AbstractModel.MutableClone:162-169), so the copy still loses the cloned `_energyCost` object (CardModel.cs:1202 -- SetThisCombat / AddThisTurn / free-this-turn overrides), `BaseReplayCount`, and the live keyword set (CardModel.cs:1195-1200). EXECUTED: a Spiral-enchanted card with `base_replay_count = 3` and `set_cost_this_combat(0)` clones with enchantment `spiral` but `base_replay_count` 3 -> 0 and cost 0 -> 1. Same mechanism and same verdict as card/anger's OnPlay entry (rule 3). The BLAST-RADIUS clause below about CardSelectCmd's MinSelect auto-select is unaffected and untouched. HISTORY -- WHAT THE DIVERGENCE WAS: The selection filter and the loop are faithful: C#'s `filter: c => c.Type == Attack || c.Type == Power` with MinSelect 1 (DualWield.cs:26-30) == `predicate=lambda c: c.card_type in (CardType.ATTACK, CardType.POWER)`, the null/empty result skips everything on both sides, and the copies go to PileType.Hand. THE COPY IS NOT A CLONE: `_clone` (trash_heap_cards.py:18-24) is `type(card)()` plus replayed upgrades. The sim's clone helper builds a FRESH instance and replays `upgrade()` `upgrade_level` times instead of reproducing `CardModel.CreateClone()` (CardModel.cs:2168-2181 -> RunState.CloneCard:394-399 -> AbstractModel.MutableClone:162-169 + CardModel.DeepCloneFields:1193-1216), which carries over the live keyword set, the cloned `_energyCost` object (so SetThisCombat / AddThisTurn / free-this-turn overrides survive), `BaseReplayCount`, and DEEP-CLONES the card's Enchantment (1204-1209) and Affliction (1210-1214) onto the copy. The sim's copy loses all of that. Observable: duplicate a Spiral-enchanted Attack -- in the game the copy is also Spiral-enchanted and replays when played; in the sim it is vanilla. LIVE: enchantments.py:372-375 (Spiral) accepts any ATTACK card and events/spiraling_whirlpool.py:46 attaches it to a player-chosen deck card; events/self_help_book.py:71 and events/grave_of_the_forgotten.py:47 are two more ported attach sites. Same mechanism and same verdict as card/anger's OnPlay entry (rule 3). Dual Wield is the card that makes this most visible, because copying an ENCHANTED Attack is the whole point of the card. Also BLAST RADIUS per rule 3: `CardSelectCmd.FromHand` auto-selects with no player choice and no RNG at or below MinSelect (CardSelectCmd.cs:287-290) where the sim's `select_cards` always delegates (combat.py:575-581) -- creature_card_cmds steps 104/105."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `create_clone` (cards/base.py) IS a memberwise copy now. `ClonePreservingMutability` is `AbstractModel.MutableClone` (a MemberwiseClone) and only THEN `DeepCloneFields` (CardModel.cs:1193-1216) and `AfterCloned` (:1218-1239), so the sim opens with `clone.__dict__.update(card.__dict__)` and the two override passes only re-point what must not be shared (`combat`, and the enchantment/affliction that DeepCloneFields re-creates). Everything the guard named now rides along: the LIVE KEYWORD SET (`_keywords = GetKeywordsWithSources(KeywordSources.Local)`, :1196-1200 -- Music Box's Ethereal), the cloned `_energyCost` and its `_localModifiers` (:1202 -> CardEnergyCost.cs:411-421 -- SetThisCombat, AddThisTurn, free-this-turn), the cloned `_dynamicVars` (:1201 -- a grown Rampage clones grown) and `BaseReplayCount` (Hidden Gem). `CreateClone`'s own tail, `ExhaustOnNextPlay = false` (:2178), is the last line. ONE MORE FINDING, and it is the reason the fix could not be a one-liner: DeepCloneFields re-attaches with `EnchantInternal` (:1204-1209 -> :1491-1498), which checks NO CanEnchant and does NOT run `ModifyCard` -- EnchantmentModel.cs:350-353 says why in as many words, \"It is NOT called when a card is cloned, because the enchantment's effects will already be reflected in the card's values.\" The sim only had the normal `attach`, and re-running it on a memberwise copy is not merely redundant, it THROWS for Souls, whose CanEnchant demands the Exhaust its own ModifyCard removes. `Enchantment.attach_internal` is that path. EXECUTED, old -> new: keyword False->True, free-this-turn cost 1->0, base_replay_count 0->3, a twice-played Rampage 9->19. Pinned by test/test_create_clone_memberwise.py. TEST MOVED (non-negotiable 5): test_card_clone_enchantment.py's `test_clone_reapplies_a_static_card_modification` is now `test_clone_carries_a_static_card_modification`, with the reason inline; its assertion is unchanged. NOT CLOSED: nothing at this site.  The text it replaced read: NARROWED 2026-07-27 (partly closed). CLOSED: the enchantment and affliction halves. `trash_heap_cards.py:_clone` (lines 20-25) is now a one-line delegate to `create_clone` (cards/base.py:57-83), which re-attaches a `clone_preserving_mutability()` copy of the source's enchantment and a copy of its affliction -- CardModel.DeepCloneFields' two blocks (CardModel.cs:1204-1215). The record's headline observable -- duplicate a Spiral-enchanted Attack and the copy is vanilla -- is gone, which is the whole point of this card. STILL OPEN: `create_clone` rebuilds from the class (`type(card)()` + replayed upgrades) where C#'s CreateClone is a MEMBERWISE copy plus DeepCloneFields (CardModel.cs:2168-2181 -> AbstractModel.MutableClone:162-169), so the copy still loses the cloned `_energyCost` object (CardModel.cs:1202 -- SetThisCombat / AddThisTurn / free-this-turn overrides), `BaseReplayCount`, and the live keyword set (CardModel.cs:1195-1200). EXECUTED: a Spiral-enchanted card with `base_replay_count = 3` and `set_cost_this_combat(0)` clones with enchantment `spiral` but `base_replay_count` 3 -> 0 and cost 0 -> 1. Same mechanism and same verdict as card/anger's OnPlay entry (rule 3). The BLAST-RADIUS clause below about CardSelectCmd's MinSelect auto-select is unaffected and untouched. HISTORY -- WHAT THE DIVERGENCE WAS: The selection filter and the loop are faithful: C#'s `filter: c => c.Type == Attack || c.Type == Power` with MinSelect 1 (DualWield.cs:26-30) == `predicate=lambda c: c.card_type in (CardType.ATTACK, CardType.POWER)`, the null/empty result skips everything on both sides, and the copies go to PileType.Hand. THE COPY IS NOT A CLONE: `_clone` (trash_heap_cards.py:18-24) is `type(card)()` plus replayed upgrades. The sim's clone helper builds a FRESH instance and replays `upgrade()` `upgrade_level` times instead of reproducing `CardModel.CreateClone()` (CardModel.cs:2168-2181 -> RunState.CloneCard:394-399 -> AbstractModel.MutableClone:162-169 + CardModel.DeepCloneFields:1193-1216), which carries over the live keyword set, the cloned `_energyCost` object (so SetThisCombat / AddThisTurn / free-this-turn overrides survive), `BaseReplayCount`, and DEEP-CLONES the card's Enchantment (1204-1209) and Affliction (1210-1214) onto the copy. The sim's copy loses all of that. Observable: duplicate a Spiral-enchanted Attack -- in the game the copy is also Spiral-enchanted and replays when played; in the sim it is vanilla. LIVE: enchantments.py:372-375 (Spiral) accepts any ATTACK card and events/spiraling_whirlpool.py:46 attaches it to a player-chosen deck card; events/self_help_book.py:71 and events/grave_of_the_forgotten.py:47 are two more ported attach sites. Same mechanism and same verdict as card/anger's OnPlay entry (rule 3). Dual Wield is the card that makes this most visible, because copying an ENCHANTED Attack is the whole point of the card. Also BLAST RADIUS per rule 3: `CardSelectCmd.FromHand` auto-selects with no player choice and no RNG at or below MinSelect (CardSelectCmd.cs:287-290) where the sim's `select_cards` always delegates (combat.py:575-581) -- creature_card_cmds steps 104/105."
     },
     "OnUpgrade": {
       "maps_to": "DualWieldCard._on_upgrade (trash_heap_cards.py:137-138)",
@@ -84,6 +84,6 @@
       "rationale": "Both sides are doubly safe: the type filter excludes it, and it is out of the hand anyway (Play pile in C#, discard-pile limbo in the sim, combat.py:452-454)."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-27"
 }

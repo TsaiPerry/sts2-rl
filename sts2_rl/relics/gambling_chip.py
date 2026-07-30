@@ -24,7 +24,8 @@ class GamblingChip(Relic):
         if self.turn > 1:
             return
         chosen = self.combat.select_cards(
-            "gambling_chip", list(player.hand), len(player.hand)
+            "gambling_chip", list(player.hand), len(player.hand),
+            min_select=0,   # GamblingChip.cs:20 CardSelectorPrefs(prompt, 0, ...)
         )
         if not chosen:
             return

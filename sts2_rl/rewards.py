@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, IntFlag
 from typing import TYPE_CHECKING
 
 from .cards import Card, CardRarity, make_card
@@ -77,6 +77,60 @@ class RarityOddsType(Enum):
     BOSS = "boss"
     SHOP = "shop"
     UNIFORM = "uniform"
+
+
+class CardCreationSource(Enum):
+    """CardCreationSource (src/Core/Runs/CardCreationSource.cs) — what a card
+    is being created FOR. Relics that only modify post-combat reward options
+    gate on it (LastingCandy.cs:106-109)."""
+
+    NONE = "none"
+    ENCOUNTER = "encounter"   # a post-encounter card reward
+    SHOP = "shop"
+    OTHER = "other"           # a reward generated from an event or a relic
+
+
+class CardCreationFlags(IntFlag):
+    """CardCreationFlags (src/Core/Runs/CardCreationFlags.cs), as much of it as
+    the sim needs. The values are the source's, because they are a [Flags]
+    enum and the composites depend on them.
+
+    Only the flags a ported listener actually reads are carried:
+    `IS_CARD_REWARD` is the one four relics gate on (DingyRug.cs:23,
+    PrismaticGem.cs:38, SilkenTress.cs:53, SilverCrucible.cs:104) and is set
+    exactly where C# sets it — `CardReward.cs:114-115` and `:134`, i.e. a card
+    REWARD screen and nothing else. `NO_CARD_POOL_MODIFICATIONS` and
+    `NO_MODIFY_HOOKS` are the two the generators pass.
+    """
+
+    NO_RARITY_MODIFICATION = 1
+    NO_UPGRADE_ROLL = 2
+    NO_HOOK_UPGRADES = 4
+    NO_MODIFY_HOOKS = 8
+    NO_CARD_POOL_MODIFICATIONS = 0x10
+    NO_CARD_MODEL_MODIFICATIONS = 0x20
+    FORCE_RARITY_ODDS_CHANGE = 0x40
+    IS_CARD_REWARD = 0x80
+
+
+@dataclass(frozen=True)
+class CardCreationOptions:
+    """The `CardCreationOptions` a creation runs against (src/Core/Runs/
+    CardCreationOptions.cs), as much of it as the sim models: the pool
+    `GetPossibleCards` returns, the source, the rarity-odds table and the
+    creation flags.
+
+    Handed to the TryModifyCardRewardOptions hooks so a listener can inspect
+    the creation it is modifying rather than just the resulting options."""
+
+    pool: tuple[str, ...]
+    source: CardCreationSource
+    odds_type: "RarityOddsType"
+    flags: CardCreationFlags = CardCreationFlags(0)
+
+    def has_flag(self, flag: CardCreationFlags) -> bool:
+        """`options.Flags.HasFlag(...)` — the form every C# listener uses."""
+        return bool(self.flags & flag)
 
 
 # CardRarityOdds.GetBaseOdds, non-ascension values: (rare, uncommon, common).
@@ -246,6 +300,7 @@ def create_reward_cards(
     mutate_pity: bool = True,
     modify_hooks: bool = True,
     pool: list[str] | None = None,
+    is_card_reward: bool = False,
 ) -> list[Card]:
     """CardFactory.CreateForReward: `count` distinct pool cards, each from a
     rarity roll (escalated with wrapping when the pool lacks the rolled
@@ -272,23 +327,55 @@ def create_reward_cards(
             reward_pool_card_ids(run.card_pool) if run.rng_set is not None
             else pool_card_ids(pool=run.card_pool)  # minus Basic/Ancient
         )
+    # Hook.ModifyCardRewardCreationOptions (CardFactory.cs:216) runs BEFORE
+    # the pool is read, so a listener can widen it — Dingy Rug appends the
+    # Colorless pool (DingyRug.cs:13-36), Prismatic Gem the other characters'.
+    # C# dispatches it once per card, always from the same starting options,
+    # so a single pass before the loop yields the same pool.
+    creation = CardCreationOptions(
+        pool=tuple(pool),
+        source=(CardCreationSource.ENCOUNTER if mutate_pity
+                else CardCreationSource.OTHER),
+        odds_type=odds_type,
+        flags=((CardCreationFlags.IS_CARD_REWARD if is_card_reward
+                else CardCreationFlags(0))
+               | (CardCreationFlags(0) if modify_hooks
+                  else CardCreationFlags.NO_MODIFY_HOOKS)),
+    )
+    if modify_hooks:
+        for relic in list(run.relics):
+            creation = relic.modify_card_reward_creation_options(run, creation)
+        pool = list(creation.pool)
     chosen_ids: list[str] = []
     cards: list[Card] = []
     for _ in range(count):
         options = [cid for cid in pool if cid not in chosen_ids]
         if not options:
             break
-        if mutate_pity:
-            rarity = run.card_rarity_odds.roll(odds_type)
+        if odds_type is RarityOddsType.UNIFORM:
+            # CardFactory.cs:219-221: the Uniform branch takes NO rarity roll
+            # at all. `items` is the whole blacklist-filtered candidate list
+            # (minus Basic and Ancient, which both pool helpers already drop)
+            # and NextItem picks straight out of it — the caller narrows the
+            # pool instead, which is what `GetPossibleCards`' predicate does
+            # (Glass Eye's `c.Rarity == rarity`, Room Full of Cheese's
+            # `Rarity == Common`). The sim ran RollWithBaseOdds here too, which
+            # burned one extra PlayerRng.Rewards draw per card the game never
+            # takes and could roll a rarity the caller's pool did not contain.
+            matching = options
         else:
-            rarity = run.card_rarity_odds.roll_with_base_odds(odds_type)
-        rarity = next_allowed_card_rarity(
-            rarity,
-            lambda r: any(_CARD_CLASSES[cid].rarity == r for cid in options),
-        )
-        if rarity is None:
-            break
-        matching = [cid for cid in options if _CARD_CLASSES[cid].rarity == rarity]
+            if mutate_pity:
+                rarity = run.card_rarity_odds.roll(odds_type)
+            else:
+                rarity = run.card_rarity_odds.roll_with_base_odds(odds_type)
+            rarity = next_allowed_card_rarity(
+                rarity,
+                lambda r: any(_CARD_CLASSES[cid].rarity == r for cid in options),
+            )
+            if rarity is None:
+                break
+            matching = [cid for cid in options
+                        if _CARD_CLASSES[cid].rarity == rarity]
         card = make_card(_draw_choice(rng, matching))
         chosen_ids.append(card.id)
         # RollForUpgrade: the draw happens for every reward card; only
@@ -302,17 +389,29 @@ def create_reward_cards(
                 card.upgrade()
         cards.append(card)
     if modify_hooks:
-        # Hook.TryModifyCardRewardOptions (Hook.cs:1444-1466) makes TWO
+        options = creation
+        # Hook.TryModifyCardRewardOptions (Hook.cs:1445-1467) makes TWO
         # complete passes over the listeners: every relic's plain hook, then
         # every relic's Late hook. The order is load-bearing — Lasting Candy
         # ADDS an option in the first pass and the egg relics / Silver Crucible
         # / Silken Tress / Glitter all upgrade or enchant in the second, so
         # the added card must be visible to them whichever relic registered
         # first.
+        #
+        # Each pass collects the listeners that returned TRUE into `modifiers`,
+        # and Hook.AfterModifyingCardRewardOptions (Hook.cs:679-690, dispatched
+        # from CardFactory.cs:106 and CardReward.cs:153) notifies exactly
+        # those. Silken Tress and Silver Crucible spend their one-shot THERE,
+        # not inside the modifier.
+        modifiers: list = []
         for relic in list(run.relics):
-            relic.modify_card_reward_options(run, cards)
+            if relic.modify_card_reward_options(run, cards, options):
+                modifiers.append(relic)
         for relic in list(run.relics):
-            relic.modify_card_reward_options_late(run, cards)
+            if relic.modify_card_reward_options_late(run, cards, options):
+                modifiers.append(relic)
+        for relic in modifiers:
+            relic.after_modify_card_reward_options(run)
     return cards
 
 
@@ -379,6 +478,73 @@ class RewardExtra:
 
 
 @dataclass
+class CardRewardGroup:
+    """One `CardReward` instance on a reward set (src/Core/Rewards/CardReward.cs):
+    an independent pick-one-of-N screen with its own creation options, its own
+    CanReroll flag and its own alternatives list.
+
+    A reward set holds a LIST of Rewards, so several CardRewards can sit on one
+    screen and each is taken separately — Prayer Wheel adds a second one to
+    every Monster room (PrayerWheel.cs:14-25) and White Star adds a Boss-odds
+    one to every Elite (WhiteStar.cs:19-28). Modelling the card choice as a
+    single flat list on CombatRewards collapsed those into one pick-one-of-N,
+    which halved what the player could keep.
+    """
+
+    cards: list[Card] = field(default_factory=list)
+    # `CardCreationOptions.ForRoom(owner, roomType)` — this group's odds table,
+    # which is NOT always the room's: White Star's extra Elite group draws on
+    # Boss odds, and Dream Catcher's rest group on Monster odds.
+    room_type: RoomType = RoomType.MONSTER
+    # CardReward.CanReroll (Driftwood): one-shot; the reroll regenerates the
+    # options through the same creation path and clears the flag.
+    can_reroll: bool = False
+    # Hook.TryModifyCardRewardAlternatives (Pael's Wing): the relic offering a
+    # SACRIFICE alternative on THIS card reward — choosing it forgoes the cards
+    # and calls relic.on_sacrifice(run).
+    sacrifice_relic: "Relic | None" = None
+    # `new CardReward(options, count, player)` — 3 everywhere today.
+    count: int = CARD_REWARD_COUNT
+    # Reward.IsPopulated. A group a hook ADDS during Hook.ModifyRewards is
+    # still unpopulated when the passes finish, and RewardsSet.cs:137-143
+    # populates it only afterwards — so its card draws land AFTER the late
+    # pass, not in the middle of it.
+    populated: bool = False
+    # A group whose `CardCreationOptions` are NOT `ForRoom(owner, roomType)`.
+    # `ForNonCombatWithUniformOdds(pool, predicate)` is the other constructor
+    # in the source — Glass Eye's five fixed-rarity screens (GlassEye.cs:29),
+    # Room Full of Cheese's Commons, The Future of Potions' typed screen. Set
+    # `pool` (the predicate, applied by the caller) and `odds_type` together;
+    # `room_type` then only labels the screen for the obs.
+    pool: "tuple[str, ...] | None" = None
+    odds_type: "RarityOddsType | None" = None
+
+    def _odds(self) -> "RarityOddsType":
+        return (self.odds_type if self.odds_type is not None
+                else ROOM_RARITY_ODDS[self.room_type])
+
+    def populate(self, run) -> None:
+        """CardReward.Populate: draw this group's options."""
+        self.populated = True
+        self.cards = create_reward_cards(
+            run, self._odds(), count=self.count,
+            # RollForRarity mutates the pity counters only for
+            # CardCreationSource.Encounter, and a pool-overriding group is
+            # always a relic/event creation (Other) — the same rule
+            # create_reward_cards derives its source from.
+            mutate_pity=self.pool is None,
+            pool=list(self.pool) if self.pool is not None else None,
+            is_card_reward=True,          # CardReward.cs:114-115
+        )
+
+    def reroll(self, run) -> None:
+        """CardReward.Reroll: one-shot — clear the flag and regenerate the
+        options via the same room-typed creation path (Populate)."""
+        self.can_reroll = False
+        self.populate(run)
+
+
+@dataclass
 class CombatRewards:
     """One post-combat reward screen: gold is granted when the screen is
     generated (the sim has no skip-gold button); the card choice, the potion
@@ -386,9 +552,24 @@ class CombatRewards:
     policy."""
 
     room_type: RoomType
+    # `RewardsSet.Room` (RewardsSet.cs:45), as a room type. Set only by
+    # WithRewardsFromRoom / EmptyForRoom; a set built by
+    # RewardsCmd.OfferCustom for a rest-site heal, an event or a relic leaves
+    # it null (RewardsSet.cs:106-110), and every room-gated TryModifyRewards
+    # implementer short-circuits on that null — AmethystAubergine.cs:29-32,
+    # BlackStar.cs, LavaRock.cs, WhiteStar.cs, PrayerWheel.cs on
+    # `room == null`, WongosMysteryTicket.cs:86 on `!(room is CombatRoom)`.
+    # DISTINCT from `room_type` above, which is this screen's card-odds table:
+    # a rest-heal screen draws on Monster odds (CardCreationOptions.ForRoom
+    # (owner, RoomType.Monster) in DreamCatcher.cs) with no room at all.
+    room: "RoomType | None" = None
     gold: int = 0
     potion: "Potion | None" = None
-    cards: list[Card] = field(default_factory=list)
+    # Every CardReward on this set, in list order. Usually one; a relic can
+    # add more (Prayer Wheel, White Star). `cards` / `can_reroll` /
+    # `sacrifice_relic` below are views onto the FIRST, which is what a
+    # one-group screen — every screen the sim built before Prayer Wheel — is.
+    card_rewards: list[CardRewardGroup] = field(default_factory=list)
     # The RelicRewards on this screen: the elite's grab-bag relic, plus any
     # hook-added extras (Lava Rock's two on the act-1 boss). Each is OFFERED
     # take-or-skip as the screen is populated (RunState.offer_relic), so a
@@ -404,21 +585,46 @@ class CombatRewards:
     # Each is an independent take-or-skip offer, separate from the pity-rolled
     # `potion` slot.
     special_potions: "list[Potion]" = field(default_factory=list)
-    # CardReward.CanReroll (Driftwood): the card choice may be rerolled once —
-    # the reroll regenerates the options through the same creation path and
-    # clears the flag (CardReward.Reroll).
-    can_reroll: bool = False
-    # Hook.TryModifyCardRewardAlternatives (Pael's Wing): the relic offering a
-    # SACRIFICE alternative on this card reward — choosing it forgoes the
-    # cards and calls relic.on_sacrifice(run) (every 2nd sacrifice pulls the
-    # next grab-bag relic).
-    sacrifice_relic: "Relic | None" = None
+
+    # ── The first CardReward, as flat attributes ─────────────────────────
+    # Every screen the sim generates on its own has exactly one card group,
+    # and the driver, the RL obs and the conformance runner all describe ONE
+    # card choice at a time, so these read and write `card_rewards[0]`.
+    # Assigning any of them on an empty screen creates that first group.
+
+    def _first_group(self) -> CardRewardGroup:
+        if not self.card_rewards:
+            self.card_rewards.append(
+                CardRewardGroup(room_type=self.room_type, populated=True))
+        return self.card_rewards[0]
+
+    @property
+    def cards(self) -> list[Card]:
+        return self.card_rewards[0].cards if self.card_rewards else []
+
+    @cards.setter
+    def cards(self, value: list[Card]) -> None:
+        self._first_group().cards = value
+
+    @property
+    def can_reroll(self) -> bool:
+        return bool(self.card_rewards) and self.card_rewards[0].can_reroll
+
+    @can_reroll.setter
+    def can_reroll(self, value: bool) -> None:
+        self._first_group().can_reroll = value
+
+    @property
+    def sacrifice_relic(self) -> "Relic | None":
+        return self.card_rewards[0].sacrifice_relic if self.card_rewards else None
+
+    @sacrifice_relic.setter
+    def sacrifice_relic(self, value: "Relic | None") -> None:
+        self._first_group().sacrifice_relic = value
 
     def reroll(self, run) -> None:
-        """CardReward.Reroll: one-shot — clear the flag and regenerate the
-        card options via the same room-typed creation path (Populate)."""
-        self.can_reroll = False
-        self.cards = create_reward_cards(run, ROOM_RARITY_ODDS[self.room_type])
+        """CardReward.Reroll on the first card group."""
+        self._first_group().reroll(run)
 
     @property
     def relic(self) -> "Relic | None":
@@ -430,11 +636,38 @@ class CombatRewards:
         return (
             self.gold == 0
             and self.potion is None
-            and not self.cards
+            and not any(g.cards for g in self.card_rewards)
             and not self.relics
             and not self.special_cards
             and not self.special_potions
         )
+
+
+def apply_reward_modifiers(run: "RunState", rewards: CombatRewards) -> None:
+    """`Hook.ModifyRewards(RunState, Player, Rewards, Room)` (Hook.cs:1981-1999)
+    — two complete passes over the listeners, TryModifyRewards then
+    TryModifyRewardsLate, so Driftwood's reroll flag lands on a reward list
+    that already holds everything the plain pass added.
+
+    Its ONE caller is `RewardsSet.GenerateWithoutOffering` (RewardsSet.cs:136),
+    which every RewardsSet goes through — the combat screen, but equally the
+    custom sets RewardsCmd.OfferCustom builds for a rest-site heal
+    (HealRestSiteOption.cs:112), an event or a relic. So this belongs at every
+    screen-generation site, not just the combat one; what keeps the room-gated
+    relics off a custom screen is `rewards.room` being None there, exactly as
+    `RewardsSet.Room` is null.
+    """
+    for relic in list(run.relics):
+        relic.modify_combat_rewards(run, rewards)
+    for relic in list(run.relics):
+        relic.modify_combat_rewards_late(run, rewards)
+    # `foreach (Reward item in Rewards.Except(second)) if (!item.IsPopulated)
+    # item.Populate();` (RewardsSet.cs:137-143): a card group a hook ADDED
+    # draws its options here, after BOTH passes — so Prayer Wheel's three
+    # cards come off the Rewards stream behind everything the late pass did.
+    for group in rewards.card_rewards:
+        if not group.populated:
+            group.populate(run)
 
 
 def generate_combat_rewards(
@@ -452,10 +685,17 @@ def generate_combat_rewards(
 
     `encounter` supplies its Min/MaxGoldReward override when it has one.
     """
-    rewards = CombatRewards(room_type=room_type)
+    rewards = CombatRewards(room_type=room_type, room=room_type)
     if room_type not in GOLD_REWARD_RANGES:
         raise ValueError(f"No combat rewards for room type {room_type!r}")
     if room_type == RoomType.BOSS and run.is_final_act:
+        # `RewardsSet.WithRewardsFromRoom` returns early here (RewardsSet.cs:
+        # 85-91) WITHOUT adding the room's own Gold/Potion/Card rewards — but
+        # it has already set `Room`, and the separate GenerateWithoutOffering
+        # still runs Hook.ModifyRewards over the (empty) list. So the hooks
+        # fire on the run's last boss like anywhere else; AmethystAubergine.cs:
+        # 33-35's explicit final-act guard would be dead code otherwise.
+        apply_reward_modifiers(run, rewards)
         return rewards
 
     gold_range = None
@@ -483,7 +723,8 @@ def generate_combat_rewards(
         if got_potion:
             from .potion_pools import generate_random_potion
             rewards.potion = generate_random_potion(rew, pool=run.potion_pool)
-        rewards.cards = create_reward_cards(run, ROOM_RARITY_ODDS[room_type])
+        rewards.cards = create_reward_cards(
+            run, ROOM_RARITY_ODDS[room_type], is_card_reward=True)
         if room_type == RoomType.ELITE:
             # RelicReward.Populate -> PullNextRelicFromFront(player): the rarity
             # roll is the only Rewards draw (the bag pull consumes none). Roll on
@@ -506,7 +747,8 @@ def generate_combat_rewards(
             run.gain_gold(rewards.gold)
         if run.potion_reward_odds.roll(room_type, force=force):
             rewards.potion = run.random_potion()
-        rewards.cards = create_reward_cards(run, ROOM_RARITY_ODDS[room_type])
+        rewards.cards = create_reward_cards(
+            run, ROOM_RARITY_ODDS[room_type], is_card_reward=True)
         if room_type == RoomType.ELITE:
             relic = run.pull_relic_from_front()
             if relic is not None:
@@ -516,17 +758,7 @@ def generate_combat_rewards(
                 run.offer_relic(relic)
                 rewards.relics.append(relic)
 
-    # Hook.ModifyRewards over the run's relics (Lava Rock adds two relic
-    # rewards to the first act's boss screen). A hook that appends to
-    # rewards.relics grants them itself (run.add_relic), like the elite
-    # branch above. Two complete passes, like the card-reward dispatch
-    # (Hook.cs:1981-1999): TryModifyRewards then TryModifyRewardsLate, so
-    # Driftwood's reroll flag lands on a reward list that already has
-    # everything the plain pass added.
-    for relic in list(run.relics):
-        relic.modify_combat_rewards(run, rewards)
-    for relic in list(run.relics):
-        relic.modify_combat_rewards_late(run, rewards)
+    apply_reward_modifiers(run, rewards)
 
     # Pending post-combat extras queued during the fight or attached by a
     # combat event (CombatRoom's ExtraRewards, folded in by

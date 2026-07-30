@@ -17,7 +17,12 @@ class IronClub(Relic):
     name = "Iron Club"
     rarity = RelicRarity.ANCIENT
 
-    CARDS = 6
+    # IronClub.cs:38 — `CanonicalVars => ... new CardsVar(4)`, read by
+    # DisplayAmount (:32), UpdateDisplay (:77) and the draw condition
+    # `CardsPlayed % intValue == 0` (:88-89). There is no
+    # AscensionHelper.GetValueIfAscension anywhere in the file, so 4 is the
+    # pinned non-ascension value; the port had 6.
+    CARDS = 4
 
     def __init__(self) -> None:
         super().__init__()

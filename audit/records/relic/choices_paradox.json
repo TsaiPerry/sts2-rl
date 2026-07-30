@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/cards/mad_science.py",
-      "sha256": "96aa8380efc11a6dfd1846039947289400ba25e856a9337196b13c2faf582557",
+      "sha256": "2ede1a12f1aa80dfde0f095c34997387210e6856011a40c954199fe33aa37c73",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "879d6791db6dd9ec5d35355d75e3e784be4c380fb7d0bcd65b0ede93ff8cd339",
+      "sha256": "03b13195368f9b62ffdaef867883b236c1573dd14c05724c40c439ede14a6fbf",
       "side": "sim"
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
@@ -61,7 +61,7 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "8baf28896c58e846435a5e208bb9014f7306cf4b1051f582d7b6347cfedc697a",
+      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
       "side": "sim"
     }
   ],
@@ -73,7 +73,7 @@
     "AfterPlayerTurnStart": {
       "maps_to": "on_player_turn_started (choices_paradox.py:23-37)",
       "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The effect is right -- 5 distinct pool cards on turn 1, each given Retain, one chosen into hand -- but they are rolled on the wrong RNG stream with the wrong draw algorithm (G1), and the sim maps AfterPlayerTurnStart and AfterSideTurnStart onto one method, losing C#'s guarantee that this relic resolves before every AfterSideTurnStart listener (G2)."
+      "issue": "STILL OPEN at G1 only. G2 is CLOSED -- see this unit's g2 entry: AfterPlayerTurnStart and AfterSideTurnStart are two sim dispatchers again, so ChoicesParadox's guaranteed position ahead of every AfterSideTurnStart listener is structural. WHAT REMAINS is G1: the five cards are rolled on the wrong RNG stream with the wrong draw algorithm.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: Rollup of guards G1 and G2 per binding rule 4. The effect is right -- 5 distinct pool cards on turn 1, each given Retain, one chosen into hand -- but they are rolled on the wrong RNG stream with the wrong draw algorithm (G1), and the sim maps AfterPlayerTurnStart and AfterSideTurnStart onto one method, losing C#'s guarantee that this relic resolves before every AfterSideTurnStart listener (G2)."
     }
   },
   "guards": [
@@ -84,8 +84,8 @@
     },
     {
       "what": "G2 (DORMANT): AfterPlayerTurnStart (step 22) and AfterSideTurnStart (step 23) are two different C# hooks collapsed onto one sim method",
-      "verdict": "gap",
-      "issue": "PROMPT.md bug class 15 -- when the sim maps two C# hooks onto one method, list both call sites. C# fires Hook.AfterPlayerTurnStart at the end of SetupPlayerTurn, per player, immediately after that player's draw (CombatManager.cs:673-675 = audit/records/seam/turn_structure.json step 22), and Hook.AfterSideTurnStart only afterwards, once EVERY player's setup has finished (CombatManager.cs:520-524 = step 23). Both map to the sim's single on_player_turn_started (hooks.py:285-295), so ChoicesParadox's guaranteed position ahead of every AfterSideTurnStart listener becomes listener-registration order. Confirmed by execution that the sim really does have only one slot there (`py audit/tools/relic_probes.py turn-order` prints exactly one on_player_turn_started per turn). Same family as audit/records/seam/turn_structure.json guard G12, which flattens the VeryEarly/Early/Late SUB-phases of a single hook; this is the coarser version -- two distinct hooks, not two sub-phases -- so it is recorded here rather than folded in. DORMANT: the divergence needs an AfterSideTurnStart listener that reads the hand on turn 1, and the ported turn-1 AfterSideTurnStart content does not -- relic/candelabra and relic/chandelier gate on turns 2 and 3, and the turn-1 hand readers (relic/cloak_clasp) sit at turn END. Porting or writing any turn-1 AfterSideTurnStart effect that counts cards in hand makes it live."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. AfterPlayerTurnStart (step 22) and AfterSideTurnStart (step 23) are no longer one method. ChoicesParadox.cs:46 declares AfterPlayerTurnStart, so it is on `on_player_turn_started` and is guaranteed ahead of every AfterSideTurnStart listener again -- see relic/mercury_hourglass's g1 for the census and the executed pair.  The gap it replaced read: PROMPT.md bug class 15 -- when the sim maps two C# hooks onto one method, list both call sites. C# fires Hook.AfterPlayerTurnStart at the end of SetupPlayerTurn, per player, immediately after that player's draw (CombatManager.cs:673-675 = audit/records/seam/turn_structure.json step 22), and Hook.AfterSideTurnStart only afterwards, once EVERY player's setup has finished (CombatManager.cs:520-524 = step 23). Both map to the sim's single on_player_turn_started (hooks.py:285-295), so ChoicesParadox's guaranteed position ahead of every AfterSideTurnStart listener becomes listener-registration order. Confirmed by execution that the sim really does have only one slot there (`py audit/tools/relic_probes.py turn-order` prints exactly one on_player_turn_started per turn). Same family as audit/records/seam/turn_structure.json guard G12, which flattens the VeryEarly/Early/Late SUB-phases of a single hook; this is the coarser version -- two distinct hooks, not two sub-phases -- so it is recorded here rather than folded in. DORMANT: the divergence needs an AfterSideTurnStart listener that reads the hand on turn 1, and the ported turn-1 AfterSideTurnStart content does not -- relic/candelabra and relic/chandelier gate on turns 2 and 3, and the turn-1 hand readers (relic/cloak_clasp) sit at turn END. Porting or writing any turn-1 AfterSideTurnStart effect that counts cards in hand makes it live."
     },
     {
       "what": "G3: the softlock guard -- `if (list.Count == 0) { Log.Error; SentryService.CaptureException; return; }` (ChoicesParadox.cs:35-41) vs `if not options: return` (choices_paradox.py:32-33)",

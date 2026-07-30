@@ -517,6 +517,35 @@ class ReplayRunner:
                 "act-entry Ancient node move does not match the start point",
             ))
 
+    def _use_map_potion(self, run, cmd, divergences, room_index) -> None:
+        """Drink one out-of-combat `UsePotion` through RunState.use_potion.
+
+        `UsePotion N` names a real belt SLOT, but resolve by the recorded
+        identity comment (`# POTION.FRUIT_JUICE`) exactly as the combat driver
+        does — the sim can legitimately hold a different potion in that slot
+        while the potion-retention divergence is open, and drinking the wrong
+        one would be worse than reporting."""
+        from .combat_driver import ReplayCombatDriver
+
+        slot = int(cmd.args[0]) if cmd.args and cmd.args[0].lstrip("-").isdigit() else -1
+        live = {i: p.id for i, p in enumerate(run.potions) if p is not None}
+        want = ReplayCombatDriver._recorded_potion_id(cmd)
+        if want is not None:
+            if want not in live.values():
+                divergences.append(Divergence(
+                    "potion", room_index, want, list(live.values()),
+                    f"recorded map potion (belt slot {slot}) not held",
+                ))
+                return
+            if live.get(slot) != want:
+                slot = next(i for i, pid in live.items() if pid == want)
+        if not run.use_potion(slot):
+            divergences.append(Divergence(
+                "potion", room_index, live.get(slot), None,
+                f"map UsePotion on belt slot {slot} was refused "
+                "(empty slot, or the potion is not PotionUsage.AnyTime)",
+            ))
+
     def _check_player_state(self, run, divergences, act_index,
                             player_checkpoints, resync_player) -> None:
         """Assert sim HP/max-HP against the completed act's floor snapshot
@@ -780,7 +809,17 @@ class ReplayRunner:
         reason = "recording exhausted"
 
         while not run.at_run_end:
-            cmd = cursor.take("MoveToMapCoord")
+            # `UsePotion` between two rooms is an AnyTime potion drunk on the
+            # MAP (PotionUsage.AnyTime — Blood Potion, Entropic Brew, Foul
+            # Potion, Fruit Juice). Every in-combat one has already been
+            # consumed by ReplayCombatDriver or dropped with a stopped fight's
+            # tail, so anything still here belongs to the walk. Left
+            # unconsumed it was silently skipped, and the belt and the asserted
+            # HP drifted from the recording for the rest of the run.
+            cmd = cursor.take("MoveToMapCoord", "UsePotion")
+            while cmd is not None and cmd.name == "UsePotion":
+                self._use_map_potion(run, cmd, divergences, room_index)
+                cmd = cursor.take("MoveToMapCoord", "UsePotion")
             if cmd is None or not cmd.args:
                 reason = "no more MoveToMapCoord commands"
                 break

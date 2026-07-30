@@ -5,10 +5,12 @@ from .base import Relic, RelicRarity, register_relic
 
 @register_relic
 class ChosenCheese(Relic):
-    """ChosenCheese.cs — gain 1 Max HP whenever a combat ends (the source
-    hook is AfterCombatEnd, which fires on any conclusion; a lost combat
-    ends the run, so the victory path is the only one that matters).
-    Granted by the Room Full of Cheese shared event."""
+    """ChosenCheese.cs:16 — gain 1 Max HP on Hook.AfterCombatEnd.
+
+    AfterCombatEnd is NOT "any conclusion": EndCombatInternal fires it
+    (CombatManager.cs:988) and ProcessPendingLoss fires nothing at all, so the
+    victory path is the only dispatch there is. Granted by the Room Full of
+    Cheese shared event."""
 
     id = "chosen_cheese"
     name = "Chosen Cheese"
@@ -16,9 +18,10 @@ class ChosenCheese(Relic):
 
     MAX_HP = 1
 
-    def on_combat_end(self, player_won: bool) -> None:
-        if self.player.is_dead:
-            return
+    def on_combat_end(self) -> None:
+        # No IsDead guard in the source (:16-20), and none is needed:
+        # ReviveBeforeCombatEnd (:986) runs first, so the owner is alive by
+        # the time any AfterCombatEnd listener sees them.
         from ..cmds import CreatureCmd
 
         # CreatureCmd.GainMaxHp: raise the cap, then heal the same amount.

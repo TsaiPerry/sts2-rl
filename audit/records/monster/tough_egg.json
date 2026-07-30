@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\hive\\ovicopter.py",
-    "sha256": "2b4e8702585fdf867b6714e5d6c9790c423c49023794d33bd22a1c7b3d073e26"
+    "sha256": "c18cdfa7236818d59a50756da1adfc62939986b06f61854ec3bd231e9d0bc304"
   },
   "hooks": {
     "Title": {

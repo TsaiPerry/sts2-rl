@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
@@ -51,12 +51,12 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
@@ -83,7 +83,7 @@
     "AfterPlayerTurnStart": {
       "maps_to": "on_player_turn_started (mr_struggles.py:22-31) -- the sim's post-draw turn-start slot, serving both C#'s AfterPlayerTurnStart (audit/records/seam/turn_structure.json step 22) and AfterSideTurnStart (step 23); executed order via `py audit/tools/relic_probes.py turn-order`",
       "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The slot, the scaling amount, the props, the dealer and the target set all match (N1-N3), but the port omits the win check its identically shaped sibling relic/mercury_hourglass performs (G1), and shares the two-pass turn-start collapse (G2)."
+      "issue": "STILL OPEN at G1 only. G2 is CLOSED -- see this unit's g2 entry and relic/mercury_hourglass's g1: the two-pass turn-start collapse is split. WHAT REMAINS is G1: the port omits the win check its identically shaped sibling relic/mercury_hourglass performs.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: Rollup of guards G1 and G2 per binding rule 4. The slot, the scaling amount, the props, the dealer and the target set all match (N1-N3), but the port omits the win check its identically shaped sibling relic/mercury_hourglass performs (G1), and shares the two-pass turn-start collapse (G2)."
     }
   },
   "guards": [
@@ -94,8 +94,8 @@
     },
     {
       "what": "G2: the sim collapses C#'s two ordered turn-start passes (AfterPlayerTurnStart, step 22; AfterSideTurnStart, step 23) into one flat on_player_turn_started pass in relic order",
-      "verdict": "gap",
-      "issue": "MECHANISM: C# runs turn-start relics in TWO complete, ordered passes -- every `Hook.AfterPlayerTurnStart` listener (audit/records/seam/turn_structure.json step 22, CombatManager.cs:673-675) finishes before any `Hook.AfterSideTurnStart` listener (step 23, CombatManager.cs:520-524) begins. The sim has ONE flat pass, `on_player_turn_started` (hooks.py:285-295), dispatched in RunState.relics order, so a step-22 relic can run after a step-23 relic. EXECUTED CENSUS (py audit/tools/relic_probes_b09.py b09-simple): 9 ported relics whose C# hook is AfterPlayerTurnStart land on the sim's on_player_turn_started (bellows, choices_paradox, festive_popper, gambling_chip, mercury_hourglass, mr_struggles, pendulum, royal_poison, vexing_puzzlebox) and 14 whose C# hook is AfterSideTurnStart land on the SAME method (akabeko, bone_tea, bread, brimstone, candelabra, chandelier, crossbow, fake_happy_flower, happy_flower, lantern, paels_tears, sai, seal_of_gold, very_hot_cocoa). THE MECHANISM IS LIVE, proved by execution on a step-22 x step-23 pair: Gambling Chip (GamblingChip.cs:16, step 22) mulligans the opening hand and Bone Tea (step 23) upgrades it, so C# always upgrades the POST-mulligan hand. The sim gives hand upgrade levels [1,1,1,1,1] for relic order [gambling_chip, bone_tea] and [0,0,0,0,1] for [bone_tea, gambling_chip] -- and Bone Tea's single charge is spent either way. Both relics are ported and obtainable (Gambling Chip is Rare in the grab bag, Bone Tea is bought at the ported Tea Master event), and either acquisition order is possible. This relic's OWN observable at this site is not separately demonstrated: the site inherits the mechanism's verdict per binding rule 3. Related but NOT identical to audit/records/seam/turn_structure.json guard G12, which flattens the Late/VeryEarly SUB-phases of one hook; this is two DIFFERENT C# hooks collapsed, with a wider blast radius (9 x 14 relic pairs). Reported as a pool-wide shape in .superpowers/sdd/relic-batch-09-lessons.md. Rule 7: leans on hooks.py, GamblingChip.cs and BoneTea.cs, none hashed here."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. Same collapse, same fix -- see relic/mercury_hourglass's g1. Mr Struggles declares AfterPlayerTurnStart and keeps `on_player_turn_started`, which is now that hook alone.  The gap it replaced read: MECHANISM: C# runs turn-start relics in TWO complete, ordered passes -- every `Hook.AfterPlayerTurnStart` listener (audit/records/seam/turn_structure.json step 22, CombatManager.cs:673-675) finishes before any `Hook.AfterSideTurnStart` listener (step 23, CombatManager.cs:520-524) begins. The sim has ONE flat pass, `on_player_turn_started` (hooks.py:285-295), dispatched in RunState.relics order, so a step-22 relic can run after a step-23 relic. EXECUTED CENSUS (py audit/tools/relic_probes_b09.py b09-simple): 9 ported relics whose C# hook is AfterPlayerTurnStart land on the sim's on_player_turn_started (bellows, choices_paradox, festive_popper, gambling_chip, mercury_hourglass, mr_struggles, pendulum, royal_poison, vexing_puzzlebox) and 14 whose C# hook is AfterSideTurnStart land on the SAME method (akabeko, bone_tea, bread, brimstone, candelabra, chandelier, crossbow, fake_happy_flower, happy_flower, lantern, paels_tears, sai, seal_of_gold, very_hot_cocoa). THE MECHANISM IS LIVE, proved by execution on a step-22 x step-23 pair: Gambling Chip (GamblingChip.cs:16, step 22) mulligans the opening hand and Bone Tea (step 23) upgrades it, so C# always upgrades the POST-mulligan hand. The sim gives hand upgrade levels [1,1,1,1,1] for relic order [gambling_chip, bone_tea] and [0,0,0,0,1] for [bone_tea, gambling_chip] -- and Bone Tea's single charge is spent either way. Both relics are ported and obtainable (Gambling Chip is Rare in the grab bag, Bone Tea is bought at the ported Tea Master event), and either acquisition order is possible. This relic's OWN observable at this site is not separately demonstrated: the site inherits the mechanism's verdict per binding rule 3. Related but NOT identical to audit/records/seam/turn_structure.json guard G12, which flattens the Late/VeryEarly SUB-phases of one hook; this is two DIFFERENT C# hooks collapsed, with a wider blast radius (9 x 14 relic pairs). Reported as a pool-wide shape in .superpowers/sdd/relic-batch-09-lessons.md. Rule 7: leans on hooks.py, GamblingChip.cs and BoneTea.cs, none hashed here."
     },
     {
       "what": "N1: the damage amount is `base.Owner.PlayerCombatState.TurnNumber` (MrStruggles.cs:21) vs `self.turn` == CombatState.turn (mr_struggles.py:28)",

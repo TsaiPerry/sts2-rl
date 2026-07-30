@@ -50,13 +50,15 @@ class VakuuEvent(AncientEvent):
         return options
 
     def _cape_option(self) -> EventOption:
-        """RelicOption<DistinguishedCape>().ThatDecreasesMaxHp(9): the OPTION
-        costs 9 Max HP on top of the relic's own pickup effect."""
+        """`RelicOption<DistinguishedCape>().ThatDecreasesMaxHp(9m)`
+        (Vakuu.cs:38) applies NO HP: `ThatDecreasesMaxHp` is
+        `ThatWillKillPlayerIf(p => p.MaxHp <= value)` (EventOption.cs:194-197),
+        a UI flag that reddens the option when taking it would be lethal. The
+        −9 is the relic's own AfterObtained (DistinguishedCape.cs:31), which
+        this option used to duplicate here."""
         from ..relics import make_relic
-        from ..relics.distinguished_cape import DistinguishedCape
 
         def on_chosen() -> None:
-            self.run.lose_max_hp(DistinguishedCape.MAX_HP_LOSS)
             self.run.add_relic(make_relic("distinguished_cape"))
             self._finish("DONE")
 

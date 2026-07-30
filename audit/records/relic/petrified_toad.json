@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\petrified_toad.py",
-    "sha256": "da7c0d38ecd9a57caebed6464bfe1b8dc8e8cc0bda5c9321271994a87072079f"
+    "sha256": "147dfbbc5f92060f7b3fd8dcff45919e25847d8093005a22b6fa365027601b8c"
   },
   "extra_sources": [
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -48,20 +48,20 @@
     },
     "BeforeCombatStartLate": {
       "maps_to": "on_combat_start (petrified_toad.py:18-20), dispatched by HookSystem.on_combat_start from CombatState.__init__ (combat.py:208)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1, G2 and G3 per binding rule 4. The relic's own logic -- procure one Potion Shaped Rock at the start of every combat -- is ported and the potion exists, but the port reaches the belt through PlayerCombatState.add_potion instead of the game's PotionCmd.TryToProcure, which drops the two hooks that verb exists to run (G1, G2), and it lands in the sim's single on_combat_start pass instead of the source's LATE phase (G3)."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `potions.try_to_procure` is the sim's `PotionCmd.TryToProcure` (PotionCmd.cs:28-54) and it existed already -- what was missing was that this relic did not call it. It does now: the `Hook.ShouldProcurePotion` pass runs before the belt is touched (Sozu.cs:17-20 is its only implementer) and `Hook.AfterPotionProcured` fires on success (Belt Buckle drops its 2 Dexterity there, BeltBuckle.cs:63-70 -- the half of 'while you have no potions' that enforces the *no*). petrified_toad.py's `on_combat_start_late` is one line: `try_to_procure(self.hooks, self.player, PotionShapedRock())`, which is PetrifiedToad.cs:19 verbatim. The LATE phase this relic is on (BeforeCombatStartLate) was already correct and is unchanged. EXECUTED: with Sozu the belt stays empty where it used to read ['PotionShapedRock', None, None]; with Belt Buckle the player opens at Dexterity 0 where it used to be 2.  Pinned by test/test_procure_and_upgrade_verbs.py.  NOT CLOSED: nothing at this site.  The text it replaced read: Rollup of guards G1, G2 and G3 per binding rule 4. The relic's own logic -- procure one Potion Shaped Rock at the start of every combat -- is ported and the potion exists, but the port reaches the belt through PlayerCombatState.add_potion instead of the game's PotionCmd.TryToProcure, which drops the two hooks that verb exists to run (G1, G2), and it lands in the sim's single on_combat_start pass instead of the source's LATE phase (G3)."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the procure skips `Hook.ShouldProcurePotion`, so Sozu does not refuse the rock",
-      "verdict": "gap",
-      "issue": "MECHANISM: PotionCmd.TryToProcure (src/Core/Commands/PotionCmd.cs:28-39) opens with `if (!Hook.ShouldProcurePotion(...)) return NotAllowed;` before it ever calls Player.AddPotionInternal, and PetrifiedToad.cs:19 goes through TryToProcure. petrified_toad.py:20 calls PlayerCombatState.add_potion, whose own docstring states the omission outright: 'Combat-side procurement (Alchemize, Delicate Frond, Petrified Toad) does not run the Hook.ShouldProcurePotion gate today ... out of scope' (player.py:112-115). The run-side twin DOES run it (RunState.add_potion, run.py:479-481). REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b12.py b12-toad): Sozu is ported and returns False from should_procure_potion (relics/sozu.py:26-27) and is granted by the ported Darv shrine; with both relics attached the sim's belt still reads ['PotionShapedRock', None, None] where the game leaves it empty. Both relics are ported, obtainable and can be held together, and the code path is taken on the first turn of every combat, so nothing further is needed. FILED AS A GAP, NOT WAIVED under the contract's potion exclusion, because the divergence is a dropped HOOK DISPATCH rather than potion bookkeeping: the same missing gate applies to every combat-side procure the sim has, and the potion is only the payload. NOTE per binding rule 7: PotionCmd.cs, player.py, run.py and relics/sozu.py are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `potions.try_to_procure` is the sim's `PotionCmd.TryToProcure` (PotionCmd.cs:28-54) and it existed already -- what was missing was that this relic did not call it. It does now: the `Hook.ShouldProcurePotion` pass runs before the belt is touched (Sozu.cs:17-20 is its only implementer) and `Hook.AfterPotionProcured` fires on success (Belt Buckle drops its 2 Dexterity there, BeltBuckle.cs:63-70 -- the half of 'while you have no potions' that enforces the *no*). petrified_toad.py's `on_combat_start_late` is one line: `try_to_procure(self.hooks, self.player, PotionShapedRock())`, which is PetrifiedToad.cs:19 verbatim. The LATE phase this relic is on (BeforeCombatStartLate) was already correct and is unchanged. EXECUTED: with Sozu the belt stays empty where it used to read ['PotionShapedRock', None, None]; with Belt Buckle the player opens at Dexterity 0 where it used to be 2.  Pinned by test/test_procure_and_upgrade_verbs.py.  NOT CLOSED: nothing at this site.  The text it replaced read: MECHANISM: PotionCmd.TryToProcure (src/Core/Commands/PotionCmd.cs:28-39) opens with `if (!Hook.ShouldProcurePotion(...)) return NotAllowed;` before it ever calls Player.AddPotionInternal, and PetrifiedToad.cs:19 goes through TryToProcure. petrified_toad.py:20 calls PlayerCombatState.add_potion, whose own docstring states the omission outright: 'Combat-side procurement (Alchemize, Delicate Frond, Petrified Toad) does not run the Hook.ShouldProcurePotion gate today ... out of scope' (player.py:112-115). The run-side twin DOES run it (RunState.add_potion, run.py:479-481). REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b12.py b12-toad): Sozu is ported and returns False from should_procure_potion (relics/sozu.py:26-27) and is granted by the ported Darv shrine; with both relics attached the sim's belt still reads ['PotionShapedRock', None, None] where the game leaves it empty. Both relics are ported, obtainable and can be held together, and the code path is taken on the first turn of every combat, so nothing further is needed. FILED AS A GAP, NOT WAIVED under the contract's potion exclusion, because the divergence is a dropped HOOK DISPATCH rather than potion bookkeeping: the same missing gate applies to every combat-side procure the sim has, and the potion is only the payload. NOTE per binding rule 7: PotionCmd.cs, player.py, run.py and relics/sozu.py are NOT hashed by this record."
     },
     {
       "what": "G2 (LIVE): the procure skips `Hook.AfterPotionProcured`, so Belt Buckle keeps its 2 Dexterity when the Toad's rock lands",
-      "verdict": "gap",
-      "issue": "MECHANISM: PotionCmd.TryToProcure fires `await Hook.AfterPotionProcured(...)` on success (PotionCmd.cs:46). Belt Buckle implements it and REMOVES the 2 Dexterity the moment the belt stops being empty; audit/records/relic/belt_buckle.json already verdicts that missing sim counterpart a LIVE gap at Belt Buckle's own site, so this entry matches that verdict per binding rule 3 and records the TRIGGER half rather than re-deriving the mechanism. What this record adds is that Petrified Toad is a second ported trigger for it, and one that fires unconditionally at the start of every single combat rather than only when the player chooses to pick a potion up. REACHABILITY (LIVE, executed -- b12-toad): with [belt_buckle, petrified_toad] the sim opens combat at Dexterity 2 with one potion held, where the game opens at Dexterity 0 with one potion held. Both relics are ported and in the transcribed grab bag (Shop and Uncommon). NOTE per binding rule 7: PotionCmd.cs and belt_buckle.json are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `potions.try_to_procure` is the sim's `PotionCmd.TryToProcure` (PotionCmd.cs:28-54) and it existed already -- what was missing was that this relic did not call it. It does now: the `Hook.ShouldProcurePotion` pass runs before the belt is touched (Sozu.cs:17-20 is its only implementer) and `Hook.AfterPotionProcured` fires on success (Belt Buckle drops its 2 Dexterity there, BeltBuckle.cs:63-70 -- the half of 'while you have no potions' that enforces the *no*). petrified_toad.py's `on_combat_start_late` is one line: `try_to_procure(self.hooks, self.player, PotionShapedRock())`, which is PetrifiedToad.cs:19 verbatim. The LATE phase this relic is on (BeforeCombatStartLate) was already correct and is unchanged. EXECUTED: with Sozu the belt stays empty where it used to read ['PotionShapedRock', None, None]; with Belt Buckle the player opens at Dexterity 0 where it used to be 2.  Pinned by test/test_procure_and_upgrade_verbs.py.  NOT CLOSED: nothing at this site.  The text it replaced read: MECHANISM: PotionCmd.TryToProcure fires `await Hook.AfterPotionProcured(...)` on success (PotionCmd.cs:46). Belt Buckle implements it and REMOVES the 2 Dexterity the moment the belt stops being empty; audit/records/relic/belt_buckle.json already verdicts that missing sim counterpart a LIVE gap at Belt Buckle's own site, so this entry matches that verdict per binding rule 3 and records the TRIGGER half rather than re-deriving the mechanism. What this record adds is that Petrified Toad is a second ported trigger for it, and one that fires unconditionally at the start of every single combat rather than only when the player chooses to pick a potion up. REACHABILITY (LIVE, executed -- b12-toad): with [belt_buckle, petrified_toad] the sim opens combat at Dexterity 2 with one potion held, where the game opens at Dexterity 0 with one potion held. Both relics are ported and in the transcribed grab bag (Shop and Uncommon). NOTE per binding rule 7: PotionCmd.cs and belt_buckle.json are not hashed here."
     },
     {
       "what": "G3 (LIVE): the hook is BeforeCombatStart**Late** and the sim has no phase concept, so the outcome of the Belt Buckle interaction depends on relic pickup ORDER where the game's is fixed",
@@ -84,6 +84,6 @@
       "rationale": "PetrifiedToad.cs is 21 lines and overrides exactly Rarity, ExtraHoverTips and BeforeCombatStartLate. There is no CanonicalVars block, no AscensionHelper.GetValueIfAscension and no count to check, so PROMPT.md bug class 19 has nothing to catch here. Recorded because the relic-stream brief asks the auditor to confirm a thin port hides no stubbed-out behaviour before accepting it, and this one genuinely has none beyond the three gaps above."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

@@ -102,11 +102,18 @@ class TestColorlessAttacks:
         play(cs, make_card("fisticuffs"))
         assert cs.player.block == 7
 
-    def test_fisticuffs_gains_no_block_when_fully_blocked(self):
+    def test_fisticuffs_blocks_for_fully_blocked_damage_too(self):
+        # MOVED 2026-07-29 (round 7, card/fisticuffs/OnPlay). It used to be
+        # `test_fisticuffs_gains_no_block_when_fully_blocked` and assert 0,
+        # which encoded the sim's old reading of the block amount as the HP
+        # actually removed. Fisticuffs.cs:32 sums
+        # `r.TotalDamage + r.OverkillDamage`, and `TotalDamage` is
+        # `BlockedDamage + UnblockedDamage` (DamageResult.cs:63) -- so an
+        # attack the target's block eats entirely still grants its full amount.
         cs = fresh()
         cs.enemy.block = 20
         play(cs, make_card("fisticuffs"))
-        assert cs.player.block == 0
+        assert cs.player.block == 7
 
     def test_gold_axe_scales_with_cards_played_this_combat(self):
         cs = fresh()

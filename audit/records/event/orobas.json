@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\orobas.py",
-    "sha256": "593bb12027e04cdd82a50805712d823e8a42b687b35a9ba98eb2934a80b7436c"
+    "sha256": "40d1ee18e733e045c9e952210275f15f282d60854a15a362a290dc043f80d973"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     },
     {
@@ -66,7 +66,7 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c41cb03e5a2d36200abfccf13a43b0b7da84780102fcd6b2e6ae57265d7e351",
+      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
       "side": "sim"
     }
   ],
@@ -130,8 +130,8 @@
     },
     {
       "what": "OptionPool3's LOCKED path skips an RNG draw. Orobas.cs:54-56 adds a null-onChosen OPTION_POOL_3_LOCKED option INTO the list when both gates fail, and Orobas.cs:75 then calls `base.Rng.NextItem(OptionPool3)` unconditionally -- so the game takes a NextItem draw over a one-element list",
-      "verdict": "gap",
-      "issue": "events/orobas.py:76-81 branches instead: `if pool3: pick(pool3) else: EventOption('OPTION_POOL_3_LOCKED', None)`. The locked branch never calls pick, so the sim takes ONE FEWER draw off the event stream than the game does. The offered options are identical -- the locked option is the only candidate either way -- so this is invisible in legacy mode, but in a string-seeded parity run it desyncs the event stream for the rest of that event and any later consumer of it. LIVE for the parity path: the both-gates-fail state is ordinary (a run with no Touch-of-Orobas-refinable starter and no transcendence card in the deck), and Orobas is one of the three act-2 Ancients."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The locked path takes its draw. Orobas.cs:54-56 adds the null-onChosen OPTION_POOL_3_LOCKED option INTO OptionPool3 when both gates fail, and Orobas.cs:75 then calls `base.Rng.NextItem(OptionPool3)` UNCONDITIONALLY -- so the game takes a NextItem draw even over a one-element list. events/orobas.py branched around `pick` and took one fewer draw off the event stream: invisible in legacy mode (the locked option is the only candidate either way) but a desync for the rest of the event and every later consumer in a string-seeded parity run. The sim now builds `pool3 or ['OPTION_POOL_3_LOCKED']` and always picks from it, mapping the sentinel back to the same locked EventOption. EXECUTED: with both gates failing the event takes FOUR NextItem draws (Sea Glass character, pool 1, pool 2, pool 3) where it took three, and the pool-3 draw is over a list of length 1.  Pinned by test/test_event_live_tail.py.  NOT CLOSED: nothing at this site.  The text it replaced read: events/orobas.py:76-81 branches instead: `if pool3: pick(pool3) else: EventOption('OPTION_POOL_3_LOCKED', None)`. The locked branch never calls pick, so the sim takes ONE FEWER draw off the event stream than the game does. The offered options are identical -- the locked option is the only candidate either way -- so this is invisible in legacy mode, but in a string-seeded parity run it desyncs the event stream for the rest of that event and any later consumer of it. LIVE for the parity path: the both-gates-fail state is ordinary (a run with no Touch-of-Orobas-refinable starter and no transcendence card in the deck), and Orobas is one of the three act-2 Ancients."
     },
     {
       "what": "this unit is one of the six with a parity RNG branch, so EV-3 does NOT apply (the locked-path missing draw above is a separate defect)",
@@ -149,6 +149,6 @@
       "verdict": "faithful"
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

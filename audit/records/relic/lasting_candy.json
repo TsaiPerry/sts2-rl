@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\lasting_candy.py",
-    "sha256": "12f1b8e8699860a03b186f2a00cd12d520bde8fcc79e8acffc5c7c19da9650fc"
+    "sha256": "0e7e604a0b66cff59d3f0a2e8cc2255442cbb5b3ecd6b5dd0edbde08b4f54c00"
   },
   "extra_sources": [
     {
@@ -31,32 +31,32 @@
     },
     {
       "path": "sts2_rl/relics/_eggs.py",
-      "sha256": "e9598b67bc030bfdcf3ac3cc7c326141f6318630a8db35c417f4e32fa2111995",
+      "sha256": "cd60f1cee6043d72cf3f6fa56180bca7c5dcd4757826a3bb1ad2d151014f2c1a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/glitter.py",
-      "sha256": "80a3cc48290426c8412c3df7413d64c7c8d3acf0b3321f0be4e21e83c7b0c460",
+      "sha256": "965af417b76bb79c967a15db1bc2e0e7d861a2db6db9932db1bf936e7d95c88d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/silken_tress.py",
-      "sha256": "ae34c594c5c9502ded4b0cf86cb7921cdcde004b1d80c81532ab3ee7dcbabcdf",
+      "sha256": "9ad69387603f7a68000e51cdecd81d6382fcda51997ad75dfb8c0ee883ed81f5",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/silver_crucible.py",
-      "sha256": "9a8147346c7c1fa77a0ebb3b1a61402e0e67663fd7686345e6f31fb0686641eb",
+      "sha256": "e9375424cc41d2dbb18f7f49b1dc08bc6246d1d0a7c57b4257510a904cccd033",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "9f8f94386154df9acfd780c8e5549419bffd7d5ed2448495595c9aa33fce4e83",
+      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
       "side": "sim"
     }
   ],
@@ -94,8 +94,9 @@
   "guards": [
     {
       "what": "G1 (LIVE): the every-other-combat Power card reward option is entirely missing, and it is the game's ONLY implementation of the EARLY TryModifyCardRewardOptions pass",
-      "verdict": "gap",
-      "issue": "MECHANISM: LastingCandy.cs:114-135 takes `creationOptions.GetPossibleCards(player)`, keeps the Power-type cards not already offered (falling back to all Power cards if that set is empty), builds a fresh CardCreationOptions with source Other and flags NoModifyHooks | NoCardPoolModifications, runs `CardFactory.CreateForReward(Owner, 1, options2)` and APPENDS the result to the options list. lasting_candy.py implements nothing. PREMISE CHECK (PROMPT.md bug class 12): the docstring says 'a card-reward modifier that runs between combats, so this is a no-op stub' -- false. `Relic.modify_card_reward_options` exists (relics/base.py:172-176) and rewards.py:299-301 dispatches it over run.relics inside create_reward_cards; the shared sweep-stub-premises already reports this pipeline as live. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b08.py b08-candy): Lasting Candy is Uncommon in the transcribed grab bag (b08-pool), and a MONSTER card reward on the second combat of a run comes out as the same three cards ['battle_trance', 'twin_strike', 'expect_a_fight'] with and without the relic, where the game adds a fourth, always-Power option. The same probe's b08-lavalamp run shows relic/silver_crucible mutating reward options through that very hook today, so the sim demonstrably can do this. SECOND OBSERVABLE: the added card costs a rarity roll, an item pick and an upgrade roll on the per-player Rewards stream (CardFactory.cs:214-241 and RollForUpgrade at CardFactory.cs, reached because options2 carries no NoUpgradeRoll flag), none of which the sim consumes -- so every later Rewards draw in the run is shifted for the conformance harness. Rule 7: relics/base.py, rewards.py, relics/silver_crucible.py and src/Core/Factories/CardFactory.cs are not hashed by this record."
+      "verdict": "faithful",
+      "maps_to": "LastingCandy.after_combat_end + LastingCandy.modify_card_reward_options (sts2_rl/relics/lasting_candy.py), the sim's first and only implementer of the EARLY TryModifyCardRewardOptions pass",
+      "rationale": "CLOSED 2026-07-28 by the gap-queue continuation's section-A fix pass (this is a CODE change, not a re-reading of the old code). Ported in full. `combats_seen` counts AfterCombatEnd and `is_in_triggering_combat` is `CombatsSeen > 0 && CombatsSeen % 2 == 0` (LastingCandy.cs:68-78); the increment precedes the screen in both codebases (CombatManager.cs:988 runs before CombatRoom.cs:251-253), so combats 2, 4, ... carry the extra option. The hook needed the creation it is modifying, so both TryModifyCardRewardOptions passes now receive a `rewards.CardCreationOptions` (pool + source + odds table); its `source` is derived from the existing `mutate_pity` flag, which is exactly CardCreationSource.Encounter (RollForRarity mutates the pity counters only for Encounter), so the two cannot drift. The added card is created with mutate_pity=False / modify_hooks=False (options2's Source Other + NoModifyHooks | NoCardPoolModifications) and still spends its upgrade draw. EXECUTED: three tests -- a 4th, always-Power option on the triggering combat, nothing on a non-Encounter creation, and the added option visible to the Late pass (Frozen Egg upgrades it).  The gap it replaced read: MECHANISM: LastingCandy.cs:114-135 takes `creationOptions.GetPossibleCards(player)`, keeps the Power-type cards not already offered (falling back to all Power cards if that set is empty), builds a fresh CardCreationOptions with source Other and flags NoModifyHooks | NoCardPoolModifications, runs `CardFactory.CreateForReward(Owner, 1, options2)` and APPENDS the result to the options list. lasting_candy.py implements nothing. PREMISE CHECK (PROMPT.md bug class 12): the docstring says 'a card-reward modifier that runs between combats, so this is a no-op stub' -- false. `Relic.modify_card_reward_options` exists (relics/base.py:172-176) and rewards.py:299-301 dispatches it over run.relics inside create_reward_cards; the shared sweep-stub-premises already reports this pipeline as live. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b08.py b08-candy): Lasting Candy is Uncommon in the transcribed grab bag (b08-pool), and a MONSTER card reward on the second combat of a run comes out as the same three cards ['battle_trance', 'twin_strike', 'expect_a_fight'] with and without the relic, where the game adds a fourth, always-Power option. The same probe's b08-lavalamp run shows relic/silver_crucible mutating reward options through that very hook today, so the sim demonstrably can do this. SECOND OBSERVABLE: the added card costs a rarity roll, an item pick and an upgrade roll on the per-player Rewards stream (CardFactory.cs:214-241 and RollForUpgrade at CardFactory.cs, reached because options2 carries no NoUpgradeRoll flag), none of which the sim consumes -- so every later Rewards draw in the run is shifted for the conformance harness. Rule 7: relics/base.py, rewards.py, relics/silver_crucible.py and src/Core/Factories/CardFactory.cs are not hashed by this record."
     },
     {
       "what": "G2 (LIVE): LastingCandy is the SEVENTEENTH member of the `IsBeforeAct3TreasureChest` (TotalFloor < 41) cluster, not a separate 'unlock gate' unit -- correcting .superpowers/sdd/content-relic-sweeps.md sweep B",

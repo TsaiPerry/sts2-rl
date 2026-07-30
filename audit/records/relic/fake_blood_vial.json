@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\fake_blood_vial.py",
-    "sha256": "005e285571ce8ab045acbb213550800891c69fa8d3fa790711db661414e0475f"
+    "sha256": "dc04745ddbd8615dcba477ce4551f3b17257177daa984487811c4efe094e5b4f"
   },
   "extra_sources": [
     {
@@ -31,17 +31,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     }
   ],
@@ -57,20 +57,20 @@
     },
     "AfterPlayerTurnStartLate": {
       "maps_to": "on_player_turn_started (fake_blood_vial.py:23-27)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The effect is right -- heal Heal.IntValue = 1 (HealVar(1m), FakeBloodVial.cs:17) once, on turn 1 only; executed (py audit/tools/relic_probes_b05.py flower-blood) 40 -> 41 on turn 1 and no second heal on turn 2 -- but the hook is the LATE sub-phase of AfterPlayerTurnStart (turn_structure step 22) and the sim binds it to the step-23 slot with no phase concept at all."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. Rollup of guards G1 and G2, both now closed -- see this unit's g1 and g2 entries.  The gap it replaced read: Rollup of guards G1 and G2 per binding rule 4. The effect is right -- heal Heal.IntValue = 1 (HealVar(1m), FakeBloodVial.cs:17) once, on turn 1 only; executed (py audit/tools/relic_probes_b05.py flower-blood) 40 -> 41 on turn 1 and no second heal on turn 2 -- but the hook is the LATE sub-phase of AfterPlayerTurnStart (turn_structure step 22) and the sim binds it to the step-23 slot with no phase concept at all."
     }
   },
   "guards": [
     {
       "what": "G1 (DORMANT): C#'s hook is AfterPlayerTurnStart**Late**, a separate complete listener pass; the sim's on_player_turn_started is a single flat pass",
-      "verdict": "gap",
-      "issue": "MECHANISM: Hook.AfterPlayerTurnStart runs three complete passes -- Early, then plain, then Late (Hook.cs:882-908) -- so a Late listener is guaranteed to see every plain listener's result. The sim's hooks.py has one walk per hook and no phase concept, which is audit/records/seam/hook_dispatch.json gap G3 and audit/records/seam/turn_structure.json gap G12; one verdict per mechanism, binding rule 3, so this entry does not re-derive it. The Late phase is chosen here for a reason a HEAL cares about: running last means the 1 HP is added after any turn-start effect that costs HP, so it cannot be wasted against a full HP bar that a later effect then empties. DORMANT AT THIS SITE: the sim's on_player_turn_started relic listeners either damage enemies or grant block/energy, and the only ported turn-start effect that damages the PLAYER is relics/royal_poison.py -- which the sim also fires from on_player_turn_started, i.e. in the same flat pass, so the order between the two is registration-order luck and the HP total after both is 40 - 4 + 1 either way. It goes live for any pair where one member's amount depends on the other's result (a percentage-of-current-HP effect is the shape). Rule 7: Hook.cs, hooks.py and relics/royal_poison.py are unhashed here."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. FakeBloodVial.cs:19 is AfterPlayerTurnStart**Late**; the relic now implements `on_player_turn_started_late`, which HookSystem._each runs as a separate complete pass after the plain one. Same fix as relic/blood_vial's G1, in the same pass.  The gap it replaced read: MECHANISM: Hook.AfterPlayerTurnStart runs three complete passes -- Early, then plain, then Late (Hook.cs:882-908) -- so a Late listener is guaranteed to see every plain listener's result. The sim's hooks.py has one walk per hook and no phase concept, which is audit/records/seam/hook_dispatch.json gap G3 and audit/records/seam/turn_structure.json gap G12; one verdict per mechanism, binding rule 3, so this entry does not re-derive it. The Late phase is chosen here for a reason a HEAL cares about: running last means the 1 HP is added after any turn-start effect that costs HP, so it cannot be wasted against a full HP bar that a later effect then empties. DORMANT AT THIS SITE: the sim's on_player_turn_started relic listeners either damage enemies or grant block/energy, and the only ported turn-start effect that damages the PLAYER is relics/royal_poison.py -- which the sim also fires from on_player_turn_started, i.e. in the same flat pass, so the order between the two is registration-order luck and the HP total after both is 40 - 4 + 1 either way. It goes live for any pair where one member's amount depends on the other's result (a percentage-of-current-HP effect is the shape). Rule 7: Hook.cs, hooks.py and relics/royal_poison.py are unhashed here."
     },
     {
       "what": "G2 (DORMANT): the sim maps AfterPlayerTurnStart (step 22) onto on_player_turn_started, which the executed order puts at step 23 (AfterSideTurnStart)",
-      "verdict": "gap",
-      "issue": "MECHANISM: turn_structure step 22 is `CardPileCmd.Draw` followed immediately by Hook.AfterPlayerTurnStart (CombatManager.cs:673-675); step 23 is Hook.AfterSideTurnStart (CombatManager.cs:520-524), which on the player side runs only after EVERY player's SetupPlayerTurn has finished. The sim has one post-draw slot for both -- relics/base.py:15-17's own mapping table says so outright -- and executed order (py audit/tools/relic_probes.py turn-order) confirms on_player_turn_started is that single slot. So a C# AfterPlayerTurnStart listener and a C# AfterSideTurnStart listener are collapsed into one pass whose internal order is registration order. This is the same collapse relic/bag_of_marbles G1 records at the other end (a BeforeSideTurnStart listener mapped forward to the same slot); PROMPT.md bug class 11. DORMANT: in single-player the two C# steps are adjacent with nothing between them (step 22 ends with the hook, step 23 begins with the next hook), so the only observable is the relative order of a step-22 and a step-23 listener -- and this relic's sibling in the same batch, relic/fake_happy_flower, is exactly a step-23 listener. Their effects (heal 1, gain 1 energy) do not interact. Porting a step-22 listener whose result a step-23 listener reads, or playing multiplayer where step 23 waits for other players, makes it live. Rule 7: CombatManager.cs and relics/base.py are unhashed here."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. The sim's post-draw slot is no longer one method for two hooks. `on_player_turn_started` is step 22 (Hook.AfterPlayerTurnStart, CombatManager.cs:673-675) and the new `after_side_turn_start` is step 23 (:520-524), fired strictly later -- so this relic and its step-23 sibling relic/fake_happy_flower are in two ordered passes, not one registration-ordered walk. See relic/mercury_hourglass's g1 for the census.  The gap it replaced read: MECHANISM: turn_structure step 22 is `CardPileCmd.Draw` followed immediately by Hook.AfterPlayerTurnStart (CombatManager.cs:673-675); step 23 is Hook.AfterSideTurnStart (CombatManager.cs:520-524), which on the player side runs only after EVERY player's SetupPlayerTurn has finished. The sim has one post-draw slot for both -- relics/base.py:15-17's own mapping table says so outright -- and executed order (py audit/tools/relic_probes.py turn-order) confirms on_player_turn_started is that single slot. So a C# AfterPlayerTurnStart listener and a C# AfterSideTurnStart listener are collapsed into one pass whose internal order is registration order. This is the same collapse relic/bag_of_marbles G1 records at the other end (a BeforeSideTurnStart listener mapped forward to the same slot); PROMPT.md bug class 11. DORMANT: in single-player the two C# steps are adjacent with nothing between them (step 22 ends with the hook, step 23 begins with the next hook), so the only observable is the relative order of a step-22 and a step-23 listener -- and this relic's sibling in the same batch, relic/fake_happy_flower, is exactly a step-23 listener. Their effects (heal 1, gain 1 energy) do not interact. Porting a step-22 listener whose result a step-23 listener reads, or playing multiplayer where step 23 waits for other players, makes it live. Rule 7: CombatManager.cs and relics/base.py are unhashed here."
     },
     {
       "what": "N1: `player == base.Owner` (FakeBloodVial.cs:21) has no sim counterpart",
@@ -88,6 +88,6 @@
       "rationale": "IntValue of HealVar(1m) is 1 with no AscensionHelper branch in the file, matching HEAL = 1 (fake_blood_vial.py:21). The sim's CreatureCmd.heal (cmds.py:158-166) bails on a dead target, caps at max HP and fires on_hp_changed, which is the mechanical core of CreatureCmd.Heal (CreatureCmd.cs:691) minus its vfx. The sim passes the PlayerCombatState where C# passes the player's Creature; the sim's PlayerCombatState IS its player creature (it carries hp/max_hp/is_dead), so the two are the same object role. Rule 7: cmds.py and CreatureCmd.cs are unhashed here."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

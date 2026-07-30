@@ -239,9 +239,16 @@ def test_brain_leech_rip_costs_5_and_offers_colorless():
     event = make_event("brain_leech", run).begin()
     assert event.choose("RIP")
     assert run.hp == hp0 - 5
-    assert len(run.deck) == deck0 + 1
-    new = [c for c in run.deck if c.id in COLORLESS_POOL]
-    assert len(new) == 1
+    # MOVED 2026-07-29 (round 7, event/brain_leech/g3): this asserted the card was
+    # ADDED. BrainLeech.cs:51-61 hands its RewardCount 3-card colourless
+    # CardRewards to `RewardsCmd.OfferCustom` — a SKIPPABLE screen; the
+    # SHARE_KNOWLEDGE branch is the one that sets `Cancelable = false`. So the
+    # deck is unchanged and the offer is parked for the driver.
+    assert len(run.deck) == deck0
+    assert event.pending_rewards is not None
+    groups = event.pending_rewards.card_rewards
+    assert len(groups) == 1 and len(groups[0].cards) == 3
+    assert all(c.id in COLORLESS_POOL for c in groups[0].cards)
 
 
 def test_future_of_potions_gate_needs_two_potions():
@@ -840,7 +847,8 @@ def test_wongos_mystery_ticket_pays_out_after_five_combats():
     run = hive_run(33)
     ticket = make_relic("wongos_mystery_ticket")
     run.add_relic(ticket)
-    rewards = CombatRewards(room_type=RoomType.MONSTER)
+    # `room` is RewardsSet.Room; WongosMysteryTicket.cs:86 wants a CombatRoom.
+    rewards = CombatRewards(room_type=RoomType.MONSTER, room=RoomType.MONSTER)
     ticket.modify_combat_rewards(run, rewards)
     assert rewards.relics == []          # not yet
     for _ in range(5):
@@ -849,7 +857,7 @@ def test_wongos_mystery_ticket_pays_out_after_five_combats():
     assert len(rewards.relics) == 3
     assert ticket.is_used_up
     # Spent: a later screen adds nothing.
-    more = CombatRewards(room_type=RoomType.MONSTER)
+    more = CombatRewards(room_type=RoomType.MONSTER, room=RoomType.MONSTER)
     ticket.modify_combat_rewards(run, more)
     assert more.relics == []
 

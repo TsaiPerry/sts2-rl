@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\normality.py",
-    "sha256": "6bfcaf8a10c6983ab40533412922c46b612606e6fc28ed37bcd239e74f763936"
+    "sha256": "a871348cca7e1ac784ec5f702f888129678d8a01e09b6e30adb63576c754e5fd"
   },
   "extra_sources": [
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
@@ -63,8 +63,8 @@
     },
     "ShouldPlay": {
       "maps_to": "NormalityCard.should_play_card (normality.py:447-454)",
-      "verdict": "gap",
-      "issue": "The hook choice is RIGHT (unlike card/clash) -- C# really does override `ShouldPlay`, which both the manual path (`CardModel.CanPlay`, CardModel.cs:1755) and the auto-play path (`CardCmd.AutoPlay`, CardCmd.cs:64) consult -- and so are the ownership and in-hand clauses and the threshold of 3. THE COUNTER READS A DIFFERENT HISTORY. C# counts `History.CardPlaysStarted.Count(e => e.HappenedThisTurn(CombatState) && e.CardPlay.Card.Owner == Owner)` (Normality.cs:33) -- plays STARTED; the sim counts `CardPlayedEntry` with `this_turn=True` (normality.py:451-453), which the combat loop appends at the END of resolution (`hooks.on_card_played(card)`, combat.py:513) -- plays FINISHED. The two agree for simple sequential plays, and diverge whenever a play is IN FLIGHT while another card's playability is tested, which is exactly what an auto-play does. Concretely: with Normality in hand, play two cards, then play Havoc as the third. C# has three STARTED plays when Havoc's auto-played card is checked, so `3 >= 3` blocks it and the auto-play is discarded unplayed; the sim has two FINISHED plays, so `2 < 3` allows it. LIVE -- card/normality is a ported curse and card/havoc, card/catastrophe, card/cascade and card/beat_down all auto-play mid-resolution. The sim's history would need a started-plays entry (or the count taken before `on_card_played`) to fix it."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The sim now has a CardPlayStarted row, pushed at the game's own position. `CombatHistory.cs:26/28` exposes CardPlaysStarted and CardPlaysFinished as two SEPARATE lists and CardModel.OnPlayWrapper pushes them at two different points INSIDE the replay loop: `History.CardPlayStarted` at CardModel.cs:1930, between Hook.BeforeCardPlayed (:1929) and `await OnPlay` (:1931), and `History.CardPlayFinished` at :1956, after the enchantment and affliction have resolved. The sim had ONE row, recorded at the FINISHED position (`on_card_played`), so nothing could see a play that was still in flight -- which is exactly the state every auto-play resolves in. Shipped: `CardPlayStartedEntry` + `CombatHistory.card_play_started` (sts2_rl/history.py) and a direct call at sts2_rl/combat.py's `_resolve_card_play`, inside the play-count loop and after before_card_played, so a replayed card pushes one row per iteration exactly as C# does. Nine C# sites read CardPlaysStarted and eleven read CardPlaysFinished; the sim's other readers stay on CardPlayedEntry until their own entries are worked, which is why the new list was ADDED rather than the old one repointed.  This site: Normality.cs:33 counts CardPlaysStarted and cards/normality.py's `should_play_card` now does too. The hook choice, the ownership clause, the in-hand clause and the threshold of 3 were already right; only the history was wrong. EXECUTED: with Normality in hand, play two cards and then a Cascade as the third -- the card Cascade auto-plays is now the FOURTH started play and is blocked (it takes no started row and goes to its result pile unplayed), where the sim used to count two FINISHED plays and let it through. Pinned by test/test_card_plays_started.py's test_normality_blocks_the_fourth_play_counting_started_plays plus the allow-the-third and outside-the-hand controls. NOT CLOSED: nothing at this site.  The text it replaced read: The hook choice is RIGHT (unlike card/clash) -- C# really does override `ShouldPlay`, which both the manual path (`CardModel.CanPlay`, CardModel.cs:1755) and the auto-play path (`CardCmd.AutoPlay`, CardCmd.cs:64) consult -- and so are the ownership and in-hand clauses and the threshold of 3. THE COUNTER READS A DIFFERENT HISTORY. C# counts `History.CardPlaysStarted.Count(e => e.HappenedThisTurn(CombatState) && e.CardPlay.Card.Owner == Owner)` (Normality.cs:33) -- plays STARTED; the sim counts `CardPlayedEntry` with `this_turn=True` (normality.py:451-453), which the combat loop appends at the END of resolution (`hooks.on_card_played(card)`, combat.py:513) -- plays FINISHED. The two agree for simple sequential plays, and diverge whenever a play is IN FLIGHT while another card's playability is tested, which is exactly what an auto-play does. Concretely: with Normality in hand, play two cards, then play Havoc as the third. C# has three STARTED plays when Havoc's auto-played card is checked, so `3 >= 3` blocks it and the auto-play is discarded unplayed; the sim has two FINISHED plays, so `2 < 3` allows it. LIVE -- card/normality is a ported curse and card/havoc, card/catastrophe, card/cascade and card/beat_down all auto-play mid-resolution. The sim's history would need a started-plays entry (or the count taken before `on_card_played`) to fix it."
     },
     "ctor": {
       "maps_to": "class attrs (normality.py:430-437) + _init_vars (441-442)",

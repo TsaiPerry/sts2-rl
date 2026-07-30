@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\feed.py",
-    "sha256": "f2e63fe747a76df842f0cf81675f30927896a08ec7b19827c5a554bb18bc10aa"
+    "sha256": "e372cb9bde1b71df68d00212189ed0912bcd54b169a1e42f591c5e07affe365e"
   },
   "extra_sources": [
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/glory/fabricator.py",
-      "sha256": "fbbb6a395caf6cbecfec4090e9870ba56967a6a8014ce8f5c2b3a973da8506e3",
+      "sha256": "0ff27ed874500a6003bf19d100d95848dae28c8afbc7b3ed38cc22891cffbddb",
       "side": "sim"
     },
     {
@@ -41,12 +41,12 @@
     },
     {
       "path": "sts2_rl/monsters/hive/ovicopter.py",
-      "sha256": "2b4e8702585fdf867b6714e5d6c9790c423c49023794d33bd22a1c7b3d073e26",
+      "sha256": "c18cdfa7236818d59a50756da1adfc62939986b06f61854ec3bd231e9d0bc304",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     }
   ],
@@ -73,8 +73,8 @@
     },
     "OnPlay": {
       "maps_to": "FeedCard.on_play (feed.py:41-47)",
-      "verdict": "gap",
-      "issue": "The damage and the max-HP amount are faithful, and so is the max-HP verb's shape: `CreatureCmd.GainMaxHp(Owner.Creature, MaxHp.IntValue)` is `SetMaxHp(MaxHp + amount)` followed by `Heal(num)` (CreatureCmd.cs:786-799) == the sim's `ctx.player.max_hp += self._max_hp` then `CreatureCmd.heal(ctx.hooks, ctx.player, self._max_hp)`. THE FATAL TEST IS NOT. C# computes `bool shouldTriggerFatal = cardPlay.Target.Powers.All(p => p.ShouldOwnerDeathTriggerFatal())` BEFORE the attack (Feed.cs:38) and only grants max HP when that is true AND the attack actually killed (`attackCommand.Results...Any(r => r.WasTargetKilled)`, line 42). The sim tests only `if target.is_dead` (feed.py:45), dropping the power-veto half entirely. Two C# powers return false from `ShouldOwnerDeathTriggerFatal`: `MinionPower` (unconditionally, MinionPower.cs:20-23) and `ReattachPower` (unless every other segment is dead, ReattachPower.cs:106-109). BOTH ARE PORTED -- `MinionPower` at powers.py:1536-1542, applied by three ported monsters (`monsters/glory/fabricator.py:182`, `monsters/glory/queen.py:50`, `monsters/hive/ovicopter.py:128`), and ReattachPower at powers.py:2360. Observable: kill a Fabricator bot, a Queen minion or an Ovicopter egg with Feed -- the game grants NO max HP, the sim grants 3 and heals 3. LIVE. The sim's docstring (feed.py:17-19) claims the Illusion case \"falls out of the is_dead check\", which is true for DEATH PREVENTION but does not cover the fatal-veto powers, which allow the death and only suppress the Fatal trigger. RATIONALE CITES THIRD FILES (rule 7): MinionPower.cs, ReattachPower.cs, CreatureCmd.cs, powers.py and the three monster modules are not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `PowerModel.ShouldOwnerDeathTriggerFatal` EXISTS in the sim now. `Power.should_owner_death_trigger_fatal` defaults to True (PowerModel.cs:646) and the two non-mock overrides are ported at their own sites -- MinionPower unconditionally (MinionPower.cs:20-23) and ReattachPower as `_all_others_down()` (ReattachPower.cs:106-109, whose own comment says \"shouldn't trigger fatal unless all other segments are dead too\"). `cmds.should_trigger_fatal(target)` is the `Target.Powers.All(...)` test, and BOTH Fatal cards call it BEFORE their attack, which is where C# reads it and is load-bearing: the killing blow strips the very powers the test asks about (Creature.RemoveAllPowersAfterDeath). This is NOT death prevention -- the minion really dies -- which is exactly why the `is_dead` check both cards already had did not cover it. EXECUTED: Feed into a minion at 1 HP kills it and grants 0 Max HP where it used to grant 3 and heal 3; into an ordinary enemy it still grants 3.  Pinned by test/test_card_residue_gaps.py.  The docstring's old claim that the Illusion case \"falls out of the is_dead check\" is corrected in the code comment: that is true for death PREVENTION and says nothing about the fatal-veto powers. NOT CLOSED: nothing at this site.  The text it replaced read: The damage and the max-HP amount are faithful, and so is the max-HP verb's shape: `CreatureCmd.GainMaxHp(Owner.Creature, MaxHp.IntValue)` is `SetMaxHp(MaxHp + amount)` followed by `Heal(num)` (CreatureCmd.cs:786-799) == the sim's `ctx.player.max_hp += self._max_hp` then `CreatureCmd.heal(ctx.hooks, ctx.player, self._max_hp)`. THE FATAL TEST IS NOT. C# computes `bool shouldTriggerFatal = cardPlay.Target.Powers.All(p => p.ShouldOwnerDeathTriggerFatal())` BEFORE the attack (Feed.cs:38) and only grants max HP when that is true AND the attack actually killed (`attackCommand.Results...Any(r => r.WasTargetKilled)`, line 42). The sim tests only `if target.is_dead` (feed.py:45), dropping the power-veto half entirely. Two C# powers return false from `ShouldOwnerDeathTriggerFatal`: `MinionPower` (unconditionally, MinionPower.cs:20-23) and `ReattachPower` (unless every other segment is dead, ReattachPower.cs:106-109). BOTH ARE PORTED -- `MinionPower` at powers.py:1536-1542, applied by three ported monsters (`monsters/glory/fabricator.py:182`, `monsters/glory/queen.py:50`, `monsters/hive/ovicopter.py:128`), and ReattachPower at powers.py:2360. Observable: kill a Fabricator bot, a Queen minion or an Ovicopter egg with Feed -- the game grants NO max HP, the sim grants 3 and heals 3. LIVE. The sim's docstring (feed.py:17-19) claims the Illusion case \"falls out of the is_dead check\", which is true for DEATH PREVENTION but does not cover the fatal-veto powers, which allow the death and only suppress the Fatal trigger. RATIONALE CITES THIRD FILES (rule 7): MinionPower.cs, ReattachPower.cs, CreatureCmd.cs, powers.py and the three monster modules are not hashed by this record."
     },
     "OnUpgrade": {
       "maps_to": "FeedCard._on_upgrade (feed.py:37-39)",
@@ -89,6 +89,6 @@
       "rationale": "These agree: the target is chosen from living enemies, so `is_dead` after the single hit means this attack killed it, and a death-prevention effect leaves it alive on both sides (the sim floors a saved creature at 1 HP, cmds.py:106-112). The divergence is entirely in the missing power veto, which the OnPlay entry owns."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

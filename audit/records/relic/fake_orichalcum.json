@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\fake_orichalcum.py",
-    "sha256": "3d5a92841e21f6e4993e2105ca379ab52ac431d9ae7005070da731f06a103a34"
+    "sha256": "07e2fe9267e0077d01e37c7c886a7e763fff697a394576cff5321b5593bf9f3e"
   },
   "extra_sources": [
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/events/fake_merchant.py",
-      "sha256": "1d4cab807ce57957942d4521f122dd008158f1f2fdc25336530aa2ab03c74f97",
+      "sha256": "b988afdfbe947f93dc619f6a22907d77137bdba4363fc04de23641f5ed6d87d5",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {

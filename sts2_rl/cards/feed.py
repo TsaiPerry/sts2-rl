@@ -39,9 +39,14 @@ class FeedCard(Card):
         self._max_hp += 1
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
-        from ..cmds import CreatureCmd, DamageCmd
+        from ..cmds import CreatureCmd, DamageCmd, should_trigger_fatal
         target = ctx.resolve_target(target_idx)
+        # Feed.cs:38 — the power veto is read BEFORE the attack, because the
+        # killing blow strips the very powers it asks about
+        # (Creature.RemoveAllPowersAfterDeath). It is not death prevention:
+        # the minion really dies, and only the Max HP is suppressed.
+        fatal = should_trigger_fatal(target)
         DamageCmd.deal(ctx.hooks, target, self._damage, dealer=ctx.player, card=self)
-        if target.is_dead:
+        if fatal and target.is_dead:
             ctx.player.max_hp += self._max_hp
             CreatureCmd.heal(ctx.hooks, ctx.player, self._max_hp)

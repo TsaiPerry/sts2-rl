@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -56,17 +56,17 @@
     },
     {
       "path": "sts2_rl/cards/feed.py",
-      "sha256": "f2e63fe747a76df842f0cf81675f30927896a08ec7b19827c5a554bb18bc10aa",
+      "sha256": "e372cb9bde1b71df68d00212189ed0912bcd54b169a1e42f591c5e07affe365e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
@@ -102,8 +102,8 @@
     },
     "ShouldPowerBeRemovedOnDeath": {
       "maps_to": "no sim counterpart",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. THE HOOK NOW EXISTS AND THIS POWER IMPLEMENTS IT: `hooks.should_power_be_removed_on_death` is consulted by `_strip_powers_after_death` (cmds.py:67-83, called from the real-death arm at cmds.py:50), and `IllusionPower.should_power_be_removed_on_death` (powers.py:1647-1656) reproduces IllusionPower.cs:59-66 -- keep buffs, drop non-temporary debuffs -- with `getattr(power, 'is_temporary', False)` standing in for the still-absent ITemporaryPower marker. WHAT REMAINS is that it is unreachable for the case it was written for: an Illusion's own death takes the PREVENTION arm (powers.py:1671 `should_die` -> False), which never calls `_strip_powers_after_death`. So the LIVE debuff half is unchanged -- an Eye with Teeth given Vulnerable 3 and killed still revives holding it. VERIFIED by reading cmds.py:30-83 and powers.py."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): STALE, not open, and by rule 3 with the seam entry it shares a mechanism with (creature_card_cmds/step8b, closed earlier this round on the same evidence). The entry says the hook is unreachable \"because an Illusion's own death takes the PREVENTION arm (powers.py `should_die` -> False)\". IllusionPower HAS NO `should_die` OVERRIDE -- `'should_die' in IllusionPower.__dict__` is False, executed today. It implements `should_remove_from_combat_after_death` (IllusionPower.cs:108-114) and nothing else on the death side, so the killed creature takes the REAL arm, which is the arm that calls `_strip_powers_after_death`. EXECUTED 2026-07-29 on a real Parafright (encounter [TheObscura, Parafright]) given a player-applied Vulnerable 3 and killed: powers go ['illusion', 'minion', 'vulnerable'] -> ['illusion', 'minion'] with the corpse still in `enemies` and `is_dead` True. That is IllusionPower.cs:59-66 exactly -- the non-temporary Debuff IS stripped, the two Buffs are kept. The `is_temporary` stand-in for the absent ITemporaryPower marker is unchanged and remains the one approximation here. NOT CLOSED: nothing -- this entry carried no residue beyond the marker note.  The text it replaced read: NARROWED 2026-07-27. THE HOOK NOW EXISTS AND THIS POWER IMPLEMENTS IT: `hooks.should_power_be_removed_on_death` is consulted by `_strip_powers_after_death` (cmds.py:67-83, called from the real-death arm at cmds.py:50), and `IllusionPower.should_power_be_removed_on_death` (powers.py:1647-1656) reproduces IllusionPower.cs:59-66 -- keep buffs, drop non-temporary debuffs -- with `getattr(power, 'is_temporary', False)` standing in for the still-absent ITemporaryPower marker. WHAT REMAINS is that it is unreachable for the case it was written for: an Illusion's own death takes the PREVENTION arm (powers.py:1671 `should_die` -> False), which never calls `_strip_powers_after_death`. So the LIVE debuff half is unchanged -- an Eye with Teeth given Vulnerable 3 and killed still revives holding it. VERIFIED by reading cmds.py:30-83 and powers.py."
     },
     "AfterApplied": {
       "maps_to": "powers.py:1562-1564 IllusionPower.__init__",

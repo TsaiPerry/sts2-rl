@@ -27,7 +27,7 @@ class LetterOpener(Relic):
         super().__init__()
         self._skills_this_turn = 0
 
-    def on_player_turn_start(self, player: PlayerCombatState) -> None:
+    def after_side_turn_start(self, player: PlayerCombatState) -> None:
         self._skills_this_turn = 0
 
     def on_card_played(self, card: Card,

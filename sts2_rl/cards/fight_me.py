@@ -42,5 +42,6 @@ class FightMeCard(Card):
                 break
             DamageCmd.deal(ctx.hooks, target, self._damage, dealer=ctx.player, card=self)
         StrengthCmd.apply(ctx.hooks, ctx.player, self._strength, card=self)
-        if not target.is_gone:
-            StrengthCmd.apply(ctx.hooks, target, self._enemy_strength, card=self)
+        # FightMe.cs:41 — the enemy's Strength is as unguarded as the SELF one
+        # on the line above; `CanReceivePowers` is the only gate.
+        StrengthCmd.apply(ctx.hooks, target, self._enemy_strength, card=self)

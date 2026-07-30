@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\bone_tea.py",
-    "sha256": "2f0231e12edbedddd9f4dc5c3dc6b559d01b90d43fef5ab56ade54f0a4e1912b"
+    "sha256": "67a38777b10d88d6f9caec173abf4b711e6ba59d8221c08f331a74b6986becdf"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
+      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     }
   ],
@@ -64,8 +64,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): C# upgrades the opening hand with CardCmd.Upgrade, which SKIPS any card whose IsUpgradable is false (BoneTea.cs:53-56); the sim calls the unguarded Card.upgrade() (bone_tea.py:34-35)",
-      "verdict": "gap",
-      "issue": "MECHANISM: CardCmd.Upgrade(IEnumerable, style) guards each card with `if (!card.IsUpgradable)` and skips it; IsUpgradable is `CurrentUpgradeLevel < MaxUpgradeLevel` (CardModel.cs:785-789). Card.upgrade() in the sim (cards/base.py:146-147) is a bare `self.upgrade_level += 1` with no guard, and bone_tea.py:34-35 loops the whole hand through it -- unlike relic/bellows, whose otherwise identical upgrade-the-opening-hand port DOES check `card.is_upgradable`. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes.py batch2): a hand of [strike, dazed, burn] comes out at upgrade_level [1, 1, 1] where C# gives [1, 0, 0]. An executed census puts 35 of 203 ported cards at max_upgrade_level 0 (18 Curse, 14 Status, 3 Quest), and statuses reach the opening hand routinely -- relic/blessed_antler, audited in this very batch, shuffles three Dazed into the turn-1 draw pile, and Bone Tea fires post-draw. The divergence is not cosmetic: conformance/runner.py:618 compares the deck as (id, upgrade_level) pairs against the save, and conformance/combat_driver.py:34 renders the '+' suffix from the same field. Bone Tea is obtainable from the ported Tea Master event. CLUSTER: this is the second instance of PROMPT.md bug class 14 in two batches (relic/astrolabe was the first), so it was swept -- py audit/tools/relic_probes.py sweep-upgrade finds SEVEN unguarded .upgrade() call sites across six relics: _eggs.py (x2), astrolabe, bone_tea, burning_sticks, dusty_tome, neows_talisman. The _eggs pair is dormant (the egg relics filter to Attack/Skill/Power and every level-0 card is Curse/Status/Quest); the rest are unaudited and listed in .superpowers/sdd/content-relic-sweeps.md."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `CardCmd.upgrade(hooks, card)` exists (cmds.py) and is CardCmd.cs:265-290's per-card body: the verb sits inside `if (!IsEnding)` and skips any card whose `IsUpgradable` is false, i.e. `CurrentUpgradeLevel < MaxUpgradeLevel` (CardModel.cs:785-789). 35 of the 203 ported cards are at MaxUpgradeLevel 0 (18 Curse, 14 Status, 3 Quest), and C# THROWS if CurrentUpgradeLevel is ever set above MaxUpgradeLevel (CardModel.cs:773-776) -- so the bare `card.upgrade()` was producing a state the source treats as impossible, and one conformance compares against the save as an (id, upgrade_level) pair. bone_tea.py loops the opening hand through it, passing `self.hooks` so the IsEnding guard is live. EXECUTED: a hand of [strike, dazed, burn] comes out at [1, 0, 0] where it used to be [1, 1, 1].  Pinned by test/test_procure_and_upgrade_verbs.py.  NOT CLOSED: the cluster this entry named is now empty except for the two `_eggs.py` sites, which its own text records as DORMANT (the egg relics filter to Attack/Skill/Power, and every level-0 card is Curse/Status/Quest) and burning_sticks/dusty_tome, which are separate records.  The text it replaced read: MECHANISM: CardCmd.Upgrade(IEnumerable, style) guards each card with `if (!card.IsUpgradable)` and skips it; IsUpgradable is `CurrentUpgradeLevel < MaxUpgradeLevel` (CardModel.cs:785-789). Card.upgrade() in the sim (cards/base.py:146-147) is a bare `self.upgrade_level += 1` with no guard, and bone_tea.py:34-35 loops the whole hand through it -- unlike relic/bellows, whose otherwise identical upgrade-the-opening-hand port DOES check `card.is_upgradable`. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes.py batch2): a hand of [strike, dazed, burn] comes out at upgrade_level [1, 1, 1] where C# gives [1, 0, 0]. An executed census puts 35 of 203 ported cards at max_upgrade_level 0 (18 Curse, 14 Status, 3 Quest), and statuses reach the opening hand routinely -- relic/blessed_antler, audited in this very batch, shuffles three Dazed into the turn-1 draw pile, and Bone Tea fires post-draw. The divergence is not cosmetic: conformance/runner.py:618 compares the deck as (id, upgrade_level) pairs against the save, and conformance/combat_driver.py:34 renders the '+' suffix from the same field. Bone Tea is obtainable from the ported Tea Master event. CLUSTER: this is the second instance of PROMPT.md bug class 14 in two batches (relic/astrolabe was the first), so it was swept -- py audit/tools/relic_probes.py sweep-upgrade finds SEVEN unguarded .upgrade() call sites across six relics: _eggs.py (x2), astrolabe, bone_tea, burning_sticks, dusty_tome, neows_talisman. The _eggs pair is dormant (the egg relics filter to Attack/Skill/Power and every level-0 card is Curse/Status/Quest); the rest are unaudited and listed in .superpowers/sdd/content-relic-sweeps.md."
     },
     {
       "what": "N1: `combats_left` is never reset at a combat boundary and C# never resets it either",

@@ -18,7 +18,7 @@ class VeryHotCocoa(Relic):
 
     ENERGY = 4
 
-    def on_player_turn_started(self, player: PlayerCombatState) -> None:
+    def after_side_turn_start(self, player: PlayerCombatState) -> None:
         if self.turn <= 1:
             from ..cmds import EnergyCmd
             EnergyCmd.gain(self.hooks, player, self.ENERGY)

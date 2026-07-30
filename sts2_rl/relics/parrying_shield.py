@@ -26,12 +26,18 @@ class ParryingShield(Relic):
         # the turn-end card effects, so block Plating just added counts.
         if player.block < self.BLOCK_THRESHOLD:
             return
-        living = self.living_enemies()
-        if not living:
+        # ParryingShield.cs:28 — RunState.Rng.CombatTargets.NextItem over
+        # `HittableEnemies`, not "the enemies that are not gone". The shield
+        # fires at every player turn end, i.e. straight after the player's own
+        # attacks, which is exactly when a creature sits alive-but-unhittable
+        # mid-revival; aiming at one lost the 6 damage AND drew the index over
+        # a list one longer than the game's, desyncing CombatTargets for the
+        # rest of the fight.
+        candidates = self.hittable_enemies()
+        if not candidates:
             return
         from ..cmds import DamageCmd
-        # ParryingShield.cs: RunState.Rng.CombatTargets.NextItem(HittableEnemies).
-        target = self.combat.combat_rng.targets.choice(living)
+        target = self.combat.combat_rng.targets.choice(candidates)
         DamageCmd.deal(
             self.hooks, target, self.DAMAGE,
             dealer=player, props=DamageProps.NON_CARD_UNPOWERED,

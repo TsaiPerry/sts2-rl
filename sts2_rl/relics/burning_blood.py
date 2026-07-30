@@ -12,7 +12,11 @@ class BurningBlood(Relic):
 
     HEAL = 6
 
-    def on_combat_end(self, player_won: bool) -> None:
-        if player_won and not self.player.is_dead:
+    def on_combat_victory(self) -> None:
+        # BurningBlood.cs:16 is AfterCombatVictory, which only the victory path
+        # dispatches (CombatManager.cs:999) -- so no `player_won` test. The
+        # `IsDead` guard (:18) is the source's own and stays, even though
+        # ReviveBeforeCombatEnd (:986) has already healed the owner to 1.
+        if not self.player.is_dead:
             from ..cmds import CreatureCmd
             CreatureCmd.heal(self.hooks, self.player, self.HEAL)

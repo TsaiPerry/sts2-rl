@@ -96,6 +96,16 @@ class Monster(Creature):
         self.performed_first_move = False
 
     @property
+    def has_rolled_a_move(self) -> bool:
+        """False only while the creature still holds `MonsterModel.NextMove`'s
+        initial `new MoveState()` — UNSET_MOVE (MonsterModel.cs:239,
+        MoveState.cs:42-45), i.e. an enemy-side spawn that
+        `CombatManager.AfterCreatureAdded`'s `CurrentSide == Player` gate
+        declined to roll. Hand-rolled monsters pick their move in __init__ and
+        have no such window, so the default is True."""
+        return True
+
+    @property
     def current_intent(self) -> Intent:
         raise NotImplementedError
 
@@ -142,6 +152,38 @@ class Encounter:
     # None on both = use the room-type range (rewards.GOLD_REWARD_RANGES).
     min_gold: int | None = None
     max_gold: int | None = None
+    # `EncounterModel.Slots` — the NAMED row this encounter's creatures occupy,
+    # in display order. Only encounters whose summons must land at a particular
+    # position declare one (FabricatorNormal.cs:19, OvicopterNormal.cs:16); an
+    # empty row means "no slot rule", which is what every other encounter has,
+    # and then a spawn simply appends.
+    slots: tuple[str, ...] = ()
+    # The slot each of `monster_classes` is seeded into, positionally — the
+    # `(MonsterModel, string?)` pairs `GenerateMonsters` returns
+    # (FabricatorNormal.cs:46-49, OvicopterNormal.cs:36-39). None = unslotted.
+    monster_slots: tuple[str | None, ...] = ()
+
+    def get_next_slot(self, combat) -> str:
+        """`EncounterModel.GetNextSlot` (EncounterModel.cs:245-248) —
+        `Slots.FirstOrDefault(s => Enemies.All(c => c.SlotName != s),
+        string.Empty)`.
+
+        Note the default: the EMPTY STRING, not null. A caller handed `""` (the
+        row is full) passes it straight to CreatureCmd.Add, and `""` is not in
+        Slots, so `Slots.IndexOf` returns -1 and the creature sorts to the FRONT.
+        The Fabricator never reaches it because CanFabricate caps the bots at 4,
+        but the value is reproduced rather than smoothed over.
+        """
+        occupied = {c.slot_name for c in combat.enemies}
+        return next((s for s in self.slots if s not in occupied), "")
+
+    def last_free_slot(self, combat) -> str | None:
+        """`Slots.LastOrDefault(s => Enemies.All(c => c.SlotName != s))`
+        (Ovicopter.cs:87) — the OTHER end of the row, and with no default
+        argument, so a full row yields None and the caller's `if (text != null)`
+        skips the spawn entirely (Ovicopter.cs:88)."""
+        occupied = {c.slot_name for c in combat.enemies}
+        return next((s for s in reversed(self.slots) if s not in occupied), None)
 
     @property
     def entry(self) -> str:
@@ -155,4 +197,9 @@ class Encounter:
     def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
         # Fixed composition draws no RNG, so the parity selection_rng (when
         # present) is simply unused here.
-        return [cls(hooks, rng) for cls in self.monster_classes]
+        monsters = [cls(hooks, rng) for cls in self.monster_classes]
+        # `GenerateMonstersWithSlots` hands CombatState.CreateCreature the slot
+        # alongside the model, so a seeded monster arrives already seated.
+        for monster, slot in zip(monsters, self.monster_slots):
+            monster.slot_name = slot
+        return monsters

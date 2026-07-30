@@ -1,0 +1,111 @@
+{
+  "unit": "enchantment/adroit",
+  "game_source": {
+    "path": "src\\Core\\Models\\Enchantments\\Adroit.cs",
+    "sha256": "17031ea03ed27e9459ceab336f45d10b338ecebef5b86d4b35e8b7bd3dddf95f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\enchantments.py",
+    "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardSelectCmd.cs",
+      "sha256": "951f39b352d758559ae5de718183c2dfc05d31fb9e5ea24d99ad85d19b3f79b4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/EnchantmentModel.cs",
+      "sha256": "f4efb3d8568fedf92c4bd5ec3243d09c5af7a108426c6d3c53fe191b9849efd9",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/Kifuda.cs",
+      "sha256": "ee7f4faccf7ed86511541baa4d60f71e4444d6c8d098c2fd52864053505e9574",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/kifuda.py",
+      "sha256": "bdd4cb3f0c16c45b4333fd19763e120289bc80502b3800092caeea52b6c0bf0d",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "HasExtraCardText": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Adroit.cs:13 \u2014 a `true` consumed only by EnchantmentModel.DynamicExtraCardText (EnchantmentModel.cs:60-81) and the card-UI nodes. Presentation only, out of scope per the shared contract's presentation/animation waiver."
+    },
+    "ShowAmount": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Adroit.cs:15 \u2014 same disposition as Sharp's ShowAmount: read only by the card-text/UI path, no game-state reader."
+    },
+    "CanonicalVars": {
+      "maps_to": "AdroitEnchantment's use of `self.amount` at the single BlockCmd.apply call site (sts2_rl/enchantments.py). Adroit.cs:17 declares exactly one var, `new BlockVar(0m, ValueProp.Move)` \u2014 base value 0 with the props that matter. Two things follow and both are ported. (1) The props are ValueProp.Move, i.e. an ORDINARY block gain, so every block modifier applies: BlockCmd.apply's `props` defaults to ValueProp.MOVE (sts2_rl/cmds.py), which is the same value, so Dexterity/Frail/Fasten and the Move-only family (Vambrace, Pael's Legion, Unmovable) all run over Adroit's block exactly as they do over a Defend's. This is the opposite disposition from FeelNoPain (ValueProp.Unpowered, fixed this round) and it is declared, not defaulted. (2) The BASE value is 0 and is never read as 0 \u2014 RecalculateValues overwrites it before any consumer, which is that hook's entry.",
+      "verdict": "faithful"
+    },
+    "RecalculateValues": {
+      "maps_to": "AdroitEnchantment.on_play reads `self.amount` directly (sts2_rl/enchantments.py). Adroit.cs:24-27 is `DynamicVars.Block.BaseValue = base.Amount`, run by EnchantmentModel whenever the amount changes, so `DynamicVars.Block` is definitionally equal to Amount at every read. The sim collapses the var into the field it mirrors rather than carrying a shadow copy. RECORDED BECAUSE THE COLLAPSE HIDES A CHOICE: the block is the ENCHANTMENT's amount (3 from Kifuda), NOT the enchanted card's printed Block and NOT a scaling of it \u2014 an Adroit'd Strike gains 3 block even though Strike prints none, and an Adroit'd Defend gains its own 5 plus 3. Pinned by test/test_false_premise_stubs.py::test_adroit_grants_block_when_its_card_is_played (a Strike, base block 0, ends the play at exactly +3).",
+      "verdict": "faithful"
+    },
+    "OnPlay": {
+      "maps_to": "AdroitEnchantment.on_play (sts2_rl/enchantments.py) -> `BlockCmd.apply(hooks, combat.player, self.amount, card=card)`. Adroit.cs:19-22 is `CreatureCmd.GainBlock(base.Card.Owner.Creature, base.DynamicVars.Block, cardPlay)`, whose BlockVar overload (CreatureCmd.cs:617-620) forwards `blockVar.BaseValue` and `blockVar.Props` to the main GainBlock (:635) \u2014 so it is a completely ordinary block gain with the full hook pipeline over it, not a direct GainBlockInternal. Three details are ported and each is load-bearing: (a) POSITION \u2014 EnchantmentModel.OnPlay is a DIRECT in-loop call from CardModel.cs:1937-1945, after the card's own OnPlay and before Hook.AfterCardPlayed, which is where sts2_rl/combat.py:792-796 calls it; it is not a hook and is not dispatched. (b) COUNT \u2014 that call sits inside the per-Replay loop, so a Throwing-Axe-doubled Adroit card gains the block TWICE; the sim's call is inside the same `for play_index in range(play_count)` loop. (c) SOURCE CARD \u2014 `cardPlay` is forwarded so that `cardPlay?.Card` reaches Hook.BeforeBlockGained / Hook.ModifyBlock / Hook.AfterModifyingBlockAmount (CreatureCmd.cs:642-646); the sim passes `card=card` for the same reason, which is what lets a card-keyed block listener see the play that caused the gain. The `Owner.Creature` indirection is single-player in the sim (`combat.player`).",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "reachability: granted by Kifuda (Kifuda.cs:24-37), a Shop-rarity relic with HasUponPickupEffect, at amount 3 \u2014 a literal `_adroitAmount = 3` (Kifuda.cs:14) passed as `CardCmd.Enchant(..., 3m)` (:35), NOT the CardsVar(3) that sizes the screen. `grep -rn 'Adroit' src/Core` finds the enchantment, Kifuda, and nothing else, so this is the only grant in the decompiled game.",
+      "maps_to": "sts2_rl/relics/kifuda.py's after_obtained \u2014 filter `run.deck` by `AdroitEnchantment.can_enchant`, then a 0..3 non-cancelable select, then attach at amount 3. The filter is the right one: CardSelectCmd.FromDeckForEnchantment (CardSelectCmd.cs:547-551) builds its candidate list as `PileType.Deck.GetPile(player).Cards.Where(c => enchantment.CanEnchant(c))`, i.e. the enchantment's own CanEnchant over the Deck pile and nothing more (the `additionalFilter` overload is passed null from Kifuda's call site). Pinned by test/test_false_premise_stubs.py::test_pickup_enchants_three_deck_cards[kifuda-adroit-3], which asserts three enchanted deck cards all carrying `adroit` at amount 3. Closing this was relic/kifuda/g1 in round 7 \u2014 the port was a documented no-op whose stated premise (\"the sim has no enchantments\") was false, and the enchantment itself did not exist until that entry was worked.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the filter is the BASE CanEnchant and nothing else: Adroit declares no CanEnchantCardType override, so unlike Sharp (Attacks) or Royally Approved (Attacks+Skills) it will take a POWER as happily as an Attack",
+      "maps_to": "AdroitEnchantment inherits Enchantment.can_enchant unchanged (sts2_rl/enchantments.py) \u2014 the sim's port of EnchantmentModel.CanEnchant (EnchantmentModel.cs:273-294), whose three surviving clauses are: `(uint)(type - 4) <= 2u` rejecting CardType 4/5/6 = Status/Curse/Quest; an Unplayable card whose pile is PileType.Deck; and an already-enchanted card (the `IsStackable` disjunct is dead for Adroit, which does not override IsStackable, so any existing enchantment blocks). The sim's one approximation is the same one the whole module shares and is recorded on the shared contract: the pile-qualified Unplayable test is an unconditional `not card.is_playable`, equal in practice because every ported grant enchants a DECK card. NOTE THE ABSENCE DELIBERATELY: writing an ATTACK-only filter here by analogy with Sharp \u2014 the file Adroit most resembles \u2014 would have been the easy error, and the source has no such clause.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "self-amplification: OnPlay forwards the enchanted card itself as the block's source card, and Hook.ModifyBlock folds the SOURCE CARD's enchantment in before either listener loop (Hook.cs:1315-1320) \u2014 so Adroit's own gain passes through Adroit's own block-modifier hooks",
+      "maps_to": "harmless in both engines, and worth pinning so it stays that way. Adroit implements neither EnchantBlockAdditive nor EnchantBlockMultiplicative, so the fold is +0/x1: in the sim, `BlockCmd.apply` reads `card.enchantment.enchant_block_additive` (sts2_rl/cmds.py) and AdroitEnchantment inherits the base no-ops (return 0 / return 1, sts2_rl/enchantments.py:72-76). One enchantment per card (the CanEnchant clause above) means no other enchantment can ever be the one folded in here either, so the composition Nimble-plus-Adroit is unreachable by construction rather than by luck.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the combat-over bail: GainBlock returns 0 before ANY hook when `CombatManager.Instance.IsOverOrEnding` (CreatureCmd.cs:637-640), and Adroit's slot is precisely where that bites \u2014 its OnPlay runs after the card's own OnPlay, so a lethal Adroit'd Strike reaches it with the combat already ending",
+      "maps_to": "BlockCmd.apply's first statement is `if is_over_or_ending(hooks): return 0` (sts2_rl/cmds.py), which is that bail, so the sim also skips the gain and every listener under it. This is not an Adroit-specific fix \u2014 it is the block pipeline's, and it is cited here because Adroit is the site that makes it observable: without it the sim would fire BeforeBlockGained/ModifyBlock/AfterModifyingBlockAmount on a corpse's play. The block VALUE itself is unobservable after a win, which is why the hook dispatch, not the number, is what this guard pins.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "FOUR-VERB COVERAGE (enchant / upgrade+downgrade / transform / copy), stated explicitly so the hole cannot reopen silently \u2014 the same table Sharp's record carries, evaluated for this unit",
+      "maps_to": "(1) ENCHANT: the reachability guard and the CanEnchant guard above. (2) UPGRADE / DOWNGRADE: no-ops for this unit. Adroit does not override modify_card, so it is not one of the four enchantments that mutate a static card property ('goopy', 'souls', 'steady', 'tezcataras_ember' \u2014 the executed enumeration is on Sharp's record) and therefore nothing it does can be undone by the card rebuild that upgrade()/downgrade() performs. Round 7 rewrote that rebuild (cards/base.py's `downgrade`, closing creature_card_cmds/step52) and it re-runs `enchantment.modify_card()` at the end, so even the four are safe now; Adroit reads `self.amount` live off the still-attached enchantment at play time and is untouched either way. (3) TRANSFORM: faithful, both engines DROP the enchantment \u2014 CardCmd.Transform (CardCmd.cs:369-451) removes the original from its pile (:400) and adds a freshly built replacement (:437/440) without ever naming Enchantment, and both AfterTransformedFrom and AfterTransformedTo (CardModel.cs:1625-1631) are empty virtuals; the sim's run.transform_card and CardCmd.transform_to_random build the replacement with `make_card(...)`, which carries none. (4) COPY: faithful, both engines KEEP it \u2014 CardModel.DeepCloneFields re-attaches a `ClonePreservingMutability()` copy (CardModel.cs:1204-1209), and cards/base.py's `create_clone` does the same through `attach_internal` (the EnchantInternal form: no CanEnchant test, no ModifyCard, per EnchantmentModel.cs:350-353). Adroit is a copy-relevant enchantment rather than a copy-neutral one, because its whole effect is OnPlay and a copy gets played. EXECUTING THAT CLAIM FOUND A DEFECT IN THE CLONE ITSELF, and it is fixed: `create_clone` nulled the copy's combat back-reference, but `CardModel.CombatState` (CardModel.cs:1017-1028) is DERIVED from `_owner` and neither DeepCloneFields nor AfterCloned (:1218-1239) touches `_owner` \u2014 AfterCloned nulls CurrentTarget, CurrentPlayIndex, DeckVersion, HasBeenRemovedFromState and the event handlers, and the owner is not on that list \u2014 so the clone reaches the combat exactly as its source does. Harmless for Sharp, which only adds damage; fatal for Adroit, whose OnPlay is `CreatureCmd.GainBlock(base.Card.Owner.Creature, ...)` and raised AttributeError on the copy. Two lines: the `clone.combat = None` is gone (the memberwise `__dict__` copy already carries it, correctly), and `Enchantment.attach_internal` now re-derives `self.combat = card.combat`, because the game's enchantment has no combat field at all and reads it off the card \u2014 so the sim's cache must follow the attachment. EXECUTED 2026-07-29: a `create_clone` of an Adroit(3) Strike, added to hand and played, gains exactly 3 block; the Defend case gains 8 (its own 5 plus the enchantment's 3). Pinned by test/test_create_clone_memberwise.py::test_clone_keeps_the_combat_back_reference.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-07-29"
+}

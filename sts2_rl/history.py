@@ -24,19 +24,43 @@ if TYPE_CHECKING:
 class HistoryEntry:
     """Base class for combat-history entries (mirrors CombatHistory entries).
 
-    turn is the combat turn the event happened on; a player turn and the
-    enemy turns that follow it share the same turn number, so events from
-    the previous enemy phase do not count as "this turn" on the player's
-    next turn.
+    turn is `CombatState.RoundNumber`, which is what every C# entry is
+    stamped with (CombatHistory.cs:40-120). A player turn and the enemy turns
+    that follow it share it, so events from the previous enemy phase do not
+    count as "this turn" on the player's next turn -- and so does an EXTRA
+    player turn, because SwitchSides' extra-turn branch bumps TurnNumber
+    without bumping RoundNumber (CombatManager.cs:1406-1418).
     """
 
     turn: int
 
 
 @dataclass
+class CardPlayStartedEntry(HistoryEntry):
+    """`CardPlayStartedEntry` — `History.CardPlaysStarted` (CombatHistory.cs:26).
+
+    A SEPARATE list from CardPlaysFinished, and the two are pushed at different
+    points inside the replay loop: started at CardModel.cs:1930, immediately
+    after Hook.BeforeCardPlayed and BEFORE `await OnPlay` (:1931); finished at
+    :1956, after the enchantment and affliction have resolved. The sim used to
+    have only the finished row, so a card auto-played from inside another card's
+    OnPlay could not see the outer play — which is exactly what Normality
+    (Normality.cs:33) and NostalgiaPower (NostalgiaPower.cs:31-42) read.
+
+    Nine C# sites read CardPlaysStarted and eleven read CardPlaysFinished, so
+    the distinction is load-bearing well beyond those two; the rest of the sim's
+    readers stay on `CardPlayedEntry` until their own entries are worked.
+    """
+
+    card: Card
+    is_auto_play: bool = False
+
+
+@dataclass
 class CardPlayedEntry(HistoryEntry):
-    """One entry per card play (mirrors CardPlayStarted/FinishedEntry). A card
-    played twice by One-Two Punch is a single play and a single entry."""
+    """`CardPlayFinishedEntry` — `History.CardPlaysFinished` (CombatHistory.cs:28),
+    pushed at CardModel.cs:1956. One entry per replay ITERATION (the push is
+    inside the loop), so a Hidden-Gem'd card records two."""
 
     card: Card
     # CardPlay.IsAutoPlay. Pael's Eye filters on it (PaelsEye.cs:155's
@@ -88,13 +112,21 @@ class CombatHistory:
 
     # ── Recorders (hook listeners) ───────────────────────────────────────
 
+    def card_play_started(self, card: Card, is_auto_play: bool = False) -> None:
+        """`History.CardPlayStarted` (CombatHistory.cs:38), pushed from
+        CardModel.cs:1930. NOT a hook — the game calls it directly, between
+        Hook.BeforeCardPlayed and OnPlay, which is why an inner auto-play sees
+        the outer play. Combat._resolve_card_play calls it at that position."""
+        self.entries.append(
+            CardPlayStartedEntry(self.combat.round_number, card, is_auto_play))
+
     def on_card_played(self, card: Card, is_auto_play: bool = False) -> None:
         self.entries.append(
-            CardPlayedEntry(self.combat.turn, card, is_auto_play))
+            CardPlayedEntry(self.combat.round_number, card, is_auto_play))
 
     def on_card_exhausted(self, card: Card,
                           caused_by_ethereal: bool = False) -> None:
-        self.entries.append(CardExhaustedEntry(self.combat.turn, card))
+        self.entries.append(CardExhaustedEntry(self.combat.round_number, card))
 
     def on_damage_received(
         self,
@@ -105,7 +137,7 @@ class CombatHistory:
         props: ValueProp = ValueProp.NONE,
     ) -> None:
         self.entries.append(
-            DamageReceivedEntry(self.combat.turn, target, amount, dealer, card)
+            DamageReceivedEntry(self.combat.round_number, target, amount, dealer, card)
         )
 
     # ── Queries ──────────────────────────────────────────────────────────
@@ -114,7 +146,7 @@ class CombatHistory:
         """Entries of the given type, optionally only from the current turn."""
         for entry in self.entries:
             if isinstance(entry, entry_type):
-                if not this_turn or entry.turn == self.combat.turn:
+                if not this_turn or entry.turn == self.combat.round_number:
                     yield entry
 
     def card_exhausted_this_turn(self) -> bool:

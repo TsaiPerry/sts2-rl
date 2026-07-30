@@ -15,7 +15,8 @@ class BlackStar(Relic):
     def modify_combat_rewards(self, run, rewards) -> None:
         from ..rooms import RoomType
 
-        if rewards.room_type != RoomType.ELITE:
+        # BlackStar.cs `room == null || room.RoomType != Elite`.
+        if rewards.room != RoomType.ELITE:
             return
         relic = run.pull_relic_from_front()
         if relic is not None:

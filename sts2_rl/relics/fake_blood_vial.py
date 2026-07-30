@@ -20,7 +20,7 @@ class FakeBloodVial(Relic):
 
     HEAL = 1
 
-    def on_player_turn_started(self, player: PlayerCombatState) -> None:
+    def on_player_turn_started_late(self, player: PlayerCombatState) -> None:
         if self.turn <= 1:
             from ..cmds import CreatureCmd
 

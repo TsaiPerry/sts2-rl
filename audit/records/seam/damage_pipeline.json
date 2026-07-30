@@ -17,7 +17,7 @@
   "sim_sources": [
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead"
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461"
     },
     {
       "path": "sts2_rl/valueprops.py",

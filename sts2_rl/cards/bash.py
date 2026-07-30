@@ -37,5 +37,7 @@ class BashCard(Card):
         from ..powers import VulnerablePower
         target = ctx.resolve_target(target_idx)
         DamageCmd.deal(ctx.hooks, target, self._damage, dealer=ctx.player, card=self)
-        if not target.is_gone:
-            PowerCmd.apply(ctx.hooks, target, VulnerablePower, self._vulnerable, applier=ctx.player)
+        # No liveness guard: C# applies this unconditionally and the only
+        # gate is `Creature.CanReceivePowers` (Creature.cs:308-322), now
+        # enforced inside PowerCmd.apply.
+        PowerCmd.apply(ctx.hooks, target, VulnerablePower, self._vulnerable, applier=ctx.player)

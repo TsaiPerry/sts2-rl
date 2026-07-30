@@ -50,7 +50,17 @@ class JossPaper(Relic):
         self.cards_exhausted += 1
         self._draw_if_threshold_met()
 
-    def on_hand_emptied(self, player: PlayerCombatState) -> None:
+    def after_player_turn_end(self, player: PlayerCombatState) -> None:
+        # JossPaper.cs:116-124 — the deferred credit is `AfterSideTurnEnd`,
+        # which Hook.AfterTurnEnd (Hook.cs:1267-1278) dispatches from
+        # CombatManager.cs:1307, AFTER FlushPlayerHand. That is what the
+        # relic's own comment (:71-75) asks for: "we want to give the resulting
+        # cards to the player after the flush occurs". The sim hung it on
+        # `on_hand_emptied` instead, a different hook that only happened to
+        # fire from inside the flush (turn_structure G16).
+        #
+        # `participants.Contains(Owner.Creature)` (:118) is the player-side
+        # test; `after_player_turn_end` IS the player side's leg of the hook.
         self.cards_exhausted += self._ethereal_pending
         self._ethereal_pending = 0
         self._draw_if_threshold_met()

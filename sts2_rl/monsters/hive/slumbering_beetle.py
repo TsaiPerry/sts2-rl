@@ -6,7 +6,6 @@ import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from ...hooks import CAT_POWER
 from ..base import Encounter, Intent, Monster, MoveType
 from ..state_machine import (
     ConditionalBranchState,
@@ -26,29 +25,6 @@ _PLATING = 15
 _SLUMBER = 3
 
 
-class _StunMoveRunner:
-    """Runs the beetle's pending stun-move body on its own stunned turn.
-
-    `CreatureCmd.Stun(creature, stunMove, nextMoveId)` (CreatureCmd.cs:884-904)
-    does not run `stunMove`: `Creature.StunInternal` (Creature.cs:524-544) hangs
-    it on a synthetic "STUNNED" MoveState, so the body is that move's PERFORM
-    body and runs on the victim's stunned turn. The sim's combat loop skips a
-    stunned enemy's move outright and has no MonsterModel listener category
-    (hook_dispatch G5), so the beetle registers this listener — in the slot
-    CombatState.IterateHookListeners gives a monster, right after its own
-    creature's Powers — and fires the body at the start of that turn."""
-
-    hook_category = CAT_POWER + 1
-
-    def __init__(self, beetle: SlumberingBeetle) -> None:
-        self.beetle = beetle
-        self.owner = beetle  # dispatch-order slot: the beetle's own creature
-
-    def on_enemy_turn_start(self, enemy: Creature) -> None:
-        if enemy is self.beetle:
-            self.beetle._run_pending_stun_move()
-
-
 class SlumberingBeetle(MachineMonster):
     """Sleeps behind Plating 15 for 3 turns (Slumber 3; unblocked damage also
     counts down a turn and wakes it stunned at 0). Awake it ROLLs OUT every
@@ -63,7 +39,6 @@ class SlumberingBeetle(MachineMonster):
         # The body handed to CreatureCmd.Stun, waiting for the stunned turn.
         self._pending_stun_move = None
         super().__init__(hooks, rng or random.Random())
-        hooks.register(_StunMoveRunner(self))
         from ...cmds import PowerCmd
         from ...powers import PlatingPower, SlumberPower
         PowerCmd.apply(hooks, self, PlatingPower, _PLATING)
@@ -119,10 +94,23 @@ class SlumberingBeetle(MachineMonster):
         if "plating" in self.powers:
             PowerCmd.remove(self._hooks, self, "plating")
 
-    def _run_pending_stun_move(self) -> None:
+    def take_turn(self, ctx: CombatCtx) -> None:
+        """Run the pending stun-move body as this turn's perform body.
+
+        `CreatureCmd.Stun(creature, stunMove, nextMoveId)` (CreatureCmd.cs:884-904)
+        does not run `stunMove`: `Creature.StunInternal` (Creature.cs:524-544)
+        hangs it on a synthetic "STUNNED" MoveState, so the body is that move's
+        PERFORM body and runs on the victim's stunned turn — inside
+        MonsterModel.PerformMove, i.e. exactly here. This used to be a
+        registered hook listener on the sim-only per-enemy `on_enemy_turn_start`
+        slot; that slot is gone (turn_structure G5), and the side-scoped hooks
+        that replaced it all fire either before every enemy has moved or after,
+        neither of which is where a move body belongs.
+        """
         body, self._pending_stun_move = self._pending_stun_move, None
         if body is not None:
             body()
+        super().take_turn(ctx)
 
     def _snore(self, ctx: CombatCtx) -> None:
         pass

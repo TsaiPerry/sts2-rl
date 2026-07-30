@@ -26,7 +26,7 @@ class FakeOrichalcum(Relic):
         super().__init__()
         self._should_trigger = False
 
-    def on_player_turn_start(self, player: PlayerCombatState) -> None:
+    def before_side_turn_start(self, player: PlayerCombatState) -> None:
         self._should_trigger = False
 
     def on_player_turn_end_very_early(self, player: PlayerCombatState) -> None:

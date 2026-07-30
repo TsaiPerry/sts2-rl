@@ -228,13 +228,15 @@ class TestSlowBehavior:
         DamageCmd.deal(cs.hooks, cs.enemy, 10, dealer=cs.player, card=card)
         assert cs.enemy.hp == before - 13  # 10 Ã— 1.3
 
-    def test_slow_counter_resets_at_owner_turn_start(self):
+    def test_slow_counter_resets_at_the_enemy_side_start(self):
+        # SlowPower.cs:52 is AfterSideTurnStart (CombatManager.cs:522), one
+        # dispatch for the whole side; the sim reset it on a per-enemy slot.
         from sts2_rl.cards import StrikeCard
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.enemy, SlowPower, 1)
         card = StrikeCard()
         cs.hooks.on_card_played(card)
-        cs.hooks.on_enemy_turn_start(cs.enemy)
+        cs.hooks.after_enemy_side_start()
         before = cs.enemy.hp
         DamageCmd.deal(cs.hooks, cs.enemy, 10, dealer=cs.player, card=card)
         assert cs.enemy.hp == before - 10

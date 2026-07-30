@@ -21,5 +21,8 @@ class PetrifiedToad(Relic):
         # plain-pass listener has had its combat-start slot, which is what
         # keeps it behind Belt Buckle's belt-widening regardless of the order
         # the two relics were acquired in.
-        from ..potions import PotionShapedRock
-        self.player.add_potion(PotionShapedRock())
+        # PetrifiedToad.cs:19 is `PotionCmd.TryToProcure<PotionShapedRock>`,
+        # which carries the Sozu veto and the AfterPotionProcured event that
+        # Belt Buckle spends its Dexterity on.
+        from ..potions import PotionShapedRock, try_to_procure
+        try_to_procure(self.hooks, self.player, PotionShapedRock())

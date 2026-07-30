@@ -36,22 +36,22 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     }
   ],
@@ -64,7 +64,7 @@
     "AfterPlayerTurnStart": {
       "maps_to": "on_player_turn_started (festive_popper.py:21-28)",
       "verdict": "gap",
-      "issue": "Rollup of guards G1, G2 and G3 per binding rule 4. The effect's numbers are right -- DamageVar(9m, ValueProp.Unpowered) (FestivePopper.cs:17) vs DAMAGE = 9 at DamageProps.NON_CARD_UNPOWERED (festive_popper.py:19, :27), no AscensionHelper branch in the file, dealer = the player on both sides, turn 1 only -- but the hook slot is a step late (G1), the enemy set is built from a weaker predicate (G2), and the win check the source performs after the whole turn-start sequence is hand-rolled inline instead (G3)."
+      "issue": "STILL OPEN at G2 and G3. G1, the slot, is CLOSED: FestivePopper.cs declares AfterPlayerTurnStart and `on_player_turn_started` is now that hook alone -- the AfterSideTurnStart listeners it used to share a registration-ordered walk with are on the new `after_side_turn_start`, fired strictly later. WHAT REMAINS: G2, the enemy set built from a weaker predicate, and G3, the hand-rolled inline win check.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: Rollup of guards G1, G2 and G3 per binding rule 4. The effect's numbers are right -- DamageVar(9m, ValueProp.Unpowered) (FestivePopper.cs:17) vs DAMAGE = 9 at DamageProps.NON_CARD_UNPOWERED (festive_popper.py:19, :27), no AscensionHelper branch in the file, dealer = the player on both sides, turn 1 only -- but the hook slot is a step late (G1), the enemy set is built from a weaker predicate (G2), and the win check the source performs after the whole turn-start sequence is hand-rolled inline instead (G3)."
     }
   },
   "guards": [

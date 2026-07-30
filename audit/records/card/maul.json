@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\maul.py",
-    "sha256": "c16db597006c2f9e5f4e0a1cffbe25d567a4a13eea0651970e5c4b5ad1b604bc"
+    "sha256": "12651d7f2622dc19c864c96316593829d7dd6bab8bddc207a39d7dc7c6c23a34"
   },
   "extra_sources": [
     {
@@ -16,27 +16,27 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/reflections.py",
-      "sha256": "80a1def7cd4014f2b74098038e1845bde9fda4874f0ea95fff7b775630cdfb05",
+      "sha256": "944bc8f2a1aabee7893510cd9663ca48d02770011227912a55d12f446f3b233a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/welcome_to_wongos.py",
-      "sha256": "bb654fc90b58c17ee0573381dc1859c91e72cf6a89e97f8934db58801612a946",
+      "sha256": "12d10fe0120fd1db28b8ded9f938c5246e3b466faa3127a84d8aae91c5b0d92f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     }
   ],
@@ -63,8 +63,8 @@
     },
     "AfterDowngraded": {
       "maps_to": "NOT PORTED -- MaulCard has no downgrade hook, and `downgrade()` therefore DESTROYS the accumulated buff (maul.py)",
-      "verdict": "gap",
-      "issue": "`AfterDowngraded()` calls base and then `DynamicVars.Damage.BaseValue += ExtraDamageFromMaulPlays` (Maul.cs:66-70) -- i.e. after `DowngradeInternal` has rebuilt the damage var from canonical (CardModel.cs:2140) it RE-ADDS the total this Maul has accumulated from Maul plays this combat, which the card tracks in a private field written by `BuffFromMaulPlay` (72-76). The sim accumulates into `_damage` directly (maul.py:306) and tracks nothing, so `Card.downgrade`'s `_init_vars` rebuild (cards/base.py:150-165) resets `_damage` to 5 and the accumulated increase is lost. Observable: play three upgraded Mauls (damage 6 -> 12), then have one downgraded -- the game leaves it at 5 + 6 accumulated = 11, the sim drops it to 5. LIVE: `downgrade()` is reachable from `powers.py:3171` (DampenPower downgrades every upgraded card in AllCards, IN COMBAT, which is exactly when the accumulation exists) as well as from `events/reflections.py:40` and `events/welcome_to_wongos.py:90`. This is a DIFFERENT downgrade defect from the five sticky-keyword cards -- there the flag survives when it should not, here a value is destroyed when it should not be -- so `card_probes.py downgrade` does not catch it: the probe compares a FRESH card against upgrade+downgrade, and Maul's loss only shows after a play. RATIONALE CITES THIRD FILES (rule 7): cards/base.py, CardModel.cs and powers.py are not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `AfterDowngraded` EXISTS NOW. `Card._after_downgraded` (cards/base.py) is CardModel.cs:2150-2155, dispatched from `Card.downgrade` between the canonical rebuild and `Enchantment?.ModifyCard()` exactly as CardModel.cs:2144 does, and this card carries the override its C# does: a `_extra_damage` tally, kept as a CLASS default rather than an `_init_vars` line precisely because `_init_vars` is what the downgrade re-runs -- the mirror of C# holding it in a private field that `DowngradeInternal` does not touch. Pinned by test/test_downgrade_rebuild.py. NOT CLOSED: nothing at this site; the seam's remaining residue is listed on creature_card_cmds/step52.  Maul's accumulation is per-PLAY and cross-card: `_buff_from_maul_play` (maul.py) is Maul.cs:72-76, where the damage bump and the tally are one statement, and OnPlay calls it on every Maul in AllCards (Maul.cs:51-56). Executed: an upgraded Maul played twice reaches 6+4 and downgrades to 5+4, where it used to drop to 5.  The text it replaced read: `AfterDowngraded()` calls base and then `DynamicVars.Damage.BaseValue += ExtraDamageFromMaulPlays` (Maul.cs:66-70) -- i.e. after `DowngradeInternal` has rebuilt the damage var from canonical (CardModel.cs:2140) it RE-ADDS the total this Maul has accumulated from Maul plays this combat, which the card tracks in a private field written by `BuffFromMaulPlay` (72-76). The sim accumulates into `_damage` directly (maul.py:306) and tracks nothing, so `Card.downgrade`'s `_init_vars` rebuild (cards/base.py:150-165) resets `_damage` to 5 and the accumulated increase is lost. Observable: play three upgraded Mauls (damage 6 -> 12), then have one downgraded -- the game leaves it at 5 + 6 accumulated = 11, the sim drops it to 5. LIVE: `downgrade()` is reachable from `powers.py:3171` (DampenPower downgrades every upgraded card in AllCards, IN COMBAT, which is exactly when the accumulation exists) as well as from `events/reflections.py:40` and `events/welcome_to_wongos.py:90`. This is a DIFFERENT downgrade defect from the five sticky-keyword cards -- there the flag survives when it should not, here a value is destroyed when it should not be -- so `card_probes.py downgrade` does not catch it: the probe compares a FRESH card against upgrade+downgrade, and Maul's loss only shows after a play. RATIONALE CITES THIRD FILES (rule 7): cards/base.py, CardModel.cs and powers.py are not hashed by this record."
     }
   },
   "guards": [
@@ -74,6 +74,6 @@
       "rationale": "The sim has the same order (maul.py:298-306): the two hits use the pre-buff `_damage`, then every Maul including this one is raised. Getting this backwards would make a single Maul deal 5 then 6."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

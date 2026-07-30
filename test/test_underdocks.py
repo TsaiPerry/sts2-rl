@@ -142,13 +142,23 @@ class TestCultists:
         assert 51 <= cs.enemies[1].max_hp <= 53
 
     def test_incantation_then_scaling_strikes(self):
+        # MOVED 2026-07-29 (round 7, power/ritual/AfterApplied). It used to
+        # assert strength 2 / 5 after the FIRST turn end and 4 / 10 after the
+        # second. RitualPower.cs:36-43 sets WasJustAppliedByEnemy from
+        # `base.Owner.IsEnemy` alone, so a monster that buffs ITSELF skips its
+        # first AfterSideTurnEnd -- and every ported Ritual source is exactly
+        # that. The whole ladder therefore shifts one turn later, and the
+        # turn-2 strikes land unbuffed.
         cs = fresh_encounter(CULTISTS_NORMAL)
         calc, damp = cs.enemies
-        cs.end_turn()  # both cast INCANTATION; Ritual triggers at turn end
+        cs.end_turn()  # both cast INCANTATION; the first Ritual is SKIPPED
         assert cs.player.hp == 80
+        assert calc.strength == 0 and damp.strength == 0
+        cs.end_turn()  # dark strikes at base: 9 + 1, then Ritual fires
+        assert cs.player.hp == 80 - 9 - 1
         assert calc.strength == 2 and damp.strength == 5
-        cs.end_turn()  # dark strikes: (9+2) + (1+5), then Ritual again
-        assert cs.player.hp == 80 - 11 - 6
+        cs.end_turn()  # now buffed: (9+2) + (1+5), then Ritual again
+        assert cs.player.hp == 80 - 9 - 1 - 11 - 6
         assert calc.strength == 4 and damp.strength == 10
 
 

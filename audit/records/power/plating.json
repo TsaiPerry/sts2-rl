@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -46,17 +46,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
@@ -71,7 +71,7 @@
     },
     {
       "path": "sts2_rl/monsters/hive/slumbering_beetle.py",
-      "sha256": "3626d45cbc1eb2ba4a3452cf72e041f25be036f7b78c80459adfdb96220c5ec4",
+      "sha256": "2a264eecf850f49e270a01a06b253908a72aa4b314bed90f9d6f9ccac8745ef2",
       "side": "sim"
     },
     {
@@ -91,12 +91,12 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "72840c98dd4eb14b3f77142dc08078d535fb5f223a14b5d7fea981010502b1a7",
+      "sha256": "06f9d38ecefba5bb61280da2dae7e92350e163a00481f23bfe8443b722327ad8",
       "side": "sim"
     },
     {
@@ -132,18 +132,18 @@
     },
     "BeforeSideTurnStart": {
       "maps_to": "powers.py:1054-1056 PlatingPower.on_combat_start (hooks.py:265-269, combat.py:208)",
-      "verdict": "gap",
-      "issue": "SLOT. C# uses the ROUND-1 arm of a turn-start hook as a stand-in for combat start -- PlatingPower.cs:41-56 fires only when side == Player, the owner is NOT a player, and combatState.RoundNumber <= 1, and its own comment says 'We want enemies that start with Plating to also start combat with block'. Dispatched at CombatManager.cs:458, i.e. AFTER Creature.BeforeTurnStart (:453) and BEFORE the block clear at :496. The sim instead uses the real combat-start hook, on_combat_start (combat.py:208, immediately before start_turn at :209). DORMANT: the two points are adjacent, the enemy's block is not cleared at the player's turn start on either side, and the round-1-only condition is enforced on both (C# by RoundNumber, the sim by on_combat_start firing once). What differs is the sim grants the block one dispatch EARLIER, so any on_combat_start listener registered after this power sees the enemy already blocked where the game shows it unblocked. Named trigger: a combat-start relic or power that reads an enemy's block -- none is ported. Reachable owners are plentiful (monsters/underdocks/sewer_clam.py:30, monsters/underdocks/lagavulin_matriarch.py:43, monsters/hive/slumbering_beetle.py:41, monsters/hive/flail_knight.py:87, monsters/glory/frog_knight.py:42)."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. PlatingPower's round-1 arm now lives on the real hook. `before_side_turn_start` is `Hook.BeforeSideTurnStart` (CombatManager.cs:458) -- fired at the top of PlayerCombatState.start_turn, after the per-turn card-cost reset and before the block clear -- and PlatingPower.cs:41-56's guards are reproduced there (owner not a player, RoundNumber <= 1). The sim's `on_combat_start` implementation is gone, so a combat-start listener that reads an enemy's block now sees it bare, as the game shows it. EXECUTED: test/test_turn_start_split.py::test_plating_grants_its_round_one_block_at_the_turn_start_not_combat_start.  The gap it replaced read: SLOT. C# uses the ROUND-1 arm of a turn-start hook as a stand-in for combat start -- PlatingPower.cs:41-56 fires only when side == Player, the owner is NOT a player, and combatState.RoundNumber <= 1, and its own comment says 'We want enemies that start with Plating to also start combat with block'. Dispatched at CombatManager.cs:458, i.e. AFTER Creature.BeforeTurnStart (:453) and BEFORE the block clear at :496. The sim instead uses the real combat-start hook, on_combat_start (combat.py:208, immediately before start_turn at :209). DORMANT: the two points are adjacent, the enemy's block is not cleared at the player's turn start on either side, and the round-1-only condition is enforced on both (C# by RoundNumber, the sim by on_combat_start firing once). What differs is the sim grants the block one dispatch EARLIER, so any on_combat_start listener registered after this power sees the enemy already blocked where the game shows it unblocked. Named trigger: a combat-start relic or power that reads an enemy's block -- none is ported. Reachable owners are plentiful (monsters/underdocks/sewer_clam.py:30, monsters/underdocks/lagavulin_matriarch.py:43, monsters/hive/slumbering_beetle.py:41, monsters/hive/flail_knight.py:87, monsters/glory/frog_knight.py:42)."
     },
     "BeforeSideTurnEndEarly": {
       "maps_to": "powers.py:1068-1070 on_player_turn_end / :1076-1078 on_enemy_turn_end -> _gain_block (combat.py:654 / combat.py:~330)",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. THE SIM NOW HAS PHASE PASSES -- `_PHASES` = very_early/early/plain/late (hooks.py:36), resolved per dispatch by `_each`, and relics really use them (relics/orichalcum.py:30 `on_player_turn_end_very_early`, relics/paels_eye.py:61 `on_player_turn_end_early`). PlatingPower did NOT move: powers.py:1138 is still the plain `on_player_turn_end`, where PlatingPower.cs:58-60 is BeforeSideTurnEndEarly and says why in as many words ('so that it triggers before end-of-turn damage effects'). The executed Constrict witness this entry carried is GONE -- ConstrictPower moved to `after_player_turn_end` (powers.py:1531), strictly after the whole BeforeTurnEnd pass -- so what remains is the phase itself, and any plain-pass turn-end damage effect still races this block on registration order. Both halves verified against today's code."
+      "verdict": "faithful",
+      "issue": "CLOSED. PlatingPower moved onto the `_early` pass on BOTH sides: `on_player_turn_end_early` and `before_enemy_side_end_early`, matching PlatingPower.cs:61 and the reason its own comment gives ('so that it triggers before end-of-turn damage effects'). Two orderings become guaranteed rather than lucky: AsleepPower's `_very_early` Plating-drop now always precedes this grant, and Fake Orichalcum's `_very_early` `Block > 0` snapshot always precedes it too, which is the ordering FakeOrichalcum.cs:40-45 spells out in prose. EXECUTED: test_fake_merchant.py::test_fake_orichalcum_is_suppressed_by_platings_earlier_grant and test_enemy_side_per_side.py::TestSideEndListeners.  FIXED 2026-07-28 (round 4). The text it replaced read: NARROWED 2026-07-27. THE SIM NOW HAS PHASE PASSES -- `_PHASES` = very_early/early/plain/late (hooks.py:36), resolved per dispatch by `_each`, and relics really use them (relics/orichalcum.py:30 `on_player_turn_end_very_early`, relics/paels_eye.py:61 `on_player_turn_end_early`). PlatingPower did NOT move: powers.py:1138 is still the plain `on_player_turn_end`, where PlatingPower.cs:58-60 is BeforeSideTurnEndEarly and says why in as many words ('so that it triggers before end-of-turn damage effects'). The executed Constrict witness this entry carried is GONE -- ConstrictPower moved to `after_player_turn_end` (powers.py:1531), strictly after the whole BeforeTurnEnd pass -- so what remains is the phase itself, and any plain-pass turn-end damage effect still races this block on registration order. Both halves verified against today's code."
     },
     "AfterSideTurnStart": {
       "maps_to": "powers.py:1072-1074 on_player_turn_start / :1080-1082 on_enemy_turn_start -> _decay (player.py:169 / combat.py:~300)",
-      "verdict": "gap",
-      "issue": "WRONG SLOT on the player leg. C#'s AfterSideTurnStart is CombatManager.cs:522, POST-draw; the sim's on_player_turn_start is player.py:169, PRE-draw (before modify_hand_draw at :171 and _draw at :183). The sim's post-draw slot, on_player_turn_started (player.py:186), is available and unused -- the same one-line fix as the other misplaced-slot units, and the population is reproducible with `py audit/tools/power_census.py slots`. DORMANT on its own: the decay is pure bookkeeping and nothing between the two points reads Plating's Amount (the block was already gained last turn end). Named trigger: any draw-time or BeforeHandDraw effect that reads the stack count -- power/hello_world shares this pre-draw slot. The ENEMY leg is turn_structure's G5 again."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. The player leg is on the real hook: PlatingPower.cs:70's AfterSideTurnStart maps to the new `after_side_turn_start` dispatcher (CombatManager.cs:522, post-draw), and `participants.Contains(Owner)` is what the surviving `player is self.owner` test reproduces. The ENEMY leg is unchanged and stays where this entry always put it -- turn_structure's G5, which owns the per-enemy-vs-per-side mechanism.  The gap it replaced read: WRONG SLOT on the player leg. C#'s AfterSideTurnStart is CombatManager.cs:522, POST-draw; the sim's on_player_turn_start is player.py:169, PRE-draw (before modify_hand_draw at :171 and _draw at :183). The sim's post-draw slot, on_player_turn_started (player.py:186), is available and unused -- the same one-line fix as the other misplaced-slot units, and the population is reproducible with `py audit/tools/power_census.py slots`. DORMANT on its own: the decay is pure bookkeeping and nothing between the two points reads Plating's Amount (the block was already gained last turn end). Named trigger: any draw-time or BeforeHandDraw effect that reads the stack count -- power/hello_world shares this pre-draw slot. The ENEMY leg is turn_structure's G5 again."
     }
   },
   "guards": [
@@ -173,6 +173,6 @@
       "rationale": "powers.py:1077. C# has no such test, but a dead creature has already had its powers stripped by Creature.RemoveAllPowersAfterDeath (Creature.cs:668-671), so the hook is unreachable on a dead owner in the game too. Defensive, not divergent. Note the PLAYER leg (:1069) does NOT carry the same guard, which is an internal inconsistency rather than a divergence."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

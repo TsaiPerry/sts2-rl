@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\ripple_basin.py",
-    "sha256": "20598f4729acbf4a7ed700b9e9dd9d80ac828ba223ebc893564e7d64c0528330"
+    "sha256": "03b34aa0433e1e8c9ad6c1851f8ce3f6c3cec0b950d46b5750c22b01a615b69a"
   },
   "extra_sources": [
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/relics/orichalcum.py",
-      "sha256": "f0e09b0422d790cea8bbbbfd03eae2b7edfe79dda4c73b3d962c7ea0edcb59bc",
+      "sha256": "e58715b053b65a089aff4f658fa16eb2c450175ab920b2fa0aa5226b8752f32b",
       "side": "sim"
     }
   ],

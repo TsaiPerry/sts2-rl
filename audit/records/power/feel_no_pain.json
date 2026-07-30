@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
@@ -42,8 +42,8 @@
     },
     "AfterCardExhausted": {
       "maps_to": "powers.py:239-241 FeelNoPainPower.on_card_exhausted",
-      "verdict": "gap",
-      "issue": "LIVE. The block is dealt as POWERED where C# deals it UNPOWERED, so Dexterity and Frail modify Feel No Pain's block in the sim and not in the game. FeelNoPainPower.cs:23 is `CreatureCmd.GainBlock(Owner, Amount, ValueProp.Unpowered, null)`; powers.py:241 is `BlockCmd.apply(self.hooks, self.owner, self.amount)` with NO props, and BlockCmd.apply defaults props to ValueProp.MOVE (cmds.py:143-144), which is_powered_attack accepts (valueprops.py:47-49 -- Move and not Unpowered), so cmds.py:146-147 runs both block modifier families over it. With Dexterity 3 the sim's Feel No Pain 3 gives 6 block and the game gives 3; under Frail the sim gives 2 and the game 3. Both halves are Ironclad-reachable from the base pool -- Feel No Pain is a ported card (cards/feel_no_pain_card.py) and Frail is applied by ported monsters. Note that eight sibling powers get this right by passing `props=ValueProp.UNPOWERED` explicitly (CrimsonMantle powers.py:648, Rage :1010, Plating :1061, ToricToughness :1218, Skittish :1816-1818, CrabRage :2519, Rampart :3002, BlockNextTurn :3846-3848), so this is an omission at one call site rather than a missing concept. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The block is UNPOWERED. FeelNoPainPower.cs:23 is `CreatureCmd.GainBlock(Owner, Amount, ValueProp.Unpowered, null)`; `BlockCmd.apply` defaults `props` to ValueProp.MOVE, which `is_powered_attack` accepts, so both block-modifier families were running over it -- Feel No Pain 3 with Dexterity 3 gave 6 where the game gives 3, and under Frail gave 2 where the game gives 3. powers.py now passes `props=ValueProp.UNPOWERED`, joining the eight sibling powers that already did. NOT CLOSED: nothing at this site; this was an omission at one call site, not a missing concept.  The text it replaced read: LIVE. The block is dealt as POWERED where C# deals it UNPOWERED, so Dexterity and Frail modify Feel No Pain's block in the sim and not in the game. FeelNoPainPower.cs:23 is `CreatureCmd.GainBlock(Owner, Amount, ValueProp.Unpowered, null)`; powers.py:241 is `BlockCmd.apply(self.hooks, self.owner, self.amount)` with NO props, and BlockCmd.apply defaults props to ValueProp.MOVE (cmds.py:143-144), which is_powered_attack accepts (valueprops.py:47-49 -- Move and not Unpowered), so cmds.py:146-147 runs both block modifier families over it. With Dexterity 3 the sim's Feel No Pain 3 gives 6 block and the game gives 3; under Frail the sim gives 2 and the game 3. Both halves are Ironclad-reachable from the base pool -- Feel No Pain is a ported card (cards/feel_no_pain_card.py) and Frail is applied by ported monsters. Note that eight sibling powers get this right by passing `props=ValueProp.UNPOWERED` explicitly (CrimsonMantle powers.py:648, Rage :1010, Plating :1061, ToricToughness :1218, Skittish :1816-1818, CrabRage :2519, Rampart :3002, BlockNextTurn :3846-3848), so this is an omission at one call site rather than a missing concept. Third-file citations, not hashed here."
     }
   },
   "guards": [
@@ -63,6 +63,6 @@
       "rationale": "Neither side tests Amount > 0 before gaining block; BlockCmd.apply's `max(0, amount)` (cmds.py:148) and C#'s GainBlock both floor at 0."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\rampage.py",
-    "sha256": "b92ad17a7dfb01eb3816719d41a0b88c0fa4bf67f3bacb46710ede0fc690e40d"
+    "sha256": "f410725a4620549a569203d590f0ea8bc0fee3adb55013a2ce8fb47c339c889b"
   },
   "extra_sources": [
     {
@@ -16,22 +16,22 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/reflections.py",
-      "sha256": "80a1def7cd4014f2b74098038e1845bde9fda4874f0ea95fff7b775630cdfb05",
+      "sha256": "944bc8f2a1aabee7893510cd9663ca48d02770011227912a55d12f446f3b233a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/welcome_to_wongos.py",
-      "sha256": "bb654fc90b58c17ee0573381dc1859c91e72cf6a89e97f8934db58801612a946",
+      "sha256": "12d10fe0120fd1db28b8ded9f938c5246e3b466faa3127a84d8aae91c5b0d92f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     }
   ],
@@ -58,8 +58,8 @@
     },
     "AfterDowngraded": {
       "maps_to": "NOT PORTED -- RampageCard has no downgrade hook, so `downgrade()` DESTROYS the accumulated damage (rampage.py)",
-      "verdict": "gap",
-      "issue": "`AfterDowngraded()` calls base and then `DynamicVars.Damage.BaseValue += ExtraDamageFromPlays` (Rampage.cs:55-59), re-adding everything this Rampage has accumulated from its own plays after `DowngradeInternal` rebuilt the damage var from canonical (CardModel.cs:2140). C# tracks the total in a private field for exactly this reason, and says so: \"Required so we can restore the extra damage amount after a downgrade (ie Magiknight)\" (Rampage.cs:24-26). The sim accumulates into `_damage` directly (rampage.py:117) and tracks nothing, so `Card.downgrade`'s `_init_vars` rebuild (cards/base.py:150-165) resets `_damage` to 9 and the accumulation is lost. Observable: play an upgraded Rampage three times (9 -> 18 -> 27 -> 36), then have it downgraded -- the game keeps 9 + 27 accumulated = 36, the sim drops to 9. LIVE via `powers.py:3171` (DampenPower downgrades every upgraded card in AllCards IN COMBAT, which is exactly when the accumulation exists) and also `events/reflections.py:40` / `events/welcome_to_wongos.py:90`. Same mechanism and same verdict as card/maul's AfterDowngraded entry (rule 3) -- these two cards are the pool's only `AfterDowngraded` overrides, and both are unported. Not caught by `card_probes.py downgrade`, which compares a FRESH card against upgrade+downgrade and so never sees the accumulation."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `AfterDowngraded` EXISTS NOW. `Card._after_downgraded` (cards/base.py) is CardModel.cs:2150-2155, dispatched from `Card.downgrade` between the canonical rebuild and `Enchantment?.ModifyCard()` exactly as CardModel.cs:2144 does, and this card carries the override its C# does: a `_extra_damage` tally, kept as a CLASS default rather than an `_init_vars` line precisely because `_init_vars` is what the downgrade re-runs -- the mirror of C# holding it in a private field that `DowngradeInternal` does not touch. Pinned by test/test_downgrade_rebuild.py. NOT CLOSED: nothing at this site; the seam's remaining residue is listed on creature_card_cmds/step52.  rampage.py tallies `_increase` alongside the damage bump (Rampage.cs:51-52). Executed: an upgraded Rampage played three times reaches 9+27 and stays there through the downgrade, where it used to drop to 9.  The text it replaced read: `AfterDowngraded()` calls base and then `DynamicVars.Damage.BaseValue += ExtraDamageFromPlays` (Rampage.cs:55-59), re-adding everything this Rampage has accumulated from its own plays after `DowngradeInternal` rebuilt the damage var from canonical (CardModel.cs:2140). C# tracks the total in a private field for exactly this reason, and says so: \"Required so we can restore the extra damage amount after a downgrade (ie Magiknight)\" (Rampage.cs:24-26). The sim accumulates into `_damage` directly (rampage.py:117) and tracks nothing, so `Card.downgrade`'s `_init_vars` rebuild (cards/base.py:150-165) resets `_damage` to 9 and the accumulation is lost. Observable: play an upgraded Rampage three times (9 -> 18 -> 27 -> 36), then have it downgraded -- the game keeps 9 + 27 accumulated = 36, the sim drops to 9. LIVE via `powers.py:3171` (DampenPower downgrades every upgraded card in AllCards IN COMBAT, which is exactly when the accumulation exists) and also `events/reflections.py:40` / `events/welcome_to_wongos.py:90`. Same mechanism and same verdict as card/maul's AfterDowngraded entry (rule 3) -- these two cards are the pool's only `AfterDowngraded` overrides, and both are unported. Not caught by `card_probes.py downgrade`, which compares a FRESH card against upgrade+downgrade and so never sees the accumulation."
     }
   },
   "guards": [
@@ -69,6 +69,6 @@
       "rationale": "AnyEnemy cards always resolve a target; `ctx.resolve_target(target_idx)` is the equivalent contract."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

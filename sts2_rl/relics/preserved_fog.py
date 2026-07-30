@@ -18,5 +18,5 @@ class PreservedFog(Relic):
         from ..cards import make_card
 
         for card in run.select_cards("remove", run.removable_cards(), self.CARDS):
-            run.deck.remove(card)
+            run.remove_cards([card])   # CardPileCmd.RemoveFromDeck
         run.add_card(make_card("folly"))

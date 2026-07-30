@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\enchantments.py",
-    "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31"
+    "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369"
   },
   "extra_sources": [
     {
@@ -71,17 +71,17 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/trash_heap_cards.py",
-      "sha256": "89ec1d15e3dd0db928e3c3a4a04aa21564c5d9b04dc5008761242025e88db7db",
+      "sha256": "f93265bdcd41fa82dd09ab914501270537ae907e02f97679dd58dd2345183e20",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
@@ -91,7 +91,7 @@
     },
     {
       "path": "sts2_rl/events/reflections.py",
-      "sha256": "80a1def7cd4014f2b74098038e1845bde9fda4874f0ea95fff7b775630cdfb05",
+      "sha256": "944bc8f2a1aabee7893510cd9663ca48d02770011227912a55d12f446f3b233a",
       "side": "sim"
     },
     {
@@ -106,22 +106,22 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "72840c98dd4eb14b3f77142dc08078d535fb5f223a14b5d7fea981010502b1a7",
+      "sha256": "06f9d38ecefba5bb61280da2dae7e92350e163a00481f23bfe8443b722327ad8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     },
     {
@@ -136,7 +136,7 @@
     },
     {
       "path": "sts2_rl/relics/music_box.py",
-      "sha256": "e1ac228baf22f662da3a9ebdf62bf538dbc5d7a1802368bc58101863238fc867",
+      "sha256": "a22104f22cd2cd0ed4345b115321d3ee8efb5421f1ee5bffccfe2718dc2fb9a8",
       "side": "sim"
     },
     {
@@ -151,7 +151,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -162,8 +162,8 @@
     },
     "AfterCardDrawn": {
       "maps_to": "SlitherEnchantment.on_card_drawn (enchantments.py:175-178), dispatched by HookSystem.on_card_drawn (hooks.py:591-600) from player._draw (player.py:335). `card.set_cost_this_combat(...)` matches Slither.cs:50's `EnergyCost.SetThisCombat(...)`, and NextInt(4) matches randrange(4)",
-      "verdict": "gap",
-      "issue": "WRONG RNG STREAM. Slither.cs:55-62 rolls on `base.Card.Owner.RunState.Rng.CombatEnergyCosts.NextInt(4)`; the sim rolls on `self.combat._rng.randrange(4)` (enchantments.py:119), the shared combat random.Random, not the per-purpose accessor. The sim HAS the right accessor -- combat_rng.py:23 maps 'energy' -> the game's combat_energy_costs stream (rng.py:92, 384) and potions.py:1049 already uses `ctx.combat.combat_rng.energy` for Snecko Oil, which is the same `Rng.CombatEnergyCosts.NextInt(4)` call in C#. EXECUTED (`py audit/tools/enchantment_probes.py slither-rng`): the sim's line is `card.set_cost_this_combat(self.combat._rng.randrange(4))`. LIVE for any string-seeded parity run: Slither is granted by the ported Wood Carvings event (events/wood_carvings.py:67), and in parity mode every OTHER stream consumer is adapted, so a Slither draw both (a) takes a number the game never takes off the shared stream and (b) fails to advance CombatEnergyCosts, desyncing every later Snecko Oil / cost roll in the run. In legacy (RL) mode both are the same random.Random, so the divergence is parity-only -- but that is a reachable observable, not a waiver. RE-VERIFIED 2026-07-28, unchanged: enchantments.py:178 is still `card.set_cost_this_combat(self.combat._rng.randrange(4))`, and `py audit/tools/enchantment_probes.py slither-rng` still prints 'DIVERGE  Slither draws off combat_rng.energy: sim=False  C#=True'. The correct accessor still exists and is still used by Snecko Oil (`ctx.combat.combat_rng.energy`). Nothing in the Tier-1 pass touched this line."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The roll is on the named stream. Slither.cs:55-62 is `base.Card.Owner.RunState.Rng.CombatEnergyCosts.NextInt(4)` and enchantments.py now calls `self.combat.combat_rng.energy.randrange(4)`. The port used `self.combat._rng`, the shared combat random.Random, which in a parity run does two wrong things at once: it takes a number off a stream the game never touches AND fails to advance CombatEnergyCosts, desyncing every later cost roll in the run -- Snecko Oil included, which is the SAME `Rng.CombatEnergyCosts.NextInt(4)` call in C# and which potions.py already routed correctly. Bug class 16. In legacy (RL) mode CombatRng maps every accessor onto the one shared Random, so nothing changes there. EXECUTED: a Slither card draw now takes exactly one `randrange(4)` off the `energy` accessor, where the accessor saw none. Pinned by test/test_relic_live_tail.py::test_slither_rolls_on_the_combat_energy_costs_stream. NOT CLOSED: nothing at this site.  The text it replaced read: WRONG RNG STREAM. Slither.cs:55-62 rolls on `base.Card.Owner.RunState.Rng.CombatEnergyCosts.NextInt(4)`; the sim rolls on `self.combat._rng.randrange(4)` (enchantments.py:119), the shared combat random.Random, not the per-purpose accessor. The sim HAS the right accessor -- combat_rng.py:23 maps 'energy' -> the game's combat_energy_costs stream (rng.py:92, 384) and potions.py:1049 already uses `ctx.combat.combat_rng.energy` for Snecko Oil, which is the same `Rng.CombatEnergyCosts.NextInt(4)` call in C#. EXECUTED (`py audit/tools/enchantment_probes.py slither-rng`): the sim's line is `card.set_cost_this_combat(self.combat._rng.randrange(4))`. LIVE for any string-seeded parity run: Slither is granted by the ported Wood Carvings event (events/wood_carvings.py:67), and in parity mode every OTHER stream consumer is adapted, so a Slither draw both (a) takes a number the game never takes off the shared stream and (b) fails to advance CombatEnergyCosts, desyncing every later Snecko Oil / cost roll in the run. In legacy (RL) mode both are the same random.Random, so the divergence is parity-only -- but that is a reachable observable, not a waiver. RE-VERIFIED 2026-07-28, unchanged: enchantments.py:178 is still `card.set_cost_this_combat(self.combat._rng.randrange(4))`, and `py audit/tools/enchantment_probes.py slither-rng` still prints 'DIVERGE  Slither draws off combat_rng.energy: sim=False  C#=True'. The correct accessor still exists and is still used by Snecko Oil (`ctx.combat.combat_rng.energy`). Nothing in the Tier-1 pass touched this line."
     }
   },
   "guards": [
@@ -189,10 +189,10 @@
     },
     {
       "what": "EG2: card COPY drops the enchantment. C# CardModel.CreateClone (CardModel.cs:2168) -> MutableClone -> DeepCloneFields re-attaches the source card's enchantment onto the copy -- CardModel.cs:1204-1209 `(EnchantmentModel)Enchantment.ClonePreservingMutability()`, `Enchantment = null`, `EnchantInternal(clone, clone.Amount)` -- and does the same for the Affliction two lines down (1210-1215). CreateClone itself throws unless the card sits in a COMBAT pile (CardModel.cs:2170-2173), so every copy site is a combat-pile copy. The sim's copy sites rebuild the card from its class and carry only the upgrade level.",
-      "verdict": "gap",
-      "issue": "PARTIAL 2026-07-28. The LISTENER half of EG2 is genuinely closed, and it is executable code, not prose: `create_clone` (cards/base.py:57-83) re-attaches a `clone_preserving_mutability()` copy of the source's enchantment (enchantments.py:109-117, attach at :119-125), and `CardPileCmd._enter_combat` (cmds.py:570-593) now runs `card.enchantment.combat = hooks.combat` + `hooks.register(card.enchantment)` at cmds.py:589-592 on all three add paths \u2014 add_to_discard (:603), add_to_draw (:628) and add_to_hand (:643). Rule-3 checked: add_to_draw branches on `crng.is_parity` for the insertion index only (cmds.py:621-627) and BOTH arms fall through to `_enter_combat` at :628, so the legacy/RL arm has it. EXECUTED 2026-07-28 with the default legacy rng (`is_parity=False`): a create_clone copy of a Slither Strike routed through each of the three paths and drawn re-rolls its OWN cost (1->2 via add_to_draw, 1->0 via add_to_discard+reshuffle, 1->2 via add_to_hand+discard+reshuffle), i.e. Slither.cs:40-53 firing on the copy's own enchantment, gated by `card is self.card` (enchantments.py:175-178). WHAT REMAINS, at all five copy sites: `create_clone` still rebuilds the card as `type(card)()` + upgrade_level + enchantment/affliction, so it does NOT port the line DeepCloneFields runs four lines ABOVE the enchantment re-attach \u2014 `_energyCost = _energyCost?.Clone(this)` (CardModel.cs:1202) \u2014 and `CardEnergyCost.Clone` copies `_localModifiers` (CardEnergyCost.cs:411-421), which holds the Absolute/EndOfCombat modifier `SetThisCombat` appended (CardEnergyCost.cs:238-244). That modifier is cleared only at combat end (the EndOfTurn/WhenPlayed sweeps at :334/:344 do not match it), so the game's copy of a Slither card starts at the source's ALREADY-ROLLED cost while the sim's copy resets to `_cost_this_combat = None` (cards/base.py:158, read at :269-270) and shows the printed cost. This is Slither's entire observable, and it is live in HAND at four of the five sites \u2014 Dual Wield (trash_heap_cards.py:149 copies a chosen HAND card into hand), Music Box (relics/music_box.py:46-48), Juggling (powers.py:884-893) and Burning Sticks (relics/burning_sticks.py:33-37) all copy a card that was necessarily drawn (hence rolled) and put the copy straight into hand, where its cost is immediately spendable and is never re-rolled until it is drawn again. EXECUTED 2026-07-28, seeds 0-4: source's rolled cost 3/3/2/0/1 -> sim copy in hand 1/1/1/1/1, where C# would give 3/3/2/0/1. (Anger's copy, cmds add_to_discard, self-corrects because it must be drawn before it is seen.) LIVE.  NARROWED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): the rest of this entry is closed in today's code. The issue it replaced read: Closed 2026-07-28: all five rebuild copy sites now route through `create_clone` (cards/base.py:57-83), which rebuilds the card AND re-attaches a `clone_preserving_mutability()` copy of the source's enchantment (enchantments.py:109-117 + attach at :119-125) and a copy of its affliction -- the port of CardModel.DeepCloneFields (CardModel.cs:1204-1215). The five: cards/trash_heap_cards.py:20-24 `_clone` (Dual Wield), powers.py:883-893 (JugglingPower), relics/music_box.py:44-49, cards/anger.py:36-38 and relics/burning_sticks.py:33-37. WAS: each was a bare `type(card)()` rebuild carrying only the upgrade level, so the copy lost the enchantment entirely. The false `_clone` docstring is fixed too (trash_heap_cards.py:20-23 now says it carries the enchantment and the affliction, and it does). The enchantment now RIDES ALONG on the copy and every DIRECT-CALL leg works (DamageCmd/BlockCmd read `card.enchantment` straight off the card, cmds.py:115-118 and :219-222; `attach` re-runs modify_card so static keywords/cost are on the copy). What REMAINS is that the copy's enchantment is never made a LISTENER: CardPileCmd._enter_combat (cmds.py:569-576) registers only the card, not `card.enchantment`, and never sets `enchantment.combat`. C# has no such step -- CombatState.IterateHookListeners re-enumerates from the piles on every dispatch and adds `cardModel.Enchantment` (CombatState.cs:449-467, the add at :462-465) -- so the game's copy is a full listener. RESIDUAL FOR THIS UNIT: Slither's whole effect is `on_card_drawn` (enchantments.py:175-178), a HOOK the copy's enchantment never receives. EXECUTED 2026-07-28: put a `create_clone` copy of a Slither Strike into the draw pile and draw it -- its cost is still the printed 1; C# rerolls it to 0-3 on every draw. LIVE."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): the clone carries the source's this-combat cost. CardModel.DeepCloneFields runs `_energyCost = _energyCost?.Clone(this)` (CardModel.cs:1202) four lines above the enchantment re-attach, and CardEnergyCost.Clone copies `_localModifiers` (CardEnergyCost.cs:411-421) -- where `SetThisCombat` parks its Absolute/EndOfCombat modifier (:238-244), which the EndOfTurn and WhenPlayed sweeps at :334/:344 do not match. `cards/base.py`'s `create_clone` now copies `_cost_this_combat`, so a copy of a Slither card starts at the ALREADY-ROLLED cost instead of resetting to the printed one -- Slither's entire observable, live in hand at four of the five copy sites (Dual Wield, Music Box, Juggling, Burning Sticks). Pinned by test_shared_enchantments.py::test_a_clone_carries_the_source_s_this_combat_cost. The LISTENER half was already closed and is unchanged.  The text it replaced read: PARTIAL 2026-07-28. The LISTENER half of EG2 is genuinely closed, and it is executable code, not prose: `create_clone` (cards/base.py:57-83) re-attaches a `clone_preserving_mutability()` copy of the source's enchantment (enchantments.py:109-117, attach at :119-125), and `CardPileCmd._enter_combat` (cmds.py:570-593) now runs `card.enchantment.combat = hooks.combat` + `hooks.register(card.enchantment)` at cmds.py:589-592 on all three add paths \u2014 add_to_discard (:603), add_to_draw (:628) and add_to_hand (:643). Rule-3 checked: add_to_draw branches on `crng.is_parity` for the insertion index only (cmds.py:621-627) and BOTH arms fall through to `_enter_combat` at :628, so the legacy/RL arm has it. EXECUTED 2026-07-28 with the default legacy rng (`is_parity=False`): a create_clone copy of a Slither Strike routed through each of the three paths and drawn re-rolls its OWN cost (1->2 via add_to_draw, 1->0 via add_to_discard+reshuffle, 1->2 via add_to_hand+discard+reshuffle), i.e. Slither.cs:40-53 firing on the copy's own enchantment, gated by `card is self.card` (enchantments.py:175-178). WHAT REMAINS, at all five copy sites: `create_clone` still rebuilds the card as `type(card)()` + upgrade_level + enchantment/affliction, so it does NOT port the line DeepCloneFields runs four lines ABOVE the enchantment re-attach \u2014 `_energyCost = _energyCost?.Clone(this)` (CardModel.cs:1202) \u2014 and `CardEnergyCost.Clone` copies `_localModifiers` (CardEnergyCost.cs:411-421), which holds the Absolute/EndOfCombat modifier `SetThisCombat` appended (CardEnergyCost.cs:238-244). That modifier is cleared only at combat end (the EndOfTurn/WhenPlayed sweeps at :334/:344 do not match it), so the game's copy of a Slither card starts at the source's ALREADY-ROLLED cost while the sim's copy resets to `_cost_this_combat = None` (cards/base.py:158, read at :269-270) and shows the printed cost. This is Slither's entire observable, and it is live in HAND at four of the five sites \u2014 Dual Wield (trash_heap_cards.py:149 copies a chosen HAND card into hand), Music Box (relics/music_box.py:46-48), Juggling (powers.py:884-893) and Burning Sticks (relics/burning_sticks.py:33-37) all copy a card that was necessarily drawn (hence rolled) and put the copy straight into hand, where its cost is immediately spendable and is never re-rolled until it is drawn again. EXECUTED 2026-07-28, seeds 0-4: source's rolled cost 3/3/2/0/1 -> sim copy in hand 1/1/1/1/1, where C# would give 3/3/2/0/1. (Anger's copy, cmds add_to_discard, self-corrects because it must be drawn before it is seen.) LIVE.  NARROWED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): the rest of this entry is closed in today's code. The issue it replaced read: Closed 2026-07-28: all five rebuild copy sites now route through `create_clone` (cards/base.py:57-83), which rebuilds the card AND re-attaches a `clone_preserving_mutability()` copy of the source's enchantment (enchantments.py:109-117 + attach at :119-125) and a copy of its affliction -- the port of CardModel.DeepCloneFields (CardModel.cs:1204-1215). The five: cards/trash_heap_cards.py:20-24 `_clone` (Dual Wield), powers.py:883-893 (JugglingPower), relics/music_box.py:44-49, cards/anger.py:36-38 and relics/burning_sticks.py:33-37. WAS: each was a bare `type(card)()` rebuild carrying only the upgrade level, so the copy lost the enchantment entirely. The false `_clone` docstring is fixed too (trash_heap_cards.py:20-23 now says it carries the enchantment and the affliction, and it does). The enchantment now RIDES ALONG on the copy and every DIRECT-CALL leg works (DamageCmd/BlockCmd read `card.enchantment` straight off the card, cmds.py:115-118 and :219-222; `attach` re-runs modify_card so static keywords/cost are on the copy). What REMAINS is that the copy's enchantment is never made a LISTENER: CardPileCmd._enter_combat (cmds.py:569-576) registers only the card, not `card.enchantment`, and never sets `enchantment.combat`. C# has no such step -- CombatState.IterateHookListeners re-enumerates from the piles on every dispatch and adds `cardModel.Enchantment` (CombatState.cs:449-467, the add at :462-465) -- so the game's copy is a full listener. RESIDUAL FOR THIS UNIT: Slither's whole effect is `on_card_drawn` (enchantments.py:175-178), a HOOK the copy's enchantment never receives. EXECUTED 2026-07-28: put a `create_clone` copy of a Slither Strike into the draw pile and draw it -- its cost is still the printed 1; C# rerolls it to 0-3 on every draw. LIVE."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-28"
 }

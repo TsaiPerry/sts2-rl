@@ -1413,16 +1413,30 @@ def spawn_roll() -> None:
         log_after_ctor = [s.id for s in spawn.machine.state_log]
         CreatureCmd.add(cs.hooks, spawn)
         after_add = calls["n"]
+        # the other arm of AfterCreatureAdded's gate (CombatManager.cs:860-867)
+        cs.current_side = "enemy"
+        enemy_spawn = FossilStalker(cs.hooks, _random.Random(6))
+        before_enemy = calls["n"]
+        CreatureCmd.add(cs.hooks, enemy_spawn)
+        after_enemy = calls["n"]
     finally:
         MonsterMoveStateMachine.roll_move = real_roll
-    print(f"\n  sim, a MachineMonster spawned mid-combat:")
+        cs.current_side = "player"
+    print(f"\n  sim, a MachineMonster spawned mid-combat on the PLAYER side:")
     print(f"    roll_move calls during __init__      : {after_ctor}")
     print(f"    roll_move calls during CreatureCmd.add: {after_add - after_ctor}")
     print(f"    state_log after construction         : {log_after_ctor}")
     print(f"    state_log after add                  : "
           f"{[s.id for s in spawn.machine.state_log]}")
-    print(f"    _current_move                        : {spawn._current_move.id}"
-          f"   (never an UNSET_MOVE placeholder)")
+    print(f"    _current_move                        : {spawn._current_move.id}")
+    print(f"\n  the same spawn on the ENEMY side (the gate's other arm):")
+    print(f"    roll_move calls during CreatureCmd.add: "
+          f"{after_enemy - before_enemy}   (C#: 0)")
+    print(f"    _current_move                        : "
+          f"{enemy_spawn._current_move.id}"
+          f"   (MonsterModel.NextMove's initial `new MoveState()`)")
+    print(f"    picked up by the next player-turn-start pass instead, at its "
+          f"position in the enemy list")
     print(f"    creature.side                        : {spawn.side!r}")
 
     # is the non-enemy-monster arm representable in the sim at all?

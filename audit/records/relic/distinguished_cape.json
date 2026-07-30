@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\distinguished_cape.py",
-    "sha256": "34e73e730c6e4273eaaab3ab77631e3ad2c158ecaa435fa2294b9927e911e82e"
+    "sha256": "8b044997a050e54fb36605867fc30b3270059103c802ef8909ba1ac7d95058dc"
   },
   "extra_sources": [
     {
@@ -26,22 +26,22 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
+      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/vakuu.py",
-      "sha256": "8342368cf750f853a60f1d6bfa1c46170dd100c96139132dccabe5568e2337e5",
+      "sha256": "2342233825e9760a45d24f2b3f86b9afef8a0e9f3dc055d0abe0e72ba830f948",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -57,15 +57,15 @@
     },
     "AfterObtained": {
       "maps_to": "after_obtained (distinguished_cape.py:21-25)",
-      "verdict": "gap",
-      "issue": "Carries guard G1's LIVE label. The card half is faithful -- three Apparitions appended to the deck -- but the relic's -9 Max HP is not implemented at all; the port puts it in the Vakuu event option instead, on a premise about the source that is false."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): the -9 is the RELIC's, and the port's premise was wrong about where it came from. `AfterObtained` (DistinguishedCape.cs:30-41) is two statements in order: `CreatureCmd.LoseMaxHp(..., DynamicVars.HpLoss.BaseValue, isFromCard: false)` with HpLossVar(9m) at :25, THEN the CardsVar(3) Apparition adds. relics/distinguished_cape.py does both, in that order. The docstring blamed the Vakuu OPTION -- `RelicOption<DistinguishedCape>().ThatDecreasesMaxHp(9m)` (Vakuu.cs:38) -- and that is not an HP loss at all: `ThatDecreasesMaxHp` is `ThatWillKillPlayerIf(p => p.MaxHp <= value)` (EventOption.cs:194-197), a UI flag that reddens an option when taking it would be lethal. events/vakuu.py's duplicate `lose_max_hp` is gone, so the total is still 9 -- it was accidentally right through the one path that granted the relic and wrong through every other, and the ORDER relative to the card adds was unmodelled. Three tests pin it, including one asserting the option does not double the loss.  The text it replaced read: Carries guard G1's LIVE label. The card half is faithful -- three Apparitions appended to the deck -- but the relic's -9 Max HP is not implemented at all; the port puts it in the Vakuu event option instead, on a premise about the source that is false."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the -9 Max HP belongs to the RELIC (DistinguishedCape.cs:31) and the port assigns it to the Vakuu event option instead, on the false premise that EventOption.ThatDecreasesMaxHp(9) applies it",
-      "verdict": "gap",
-      "issue": "MECHANISM: DistinguishedCape.AfterObtained's FIRST statement is `CreatureCmd.LoseMaxHp(new ThrowingPlayerChoiceContext(), base.Owner.Creature, base.DynamicVars.HpLoss.BaseValue, isFromCard: false)` (DistinguishedCape.cs:31), with HpLossVar(9m) declared at DistinguishedCape.cs:25 and the same 9 pinned as `public const int maxHpLoss` at line 15. distinguished_cape.py's docstring asserts the opposite -- 'The -9 Max HP comes from the Vakuu event OPTION (RelicOption<DistinguishedCape>().ThatDecreasesMaxHp(9)), not the relic itself' -- and its after_obtained only adds the cards. THE PREMISE IS FALSE: EventOption.ThatDecreasesMaxHp (EventOption.cs:193-197) is `return ThatWillKillPlayerIf(p => p.Creature.MaxHp <= value)`, i.e. it sets the WillKillPlayer predicate that makes the option flash red, and a grep for the field it sets finds no consumer that loses HP anywhere under src/Core. It is presentation. Its only two other users, DrowningBeacon.cs:32 and UnrestSite.cs:36, both apply their HP loss in their own option bodies. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b04.py cape): `run.add_relic(make_relic('distinguished_cape'))` leaves (max_hp, hp, deck) at (80, 80, 13) where C# gives (71, 71, 13) -- the sim loses 0 Max HP. This is EXACTLY the relic/big_mushroom G1 shape from batch 1 with the sign reversed ('+20 Max HP lives in the wrong place'), and it has the same two live consequences. (a) The conformance runner grants relics by id straight through add_relic (runner.py:465, 698, 751), so its relic resync silently keeps 9 Max HP that the save says was spent, which DETECTOR 3's act-boundary HP assertion reports as a parity failure on any seed that took the Cape. (b) The port defines no undo_after_obtained (executed: False), which relics/base.py:143-151 exists precisely to let the runner unwind a max-HP relic on a swap. The TOTAL via the Vakuu shrine is right by accident -- events/vakuu.py:58-60 pays run.lose_max_hp(9) itself and the executed path gives 80 -> 71, matching C# -- so this defect is invisible to anyone who only plays the event. The fix must move the loss into the relic AND delete it from the event, or the Cape will cost 18. RULE 7: events/vakuu.py, relics/base.py, conformance/runner.py, EventOption.cs, DrowningBeacon.cs and UnrestSite.cs are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): the -9 is the RELIC's, and the port's premise was wrong about where it came from. `AfterObtained` (DistinguishedCape.cs:30-41) is two statements in order: `CreatureCmd.LoseMaxHp(..., DynamicVars.HpLoss.BaseValue, isFromCard: false)` with HpLossVar(9m) at :25, THEN the CardsVar(3) Apparition adds. relics/distinguished_cape.py does both, in that order. The docstring blamed the Vakuu OPTION -- `RelicOption<DistinguishedCape>().ThatDecreasesMaxHp(9m)` (Vakuu.cs:38) -- and that is not an HP loss at all: `ThatDecreasesMaxHp` is `ThatWillKillPlayerIf(p => p.MaxHp <= value)` (EventOption.cs:194-197), a UI flag that reddens an option when taking it would be lethal. events/vakuu.py's duplicate `lose_max_hp` is gone, so the total is still 9 -- it was accidentally right through the one path that granted the relic and wrong through every other, and the ORDER relative to the card adds was unmodelled. Three tests pin it, including one asserting the option does not double the loss.  The text it replaced read: MECHANISM: DistinguishedCape.AfterObtained's FIRST statement is `CreatureCmd.LoseMaxHp(new ThrowingPlayerChoiceContext(), base.Owner.Creature, base.DynamicVars.HpLoss.BaseValue, isFromCard: false)` (DistinguishedCape.cs:31), with HpLossVar(9m) declared at DistinguishedCape.cs:25 and the same 9 pinned as `public const int maxHpLoss` at line 15. distinguished_cape.py's docstring asserts the opposite -- 'The -9 Max HP comes from the Vakuu event OPTION (RelicOption<DistinguishedCape>().ThatDecreasesMaxHp(9)), not the relic itself' -- and its after_obtained only adds the cards. THE PREMISE IS FALSE: EventOption.ThatDecreasesMaxHp (EventOption.cs:193-197) is `return ThatWillKillPlayerIf(p => p.Creature.MaxHp <= value)`, i.e. it sets the WillKillPlayer predicate that makes the option flash red, and a grep for the field it sets finds no consumer that loses HP anywhere under src/Core. It is presentation. Its only two other users, DrowningBeacon.cs:32 and UnrestSite.cs:36, both apply their HP loss in their own option bodies. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b04.py cape): `run.add_relic(make_relic('distinguished_cape'))` leaves (max_hp, hp, deck) at (80, 80, 13) where C# gives (71, 71, 13) -- the sim loses 0 Max HP. This is EXACTLY the relic/big_mushroom G1 shape from batch 1 with the sign reversed ('+20 Max HP lives in the wrong place'), and it has the same two live consequences. (a) The conformance runner grants relics by id straight through add_relic (runner.py:465, 698, 751), so its relic resync silently keeps 9 Max HP that the save says was spent, which DETECTOR 3's act-boundary HP assertion reports as a parity failure on any seed that took the Cape. (b) The port defines no undo_after_obtained (executed: False), which relics/base.py:143-151 exists precisely to let the runner unwind a max-HP relic on a swap. The TOTAL via the Vakuu shrine is right by accident -- events/vakuu.py:58-60 pays run.lose_max_hp(9) itself and the executed path gives 80 -> 71, matching C# -- so this defect is invisible to anyone who only plays the event. The fix must move the loss into the relic AND delete it from the event, or the Cape will cost 18. RULE 7: events/vakuu.py, relics/base.py, conformance/runner.py, EventOption.cs, DrowningBeacon.cs and UnrestSite.cs are not hashed here."
     },
     {
       "what": "N1: HpLossVar(9m) / `const int maxHpLoss = 9` read as BaseValue (DistinguishedCape.cs:15, 25, 31) vs MAX_HP_LOSS = 9 (distinguished_cape.py:19), and CardsVar(3) read as IntValue (DistinguishedCape.cs:26, 33) vs CARDS = 3 (distinguished_cape.py:18)",
@@ -83,6 +83,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / RefreshCounter / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

@@ -25,13 +25,26 @@ class SilverCrucible(Relic):
         return (self.times_used >= self.CARD_REWARDS
                 and self.treasure_rooms_entered > 0)
 
-    def modify_card_reward_options_late(self, run, cards) -> None:
+    def modify_card_reward_options_late(self, run, cards, options=None) -> None:
+        # SilkenTress.cs:53-56 / SilverCrucible.cs:104-107 —
+        # `if (!options.Flags.HasFlag(CardCreationFlags.IsCardReward)) return
+        # false;`. Without it a relic or event card generation spent the
+        # one-shot (relic/_reward_late_pass).
+        from ..rewards import CardCreationFlags
+
+        if options is None or not options.has_flag(CardCreationFlags.IS_CARD_REWARD):
+            return False
         if self.times_used >= self.CARD_REWARDS:
-            return
+            return False
         for card in cards:
             if card.is_upgradable:
                 card.upgrade()
-        self.times_used += 1
+        return True                             # SilverCrucible.cs:119
+
+    def after_modify_card_reward_options(self, run) -> None:
+        # SilverCrucible.cs:121-129 — the charge is spent HERE.
+        if self.times_used < self.CARD_REWARDS:
+            self.times_used += 1
 
     def after_room_entered(self, run, point, room_type) -> None:
         from ..rooms import RoomType

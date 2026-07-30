@@ -24,7 +24,7 @@ class PollinousCore(Relic):
         super().__init__()
         self.turns_seen = 0
 
-    def on_player_turn_start(self, player) -> None:
+    def before_side_turn_start(self, player) -> None:
         if player is self.player:
             self.turns_seen += 1
 

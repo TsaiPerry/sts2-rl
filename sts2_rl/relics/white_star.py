@@ -9,16 +9,29 @@ class WhiteStar(Relic):
     Boss odds (`TryModifyRewards` adds
     `new CardReward(CardCreationOptions.ForRoom(owner, RoomType.Boss), 3)`).
 
-    STILL A NO-OP, and the reason is structural rather than "out of combat":
-    `rewards.CombatRewards` models exactly ONE pick-one-of-N card group
-    (`cards`) plus independent take-or-skip singles (`special_cards`). A second
-    CardReward group has no field to live in and no driver action to surface
-    it, so the missing piece is a `CombatRewards` shape change plus a driver
-    seam, not a hook on this class. Same shape as Prayer Wheel."""
+    Same shape as Prayer Wheel, and it lands in the same place:
+    `CombatRewards.card_rewards` is a LIST of `CardRewardGroup`, so a second
+    pick-one-of-3 has a field to live in and the driver already walks them.
+    What differs from Prayer Wheel is the odds table -- `ForRoom(RoomType.Boss)`
+    selects `CardRarityOddsType.BossEncounter` (CardCreationOptions.cs:122-129),
+    which rewards.py maps to (1.0, 0.0, 0.0), so the extra group is three RARE
+    cards rather than three Elite-tier ones."""
 
     id = "white_star"
     name = "White Star"
     rarity = RelicRarity.RARE
+
+    def modify_combat_rewards(self, run, rewards) -> None:
+        from ..rewards import CardRewardGroup
+        from ..rooms import RoomType
+
+        # WhiteStar.cs:24-27 -- `room == null || room.RoomType != Elite`.
+        if rewards.room != RoomType.ELITE:
+            return
+        # Unpopulated, like Prayer Wheel's: RewardsSet.cs:137-143 draws the
+        # options of a hook-added group only AFTER both ModifyRewards passes,
+        # which is what puts the three Rewards-stream draws in the right place.
+        rewards.card_rewards.append(CardRewardGroup(room_type=RoomType.BOSS))
 
     @classmethod
     def is_allowed(cls, run) -> bool:

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
@@ -67,8 +67,8 @@
     },
     "AfterPlayerTurnStart": {
       "maps_to": "powers.py:3708-3724 on_player_turn_started (player.py:186)",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. ONE of the three collapsed phases has been split out: Hook.AfterAutoPrePlayPhaseEntered now has its own sim dispatch, `hooks.after_auto_pre_play_phase_entered` (hooks.py:480-486), fired at player.py:221 strictly after `on_player_turn_started` (:218), and MayhemPower moved onto it (powers.py:3763) -- so the executed Mayhem witnesses this entry pointed at are resolved. WHAT REMAINS is the other half of the collapse: `on_player_turn_started` (player.py:218) is still ONE slot serving BOTH Hook.AfterPlayerTurnStart (CombatManager.cs:675) and Hook.AfterSideTurnStart (:522), which the game runs in that fixed order, so the relative order of two powers on opposite sides of that boundary is still hook-registration order. VERIFIED by reading hooks.py, player.py and powers.py."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. RollingBoulderPower declares AfterPlayerTurnStart and keeps `on_player_turn_started`, which is now that hook and only that hook -- the AfterSideTurnStart listeners it used to share the walk with are on `after_side_turn_start`. See power/crimson_mantle's entry.  The gap it replaced read: NARROWED 2026-07-27. ONE of the three collapsed phases has been split out: Hook.AfterAutoPrePlayPhaseEntered now has its own sim dispatch, `hooks.after_auto_pre_play_phase_entered` (hooks.py:480-486), fired at player.py:221 strictly after `on_player_turn_started` (:218), and MayhemPower moved onto it (powers.py:3763) -- so the executed Mayhem witnesses this entry pointed at are resolved. WHAT REMAINS is the other half of the collapse: `on_player_turn_started` (player.py:218) is still ONE slot serving BOTH Hook.AfterPlayerTurnStart (CombatManager.cs:675) and Hook.AfterSideTurnStart (:522), which the game runs in that fixed order, so the relative order of two powers on opposite sides of that boundary is still hook-registration order. VERIFIED by reading hooks.py, player.py and powers.py."
     }
   },
   "guards": [

@@ -373,12 +373,37 @@ class TestGeneratedCardPotions:
         # canSkip choose-a-card screen, then SetToFreeThisTurn + add to hand.
         # Legacy play resolves the pick inline (like Skill/Attack Potion).
         from sts2_rl.cards.pool import COLORLESS_POOL
-        cs = fresh("colorless_potion")
+        # The screen is MinSelect 0 / canSkip, so pin the pick with a selector
+        # rather than relying on the selectorless default (which may decline —
+        # see test_the_generator_screen_can_be_declined).
+        cs = fresh("colorless_potion",
+                   card_selector=lambda purpose, cands, count: cands[:1])
         cs.player.hand = []
         assert cs.use_potion(0)
         assert len(cs.player.hand) == 1
         assert cs.player.hand[0].id in COLORLESS_POOL
         assert cs.player.hand[0].energy_cost == 0
+
+    def test_the_generator_screen_can_be_declined(self):
+        """`FromChooseACardScreen(..., canSkip: true)` (CardSelectCmd.cs:216-261)
+        with `GetSelectedCards(cards, 0, 1)` at :230 — taking nothing is a
+        first-class outcome, and the caller's `if (cardModel != null)` is what
+        makes it add nothing. Toolbox and Choices Paradox open the same screen
+        with canSkip FALSE, hence the separate purpose."""
+        from sts2_rl.driver import SKIPPABLE_PURPOSES
+
+        seen = []
+
+        def decline(purpose, candidates, count):
+            seen.append(purpose)
+            return []
+
+        cs = fresh("colorless_potion", card_selector=decline)
+        cs.player.hand = []
+        assert cs.use_potion(0)
+        assert cs.player.hand == []
+        assert seen == ["choose_a_card_optional"]
+        assert seen[0] in SKIPPABLE_PURPOSES
 
     def test_colorless_potion_offers_three_cards_in_a_parity_run(self):
         from sts2_rl.cards.pool import COLORLESS_POOL
@@ -626,6 +651,35 @@ class TestMinSelectZero:
         assert [c.id for c in cs.player.discard_pile] == ["wound"]
         assert sorted(c.id for c in cs.player.hand) == ["bash", "strike"]
 
+    def test_the_zero_reaches_the_selectorless_engine_default(self):
+        """The MinSelect is only real if the call site PASSES it: without
+        `min_select=0` the engine default clamps to `count` and takes the whole
+        hand every time.  Over many seeds a genuine 0..N screen must return
+        different sizes, including sometimes none."""
+        sizes = set()
+        for seed in range(30):
+            cs = fresh("ashwater", seed=seed, card_selector=None)
+            cs.player.hand = [make_card(cid) for cid in
+                              ("strike", "defend", "bash", "wound")]
+            assert cs.use_potion(0)
+            sizes.add(len(cs.player.exhaust_pile))
+        assert sizes <= {0, 1, 2, 3, 4}
+        assert len(sizes) > 1, f"still an exactly-N screen: {sizes}"
+        assert 0 in sizes, "confirming none was never reachable"
+
+    def test_gambling_chip_is_the_same_screen(self):
+        """GamblingChip.cs:20 builds the identical prefs, so its turn-1
+        mulligan is 0..hand-size too, not always-all."""
+        from sts2_rl.relics import make_relic
+
+        sizes = set()
+        for seed in range(30):
+            cs = fresh(seed=seed, card_selector=None,
+                       relics=[make_relic("gambling_chip")],
+                       starting_deck=[make_card("strike") for _ in range(12)])
+            sizes.add(len(cs.player.discard_pile))
+        assert len(sizes) > 1, f"still an all-or-nothing mulligan: {sizes}"
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # PotionUsage.AnyTime — the out-of-combat use path
@@ -824,3 +878,63 @@ class TestSingleUnitFixes:
         enemy.powers["illusion"].is_reviving = True
         assert cs.use_potion(0)
         assert "shackling_potion" not in enemy.powers
+
+
+class TestOnUseWrapper:
+    """PotionModel.OnUseWrapper (PotionModel.cs:291-342) is one pipeline for
+    every potion, and it was covered by no seam record until 2026-07-29
+    (potion/_use_pipeline).  These pin the three dispatches the sim used to
+    skip, in the source's order: :297 BeforePotionUsed, :324-331 the
+    Begin/EndCardOrPotionEffect bracket, :340 CheckForEmptyHand."""
+
+    def test_check_for_empty_hand_runs_after_the_use(self):
+        # PotionModel.cs:340 -- the hand is tested AFTER the effect, so any
+        # potion can trigger it.  Unceasing Top (UnceasingTop.cs:16,
+        # AfterHandEmptied) is the sole implementer; the record's own witness
+        # is a Block Potion used on an already-empty hand.
+        from sts2_rl.relics import UnceasingTop
+
+        cs = CombatState(rng=random.Random(0), relics=[UnceasingTop()],
+                         potions=[make_potion("block_potion")])
+        cs.player.hand = []
+        assert cs.use_potion(0)
+        assert len(cs.player.hand) == 1
+
+    def test_before_potion_used_precedes_the_effect(self):
+        # Hook.BeforePotionUsed (:297) fires BEFORE OnUse (:327).  Its one C#
+        # implementer is SurroundedPower.cs:82, so a targeted potion thrown at
+        # the far Kaiser Crab arm turns the player to face it first.
+        seen: list[str] = []
+
+        class _Spy:
+            id = "spy"
+
+            def before_potion_used(self, potion, target):
+                seen.append("before")
+
+            def on_potion_used(self, potion, target):
+                seen.append("after")
+
+        cs = CombatState(rng=random.Random(0),
+                         potions=[make_potion("block_potion")])
+        spy = _Spy()
+        cs.hooks.register(spy)
+        assert cs.use_potion(0)
+        assert seen == ["before", "after"]
+
+    def test_the_effect_bracket_defers_the_empty_hand_check(self):
+        # CombatManager.cs:889's `!IsExecutingCardOrPotionEffect(player)`:
+        # a potion body that empties the hand must NOT trigger the check
+        # until PotionModel.cs:331's `finally` releases the bracket.
+        from sts2_rl.relics import UnceasingTop
+
+        cs = CombatState(rng=random.Random(0), relics=[UnceasingTop()],
+                         potions=[make_potion("block_potion")])
+        cs.player.hand = []
+        depth_seen = []
+        with cs._card_or_potion_effect():
+            cs._check_for_empty_hand()
+            depth_seen.append(len(cs.player.hand))
+        assert depth_seen == [0]      # suppressed inside the bracket
+        cs._check_for_empty_hand()
+        assert len(cs.player.hand) == 1

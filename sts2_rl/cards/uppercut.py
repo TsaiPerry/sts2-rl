@@ -36,6 +36,8 @@ class UppercutCard(Card):
         from ..powers import VulnerablePower, WeakPower
         target = ctx.resolve_target(target_idx)
         DamageCmd.deal(ctx.hooks, target, self._damage, dealer=ctx.player, card=self)
-        if not target.is_gone:
-            PowerCmd.apply(ctx.hooks, target, WeakPower, self._power, applier=ctx.player)
-            PowerCmd.apply(ctx.hooks, target, VulnerablePower, self._power, applier=ctx.player)
+        # No liveness guard: C# applies this unconditionally and the only
+        # gate is `Creature.CanReceivePowers` (Creature.cs:308-322), now
+        # enforced inside PowerCmd.apply.
+        PowerCmd.apply(ctx.hooks, target, WeakPower, self._power, applier=ctx.player)
+        PowerCmd.apply(ctx.hooks, target, VulnerablePower, self._power, applier=ctx.player)

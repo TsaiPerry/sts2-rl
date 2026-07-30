@@ -200,7 +200,15 @@ def test_fabricator_spawn_pick_comes_from_the_monster_ai_stream():
     fab._spawn_bot(combat._ctx(), _AGGRO_SPAWNS)
 
     assert fab._last_spawned is expected
-    assert isinstance(combat.enemies[-1], expected)
+    # MOVED 2026-07-29 (round 7, monster/fabricator/g5): this asserted
+    # `enemies[-1]`, i.e. that the bot was APPENDED. Fabricator.cs:115 passes
+    # `Encounter.GetNextSlot(CombatState)` to CreatureCmd.Add and the row is
+    # [bot1, bot2, fabricator, bot3, bot4] (FabricatorNormal.cs:19), so the first
+    # bot takes bot1 and seats in FRONT of the Fabricator — the game's Enemies
+    # after the opening FABRICATE are [bot, Fabricator]. The pick itself (what
+    # this test is for) is unchanged.
+    assert isinstance(combat.enemies[0], expected)
+    assert combat.enemies[-1] is fab
 
 
 def test_fabricator_spawn_pick_is_independent_of_the_shared_rng():
@@ -212,8 +220,11 @@ def test_fabricator_spawn_pick_is_independent_of_the_shared_rng():
         rs = RunRngSet("SEL66FAB2")
         combat = CombatState(rng=random.Random(shared_seed), rng_set=rs,
                              encounter=FABRICATOR_NORMAL)
-        combat.enemies[0]._spawn_bot(combat._ctx(), _AGGRO_SPAWNS)
-        picks.append(combat.enemies[0]._last_spawned)
+        fab = combat.enemies[0]
+        fab._spawn_bot(combat._ctx(), _AGGRO_SPAWNS)
+        # Hold the reference: the spawned bot seats at bot1, so after the spawn
+        # `enemies[0]` is the BOT, not the Fabricator (monster/fabricator/g5).
+        picks.append(fab._last_spawned)
     assert len(set(picks)) == 1, f"shared-rng-dependent spawn pick: {picks}"
 
 

@@ -26,7 +26,7 @@ class RippleBasin(Relic):
         super().__init__()
         self._attack_this_turn = False
 
-    def on_player_turn_start(self, player: PlayerCombatState) -> None:
+    def before_side_turn_start(self, player: PlayerCombatState) -> None:
         self._attack_this_turn = False
 
     def on_card_played(self, card: Card,

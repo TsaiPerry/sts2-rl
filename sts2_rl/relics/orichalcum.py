@@ -23,7 +23,7 @@ class Orichalcum(Relic):
         super().__init__()
         self._should_trigger = False
 
-    def on_player_turn_start(self, player: PlayerCombatState) -> None:
+    def before_side_turn_start(self, player: PlayerCombatState) -> None:
         # Orichalcum.cs:68-75 BeforeSideTurnStart clears the latch.
         self._should_trigger = False
 

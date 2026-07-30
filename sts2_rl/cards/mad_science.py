@@ -117,8 +117,10 @@ class MadScienceCard(Card):
             if target.is_gone or ctx.player.is_dead:
                 break
             DamageCmd.deal(ctx.hooks, target, self._damage, dealer=ctx.player, card=self)
-        if target.is_gone:
-            return
+        # The per-hit break above is AttackCommand's own (`validTargets` is
+        # filtered on IsAlive, AttackCommand.cs:544-550). The RIDER had no such
+        # justification: ExecuteRider (MadScience.cs:267-294) is called from
+        # OnPlay's tail with no liveness test, gated only by CanReceivePowers.
         if self.rider == "sapping":
             PowerCmd.apply(ctx.hooks, target, WeakPower, _SAPPING_WEAK, applier=ctx.player)
             PowerCmd.apply(

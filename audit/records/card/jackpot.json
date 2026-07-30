@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_attacks.py",
-    "sha256": "2e92a8261cb05edbecdfa9281fd940b1a96d7c5004e064d9d03204123b6be24e"
+    "sha256": "c968f51d1badb64580afa265bb1e71b26b30cb4c0aeaf5f529cd437e445a1ce2"
   },
   "extra_sources": [
     {
@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "879d6791db6dd9ec5d35355d75e3e784be4c380fb7d0bcd65b0ede93ff8cd339",
+      "sha256": "03b13195368f9b62ffdaef867883b236c1573dd14c05724c40c439ede14a6fbf",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     },
     {
       "path": "test/test_rng_tripwire.py",
-      "sha256": "c34c8bc722ef8c237fc8f09cb3bb0b09e789c97f16fc3cc11619ffabc270a008",
+      "sha256": "2265d317d867d7f296c12774adb73b43d9828aca995f80bb15e1a53deb29451f",
       "side": "sim"
     }
   ],
@@ -53,8 +53,8 @@
     },
     "OnPlay": {
       "maps_to": "JackpotCard.on_play (colorless_attacks.py:234-254)",
-      "verdict": "gap",
-      "issue": "Order, filter and the upgrade-the-generated-cards branch are all faithful. Attack first (Jackpot.cs:30-32), then generation. The filter is transcribed exactly, including the subtle part: C# tests `energyCost.Canonical == 0 && !energyCost.CostsX` (Jackpot.cs:35-37) -- the CANONICAL cost, not the current one, so a card discounted this turn does not qualify -- and the sim reads `_CARD_CLASSES[cid]()._energy_cost` off a FRESH instance (colorless_attacks.py:244), which is the canonical value, plus the same `energy_cost_x` exclusion. The upgrade branch matches too: `if (IsUpgraded) CardCmd.Upgrade(item)` BEFORE the pile add (Jackpot.cs:40-44) == `if self.upgrade_level > 0 and new_card.is_upgradable: new_card.upgrade()` before `add_to_hand`, and C#'s `CardCmd.Upgrade` self-checks IsUpgradable (CardCmd.cs:270-273) so the sim's explicit test is equivalent. The generation is `GetForCombat` -- WITH replacement, so duplicates are allowed -- and the sim's per-card `_rng.choice` reproduces that shape. WRONG RNG STREAM: C# names `Owner.RunState.Rng.CombatCardGeneration`; the sim draws on the unseeded shared `combat._rng` even though `ctx.combat.combat_rng.card_gen` maps to `combat_card_generation` (combat_rng.py:20,52), and `random_pool_cards` uses `rng.sample` / `rng.choice` (pool.py:157-161) rather than the game's draw sequence, so the number of draws differs too. Same mechanism and same verdict as card/discovery's and card/distraction's OnPlay entries (rule 3). LIVE, and this card is one of the 21 the `shared-rng` probe lists. card/infernal_blade in this same batch shows the correct shape: branch on `crng.is_parity` and use `crng.card_gen`. REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): Routed to the stream its C# names. Jackpot.cs names `Rng.CombatCardGeneration` for `CardFactory.GetForCombat` -- one NextItem per card, WITH replacement, which the per-card `choice` already reproduced. Everything else this entry checked was already faithful, the canonical-cost filter included, and the `is_upgradable` test it called equivalent to CardCmd.Upgrade's guard is untouched.  Pinned by test/test_card_residue_gaps.py.  NOT CLOSED: nothing at this site.  The text it replaced read: Order, filter and the upgrade-the-generated-cards branch are all faithful. Attack first (Jackpot.cs:30-32), then generation. The filter is transcribed exactly, including the subtle part: C# tests `energyCost.Canonical == 0 && !energyCost.CostsX` (Jackpot.cs:35-37) -- the CANONICAL cost, not the current one, so a card discounted this turn does not qualify -- and the sim reads `_CARD_CLASSES[cid]()._energy_cost` off a FRESH instance (colorless_attacks.py:244), which is the canonical value, plus the same `energy_cost_x` exclusion. The upgrade branch matches too: `if (IsUpgraded) CardCmd.Upgrade(item)` BEFORE the pile add (Jackpot.cs:40-44) == `if self.upgrade_level > 0 and new_card.is_upgradable: new_card.upgrade()` before `add_to_hand`, and C#'s `CardCmd.Upgrade` self-checks IsUpgradable (CardCmd.cs:270-273) so the sim's explicit test is equivalent. The generation is `GetForCombat` -- WITH replacement, so duplicates are allowed -- and the sim's per-card `_rng.choice` reproduces that shape. WRONG RNG STREAM: C# names `Owner.RunState.Rng.CombatCardGeneration`; the sim draws on the unseeded shared `combat._rng` even though `ctx.combat.combat_rng.card_gen` maps to `combat_card_generation` (combat_rng.py:20,52), and `random_pool_cards` uses `rng.sample` / `rng.choice` (pool.py:157-161) rather than the game's draw sequence, so the number of draws differs too. Same mechanism and same verdict as card/discovery's and card/distraction's OnPlay entries (rule 3). LIVE, and this card is one of the 21 the `shared-rng` probe lists. card/infernal_blade in this same batch shows the correct shape: branch on `crng.is_parity` and use `crng.card_gen`. REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
     },
     "OnUpgrade": {
       "maps_to": "JackpotCard._on_upgrade (colorless_attacks.py:231-232)",
@@ -74,6 +74,6 @@
       "rationale": "The sim is equally unguarded (colorless_attacks.py:242-254), so both add the three cards to a hand that is about to be discarded by the combat-end cleanup. Same outcome."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

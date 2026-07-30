@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\event_cards.py",
-    "sha256": "e2252c0e6b225be22f1da3051e67dc0f235f6b82ec2ccf0ea6158a20701730df"
+    "sha256": "57208afe6ae70f9dd177e57aee53a7f5b5624a5ba5d830a46de5263c8732e691"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     }
   ],
@@ -33,8 +33,8 @@
     },
     "OnPlay": {
       "maps_to": "EnlightenmentCard.on_play (event_cards.py:326-333)",
-      "verdict": "gap",
-      "issue": "The BRANCH is right and easy to get backwards, so it is worth stating: unupgraded uses `SetThisTurnOrUntilPlayed(1, reduceOnly: true)` and UPGRADED uses `SetThisCombat(1, reduceOnly: true)` (Enlightenment.cs:21-28), and the sim maps them to `add_cost_this_turn` and `set_cost_this_combat(1)` respectively (event_cards.py:330-333) -- the this-turn/this-combat split is correct. THE UNUPGRADED BRANCH USES A DELTA WHERE C# USES AN ABSOLUTE SET. C# registers a LocalCostModifier of type Absolute with value 1 (CardEnergyCost.cs:197-203, LocalCostModifier.cs class comment); the sim writes `card.add_cost_this_turn(1 - card.energy_cost)`, a Relative modifier computed from the cost AT THAT INSTANT. The two agree while the card's base cost is unchanged, and diverge the moment it changes within the same turn: a 3-cost card gets delta -2 in the sim, so if it is then UPGRADED mid-turn to base 2 the sim reads 0 while C# still reads its absolute 1. LIVE -- Enlightenment is granted by the ported Zen Weaver event, and card/armaments and card/apotheosis both upgrade cards IN HAND during the same turn, with several Ironclad cards dropping a cost on upgrade (barricade, apotheosis, body_slam, corruption, dark_embrace, ...). The sim already has the right primitive: `Card.set_cost_this_turn` (cards/base.py:252-258) is the absolute form and is used elsewhere."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The unupgraded branch registers an ABSOLUTE cost, not a delta. Enlightenment.cs:21-24 is `SetThisTurnOrUntilPlayed(1, reduceOnly: true)`, a LocalCostModifier of type Absolute with value 1 (CardEnergyCost.cs:197-203); the port wrote `add_cost_this_turn(1 - card.energy_cost)`, a RELATIVE modifier computed from the cost at that instant, which drifts the moment the card's base cost changes within the same turn. `Card.set_cost_this_turn` is the absolute form and was already there. EXECUTED: a 3-cost Bludgeon reads 1 after Enlightenment and STILL reads 1 after being upgraded to base 2 in the same turn, where the delta form read 0 -- and card/armaments and card/apotheosis both upgrade cards in hand.  Pinned by test/test_card_residue_gaps.py.  The this-turn/this-combat split between the two branches was already correct and is untouched. NOT CLOSED: nothing at this site.  The text it replaced read: The BRANCH is right and easy to get backwards, so it is worth stating: unupgraded uses `SetThisTurnOrUntilPlayed(1, reduceOnly: true)` and UPGRADED uses `SetThisCombat(1, reduceOnly: true)` (Enlightenment.cs:21-28), and the sim maps them to `add_cost_this_turn` and `set_cost_this_combat(1)` respectively (event_cards.py:330-333) -- the this-turn/this-combat split is correct. THE UNUPGRADED BRANCH USES A DELTA WHERE C# USES AN ABSOLUTE SET. C# registers a LocalCostModifier of type Absolute with value 1 (CardEnergyCost.cs:197-203, LocalCostModifier.cs class comment); the sim writes `card.add_cost_this_turn(1 - card.energy_cost)`, a Relative modifier computed from the cost AT THAT INSTANT. The two agree while the card's base cost is unchanged, and diverge the moment it changes within the same turn: a 3-cost card gets delta -2 in the sim, so if it is then UPGRADED mid-turn to base 2 the sim reads 0 while C# still reads its absolute 1. LIVE -- Enlightenment is granted by the ported Zen Weaver event, and card/armaments and card/apotheosis both upgrade cards IN HAND during the same turn, with several Ironclad cards dropping a cost on upgrade (barricade, apotheosis, body_slam, corruption, dark_embrace, ...). The sim already has the right primitive: `Card.set_cost_this_turn` (cards/base.py:252-258) is the absolute form and is used elsewhere."
     }
   },
   "guards": [

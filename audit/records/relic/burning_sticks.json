@@ -21,17 +21,17 @@
     },
     {
       "path": "sts2_rl/cards/trash_heap_cards.py",
-      "sha256": "89ec1d15e3dd0db928e3c3a4a04aa21564c5d9b04dc5008761242025e88db7db",
+      "sha256": "f93265bdcd41fa82dd09ab914501270537ae907e02f97679dd58dd2345183e20",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/relics/music_box.py",
-      "sha256": "e1ac228baf22f662da3a9ebdf62bf538dbc5d7a1802368bc58101863238fc867",
+      "sha256": "a22104f22cd2cd0ed4345b115321d3ee8efb5421f1ee5bffccfe2718dc2fb9a8",
       "side": "sim"
     },
     {
@@ -79,8 +79,8 @@
     },
     {
       "what": "G3 (LIVE): the copy is rebuilt from the card id, where C# clones the actual card instance",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27, RE-OPENED 2026-07-28: the copy carries more than it used to but it is still REBUILT from the class, which is exactly what this guard claims. CLOSED: sts2_rl/relics/burning_sticks.py calls `create_clone(card)` (sts2_rl/cards/base.py:57-83), so the copy now carries the source's upgrade level plus live copies of its ENCHANTMENT and AFFLICTION -- an enchanted Defend no longer clones as `clone.enchantment=None`. STILL OPEN: create_clone opens with `clone = type(card)()` (cards/base.py:74). BurningSticks.cs:44-52 calls card.CreateClone(), a memberwise MutableClone whose DeepCloneFields (CardModel.cs:1193-1216) also carries `_keywords` (Local sources), `_dynamicVars`, `_energyCost` and `_temporaryStarCosts`. EXECUTED 2026-07-28 (same probe as relic/music_box G1): a source with set_cost_this_combat(0), base_replay_count 1 and is_ethereal True clones to (energy_cost 1, replay 0, ethereal False). LIVE ROUTE FOR A SKILL, which is all this relic ever copies: potions.py, relics/crossbow.py, relics/jeweled_mask.py, relics/vexing_puzzlebox.py and cards/infernal_blade.py all call set_free_this_turn / set_cost_this_combat, so a cost-reduced Skill that is then exhausted returns to hand at FULL cost in the sim and at the modified cost in the game. One mechanism with relic/music_box G1 (binding rule 3); the fix is in create_clone, not in either relic. WAS: the port built `make_card(card.id)` and replayed only the upgrade level. Rule 7: sts2_rl/cards/base.py, sts2_rl/potions.py and the three relic files are cited without being hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `create_clone` (cards/base.py) IS a memberwise copy now. `ClonePreservingMutability` is `AbstractModel.MutableClone` (a MemberwiseClone) and only THEN `DeepCloneFields` (CardModel.cs:1193-1216) and `AfterCloned` (:1218-1239), so the sim opens with `clone.__dict__.update(card.__dict__)` and the two override passes only re-point what must not be shared (`combat`, and the enchantment/affliction that DeepCloneFields re-creates). Everything the guard named now rides along: the LIVE KEYWORD SET (`_keywords = GetKeywordsWithSources(KeywordSources.Local)`, :1196-1200 -- Music Box's Ethereal), the cloned `_energyCost` and its `_localModifiers` (:1202 -> CardEnergyCost.cs:411-421 -- SetThisCombat, AddThisTurn, free-this-turn), the cloned `_dynamicVars` (:1201 -- a grown Rampage clones grown) and `BaseReplayCount` (Hidden Gem). `CreateClone`'s own tail, `ExhaustOnNextPlay = false` (:2178), is the last line. ONE MORE FINDING, and it is the reason the fix could not be a one-liner: DeepCloneFields re-attaches with `EnchantInternal` (:1204-1209 -> :1491-1498), which checks NO CanEnchant and does NOT run `ModifyCard` -- EnchantmentModel.cs:350-353 says why in as many words, \"It is NOT called when a card is cloned, because the enchantment's effects will already be reflected in the card's values.\" The sim only had the normal `attach`, and re-running it on a memberwise copy is not merely redundant, it THROWS for Souls, whose CanEnchant demands the Exhaust its own ModifyCard removes. `Enchantment.attach_internal` is that path. EXECUTED, old -> new: keyword False->True, free-this-turn cost 1->0, base_replay_count 0->3, a twice-played Rampage 9->19. Pinned by test/test_create_clone_memberwise.py. TEST MOVED (non-negotiable 5): test_card_clone_enchantment.py's `test_clone_reapplies_a_static_card_modification` is now `test_clone_carries_a_static_card_modification`, with the reason inline; its assertion is unchanged. NOT CLOSED: nothing at this site.  The text it replaced read: NARROWED 2026-07-27, RE-OPENED 2026-07-28: the copy carries more than it used to but it is still REBUILT from the class, which is exactly what this guard claims. CLOSED: sts2_rl/relics/burning_sticks.py calls `create_clone(card)` (sts2_rl/cards/base.py:57-83), so the copy now carries the source's upgrade level plus live copies of its ENCHANTMENT and AFFLICTION -- an enchanted Defend no longer clones as `clone.enchantment=None`. STILL OPEN: create_clone opens with `clone = type(card)()` (cards/base.py:74). BurningSticks.cs:44-52 calls card.CreateClone(), a memberwise MutableClone whose DeepCloneFields (CardModel.cs:1193-1216) also carries `_keywords` (Local sources), `_dynamicVars`, `_energyCost` and `_temporaryStarCosts`. EXECUTED 2026-07-28 (same probe as relic/music_box G1): a source with set_cost_this_combat(0), base_replay_count 1 and is_ethereal True clones to (energy_cost 1, replay 0, ethereal False). LIVE ROUTE FOR A SKILL, which is all this relic ever copies: potions.py, relics/crossbow.py, relics/jeweled_mask.py, relics/vexing_puzzlebox.py and cards/infernal_blade.py all call set_free_this_turn / set_cost_this_combat, so a cost-reduced Skill that is then exhausted returns to hand at FULL cost in the sim and at the modified cost in the game. One mechanism with relic/music_box G1 (binding rule 3); the fix is in create_clone, not in either relic. WAS: the port built `make_card(card.id)` and replayed only the upgrade level. Rule 7: sts2_rl/cards/base.py, sts2_rl/potions.py and the three relic files are cited without being hashed by this record."
     },
     {
       "what": "G2: sweep-upgrade flags burning_sticks.py:24 as an unguarded `Card.upgrade()` (PROMPT.md bug class 14) -- settled by execution as a false positive",

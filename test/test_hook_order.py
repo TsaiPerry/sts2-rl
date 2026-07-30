@@ -271,6 +271,54 @@ class TestCreatureCardCmdsOrder:
         second = BlockCmd.apply(cs.hooks, cs.player, 5, card=card)
         assert (first, second) == (10, 10)  # C#: same CardPlay, still doubled
 
+    def test_after_modifying_block_amount_runs_before_the_block_lands(self):
+        # CreatureCmd.cs:644-646 dispatches AfterModifyingBlockAmount, and only
+        # THEN does `if (modifiedAmount > 0m) ... GainBlockInternal` (:647-651).
+        # The sim used to fire it after `target.block +=`, so a listener that
+        # read the block saw the gain already applied (damage_pipeline/G2).
+        seen = []
+
+        from sts2_rl.relics.base import Relic
+
+        class _Spy(Relic):
+            id = "spy"
+            name = "Spy"
+
+            def modify_block_additive(self, target, amount, card=None,
+                                      props=ValueProp.NONE):
+                return 1
+
+            def after_modify_block_amount(self, target, amount, card=None):
+                seen.append((target.block, amount))
+
+        cs = CombatState(rng=random.Random(0), relics=[_Spy()])
+        cs.player.block = 0
+        BlockCmd.apply(cs.hooks, cs.player, 5, card=make_card("defend"))
+        assert seen == [(0, 6)]      # block not yet gained; amount is final
+
+    def test_paels_legion_latches_on_the_after_event_not_the_modifier(self):
+        # PaelsLegion.cs:134-152 ModifyBlockMultiplicative is PURE — it reads
+        # the cooldown and returns 2m, and latches nothing. The latch is
+        # :155-170's AfterModifyingBlockAmount, which only runs for a listener
+        # that actually changed the amount. Reading a preview must therefore
+        # not arm the relic.
+        legion = make_relic("paels_legion")
+        cs = CombatState(rng=random.Random(0), relics=[legion])
+        card = make_card("defend")
+        assert legion.modify_block_multiplicative(
+            cs.player, 5, card, ValueProp.MOVE) == 2.0
+        assert legion._affected_card is None      # the pure read armed nothing
+        BlockCmd.apply(cs.hooks, cs.player, 5, card=card)
+        assert legion._affected_card is card
+
+    def test_paels_legion_ignores_a_zero_block_gain(self):
+        # PaelsLegion.cs:157-160 — `if (modifiedAmount <= 0m) return;`.
+        legion = make_relic("paels_legion")
+        cs = CombatState(rng=random.Random(0), relics=[legion])
+        BlockCmd.apply(cs.hooks, cs.player, 0, card=make_card("defend"))
+        assert legion._affected_card is None
+        assert legion.cooldown == 0
+
     # creature_card_cmds gap G3 FIXED (GAP-QUEUE.md entry 31):
     # RunState.transform_card now runs the same two deck-entry hooks
     # CardCmd.Transform runs for a Deck pile — Hook.ModifyCardBeingAddedToDeck
@@ -349,11 +397,12 @@ class TestTurnStructureOrder:
         "should_take_extra_turn", "on_player_turn_end",
         "should_ethereal_trigger", "on_card_exhausted", "should_flush_hand",
         "on_card_discarded", "on_hand_emptied", "after_player_turn_end",
-        "should_clear_block", "on_block_cleared", "on_enemy_turn_start",
-        "on_enemy_turn_end", "on_enemy_side_end", "modify_max_energy",
-        "should_reset_energy", "on_energy_reset", "on_player_turn_start",
-        "modify_hand_draw", "should_draw", "on_card_drawn",
-        "on_player_turn_started",
+        "before_side_turn_start", "should_clear_block", "on_block_cleared",
+        "before_enemy_side_start", "after_enemy_side_start",
+        "before_enemy_side_end", "on_enemy_side_end",
+        "modify_max_energy", "should_reset_energy", "on_energy_reset",
+        "on_player_turn_start", "modify_hand_draw", "should_draw",
+        "on_card_drawn", "on_player_turn_started", "after_side_turn_start",
     ]
 
     def test_end_turn_hook_sequence(self):
@@ -368,9 +417,11 @@ class TestTurnStructureOrder:
           Burn) -> ShouldFlush (step 61) -> the flush (step 62) -> the
           player-side Hook.AfterTurnEnd (step 64, the Parrying Shield slot,
           AFTER the flush);
-        - the enemy side (steps 30-39): block clear, per-enemy turn start,
-          per-enemy turn end, then ONE side-end (where Vulnerable/Weak/Frail
-          tick, step 39);
+        - the enemy side (steps 30-39), now one side turn rather than N
+          creature turns (gap G5): ONE BeforeSideTurnStart, the block-clear and
+          AfterBlockCleared passes, ONE AfterSideTurnStart, the moves, then ONE
+          BeforeTurnEnd and ONE AfterTurnEnd (where Vulnerable/Weak/Frail tick,
+          step 39);
         - the next player turn's setup (steps 12-23): block clear -> energy
           (modify_max_energy, ShouldPlayerResetEnergy, AfterEnergyReset) ->
           BeforeHandDraw -> ModifyHandDraw -> the 5-card draw ->
@@ -399,16 +450,19 @@ class TestTurnStructureOrder:
             "on_card_discarded",          # step 54  Burn -> Discard
             "should_flush_hand",          # step 61  Hook.ShouldFlush
             "on_card_discarded",          # step 62  the flush (Strike)
-            "on_hand_emptied",            # (sim-only here -- gap G16)
+            # No on_hand_emptied: CombatManager.cs:880-883 excludes the flush
+            # from CheckForEmptyHand on purpose (G16, closed).
             "after_player_turn_end",      # step 64  Hook.AfterTurnEnd
             "should_take_extra_turn",     # step 65  SwitchFromPlayerToEnemySide
             # --- the enemy side -----------------------------------------
+            "before_enemy_side_start",    # step 11  Hook.BeforeSideTurnStart
             "should_clear_block",         # step 13  the enemy's clear
             "on_block_cleared",           # step 14
-            "on_enemy_turn_start",        # (sim-only per-enemy -- gap G5)
-            "on_enemy_turn_end",          # (sim-only per-enemy -- gap G5)
+            "after_enemy_side_start",     # step 24  Hook.AfterSideTurnStart
+            "before_enemy_side_end",      # step 38  Hook.BeforeTurnEnd
             "on_enemy_side_end",          # step 39  V/W/F tick down here
             # --- the next player turn's setup ---------------------------
+            "before_side_turn_start",     # step 11  Hook.BeforeSideTurnStart
             "should_clear_block",         # step 13  the player's clear
             "on_block_cleared",           # step 14
             "modify_max_energy",          # step 17  Hook.ModifyMaxEnergy
@@ -421,40 +475,14 @@ class TestTurnStructureOrder:
             "should_draw", "on_card_drawn",
             "should_draw", "on_card_drawn",
             "should_draw", "on_card_drawn",   # step 22  the 5-card draw
-            "on_player_turn_started",     # steps 22/23 AfterPlayerTurnStart
+            "on_player_turn_started",     # step 23  Hook.AfterPlayerTurnStart
+            "after_side_turn_start",      # step 24  Hook.AfterSideTurnStart
         ]
 
-    def test_enemy_side_is_interleaved_per_enemy(self):
-        """Gap G5, pinned as a PASSING trace of the sim's current (divergent)
-        order so that fixing it has to come here and change this deliberately.
-        C# runs three complete passes over every participant before any enemy
-        acts (BeforeTurnStart 449-455, AfterTurnStart/ClearBlock 492-499,
-        AfterBlockCleared 500-507), then ONE Hook.AfterSideTurnStart (522),
-        then the moves (1072-1090), then ONE Hook.BeforeTurnEnd (1251) and ONE
-        Hook.AfterTurnEnd (1256) -- i.e. [clear1, clear2, cleared1, cleared2,
-        SideTurnStart, move1, move2, BeforeTurnEnd, AfterTurnEnd]. The sim
-        brackets each enemy individually and has no side-start slot at all."""
-        from sts2_rl.monsters import Encounter, FuzzyWurmCrawler
-
-        cs = CombatState(
-            rng=random.Random(0),
-            encounter=Encounter(id="two_crawlers",
-                                monster_classes=[FuzzyWurmCrawler,
-                                                 FuzzyWurmCrawler]),
-        )
-        for e in cs.enemies:
-            e.block = 5
-        calls = trace(cs.hooks, ["should_clear_block", "on_block_cleared",
-                                 "on_enemy_turn_start", "on_enemy_turn_end",
-                                 "on_enemy_side_end"])
-        cs._run_enemy_turns()
-        assert calls == [
-            "should_clear_block", "on_block_cleared",
-            "on_enemy_turn_start", "on_enemy_turn_end",
-            "should_clear_block", "on_block_cleared",
-            "on_enemy_turn_start", "on_enemy_turn_end",
-            "on_enemy_side_end",
-        ]
+    # Gap G5's multi-enemy trace moved to test/test_enemy_side_per_side.py when
+    # the gap was fixed: it used to pin the sim's interleaved
+    # [clear, start, move, end]-per-enemy order as a deliberate divergence, and
+    # the replacement pins the three-complete-passes shape the game has.
 
     def test_block_clear_event_fires_even_when_prevented(self):
         from sts2_rl.powers import BarricadePower
@@ -823,12 +851,25 @@ class TestHookDispatchOrder:
         cs.player.hand.clear()
         cs.player.hand.append(make_card("strike"))
         block_before = cs.player.block
+        seen: list[str] = []
+
+        class _Watch:
+            hook_category = 99            # walks after the relics
+
+            def on_block_gained(self, target, amount, card=None):
+                seen.append("block")
+
+        cs.hooks.register(_Watch())
         cs.play_card(0)                       # the killing blow
         assert cs._all_enemies_dead()
         # C#: AfterCardPlayed completes the resolution of the card that caused
-        # the kill, so the relic still gets its Block (Hook.cs:275-276,
-        # CardModel.cs:1957).
-        assert cs.player.block == block_before + 1
+        # the kill, so the relic's listener still RUNS (Hook.cs:275-276,
+        # CardModel.cs:1957) -- but the CreatureCmd.GainBlock it runs has its
+        # own `IsOverOrEnding -> return default` guard (CreatureCmd.cs:637), so
+        # no block lands. This used to assert the block, having checked only
+        # the hook half.
+        assert cs.player.block == block_before
+        assert seen == []
 
     def test_multiplicative_damage_modifiers_chain_sequentially(self):
         from sts2_rl.powers import ShrinkPower
@@ -916,14 +957,18 @@ class TestMonsterStateMachineOrder:
         reduces to `RefreshIntents()`, so the flag exists to stop that call
         re-rolling what `CombatManager.AfterCreatureAdded`
         (`CombatManager.cs:860-867`) already rolled -- C# rolls a spawn's move
-        EXACTLY ONCE, never twice. The sim reaches the same property by a
-        different split: `CreatureCmd.add` (`cmds.py:237-266`) never rolls and
-        `MachineMonster.__init__` rolls once (`state_machine.py:300-301`).
-        Pinned because nothing else asserts it and a future
-        `telegraph_next_move` call inside `CreatureCmd.add` would silently
-        double-roll (one extra MonsterAi draw plus a second log entry).
-        Executed equivalently by `audit/tools/state_machine_probes.py
-        spawn-roll`."""
+        EXACTLY ONCE, never twice.
+
+        CORRECTED 2026-07-29 (`turn_structure/step2`). This used to assert the
+        sim's "different split": `CreatureCmd.add` never rolls and
+        `MachineMonster.__init__` rolls once. That split got the exactly-once
+        COUNT right and the side gate wrong -- `AfterCreatureAdded` rolls only
+        `if (creature.IsEnemy && CurrentSide == CombatSide.Player)`, so a
+        constructor roll also fires for a summon on the ENEMY side, which C#
+        does not roll at all. The roll now lives where C# puts it, and this
+        test pins both arms of the gate plus the exactly-once property that
+        was always the point. Executed equivalently by
+        `audit/tools/state_machine_probes.py spawn-roll`."""
         from sts2_rl.cmds import CreatureCmd
         from sts2_rl.monsters import Encounter
         from sts2_rl.monsters.state_machine import MonsterMoveStateMachine
@@ -945,13 +990,24 @@ class TestMonsterStateMachineOrder:
             during_ctor = len(calls)
             CreatureCmd.add(cs.hooks, spawn)
             during_add = len(calls) - during_ctor
+
+            # the other arm: CurrentSide == Enemy, so no roll at all
+            cs.current_side = "enemy"
+            enemy_side = FossilStalker(cs.hooks, random.Random(6))
+            before = len(calls)
+            CreatureCmd.add(cs.hooks, enemy_side)
+            during_enemy_add = len(calls) - before
         finally:
             MonsterMoveStateMachine.roll_move = real
+            cs.current_side = "player"
 
-        assert during_ctor == 1                 # C#: AfterCreatureAdded's roll
-        assert during_add == 0                  # C#: rollNewMove: false
+        assert during_ctor == 0                 # C#: the ctor is not a hook
+        assert during_add == 1                  # C#: AfterCreatureAdded's roll
         assert len(spawn.machine.state_log) == 1
         assert spawn._current_move.id == spawn.machine.current.id
+
+        assert during_enemy_add == 0            # C#: the CurrentSide gate
+        assert not enemy_side.has_rolled_a_move
 
     def test_addbranch_int_args_are_repeat_limits_not_weights(self):
         """monster_state_machine audit gap G1, FIXED. C#'s

@@ -17,6 +17,7 @@ from sts2_rl.afflictions import TaintedAffliction
 from sts2_rl.cards import CardRarity, make_card
 from sts2_rl.monsters import Encounter, MoveType
 from sts2_rl.monsters.hive import (
+    OVICOPTER_NORMAL,
     BowlbugEgg,
     BowlbugNectar,
     BowlbugRock,
@@ -304,12 +305,24 @@ class TestLouseProgenitor:
         cs.end_turn()  # WEB_CANNON 9 + 5
         assert cs.player.hp == 80 - 9 - 19 - 14
 
-    def test_curl_up_blocks_on_first_hit(self):
+    def test_curl_up_blocks_after_the_card_play_that_hit_it(self):
+        # MOVED 2026-07-29 (round 7, power/curl_up/AfterDamageReceived). It
+        # used to drive `DamageCmd.deal` directly and assert the block appeared
+        # inside the damage hook. CurlUpPower.cs:34-54 only LATCHES the
+        # triggering card; the block lands in AfterCardPlayed (:56-70), once
+        # the whole play has resolved -- and a bare damage instance with no
+        # cardSource latches nothing at all (:44-47).
+        from sts2_rl.cards import make_card
         cs = fresh_with(LouseProgenitor)
         louse = cs.enemy
         assert louse.powers["curl_up"].amount == 14
         DamageCmd.deal(cs.hooks, louse, 5, dealer=cs.player)
-        assert louse.hp == louse.max_hp - 5  # the triggering hit lands first
+        assert louse.block == 0 and "curl_up" in louse.powers
+        hp = louse.hp
+        strike = make_card("strike")
+        strike.on_play(cs._ctx(), target_idx=0)
+        cs.hooks.on_card_played(strike)
+        assert louse.hp == hp - 6            # the triggering hit lands first
         assert louse.block == 14
         assert "curl_up" not in louse.powers
 
@@ -352,8 +365,17 @@ class TestMytes:
 # ═════════════════════════════════════════════════════════════════════════
 
 class TestOvicopter:
+    """MOVED 2026-07-29 (round 7, monster/ovicopter/g2): these used
+    `fresh_with(Ovicopter)`, a synthetic one-monster Encounter with NO slot
+    row.
+    The lay is `Encounter.Slots.LastOrDefault(unoccupied)` (Ovicopter.cs:87)
+    under `if (text != null)` (:88), so a slot-less encounter lays NOTHING — and
+    the game's Ovicopter exists only in OvicopterNormal, whose row IS declared
+    (OvicopterNormal.cs:16). Driving the real encounter is both what the game
+    does and what these assertions were always about.
+    """
     def test_lays_three_minion_eggs(self):
-        cs = fresh_with(Ovicopter)
+        cs = fresh_encounter(OVICOPTER_NORMAL)
         assert 124 <= cs.enemy.max_hp <= 130
         cs.end_turn()  # LAY_EGGS
         assert cs.player.hp == 80
@@ -362,7 +384,15 @@ class TestOvicopter:
         for egg in eggs:
             assert 14 <= egg.max_hp <= 18
             assert "minion" in egg.powers
-            assert egg.powers["hatch"].amount == 2
+            # ToughEgg.cs:133 applies Hatch 2 when the current side is Enemy
+            # and 1 otherwise -- the extra point is there PRECISELY because
+            # HatchPower.cs:18 is AfterSideTurnEnd (CombatManager.cs:1256, once
+            # for the side after every enemy has moved) and the newly-laid egg
+            # is already in `CreaturesOnCurrentSide` by then, so it takes that
+            # same turn's decrement. The sim used to read 2 here because its
+            # per-enemy turn-end slot iterated a snapshot taken before the eggs
+            # existed (turn_structure G5).
+            assert egg.powers["hatch"].amount == 1
             assert egg.current_intent.move_type == MoveType.SUMMON
 
     def test_eggs_fill_their_slots_backwards_ahead_of_the_ovicopter(self):
@@ -372,7 +402,7 @@ class TestOvicopter:
         SortEnemiesBySlotName then orders Enemies [egg3, egg4, egg5,
         ovicopter]: newest egg first, the Ovicopter (slot index 5) last. The
         default/RL (legacy) path used to append instead."""
-        cs = fresh_with(Ovicopter)
+        cs = fresh_encounter(OVICOPTER_NORMAL)
         ovi = cs.enemies[0]
         ovi._lay_eggs(cs._ctx())
         assert [type(e).__name__ for e in cs.enemies] == [
@@ -384,7 +414,7 @@ class TestOvicopter:
         assert list(cs.enemies[2:5]) == first_lay
 
     def test_eggs_hatch_then_nibble(self):
-        cs = fresh_with(Ovicopter)
+        cs = fresh_encounter(OVICOPTER_NORMAL)
         cs.end_turn()  # LAY_EGGS
         eggs = [e for e in cs.enemies if isinstance(e, ToughEgg)]
         cs.end_turn()  # SMASH 16; eggs hatch (no damage from them yet)
@@ -403,7 +433,7 @@ class TestOvicopter:
         # max-EXCLUSIVE — 22 is a roll the game cannot produce.
         seen = set()
         for seed in range(60):
-            cs = fresh_with(Ovicopter, seed)
+            cs = fresh_encounter(OVICOPTER_NORMAL, seed)
             cs.end_turn()  # LAY_EGGS
             eggs = [e for e in cs.enemies if isinstance(e, ToughEgg)]
             cs.end_turn()  # SMASH; eggs hatch
@@ -413,7 +443,7 @@ class TestOvicopter:
         assert seen == {19, 20, 21}
 
     def test_paste_while_eggs_alive_lay_after_they_die(self):
-        cs = fresh_with(Ovicopter)
+        cs = fresh_encounter(OVICOPTER_NORMAL)
         ovi = cs.enemies[0]
         cs.end_turn()  # LAY_EGGS
         cs.player.hp = 80
@@ -427,7 +457,7 @@ class TestOvicopter:
         assert ovi._can_lay()
 
     def test_minion_eggs_do_not_prolong_combat(self):
-        cs = fresh_with(Ovicopter)
+        cs = fresh_encounter(OVICOPTER_NORMAL)
         ovi = cs.enemies[0]
         cs.end_turn()  # LAY_EGGS (the eggs take the slots ahead of the Ovicopter)
         DamageCmd.deal(cs.hooks, ovi, 999, dealer=cs.player)

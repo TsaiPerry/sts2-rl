@@ -339,9 +339,14 @@ class TestDebuffTickRateWithMultipleEnemies:
         cs.end_turn()
         assert cs.enemies[0].powers["vulnerable"].amount == 2
 
-    def test_per_enemy_turn_end_does_not_tick_debuffs(self):
+    def test_the_side_end_before_pass_does_not_tick_debuffs(self):
+        """Duration ticks are `AfterSideTurnEnd` (Hook.AfterTurnEnd,
+        CombatManager.cs:1256), not the `Hook.BeforeTurnEnd` that opens
+        EndEnemyTurnInternal one line earlier (:1251). The sim used to have a
+        per-enemy turn-end slot and this test pinned that the ticks were not on
+        it; the slot is gone (turn_structure G5), so the adjacent side-scoped
+        pass is what can now be got wrong."""
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.player, VulnerablePower, 3)
-        cs.hooks.on_enemy_turn_end(cs.enemies[0])
-        cs.hooks.on_enemy_turn_end(cs.enemies[1])
+        cs.hooks.before_enemy_side_end()
         assert cs.player.powers["vulnerable"].amount == 3

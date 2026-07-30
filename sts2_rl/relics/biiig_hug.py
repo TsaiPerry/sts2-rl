@@ -23,7 +23,7 @@ class BiiigHug(Relic):
     def after_obtained(self, run) -> None:
         candidates = run.removable_cards()
         for card in run.select_cards("remove", candidates, self.CARDS):
-            run.deck.remove(card)
+            run.remove_cards([card])   # CardPileCmd.RemoveFromDeck
 
     def on_shuffle(self, player: PlayerCombatState) -> None:
         from ..cards import make_card

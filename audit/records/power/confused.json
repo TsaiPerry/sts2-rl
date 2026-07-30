@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
@@ -59,8 +59,8 @@
   "guards": [
     {
       "what": "ConfusedPower.cs:53 Rng.CombatEnergyCosts.NextInt(4)",
-      "verdict": "gap",
-      "issue": "WRONG RNG STREAM. C# draws the cost from base.Owner.Player.RunState.Rng.CombatEnergyCosts; powers.py:3873 uses combat._rng.randrange(4), the SHARED unseeded random.Random (combat.py:88). combat.combat_rng.energy (combat_rng.py:23,53 -- the combat_energy_costs stream) is the matching accessor and exists. The range is right on both sides (NextInt(4) is 0..3 and randrange(4) is 0..3, so costs 0-3 inclusive, which the sim's docstring states). Same defect as power/aggression's (main report section 4 item 8) and as power/hello_world, power/entropy and power/stampede in half A, and LIVE for the same reason with an unusually wide blast radius: Confused re-costs EVERY card the player draws for the whole combat, so under seed parity a Snecko Eye run diverges on the first draw and every shared-rng consumer after it is perturbed. Both appliers are ported relics (relics/snecko_eye.py:25-28, relics/fake_snecko_eye.py:19-22), so binding rule 6 is satisfied. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): closed by the same edit as relic/snecko_eye/g1. ConfusedPower.NextEnergyCost (ConfusedPower.cs:47-54) ends in `RunState.Rng.CombatEnergyCosts.NextInt(4)`, and powers.py's ConfusedPower.on_card_drawn now reads `combat.combat_rng.energy` -- combat_energy_costs in a parity run, the shared legacy Random in RL play. Pinned by test_combat_rng.py::test_confused_cost_draws_from_the_energy_cost_stream.  The text it replaced read: WRONG RNG STREAM. C# draws the cost from base.Owner.Player.RunState.Rng.CombatEnergyCosts; powers.py:3873 uses combat._rng.randrange(4), the SHARED unseeded random.Random (combat.py:88). combat.combat_rng.energy (combat_rng.py:23,53 -- the combat_energy_costs stream) is the matching accessor and exists. The range is right on both sides (NextInt(4) is 0..3 and randrange(4) is 0..3, so costs 0-3 inclusive, which the sim's docstring states). Same defect as power/aggression's (main report section 4 item 8) and as power/hello_world, power/entropy and power/stampede in half A, and LIVE for the same reason with an unusually wide blast radius: Confused re-costs EVERY card the player draws for the whole combat, so under seed parity a Snecko Eye run diverges on the first draw and every shared-rng consumer after it is perturbed. Both appliers are ported relics (relics/snecko_eye.py:25-28, relics/fake_snecko_eye.py:19-22), so binding rule 6 is satisfied. Third-file citations, not hashed here."
     },
     {
       "what": "ConfusedPower.cs:11,17-29 TestEnergyCostOverride",

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\frantic_escape.py",
-    "sha256": "d7cbdc8b69a01457f9eb6ff70781c996f8b047819c5ea74ba0411c3fc977d70b"
+    "sha256": "157fa4e33cf09bf2fdc0ad9088b65bd126cd9236fb032dbbd3ef3a69769a387b"
   },
   "extra_sources": [
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     }
   ],
@@ -48,8 +48,8 @@
     },
     "OnPlay": {
       "maps_to": "FranticEscapeCard.on_play (frantic_escape.py:33-42)",
-      "verdict": "gap",
-      "issue": "TWO DIVERGENCES. (1) THE COST BUMP IS PERMANENT IN THE SIM. `base.EnergyCost.AddThisCombat(1)` (FranticEscape.cs:45) registers a LocalCostModifier with `LocalCostModifierExpiration.EndOfCombat` (CardEnergyCost.cs, the AddThisCombat overload), so the card resets to cost 1 in the NEXT combat. The sim writes `self._energy_cost += 1` (frantic_escape.py:42), mutating the card's BASE cost -- and `_energy_cost` is re-seeded only by `_init_vars`, which `reset_combat_state` (cards/base.py:239-245) does not call. So a Frantic Escape played twice in one combat and then carried into the next starts that combat at cost 3 in the sim and cost 1 in the game. LIVE: The Insatiable's LIQUIFY_GROUND adds these cards, the sim keeps deck cards across combats (RunState.deck), and `reset_combat_state` exists precisely to clear per-combat cost state -- it already handles `_cost_this_combat`, which is the field this should have used (`set_cost_this_combat` is a SET, so an ADD needs `self.set_cost_this_combat(self._energy_cost + 1)` or an equivalent per-combat delta). (2) APPLY vs MODIFYAMOUNT AND A MISSING TARGET FILTER: C# finds the Sandpit power `s.Target == Owner.Creature` (FranticEscape.cs:40) and calls `PowerCmd.ModifyAmount(sandpitPower, 1m, sandpitEnemy, this)` on that exact instance; the sim takes the first enemy with ANY `sandpit` power and calls `PowerCmd.apply(..., SandpitPower, 1)` (frantic_escape.py:36-40), which routes through the stacking path and, unlike ModifyAmount, runs the full apply pipeline. DORMANT: single-player means one Sandpit can only target the one player, so the `Target ==` filter selects the same instance, and the sim's `PowerCmd.apply` reaches `existing.on_stack(amount)` (cmds.py:308-322) for an already-present power, which is ModifyAmount's job. Live if a second Sandpit or a multi-target Sandpit is ever reachable."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): Divergence (1) closed: the cost bump is per-COMBAT. FranticEscape.cs:45 is `EnergyCost.AddThisCombat(1)`, a LocalCostModifier with EndOfCombat expiration, and the port mutated `self._energy_cost`, the card's BASE cost -- which `reset_combat_state` does not re-seed, because it does not re-run `_init_vars`. It now calls `set_cost_this_combat(self.energy_cost + 1)`, the field `reset_combat_state` already clears. EXECUTED: played twice the card reads 3, and after `reset_combat_state` it is back to 1 where it used to start the next combat at 3.  Pinned by test/test_card_residue_gaps.py.  NOT CLOSED: divergence (2), the Apply-vs-ModifyAmount substitution and the missing `s.Target == Owner.Creature` filter, which this entry already records as DORMANT -- single-player means one Sandpit can only target the one player, so the filter selects the same instance.  The text it replaced read: TWO DIVERGENCES. (1) THE COST BUMP IS PERMANENT IN THE SIM. `base.EnergyCost.AddThisCombat(1)` (FranticEscape.cs:45) registers a LocalCostModifier with `LocalCostModifierExpiration.EndOfCombat` (CardEnergyCost.cs, the AddThisCombat overload), so the card resets to cost 1 in the NEXT combat. The sim writes `self._energy_cost += 1` (frantic_escape.py:42), mutating the card's BASE cost -- and `_energy_cost` is re-seeded only by `_init_vars`, which `reset_combat_state` (cards/base.py:239-245) does not call. So a Frantic Escape played twice in one combat and then carried into the next starts that combat at cost 3 in the sim and cost 1 in the game. LIVE: The Insatiable's LIQUIFY_GROUND adds these cards, the sim keeps deck cards across combats (RunState.deck), and `reset_combat_state` exists precisely to clear per-combat cost state -- it already handles `_cost_this_combat`, which is the field this should have used (`set_cost_this_combat` is a SET, so an ADD needs `self.set_cost_this_combat(self._energy_cost + 1)` or an equivalent per-combat delta). (2) APPLY vs MODIFYAMOUNT AND A MISSING TARGET FILTER: C# finds the Sandpit power `s.Target == Owner.Creature` (FranticEscape.cs:40) and calls `PowerCmd.ModifyAmount(sandpitPower, 1m, sandpitEnemy, this)` on that exact instance; the sim takes the first enemy with ANY `sandpit` power and calls `PowerCmd.apply(..., SandpitPower, 1)` (frantic_escape.py:36-40), which routes through the stacking path and, unlike ModifyAmount, runs the full apply pipeline. DORMANT: single-player means one Sandpit can only target the one player, so the `Target ==` filter selects the same instance, and the sim's `PowerCmd.apply` reaches `existing.on_stack(amount)` (cmds.py:308-322) for an already-present power, which is ModifyAmount's job. Live if a second Sandpit or a multi-target Sandpit is ever reachable."
     }
   },
   "guards": [

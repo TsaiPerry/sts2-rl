@@ -43,22 +43,38 @@ class PaelsLegion(Relic):
         self, target: "Creature", amount: int, card: "Card | None" = None,
         props: ValueProp = ValueProp.NONE,
     ) -> float:
-        if not is_card_or_monster_move(props):   # PaelsLegion.cs:132
+        if not is_card_or_monster_move(props):   # PaelsLegion.cs:136
             return 1.0
         # Owner's card-sourced block only, while awake.
         if card is None or self.cooldown > 0 or target is not self.player:
             return 1.0
-        self._affected_card = card
         return 2.0
+
+    def after_modify_block_amount(self, target: "Creature", amount: int,
+                                  card: "Card | None" = None) -> None:
+        # PaelsLegion.cs:155-170. The latch lives HERE, not in the modifier:
+        # Hook.AfterModifyingBlockAmount only reaches a listener that actually
+        # changed the amount (CreatureCmd.cs:646's `out modifiers`), so a
+        # pure-read preview through ModifyBlockMultiplicative cannot arm the
+        # relic. The sim used to latch inside the multiplier itself.
+        if amount <= 0:                                     # :157
+            return
+        if card is None:                                    # :161
+            return
+        if self._affected_card is not None and self._affected_card is not card:
+            return                                          # :165
+        self._affected_card = card
 
     def on_card_played(self, card: "Card",
                        is_auto_play: bool = False) -> None:
-        # AfterCardPlayed: the doubled play ends — start the cooldown.
+        # AfterCardPlayed (:173-185): the doubled play ends — start the
+        # cooldown. C# compares CardPlay identity; the sim's card object is
+        # the same latch, as it is for Vambrace.
         if self._affected_card is card:
             self._affected_card = None
             self.cooldown = self.COOLDOWN_TURNS
 
-    def on_player_turn_start(self, player) -> None:
+    def after_side_turn_start(self, player) -> None:
         # AfterSideTurnStart: tick the cooldown down.
         if self.cooldown > 0:
             self.cooldown -= 1

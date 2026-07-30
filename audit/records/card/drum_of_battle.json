@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\drum_of_battle.py",
-    "sha256": "a398603f3cf606a1bef0151f6ea08a50d395c825152b9cc9a3f30e970ce10143"
+    "sha256": "f223fce121c21325926f735f93eb91eb58c46e81a8c497158ff1cd3906609f0c"
   },
   "extra_sources": [
     {
@@ -16,20 +16,20 @@
     },
     {
       "path": "sts2_rl/cards/colorless_skills.py",
-      "sha256": "582eae297c48ba02774195e37e6ddb76d3874c28f7007d4c54267ed41da7e6d8",
+      "sha256": "a94c279e15e166c280c399871da2c21a4ed6c4bf2b827bcf3cf4d1bb9c22b4ca",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     }
   ],
   "hooks": {
     "AfterCardExhausted": {
       "maps_to": "DrumOfBattleCard.on_card_exhausted (drum_of_battle.py:44-50)",
-      "verdict": "gap",
-      "issue": "The self-check and the payout loop are faithful -- `if (card == this && CombatState != null)` (DrumOfBattle.cs:33) == `if card is not self or self.combat is None: return`, and both then gain `Energy.BaseValue` once per play-count iteration. THE PLAY COUNT IS COMPUTED FROM THE WRONG BASE. C# calls `GeneratePlayCount(CombatState, null)` (DrumOfBattle.cs:35), which is `GetEnchantedReplayCount() + 1` fed through `Hook.ModifyCardPlayCount`, followed by `Hook.AfterModifyingCardPlayCount` (CardModel.cs:2015-2021); and `GetEnchantedReplayCount()` is `Enchantment?.EnchantPlayCount(BaseReplayCount) ?? BaseReplayCount` (CardModel.cs:1129-1132). The sim passes a bare `1` into `modify_card_play_count` (drum_of_battle.py:48), dropping `base_replay_count` entirely -- the field Hidden Gem raises (`card.base_replay_count += self._replay`, colorless_skills.py:322) and the field the sim's own normal play path DOES include (`1 + card.base_replay_count`, combat.py:469-470). It also drops the AfterModifyingCardPlayCount notification. Observable: use Hidden Gem on Drum of Battle, then exhaust it -- the game pays out twice, the sim once. LIVE: card/hidden_gem is a ported colorless Skill that raises `base_replay_count` on a chosen card, and Drum of Battle is a ported Uncommon. This is the card half of gap G4's blast radius identified by `py audit/tools/card_probes.py replay`."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The play count starts from BaseReplayCount. DrumOfBattle.cs:35 calls `GeneratePlayCount(CombatState, null)`, which is `GetEnchantedReplayCount() + 1` fed through Hook.ModifyCardPlayCount (CardModel.cs:2015-2021), and GetEnchantedReplayCount falls back to `BaseReplayCount` when there is no enchantment (:1129-1132). cards/drum_of_battle.py passed a bare `1`, dropping the field Hidden Gem raises -- the field the normal play path already includes as `1 + card.base_replay_count`. It now passes `1 + self.base_replay_count` into the same hook, which is the normal path's expression verbatim; the enchantment's own contribution arrives through the hook walk (enchantments are registered listeners), so adding `enchanted_replay_count()` on top would have DOUBLE-counted it. EXECUTED: a Hidden-Gem'd Drum of Battle exhausted at energy 0 now pays out 4 (2 twice) where it paid 2; an unmodified one still pays 2; another card's exhaust still pays nothing (the `card == this` clause, DrumOfBattle.cs:33). Pinned by test/test_card_residue_gaps2.py (3 tests). NOT CLOSED: the AfterModifyingCardPlayCount notification, which the sim has no dispatcher for at ANY site including the normal play path -- it is the seam's to add, not this card's, and no ported listener implements it.  The text it replaced read: The self-check and the payout loop are faithful -- `if (card == this && CombatState != null)` (DrumOfBattle.cs:33) == `if card is not self or self.combat is None: return`, and both then gain `Energy.BaseValue` once per play-count iteration. THE PLAY COUNT IS COMPUTED FROM THE WRONG BASE. C# calls `GeneratePlayCount(CombatState, null)` (DrumOfBattle.cs:35), which is `GetEnchantedReplayCount() + 1` fed through `Hook.ModifyCardPlayCount`, followed by `Hook.AfterModifyingCardPlayCount` (CardModel.cs:2015-2021); and `GetEnchantedReplayCount()` is `Enchantment?.EnchantPlayCount(BaseReplayCount) ?? BaseReplayCount` (CardModel.cs:1129-1132). The sim passes a bare `1` into `modify_card_play_count` (drum_of_battle.py:48), dropping `base_replay_count` entirely -- the field Hidden Gem raises (`card.base_replay_count += self._replay`, colorless_skills.py:322) and the field the sim's own normal play path DOES include (`1 + card.base_replay_count`, combat.py:469-470). It also drops the AfterModifyingCardPlayCount notification. Observable: use Hidden Gem on Drum of Battle, then exhaust it -- the game pays out twice, the sim once. LIVE: card/hidden_gem is a ported colorless Skill that raises `base_replay_count` on a chosen card, and Drum of Battle is a ported Uncommon. This is the card half of gap G4's blast radius identified by `py audit/tools/card_probes.py replay`."
     },
     "ctor": {
       "maps_to": "class attrs (drum_of_battle.py:24-28) + _init_vars (30-33)",
@@ -53,6 +53,6 @@
     }
   },
   "guards": [],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

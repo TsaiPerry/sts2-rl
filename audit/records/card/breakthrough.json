@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\breakthrough.py",
-    "sha256": "4192660bb07c535a49e5f3f4faffd4bfd1f1294bfd49c64f00d60c1eb193ed28"
+    "sha256": "5dcda8546a221d075c89ce0b0de38e2ce3f849e0d2c7e51aa11cec85e26e4297"
   },
   "extra_sources": [
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/creatures.py",
-      "sha256": "11658743b59d1dce2d07d838b6c65594e00dcdf1a4227fac57d24b0cd538fc42",
+      "sha256": "34e44031a337c75e1c2685e0521a075d95fa7a1478ca8594e6a138651c361078",
       "side": "sim"
     },
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     }
   ],
@@ -53,8 +53,8 @@
     },
     "OnPlay": {
       "maps_to": "BreakthroughCard.on_play (breakthrough.py:39-56)",
-      "verdict": "gap",
-      "issue": "The AoE half is faithful (`DamageCmd.Attack(9).FromCard(this).TargetingAllOpponents(CombatState)`, Breakthrough.cs:28-30, == a per-enemy `DamageCmd.deal(..., dealer=ctx.player, card=self)`), and so is the order (self-damage FIRST). THE SELF-DAMAGE BYPASSES THE DAMAGE PIPELINE ENTIRELY. C# calls `CreatureCmd.Damage(choiceContext, Owner.Creature, DynamicVars.HpLoss.BaseValue, Unblockable | Unpowered | Move, this)` (Breakthrough.cs:27) -- the full pipeline: the damage modifiers, the damage cap, `Hook.AfterCurrentHpChanged`, `Hook.AfterDamageReceived`, the death check and Kill. The sim hand-rolls it: `p.hp = max(0, p.hp - 1)` plus a bare `on_hp_changed` and a manual `should_die`/`on_death` (breakthrough.py:42-50), so `on_damage_received` never fires and no damage modifier is consulted. Observable through RupturePower, which gains Strength on any unblocked damage its owner receives (`RupturePower.AfterDamageReceived`, RupturePower.cs:44-57 -- with cardSource null the immediate-apply branch at line 48 is taken) and whose sim port listens on `on_damage_received` (powers.py:272-289). Play Breakthrough holding Rupture: the game gains Strength, the sim does not. LIVE -- card/rupture is a ported Ironclad card (sts2_rl/cards/rupture_card.py) and Breakthrough is a ported Common. The bypass also skips the Intangible cap and Buffer, which would matter for any larger card-sourced HP loss. Presentation, folded in: VfxCmd.PlayOnCreatureCenter (26) and WithHitFx (29)."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The self-damage goes through the damage pipeline. Breakthrough.cs:27 is `CreatureCmd.Damage(choiceContext, Owner.Creature, DynamicVars.HpLoss.BaseValue, Unblockable | Unpowered | Move, this)` and cards/breakthrough.py now calls `DamageCmd.deal(..., props=UNBLOCKABLE|UNPOWERED|MOVE, dealer=player, card=self)` in its place. WAS: a hand-rolled `p.hp = max(0, p.hp - 1)` with a bare on_hp_changed and a manual should_die/on_death, so `on_damage_received` never fired, no damage modifier was consulted, and the Intangible cap and Buffer were skipped. EXECUTED: play Breakthrough holding Rupture 1 and the player now gains 1 Strength (RupturePower.cs:44-57, the null-cardSource immediate-apply branch) where the sim gained none. The two props are pinned separately -- 20 block does not absorb the 1 HP (Unblockable) and Strength 5 does not scale it while it DOES scale the 9-damage AoE half (Unpowered). `HP_LOSS = 1` is HpLossVar(1m), Breakthrough.cs:16, with no upgrade and no ascension branch. Pinned by test/test_card_residue_gaps2.py (4 tests). NOT CLOSED: nothing at this site.  The text it replaced read: The AoE half is faithful (`DamageCmd.Attack(9).FromCard(this).TargetingAllOpponents(CombatState)`, Breakthrough.cs:28-30, == a per-enemy `DamageCmd.deal(..., dealer=ctx.player, card=self)`), and so is the order (self-damage FIRST). THE SELF-DAMAGE BYPASSES THE DAMAGE PIPELINE ENTIRELY. C# calls `CreatureCmd.Damage(choiceContext, Owner.Creature, DynamicVars.HpLoss.BaseValue, Unblockable | Unpowered | Move, this)` (Breakthrough.cs:27) -- the full pipeline: the damage modifiers, the damage cap, `Hook.AfterCurrentHpChanged`, `Hook.AfterDamageReceived`, the death check and Kill. The sim hand-rolls it: `p.hp = max(0, p.hp - 1)` plus a bare `on_hp_changed` and a manual `should_die`/`on_death` (breakthrough.py:42-50), so `on_damage_received` never fires and no damage modifier is consulted. Observable through RupturePower, which gains Strength on any unblocked damage its owner receives (`RupturePower.AfterDamageReceived`, RupturePower.cs:44-57 -- with cardSource null the immediate-apply branch at line 48 is taken) and whose sim port listens on `on_damage_received` (powers.py:272-289). Play Breakthrough holding Rupture: the game gains Strength, the sim does not. LIVE -- card/rupture is a ported Ironclad card (sts2_rl/cards/rupture_card.py) and Breakthrough is a ported Common. The bypass also skips the Intangible cap and Buffer, which would matter for any larger card-sourced HP loss. Presentation, folded in: VfxCmd.PlayOnCreatureCenter (26) and WithHitFx (29)."
     },
     "OnUpgrade": {
       "maps_to": "BreakthroughCard._on_upgrade (breakthrough.py:37-38)",

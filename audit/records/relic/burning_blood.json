@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\burning_blood.py",
-    "sha256": "405e77409b015750d2a39b6b4c0c1281e3d2a003dd652d0027301b14c4309446"
+    "sha256": "0cfe83c2e28410bbeef86876b7882ac550a7f99232058530e87ec4776106f63c"
   },
   "extra_sources": [
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     }
   ],
@@ -41,21 +41,21 @@
       "verdict": "faithful"
     },
     "AfterCombatVictory": {
-      "maps_to": "on_combat_end (burning_blood.py:15-18), guarded on player_won",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The heal itself is faithful (6 HP, `!IsDead`, no ascension branch); what diverges is the hook the sim maps it onto -- one collapsed on_combat_end(player_won) instead of C#'s separate AfterCombatEnd/AfterCombatVictory pair, with no ReviveBeforeCombatEnd step in between."
+      "maps_to": "on_combat_victory (burning_blood.py)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 5): guard G1. The text it replaced read: Rollup of guard G1 per binding rule 4. The heal itself is faithful (6 HP, `!IsDead`, no ascension branch); what diverges is the hook the sim maps it onto -- one collapsed on_combat_end(player_won) instead of C#'s separate AfterCombatEnd/AfterCombatVictory pair, with no ReviveBeforeCombatEnd step in between."
     }
   },
   "guards": [
     {
       "what": "G1 (DORMANT): AfterCombatVictory and AfterCombatEnd are one sim hook, and the sim has no ReviveBeforeCombatEnd",
-      "verdict": "gap",
-      "issue": "MECHANISM: C# reaches AfterCombatEnd and AfterCombatVictory only through EndCombatInternal (CombatManager.cs:970-999), which is the VICTORY path; a loss goes LoseCombat -> _pendingLoss -> ProcessPendingLoss (CombatManager.cs:945-965, 1046-1052) and fires NO hook at all. EndCombatInternal also runs `await player.ReviveBeforeCombatEnd()` (Player.cs:821-827, heal-to-1) before either hook. The sim collapses both hooks into one `on_combat_end(player_won)` (combat.py:347-350) and has no revive step. audit/records/seam/turn_structure.json step 71 / guard G10 already verdicts this mechanism a gap and labels it DORMANT, and names this exact relic file as one of the four ported on_combat_end listeners it read to establish the dormancy. One verdict per mechanism (binding rule 3): this record cites it and does not re-derive it. Rule 7: CombatManager.cs, Player.cs and sts2_rl/combat.py are NOT hashed by this record. WHAT WOULD MAKE IT LIVE for this relic: an AfterCombatVictory-only listener whose effect is unconditional (this one is not -- it gates on player_won), or a sim path that reaches on_combat_end(player_won=True) with a dead player that C# would have revived. Both codebases currently agree on every reachable outcome, which is what makes it dormant rather than live."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 5): AfterCombatVictory and AfterCombatEnd are two sim hooks now, and ReviveBeforeCombatEnd exists. The relic implements `on_combat_victory` (Hook.AfterCombatVictory, CombatManager.cs:999); Hook.AfterCombatEnd (:988) is the separate, earlier `on_combat_end`; and `CombatState._end_combat_internal` heals a dead player to 1 before either (Player.cs:821-827). See turn_structure G10.  The text it replaced read: MECHANISM: C# reaches AfterCombatEnd and AfterCombatVictory only through EndCombatInternal (CombatManager.cs:970-999), which is the VICTORY path; a loss goes LoseCombat -> _pendingLoss -> ProcessPendingLoss (CombatManager.cs:945-965, 1046-1052) and fires NO hook at all. EndCombatInternal also runs `await player.ReviveBeforeCombatEnd()` (Player.cs:821-827, heal-to-1) before either hook. The sim collapses both hooks into one `on_combat_end(player_won)` (combat.py:347-350) and has no revive step. audit/records/seam/turn_structure.json step 71 / guard G10 already verdicts this mechanism a gap and labels it DORMANT, and names this exact relic file as one of the four ported on_combat_end listeners it read to establish the dormancy. One verdict per mechanism (binding rule 3): this record cites it and does not re-derive it. Rule 7: CombatManager.cs, Player.cs and sts2_rl/combat.py are NOT hashed by this record. WHAT WOULD MAKE IT LIVE for this relic: an AfterCombatVictory-only listener whose effect is unconditional (this one is not -- it gates on player_won), or a sim path that reaches on_combat_end(player_won=True) with a dead player that C# would have revived. Both codebases currently agree on every reachable outcome, which is what makes it dormant rather than live."
     },
     {
       "what": "N1: `!base.Owner.Creature.IsDead` (BurningBlood.cs:18) vs `player_won and not self.player.is_dead` (burning_blood.py:16)",
       "verdict": "faithful",
-      "rationale": "The two guards have opposite standing and the same result. C#'s is effectively dead code in single-player: ReviveBeforeCombatEnd has already healed a dead player to 1 HP by the time AfterCombatVictory runs, so IsDead is false -- the guard exists for a downed co-op player. The sim's IS live, because there is no revive; but the only sim path that can declare a win with a dead player is combat.py:302-305 (all enemies die to an on_enemy_turn_start effect that also kills the player), and C# resolves exactly that race as a LOSS -- CheckWinCondition tests _pendingLoss before IsEnding (CombatManager.cs:1046-1057) -- where it likewise heals nothing. Same observable on every reachable path. Rule 7: neither CombatManager.cs nor combat.py is hashed here."
+      "rationale": "`!base.Owner.Creature.IsDead` (BurningBlood.cs:18) vs `not self.player.is_dead` (burning_blood.py) -- the same test, and the same one only. The port's old `player_won and ...` prefix is gone: the losing path fires no hook at all (ProcessPendingLoss, CombatManager.cs:956-965), so there is nothing to test for. The IsDead guard is now unreachable in practice, because ReviveBeforeCombatEnd (:986) runs first -- the source keeps it, and so does the port."
     },
     {
       "what": "N2: `base.DynamicVars.Heal.BaseValue` from `HealVar(6m)` (BurningBlood.cs:14, 21) vs `HEAL = 6` (burning_blood.py:13)",
@@ -73,6 +73,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

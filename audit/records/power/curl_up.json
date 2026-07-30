@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
@@ -47,8 +47,8 @@
     },
     "AfterDamageReceived": {
       "maps_to": "powers.py:299-312 CurlUpPower.on_damage_received",
-      "verdict": "gap",
-      "issue": "LIVE. C# only LATCHES the triggering card here and grants nothing; the sim grants the block and expires the power on the spot. CurlUpPower.cs:34-54 records cardSource in internal Data and returns; CurlUpPower.cs:56-70 (AfterCardPlayed) is what actually gains the block, once the whole card play has resolved. powers.py:309-312 calls BlockCmd.apply and _expire() inside the damage hook, so the SECOND and later hits of a multi-hit attack are absorbed by block the game would not have granted yet. The sim's own docstring (powers.py:307-308) states the weaker half of this correctly -- the triggering hit does take full damage -- and then stops one hit short. Reachable from the ported Louse Progenitor (monsters/hive/louse_progenitor.py:34) plus any multi-hit Attack card. Two guards are also missing; see their own entries. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): AfterDamageReceived only LATCHES now. CurlUpPower.cs:34-54 records `cardSource` and returns; CurlUpPower.cs:56-70 (AfterCardPlayed) is what gains the block, once the whole card play has resolved, and removes the power. Granting inside the damage hook meant the SECOND and later hits of a multi-hit attack were absorbed by block the game had not handed out yet. powers.py's CurlUpPower carries all three latch guards -- the owner, `props.IsPoweredAttack()`, a non-null cardSource -- plus the no-re-latch clause, and grants UNPOWERED block from `on_card_played`. EXECUTED: a Twin Strike into a Curl Up 8 removes 10 HP (5 + 5, neither hit blocked) and leaves 8 block, where the sim used to absorb the second hit; a bare `DamageCmd.deal` with no card latches nothing at all. TWO LEGACY TESTS MOVED (non-negotiable 5): test_powers.py's whole `TestCurlUp` class drove `DamageCmd.deal` directly and is rewritten around a card PLAY (with the multi-hit case and the null-cardSource guard added), and test_hive.py's `test_curl_up_blocks_on_first_hit` is now `test_curl_up_blocks_after_the_card_play_that_hit_it`. NOT CLOSED: the two guards this entry defers to their own entries are unchanged.  The text it replaced read: LIVE. C# only LATCHES the triggering card here and grants nothing; the sim grants the block and expires the power on the spot. CurlUpPower.cs:34-54 records cardSource in internal Data and returns; CurlUpPower.cs:56-70 (AfterCardPlayed) is what actually gains the block, once the whole card play has resolved. powers.py:309-312 calls BlockCmd.apply and _expire() inside the damage hook, so the SECOND and later hits of a multi-hit attack are absorbed by block the game would not have granted yet. The sim's own docstring (powers.py:307-308) states the weaker half of this correctly -- the triggering hit does take full damage -- and then stops one hit short. Reachable from the ported Louse Progenitor (monsters/hive/louse_progenitor.py:34) plus any multi-hit Attack card. Two guards are also missing; see their own entries. Third-file citations, not hashed here."
     },
     "AfterCardPlayed": {
       "maps_to": "no sim counterpart",

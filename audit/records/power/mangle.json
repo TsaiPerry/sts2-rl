@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -66,12 +66,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
@@ -142,9 +142,9 @@
       "rationale": "The re-stack leg. C# reaches it through ModifyAmount's step 33 (PowerCmd.cs:243-246, gated on modifiedOffset != 0) and guards !(amount == base.Amount) && power == this -- the amount-vs-total test is what stops the FIRST application double-applying the Strength, since step 23 fires the same hook for a brand-new power. The sim needs no such guard because the two cases are different methods (__init__ at cmds.py:324 vs on_stack at cmds.py:311), and it keeps C#'s internal order -- super().on_stack before PowerCmd.apply (powers.py:856-858) matches SetAmount at PowerCmd.cs:237 before the hook at :243. Third-file citations, not hashed here."
     },
     "AfterSideTurnEnd (inherited, TemporaryStrengthPower.cs:173-181)": {
-      "maps_to": "powers.py:866-872 on_player_turn_end / on_enemy_side_end -> _revert",
-      "verdict": "gap",
-      "issue": "SLOT, and LIVE. Inherited from TemporaryStrengthPower.cs:173-181 (a third file, not hashed by this record). AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end (powers.py:866-868) is Hook.BeforeTurnEnd (combat.py:654), which runs BEFORE _process_turn_end_cards (combat.py:658) and the flush (combat.py:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. EXECUTED WITNESS for this family, and the sharpest one found for the whole player-side AfterSideTurnEnd group so far, because the effect is a damage-relevant stat revert rather than a bookkeeping reset: with StampedePower 1 (powers.py:1025-1041, which auto-plays an Attack from its own on_player_turn_end) and SetupStrikePower 2, one Strike in hand, ending the turn deals 6 damage when the temp-strength power was applied FIRST (its revert runs first, so the auto-played Strike loses the +2) and 8 when Stampede was applied first. The game always deals 8. So the sim is wrong on exactly the registration orders where the temp power lands before Stampede -- decided by which card the player happened to play first. The enemy-owned leg (powers.py:870-872, on_enemy_side_end, combat.py:345) is in the RIGHT slot; only the player-owned leg is misplaced. Reproduce the affected population with py audit/tools/power_census.py slots."
+      "maps_to": "TemporaryStrengthPower.after_player_turn_end (sts2_rl/powers.py) + on_enemy_side_end",
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 by the gap-queue continuation's section-A fix pass (this is a CODE change, not a re-reading of the old code). Same fix as power/setup_strike, which this entry inherits from under binding rule 3: the player-side revert now runs in the Hook.AfterTurnEnd pass (combat.py's after_player_turn_end), matching TemporaryStrengthPower.cs:173-181 / CombatManager.cs:1307.  The gap it replaced read: SLOT, and LIVE. Inherited from TemporaryStrengthPower.cs:173-181 (a third file, not hashed by this record). AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called for the player side at CombatManager.cs:1307 -- AFTER the turn-end card effects and the hand flush. The sim's on_player_turn_end (powers.py:866-868) is Hook.BeforeTurnEnd (combat.py:654), which runs BEFORE _process_turn_end_cards (combat.py:658) and the flush (combat.py:661-662); the sim's real AfterTurnEnd slot, after_player_turn_end (combat.py:665), is available and unused. EXECUTED WITNESS for this family, and the sharpest one found for the whole player-side AfterSideTurnEnd group so far, because the effect is a damage-relevant stat revert rather than a bookkeeping reset: with StampedePower 1 (powers.py:1025-1041, which auto-plays an Attack from its own on_player_turn_end) and SetupStrikePower 2, one Strike in hand, ending the turn deals 6 damage when the temp-strength power was applied FIRST (its revert runs first, so the auto-played Strike loses the +2) and 8 when Stampede was applied first. The game always deals 8. So the sim is wrong on exactly the registration orders where the temp power lands before Stampede -- decided by which card the player happened to play first. The enemy-owned leg (powers.py:870-872, on_enemy_side_end, combat.py:345) is in the RIGHT slot; only the player-owned leg is misplaced. Reproduce the affected population with py audit/tools/power_census.py slots."
     }
   },
   "guards": [

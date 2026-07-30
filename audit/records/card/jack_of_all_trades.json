@@ -6,17 +6,17 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_skills.py",
-    "sha256": "582eae297c48ba02774195e37e6ddb76d3874c28f7007d4c54267ed41da7e6d8"
+    "sha256": "a94c279e15e166c280c399871da2c21a4ed6c4bf2b827bcf3cf4d1bb9c22b4ca"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "879d6791db6dd9ec5d35355d75e3e784be4c380fb7d0bcd65b0ede93ff8cd339",
+      "sha256": "03b13195368f9b62ffdaef867883b236c1573dd14c05724c40c439ede14a6fbf",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     },
     {
       "path": "test/test_rng_tripwire.py",
-      "sha256": "c34c8bc722ef8c237fc8f09cb3bb0b09e789c97f16fc3cc11619ffabc270a008",
+      "sha256": "2265d317d867d7f296c12774adb73b43d9828aca995f80bb15e1a53deb29451f",
       "side": "sim"
     }
   ],
@@ -53,8 +53,8 @@
     },
     "OnPlay": {
       "maps_to": "JackOfAllTradesCard.on_play (colorless_skills.py:379-386)",
-      "verdict": "gap",
-      "issue": "The POOL and the self-exclusion are faithful: `ModelDb.CardPool<ColorlessCardPool>()...Where(c => !(c is JackOfAllTrades))` (JackOfAllTrades.cs:31-33) == `random_pool_cards(..., pool=COLORLESS_POOL, exclude_ids={self.id})`, and the distinct-draw of `Cards.IntValue` cards each added to the hand matches. WRONG RNG STREAM: C# names `Owner.RunState.Rng.CombatCardGeneration`; the sim draws on the unseeded shared `combat._rng` even though `ctx.combat.combat_rng.card_gen` maps to `combat_card_generation` (combat_rng.py:20,52), and `random_pool_cards` uses `rng.sample` / `rng.choice` (pool.py:157-161) rather than the game's draw sequence, so the number of draws differs too. Same mechanism and same verdict as card/discovery's and card/distraction's OnPlay entries (rule 3). LIVE, and this card is one of the 21 the `shared-rng` probe lists. card/infernal_blade in this same batch shows the correct shape: branch on `crng.is_parity` and use `crng.card_gen`. REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): Routed to the stream its C# names. JackOfAllTrades.cs:31-33 names `Rng.CombatCardGeneration`, so the site passes `combat_rng.card_gen` into `random_pool_cards`. The Colorless pool and the self-exclusion were already faithful and are untouched. The card is gone from `card_probes.py shared-rng`, which drops 20 classes -> 9.  Pinned by test/test_card_residue_gaps.py.  NOT CLOSED: nothing at this site.  The text it replaced read: The POOL and the self-exclusion are faithful: `ModelDb.CardPool<ColorlessCardPool>()...Where(c => !(c is JackOfAllTrades))` (JackOfAllTrades.cs:31-33) == `random_pool_cards(..., pool=COLORLESS_POOL, exclude_ids={self.id})`, and the distinct-draw of `Cards.IntValue` cards each added to the hand matches. WRONG RNG STREAM: C# names `Owner.RunState.Rng.CombatCardGeneration`; the sim draws on the unseeded shared `combat._rng` even though `ctx.combat.combat_rng.card_gen` maps to `combat_card_generation` (combat_rng.py:20,52), and `random_pool_cards` uses `rng.sample` / `rng.choice` (pool.py:157-161) rather than the game's draw sequence, so the number of draws differs too. Same mechanism and same verdict as card/discovery's and card/distraction's OnPlay entries (rule 3). LIVE, and this card is one of the 21 the `shared-rng` probe lists. card/infernal_blade in this same batch shows the correct shape: branch on `crng.is_parity` and use `crng.card_gen`. REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
     },
     "OnUpgrade": {
       "maps_to": "JackOfAllTradesCard._on_upgrade (colorless_skills.py:376-377)",
@@ -69,6 +69,6 @@
       "rationale": "The sim also omits it (colorless_skills.py:382-386). Recorded because three sibling generation cards DO set it, so the absence is easy to \"fix\" wrongly."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\kusarigama.py",
-    "sha256": "35e10c499545e12fa09663e97d6a7fa892d13c0425a3c0b0bea81cc5910c19f3"
+    "sha256": "738d85aa0e646ea1164895ed70994b8abdcc73c59a5318c096cdaaec80baef6c"
   },
   "extra_sources": [
     {
@@ -41,12 +41,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
@@ -56,27 +56,27 @@
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31",
+      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/parrying_shield.py",
-      "sha256": "1d5e18611546ef527480348df2ff93ba678131e4e9724079586c1d1fe45ff794",
+      "sha256": "8d1635234f35b2f9d8cf3a5b3fa0d0263175964e7d18ad0052ef928ed0f43271",
       "side": "sim"
     },
     {
@@ -117,8 +117,8 @@
     },
     "AfterSideTurnEnd": {
       "maps_to": "on_player_turn_end (kusarigama.py:32-33)",
-      "verdict": "gap",
-      "issue": "WRONG TURN-END SLOT. C#'s player-side AfterSideTurnEnd is audit/records/seam/turn_structure.json step 64 -- it runs AFTER the hand flush -- and the sim HAS that slot: hooks.after_player_turn_end (hooks.py:303-310), whose own docstring says it is Hook.AfterTurnEnd and is 'Distinct from on_player_turn_end, which is Hook.BeforeTurnEnd' (step 48). kusarigama.py:32-33 uses on_player_turn_end, so the reset happens ~16 steps too early. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b08.py b08-kusarigama): the ported StampedePower auto-plays N Attacks from `on_player_turn_end` (powers.py:1023-1039) -- the SAME sim hook -- and its C# home is StampedePower.cs:18 AfterAutoPostPlayPhaseEntered, which turn_structure step 47 places BEFORE step 64. So C# always resets after those Attacks and the sim may not: with Stampede(2) on the player and the executed listener order ['Kusarigama', 'StampedePower'], end_turn leaves _attacks_this_turn=2 where C# leaves 0, and those 2 carry into the next turn -- shifting every 'every 3rd Attack' trigger for the rest of the combat. Both sides ported: Stampede is the Ironclad card cards/stampede.py:36. Bounded, not run-wide: the on_combat_start reset above stops it leaking past the combat. The `participants.Contains(base.Owner.Creature)` filter is structurally satisfied (the sim fires this hook for the player side only). Fix: move the reset to after_player_turn_end, the slot relics/parrying_shield.py:24 already uses. Rule 7: hooks.py, powers.py, cards/stampede.py, relics/parrying_shield.py, src/Core/Models/Powers/StampedePower.cs and audit/records/seam/turn_structure.json are not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The reset moved to the right slot. Kusarigama.cs's player-side AfterSideTurnEnd is turn_structure step 64, which runs AFTER the hand flush; the port used `on_player_turn_end`, which is Hook.BeforeTurnEnd (step 48) -- about sixteen steps too early. `relics/kusarigama.py` now implements `after_player_turn_end`, the slot whose own docstring names Hook.AfterTurnEnd and distinguishes it from BeforeTurnEnd. The reachability the entry established is what made it matter: the ported StampedePower auto-plays N Attacks from the LATER slot, so the counter was being cleared before those plays could count toward it.  Pinned by test/test_relic_residue_gaps.py.  NOT CLOSED: nothing at this site.  The text it replaced read: WRONG TURN-END SLOT. C#'s player-side AfterSideTurnEnd is audit/records/seam/turn_structure.json step 64 -- it runs AFTER the hand flush -- and the sim HAS that slot: hooks.after_player_turn_end (hooks.py:303-310), whose own docstring says it is Hook.AfterTurnEnd and is 'Distinct from on_player_turn_end, which is Hook.BeforeTurnEnd' (step 48). kusarigama.py:32-33 uses on_player_turn_end, so the reset happens ~16 steps too early. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b08.py b08-kusarigama): the ported StampedePower auto-plays N Attacks from `on_player_turn_end` (powers.py:1023-1039) -- the SAME sim hook -- and its C# home is StampedePower.cs:18 AfterAutoPostPlayPhaseEntered, which turn_structure step 47 places BEFORE step 64. So C# always resets after those Attacks and the sim may not: with Stampede(2) on the player and the executed listener order ['Kusarigama', 'StampedePower'], end_turn leaves _attacks_this_turn=2 where C# leaves 0, and those 2 carry into the next turn -- shifting every 'every 3rd Attack' trigger for the rest of the combat. Both sides ported: Stampede is the Ironclad card cards/stampede.py:36. Bounded, not run-wide: the on_combat_start reset above stops it leaking past the combat. The `participants.Contains(base.Owner.Creature)` filter is structurally satisfied (the sim fires this hook for the player side only). Fix: move the reset to after_player_turn_end, the slot relics/parrying_shield.py:24 already uses. Rule 7: hooks.py, powers.py, cards/stampede.py, relics/parrying_shield.py, src/Core/Models/Powers/StampedePower.cs and audit/records/seam/turn_structure.json are not hashed by this record."
     },
     "AfterCardPlayed": {
       "maps_to": "on_card_played (kusarigama.py:35-50)",

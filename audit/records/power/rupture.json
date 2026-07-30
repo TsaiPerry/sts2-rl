@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     }
   ],
@@ -42,13 +42,13 @@
     },
     "BeforeCardPlayed": {
       "maps_to": "no sim counterpart",
-      "verdict": "gap",
-      "issue": "Half of a deferral mechanism the sim does not implement at all. RupturePower.cs:31-43 registers every card the owner starts playing during its own side turn in an internal playedCards dictionary; AfterDamageReceived then ACCUMULATES into that entry instead of applying Strength, and AfterCardPlayed applies the accumulated total once the card has fully resolved. The point is that a card which damages its own player several times must not have its later hits boosted by the Strength its earlier hits earned. The sim has no BeforeCardPlayed on Rupture and applies Strength per hit, inline (powers.py:279-289). LIVE: Rupture is a ported Ironclad card (cards/rupture_card.py:35) and the sim's self-damage cards deal multi-instance HP loss, so mid-card Strength changes the same card's remaining damage. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): BOTH halves of the mechanism landed together, because the deferral is what the guard is for. (a) RupturePower.cs:47's `CombatState.CurrentSide == Owner.Side` is ported: Rupture pays out only for damage the owner takes DURING ITS OWN TURN, i.e. self-inflicted HP loss. Without it a self-harm payoff card was a free Strength engine that grew whenever the player was hit on the ENEMY's turn. (b) RupturePower.cs:31-43's `playedCards` deferral is ported: `before_card_played` opens an accumulator for a card the owner starts playing on its own turn, `on_damage_received` ACCUMULATES into it instead of applying, and `on_card_played` applies the total once the card has fully resolved -- so a card that damages its own player several times does not have its later hits boosted by the Strength its earlier hits earned. Damage taken with no card in flight still applies immediately, which is the null-entry arm.  Same mechanism as this power's AfterDamageReceived entry (rule 3). NOT CLOSED: nothing at this site.  The text it replaced read: Half of a deferral mechanism the sim does not implement at all. RupturePower.cs:31-43 registers every card the owner starts playing during its own side turn in an internal playedCards dictionary; AfterDamageReceived then ACCUMULATES into that entry instead of applying Strength, and AfterCardPlayed applies the accumulated total once the card has fully resolved. The point is that a card which damages its own player several times must not have its later hits boosted by the Strength its earlier hits earned. The sim has no BeforeCardPlayed on Rupture and applies Strength per hit, inline (powers.py:279-289). LIVE: Rupture is a ported Ironclad card (cards/rupture_card.py:35) and the sim's self-damage cards deal multi-instance HP loss, so mid-card Strength changes the same card's remaining damage. Third-file citations, not hashed here."
     },
     "AfterDamageReceived": {
       "maps_to": "powers.py:279-289 RupturePower.on_damage_received",
-      "verdict": "gap",
-      "issue": "LIVE, and the bigger half. C# requires `base.CombatState.CurrentSide == base.Owner.Side` (RupturePower.cs:47): Rupture only pays out for damage the owner takes DURING ITS OWN TURN, i.e. self-inflicted HP loss. powers.py:287 tests only `target is self.owner and amount > 0`, so the sim's Rupture also pays out for every enemy attack that gets through on the ENEMY's turn -- turning a self-harm payoff card into a free Strength engine that grows whenever the player is hit. The guard is not even hard to reach: the sim already exposes `combat.current_side` and InfernoPower uses it for exactly this purpose two hundred lines away (powers.py:757-759). Additionally the accumulate-then-apply-once deferral is absent (see the BeforeCardPlayed entry), so even the in-scope self-damage case grants Strength mid-card. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): BOTH halves of the mechanism landed together, because the deferral is what the guard is for. (a) RupturePower.cs:47's `CombatState.CurrentSide == Owner.Side` is ported: Rupture pays out only for damage the owner takes DURING ITS OWN TURN, i.e. self-inflicted HP loss. Without it a self-harm payoff card was a free Strength engine that grew whenever the player was hit on the ENEMY's turn. (b) RupturePower.cs:31-43's `playedCards` deferral is ported: `before_card_played` opens an accumulator for a card the owner starts playing on its own turn, `on_damage_received` ACCUMULATES into it instead of applying, and `on_card_played` applies the total once the card has fully resolved -- so a card that damages its own player several times does not have its later hits boosted by the Strength its earlier hits earned. Damage taken with no card in flight still applies immediately, which is the null-entry arm.  NOT CLOSED: nothing at this site.  The text it replaced read: LIVE, and the bigger half. C# requires `base.CombatState.CurrentSide == base.Owner.Side` (RupturePower.cs:47): Rupture only pays out for damage the owner takes DURING ITS OWN TURN, i.e. self-inflicted HP loss. powers.py:287 tests only `target is self.owner and amount > 0`, so the sim's Rupture also pays out for every enemy attack that gets through on the ENEMY's turn -- turning a self-harm payoff card into a free Strength engine that grows whenever the player is hit. The guard is not even hard to reach: the sim already exposes `combat.current_side` and InfernoPower uses it for exactly this purpose two hundred lines away (powers.py:757-759). Additionally the accumulate-then-apply-once deferral is absent (see the BeforeCardPlayed entry), so even the in-scope self-damage case grants Strength mid-card. Third-file citations, not hashed here."
     },
     "AfterCardPlayed": {
       "maps_to": "no sim counterpart",

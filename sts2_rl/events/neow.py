@@ -52,6 +52,18 @@ _LAVA_ROCK_PAIR = ("lava_rock", "small_capsule")
 _OYSTER_PAIR = ("nutritious_oyster", "stone_humidifier")
 _TALISMAN_PAIR = ("neows_talisman", "pomander")
 
+# The same six relics as SEPARATE trailing options, which is how
+# Neow.AllPossibleOptions builds the full pool (Neow.cs:56-61 adds
+# LavaRockOption, NeowsTalismanOption, NutritiousOysterOption, PomanderOption,
+# SmallCapsuleOption, StoneHumidifierOption one at a time, in that declaration
+# order). The pairing above is a fact about GenerateInitialOptions' coin flips,
+# not about the pool — and the ORDER is load-bearing, because Neow's Bones
+# shuffles this list and a Fisher-Yates swap sequence depends only on the RNG.
+_SINGLETON_OPTIONS: tuple[str, ...] = (
+    "lava_rock", "neows_talisman", "nutritious_oyster",
+    "pomander", "small_capsule", "stone_humidifier",
+)
+
 # Curse → the positive it excludes (mutual-exclusion pruning).
 _CURSE_EXCLUDES: dict[str, str] = {
     "cursed_pearl": "golden_pearl",
@@ -67,7 +79,7 @@ def neow_relic_pool(run: "RunState") -> list[str]:
     ids = (
         list(CURSE_RELICS)
         + list(POSITIVE_RELICS)
-        + [*_LAVA_ROCK_PAIR, *_OYSTER_PAIR, *_TALISMAN_PAIR]
+        + list(_SINGLETON_OPTIONS)
     )
     return [rid for rid in ids if ALL_RELICS[rid].is_allowed_at_neow(run)]
 

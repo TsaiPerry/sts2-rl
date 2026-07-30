@@ -52,34 +52,49 @@ class FurCoat(Relic):
             self.act_index = run.act_index
             self._mark_rooms(run, run.map)
 
-    def modify_generated_map_late(self, run, act_map, act_index):
-        # Re-mark a regenerated same-act map (Golden Compass); keep existing
-        # coords when they still point at Monster/Elite rooms.
-        if self.act_index == act_index and self.marked_coords:
-            from ..actmap import MapPointType
-
-            def still_valid(coord) -> bool:
-                point = act_map.get_point(*coord)
-                return point is not None and point.point_type in (
-                    MapPointType.MONSTER, MapPointType.ELITE,
-                )
-
-            if not all(still_valid(c) for c in self.marked_coords):
-                self._mark_rooms(run, act_map)
-        return act_map
+    # NO `modify_generated_map_late` OVERRIDE. FurCoat.cs:57-60 has one, but
+    # `Hook.ModifyGeneratedMapLate` has exactly ONE caller in the game: the
+    # SavedActMap branch of RunManager.GenerateMap (RunManager.cs:740, inside
+    # `if (SavedMapsToLoad != null && SavedMapsToLoad.TryGetValue(...))`), the
+    # branch that DESERIALIZES a saved map. The branch that GENERATES one
+    # (:743-747) runs ModifyGeneratedMap and AfterMapGenerated only — the Late
+    # hook exists to re-attach quests/shape to a LOADED map. The sim has no
+    # save-load, so on the only path it has, the game never calls this.
+    #
+    # The port implemented it and the sim dispatches the pass (card/spoils_map
+    # needs it — see RunState._generate_map), so Fur Coat re-marked on every
+    # fresh generation and could RE-ROLL: take Fur Coat and then Golden Compass
+    # in the same act, and the sim regenerated the map, saw the golden path had
+    # invalidated the marked coords, and rolled five fresh ones off a new
+    # event-rng shuffle where the game leaves the persisted FurCoatCoordCols/Rows
+    # arrays untouched — so only the marks that happen to fall on the golden
+    # path's single column can ever fire. It also burned a shuffle the game never
+    # takes, a parity divergence on its own. Dropping the override is what closes
+    # relic/fur_coat/g2; the marks are set once, by `after_obtained`.
 
     # ── The 1-HP effect ──────────────────────────────────────────────────
 
     def after_room_entered(self, run, point, room_type) -> None:
-        self._armed = (
-            self.act_index == run.act_index
-            and point.coord in self.marked_coords
-        )
+        # FurCoat.cs has an act check in exactly ONE place: AddMarkedRooms
+        # (:64-67), which controls only whether the marks are ATTACHED to a map.
+        # BeforeCombatStart (:114-120) tests `GetMarkedCoords().Contains(
+        # RunState.CurrentMapPoint.coord)` and NOTHING ELSE — and a MapCoord is a
+        # bare (col, row) pair with no act component, so a coord that recurs in a
+        # later act fires again. The sim's latch also required
+        # `act_index == run.act_index`, so it never did: with 7 act-0 coords
+        # marked, between 1 and all 7 survive onto the act-1 map on the seeds the
+        # entry's probe measured, and in the game every one of those combats opens
+        # with the enemies at 1 HP. Recorded as a gap against the source even
+        # though the source's behaviour looks like a bug: the ground truth is the
+        # decompiled game.
+        self._armed = point.coord in self.marked_coords
 
     def on_combat_start(self) -> None:
         if not self._armed:
             return
-        for enemy in self.living_enemies():
+        # FurCoat.cs:121-127 walks `CombatState.HittableEnemies`, not every enemy
+        # that is not gone: a creature can be present and un-hittable.
+        for enemy in self.hittable_enemies():
             enemy.hp = 1  # SetCurrentHp: a raw set, no damage pipeline
 
     def on_creature_added(self, creature) -> None:

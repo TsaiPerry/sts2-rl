@@ -13,9 +13,10 @@ class Glitter(Relic):
     name = "Glitter"
     rarity = RelicRarity.ANCIENT
 
-    def modify_card_reward_options_late(self, run, cards) -> None:
+    def modify_card_reward_options_late(self, run, cards, options=None):
         from ..enchantments import GlamEnchantment
 
         for card in cards:
             if GlamEnchantment.can_enchant(card):
                 GlamEnchantment().attach(card)
+        return True

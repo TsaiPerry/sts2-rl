@@ -69,5 +69,12 @@ class PotionCourier(Event):
                 key=lambda cls: cls.id,
             )
             if uncommon:
-                self.offer_potion(self.rng.choice(uncommon)())
+                # `base.Owner.PlayerRng.Rewards.NextItem(items)`
+                # (PotionCourier.cs:52) — the per-PLAYER Rewards stream, not
+                # the event's own Rng and not the shared run rng (event/EV-3).
+                rewards = (self.run.player_rng.rewards
+                           if self.run.rng_set is not None else None)
+                pick = (rewards.next_item(uncommon) if rewards is not None
+                        else self.rng.choice(uncommon))
+                self.offer_potion(pick())
         self._finish("RANSACK")

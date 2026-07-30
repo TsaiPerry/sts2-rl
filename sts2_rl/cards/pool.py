@@ -178,6 +178,29 @@ def random_pool_cards(
     return [make_card(card_id) for card_id in chosen]
 
 
+def take_random(items, count: int, rng) -> list:
+    """`IEnumerableExtensions.TakeRandom` (IEnumerableExtensions.cs:17-20) --
+    `collection.ToList().UnstableShuffle(rng).Take(count)`.
+
+    Three things this is NOT, and each of them costs a divergence:
+
+    * It is not `rng.sample`. A full Fisher-Yates over N items spends N-1
+      draws whatever `count` is, where `sample` spends far fewer -- so even a
+      run where the picked items agree leaves the stream in a different place.
+    * It does not mutate the caller's list (`.ToList()` first).
+    * It does not clamp `count`. `Take(n)` on a shorter sequence yields the
+      whole sequence, which is what lets Anointed pass `10 - handCount`.
+
+    `rng` is the NAMED stream the call site's C# names -- a `CombatRng`
+    accessor, whose `.shuffle` in a parity run is the game's top-down
+    Fisher-Yates. `StableShuffle` is a different verb (it SORTS first);
+    `player.stable_shuffled_cards` is that one.
+    """
+    pool = list(items)
+    rng.shuffle(pool)
+    return pool[:count]
+
+
 def get_for_combat_parity(
     rng,
     count: int,

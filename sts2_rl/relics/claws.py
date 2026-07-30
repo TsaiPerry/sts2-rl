@@ -22,7 +22,12 @@ class Claws(Relic):
     def after_obtained(self, run) -> None:
         from ..cards import make_card
 
-        candidates = run.removable_cards()
+        # CardSelectCmd.cs:487 — `c.Type != CardType.Quest && c.IsTransformable`.
+        # `removable_cards()` is the IsTransformable half alone (for a card in
+        # the Deck pile IsTransformable reduces to `!Eternal`,
+        # CardModel.cs:737-750); the Quest clause was dropped, so the three
+        # ported Quest cards were offerable.
+        candidates = run.transformable_cards()
         for original in run.select_cards(
                 "transform_optional", candidates, self.CARDS):
             maul = make_card("maul")

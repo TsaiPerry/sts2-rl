@@ -89,8 +89,27 @@ class Trial(Event):
         self._finish("NOBLE_INNOCENT")
 
     def _nondescript_guilty(self) -> None:
+        from ..rewards import (CardRewardGroup, CombatRewards, RarityOddsType,
+                               create_reward_cards)
+        from ..rooms import RoomType
+
         self.run.add_card(make_card("doubt"))
-        # Two card-reward offers (RewardsCmd.OfferCustom) are not modelled.
+        # Trial.cs:177-187 — after the Doubt, TWO `CardReward(CardCreationOptions
+        # .ForNonCombatWithDefaultOdds([Owner.Character.CardPool]), 3, Owner)`
+        # entries handed to `RewardsCmd.OfferCustom`. The port added the Doubt and
+        # stopped, so the screens, the cards AND every Rewards-stream draw
+        # CreateForReward takes were absent — a deck delta of exactly 1 where the
+        # game's is 1 to 3. Both halves of the capability already existed:
+        # create_reward_cards is the faithful CreateForReward port for exactly
+        # this ForNonCombatWithDefaultOdds(characterPool) shape (brain_leech.py
+        # calls it), and `pending_rewards` is the mid-event OfferCustom channel.
+        groups = []
+        for _ in range(2):
+            cards = create_reward_cards(self.run, RarityOddsType.REGULAR, count=3)
+            groups.append(CardRewardGroup(cards=cards, room_type=RoomType.MONSTER,
+                                          count=3, populated=True))
+        self.pending_rewards = CombatRewards(room_type=RoomType.MONSTER,
+                                             card_rewards=groups)
         self._finish("NONDESCRIPT_GUILTY")
 
     def _nondescript_innocent(self) -> None:

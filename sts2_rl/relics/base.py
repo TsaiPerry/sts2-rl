@@ -15,8 +15,9 @@ Hook mapping from the game (see CombatManager.SetupPlayerTurn):
   AfterPlayerTurnStart(Late) /
   AfterSideTurnStart (player, post-draw)→ on_player_turn_started (post-draw)
   BeforeSideTurnEnd / AfterSideTurnEnd  → on_player_turn_end
-  AfterCombatVictoryEarly               → on_combat_end_early(player_won=True)
-  AfterCombatVictory                    → on_combat_end(player_won=True)
+  AfterCombatEnd                        → on_combat_end          (victory path)
+  AfterCombatVictoryEarly               → on_combat_victory_early
+  AfterCombatVictory                    → on_combat_victory
 
 A relic instance lives on RunState.relics and is re-attached to every new
 CombatState, so anything it latches during a fight would otherwise last the
@@ -246,17 +247,42 @@ class Relic:
         everything the first one added (Driftwood flags the card reward
         rerollable)."""
 
-    def modify_card_reward_options(self, run, cards) -> None:
+    def modify_card_reward_creation_options(self, run, options):
+        """Hook.ModifyCardRewardCreationOptions (CardFactory.cs:216) — return
+        the (possibly widened) `CardCreationOptions` a reward will be drawn
+        from. It runs BEFORE the cards exist, so it shapes the POOL rather
+        than the offer; Dingy Rug appends the Colorless pool. Chain-style: each
+        listener receives the previous one's result, as C# does by reassigning
+        `options`."""
+        return options
+
+    def modify_card_reward_options(self, run, cards, options=None):
         """Hook.TryModifyCardRewardOptions — mutate a card reward's options in
         place. The FIRST of the two complete passes
-        Hook.TryModifyCardRewardOptions makes (Hook.cs:1444-1466); Lasting
-        Candy adds an option here."""
+        Hook.TryModifyCardRewardOptions makes (Hook.cs:1445-1467); Lasting
+        Candy adds an option here.
 
-    def modify_card_reward_options_late(self, run, cards) -> None:
+        `options` is the rewards.CardCreationOptions being created against —
+        the C# hook's second argument, which Lasting Candy reads for both its
+        Source gate and its pool.
+
+        RETURNS whether this listener actually modified anything — C#'s `bool`.
+        The dispatcher collects the true-returners and hands exactly them to
+        `after_modify_card_reward_options`."""
+        return False
+
+    def modify_card_reward_options_late(self, run, cards, options=None):
         """Hook.TryModifyCardRewardOptionsLate — the second complete pass, so
         it sees the options the first one added (Silver Crucible upgrades
         them, Silken Tress enchants them, the egg relics upgrade their own
-        card type)."""
+        card type). Returns the same bool as the plain pass."""
+        return False
+
+    def after_modify_card_reward_options(self, run) -> None:
+        """Hook.AfterModifyingCardRewardOptions (Hook.cs:679-690) — fired only
+        for the listeners that returned true above, which is why Silken Tress
+        and Silver Crucible can spend their one-shot here (SilkenTress.cs:75-81,
+        SilverCrucible.cs:121-129) instead of inside the modifier."""
 
     def modify_merchant_card_results(self, run, cards) -> None:
         """Hook.ModifyMerchantCardCreationResults (MerchantCardEntry.cs:92) —
@@ -297,6 +323,17 @@ class Relic:
         """RelicModel.ModifyGoldGained — chain-modify a gold gain before it
         lands (Ectoplasm returns 0: you can never gain gold)."""
         return amount
+
+    def after_gold_gained(self, run, amount: int) -> None:
+        """RelicModel.AfterGoldGained, dispatched from `PlayerCmd.GainGold`.
+
+        Two details of the C# dispatch matter and both are in `RunState.gain_gold`:
+        the hook fires AFTER `player.Gold += amount` (PlayerCmd.cs:168-169), so a
+        listener reads the NEW balance, and it sits behind the
+        `if (!(amount > 0m)) return;` bail (PlayerCmd.cs:146-149) — which runs on
+        the amount AFTER ModifyGoldGained, so an Ectoplasm-zeroed gain pays
+        nothing.
+        """
 
     def should_procure_potion(self, run, potion) -> bool:
         """RelicModel.ShouldProcurePotion — False refuses the potion outright
@@ -373,6 +410,15 @@ class Relic:
     def after_map_generated(self, run, act_map, act_index) -> None:
         """AbstractModel.AfterMapGenerated."""
 
+    def modify_next_event(self, run, event_id):
+        """`AbstractModel.ModifyNextEvent` (AbstractModel.cs:1892) — swap the
+        event a "?" node is about to serve. Dispatched by `Hook.ModifyNextEvent`
+        (Hook.cs:1830-1836), whose ONE call site is `ActModel.PullNextEvent`
+        (ActModel.cs:437-443): EnsureNextEventIsValid, then this chain, then
+        `AddVisitedEvent` on the MODIFIED event. The sim passes and returns an
+        event ID where C# passes an EventModel."""
+        return event_id
+
     def modify_unknown_map_point_room_types(self, run, room_types):
         """AbstractModel.ModifyUnknownMapPointRoomTypes."""
         return room_types
@@ -392,9 +438,17 @@ class Relic:
         return self.combat.turn
 
     def living_enemies(self) -> list[Monster]:
-        """Mirrors ICombatState.HittableEnemies (the sim's DamageCmd applies
-        the should_allow_hitting predicate on top)."""
+        """`_state.Enemies.Where(e => !e.IsDead)` — alive, hittable or not.
+
+        NOT `HittableEnemies`: a relic that draws over this one can still aim
+        at a mid-revival creature. Use `hittable_enemies()` at every site whose
+        C# reads `CombatState.HittableEnemies`.
+        """
         return [e for e in self.combat.enemies if not e.is_gone]
+
+    def hittable_enemies(self) -> list[Monster]:
+        """`CombatState.HittableEnemies` (CombatState.cs:142)."""
+        return self.combat.hittable_enemies
 
     def _check_win(self) -> None:
         """End combat if a relic effect just killed the last enemy (mirrors

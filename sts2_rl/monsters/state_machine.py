@@ -72,6 +72,30 @@ def _stunned_move(ctx) -> None:
     MoveState.PerformMove setting `_performedAtLeastOnce`."""
 
 
+# `MonsterModel.NextMove` is initialised to `new MoveState()`
+# (MonsterModel.cs:239), and the parameterless ctor is
+# `this("UNSET_MOVE", UnsetMove)` with NO intents (MoveState.cs:42-45). So a
+# creature that has not been rolled yet is NOT null-moved in C# — it holds a
+# real, performable, intent-less move. The sim needs the same object, because
+# `AfterCreatureAdded` only rolls on the player side (CombatManager.cs:860-867)
+# and an enemy-side spawn therefore sits on UNSET_MOVE until the next
+# player-turn-start pass.
+UNSET_STATE_ID = "UNSET_MOVE"
+
+
+def _unset_move(ctx) -> None:
+    """`MoveState.UnsetMove` (MoveState.cs:77-80) — the body THROWS
+    `InvalidOperationException("No move has been set for the monster")`.
+
+    Ported as a throw rather than softened to a no-op, because nothing can
+    reach it in either engine and a raise is the cheaper tripwire if that ever
+    stops being true: `ExecuteEnemyTurn` iterates `_state.Enemies.ToList()`, a
+    snapshot taken before the first enemy acts (CombatManager.cs:1072), so a
+    creature summoned part-way through the enemy turn does not act until the
+    next one — by which time the player-turn-start pass has rolled it."""
+    raise RuntimeError("No move has been set for the monster")
+
+
 class MoveRepeatType(Enum):
     CAN_REPEAT_FOREVER = "can_repeat_forever"
     CAN_REPEAT_X_TIMES = "can_repeat_x_times"
@@ -365,14 +389,24 @@ class MachineMonster(Monster):
     (CombatManager.cs:478-484 -> Creature.PrepareForNextTurn), which
     CombatState._roll_enemy_intents mirrors. The only roll outside that pass
     is the one CombatManager.AfterCreatureAdded (CombatManager.cs:860-867)
-    makes when the creature joins the combat — this class's __init__.
+    makes when the creature joins the combat — and that one is SIDE-GATED:
+
+        if (creature.IsEnemy && _state.CurrentSide == CombatSide.Player)
+            creature.Monster.RollMove(...)
+
+    so a creature summoned during the ENEMY side is not rolled at all. It
+    keeps `MonsterModel.NextMove`'s initial `new MoveState()` — UNSET_MOVE —
+    until the next player-turn-start pass reaches it in enemy-list order.
+    Construction therefore does NOT roll here either; `CombatState
+    .after_creature_added` owns the opening roll for both paths.
     """
 
     def __init__(self, hooks: HookSystem, rng: random.Random) -> None:
         super().__init__(hooks, rng)
         self._rng = rng
         self.machine = self.build_machine()
-        self._current_move: MoveState = self.machine.roll_move(self, self._move_rng)
+        self._current_move: MoveState = MoveState(
+            UNSET_STATE_ID, _unset_move, Intent(MoveType.UNKNOWN))
 
     def build_machine(self) -> MonsterMoveStateMachine:
         raise NotImplementedError
@@ -384,6 +418,10 @@ class MachineMonster(Monster):
         # RunRng.MonsterAi)). self._rng (HP roll, and any non-move use a
         # subclass makes of it) is untouched — only the move roll moves.
         return self._hooks.combat.combat_rng.monster_ai
+
+    @property
+    def has_rolled_a_move(self) -> bool:
+        return self._current_move.id != UNSET_STATE_ID
 
     @property
     def current_intent(self) -> Intent:

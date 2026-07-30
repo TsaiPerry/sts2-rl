@@ -16,42 +16,42 @@
     },
     {
       "path": "sts2_rl/cards/colorless_skills.py",
-      "sha256": "582eae297c48ba02774195e37e6ddb76d3874c28f7007d4c54267ed41da7e6d8",
+      "sha256": "a94c279e15e166c280c399871da2c21a4ed6c4bf2b827bcf3cf4d1bb9c22b4ca",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "72840c98dd4eb14b3f77142dc08078d535fb5f223a14b5d7fea981010502b1a7",
+      "sha256": "06f9d38ecefba5bb61280da2dae7e92350e163a00481f23bfe8443b722327ad8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/delicate_frond.py",
-      "sha256": "0cf7d5688b9436ff83a8bc91e362bad5f702521d412e7b0d3d142ddd8d62be21",
+      "sha256": "c179a633d56de8d648aee72a1573bb439448c18df0710172e87fbdd136deedde",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/petrified_toad.py",
-      "sha256": "da7c0d38ecd9a57caebed6464bfe1b8dc8e8cc0bda5c9321271994a87072079f",
+      "sha256": "147dfbbc5f92060f7b3fd8dcff45919e25847d8093005a22b6fa365027601b8c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -75,8 +75,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): the sim has TWO potion-procure paths and only the out-of-combat one consults should_procure_potion, so a mid-combat Alchemize gives a Sozu owner a potion the game refuses",
-      "verdict": "gap",
-      "issue": "MECHANISM: in C# there is exactly ONE procure entry point -- PotionCmd.TryToProcure (PotionCmd.cs:28-52) -- and its first statement is the Hook.ShouldProcurePotion gate; all ten callers go through it. The sim now HAS that single gated entry point for combat-side sources: potions.py:1352-1375 `try_to_procure` runs the `should_procure_potion` pass (:1368-1370), then `player.add_potion` (:1371), then `after_potion_procured` (:1373-1374). What REMAINS is that only two of the four ported combat-side callers were moved onto it. FIXED: cards/colorless_skills.py:56 (Alchemize) and potions.py:1270 (Entropic Brew's in-combat `use`) both call `try_to_procure`. STILL UNGATED: relics/delicate_frond.py:24-25 (`while player.has_open_potion_slot: player.add_potion(self.combat._rng.choice(pool)())`) and relics/petrified_toad.py:20 (`self.player.add_potion(PotionShapedRock())`) call PlayerCombatState.add_potion directly, and player.py:107-121 still runs neither Hook.ShouldProcurePotion nor Hook.AfterPotionProcured -- its docstring concedes exactly this at player.py:112-115. Both C# counterparts are gated: DelicateFrond.cs:18 `if (!(await PotionCmd.TryToProcure(potion, base.Owner)).success) break;` and PetrifiedToad.cs:19 `await PotionCmd.TryToProcure<PotionShapedRock>(base.Owner);`. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b15.py b15-sozu`): `PlayerCombatState.add_potion` with Sozu held returns kept=True and belt ['fire_potion', None, None] where C# refuses, and the probe's own live grep of ungated callers now lists exactly relics/delicate_frond.py:25 and relics/petrified_toad.py:20 (plus potions.py:1371, which is the helper's own internal call). Both sides remain ported content: Sozu comes from the ported Darv shrine (events/darv.py), and Delicate Frond and Petrified Toad are ported relics that fire at combat start. TWO observables at each remaining site: the Sozu owner keeps a potion the game refuses, and Belt Buckle's AfterPotionProcured never fires for it. NOTE FOR THE FIX: DelicateFrond's C# loop breaks on a failed procure; the sim's `while player.has_open_potion_slot` loop has no break, so simply swapping in `try_to_procure` there would spin forever under Sozu -- port the break with it. SCOPE NOTE unchanged: this is a relic whose entire stated effect is the gate, and the divergent observable is the potion BELT, which the conformance runner asserts and resyncs slot-by-slot.  NARROWED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): the rest of this entry is closed in today's code. The issue it replaced read: MECHANISM: in C# there is exactly ONE procure entry point -- PotionCmd.TryToProcure (PotionCmd.cs:27-52) -- and its first statement is the Hook.ShouldProcurePotion gate (PotionCmd.cs:31); an executed grep finds all ten callers go through it (PotionReward, MerchantPotionEntry, AlchemicalCoffer, DelicateFrond, PhialHolster, EntropicBrew, Alchemize, the console and the multiplayer synchroniser). The sim splits the operation: RunState.add_potion (run.py:474-485) runs the gate, but PlayerCombatState.add_potion (player.py:107-121) does NOT -- its own docstring concedes it at player.py:112-115. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b15.py b15-sozu): `RunState.add_potion` with Sozu held returns kept=False and an empty belt (correct), while `PlayerCombatState.add_potion` with the same relic returns kept=True and belt ['fire_potion', None, None] where C# refuses. Both sides are ported content: Sozu comes from the ported Darv shrine (events/darv.py) and the ungated path has FOUR ported callers, printed by the probe -- cards/colorless_skills.py:53 (Alchemize, a ported Colorless Skill that generates a random combat potion), potions.py:1217 (Entropic Brew), relics/delicate_frond.py:25 and relics/petrified_toad.py:20. SCOPE NOTE: the shared contract defers potions, but this is not a potion-content audit finding -- it is a relic whose entire stated effect is the gate, and the divergent observable is the potion BELT, which the conformance runner asserts and resyncs slot-by-slot. Same reasoning as relic/belt_buckle's AfterPotionProcured entry, which likewise filed rather than waived."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): THE TWO REMAINING UNGATED CALLERS ARE GONE, and with them the sim's second procure path. This entry's own text named them: relics/delicate_frond.py and relics/petrified_toad.py both called `PlayerCombatState.add_potion` directly, and both now go through `potions.try_to_procure` -- so all four ported combat-side sources (Alchemize, Entropic Brew's in-combat use, the Frond, the Toad) share the one gated entry point C# has, which is the whole point of PotionCmd.TryToProcure. The entry's FIX NOTE was honoured: DelicateFrond's C# loop breaks on a failed procure and the sim's now does too, because under Sozu the belt never fills. EXECUTED: `CombatState(relics=[delicate_frond, sozu])` and `CombatState(relics=[petrified_toad, sozu])` both open with an empty belt.  Pinned by test/test_procure_and_upgrade_verbs.py.  NOT CLOSED: `PlayerCombatState.add_potion` remains the ungated primitive -- it is `AddPotionInternal`, which is what TryToProcure calls once the gate passes, so that is the source's shape and not a residue.  The text it replaced read: MECHANISM: in C# there is exactly ONE procure entry point -- PotionCmd.TryToProcure (PotionCmd.cs:28-52) -- and its first statement is the Hook.ShouldProcurePotion gate; all ten callers go through it. The sim now HAS that single gated entry point for combat-side sources: potions.py:1352-1375 `try_to_procure` runs the `should_procure_potion` pass (:1368-1370), then `player.add_potion` (:1371), then `after_potion_procured` (:1373-1374). What REMAINS is that only two of the four ported combat-side callers were moved onto it. FIXED: cards/colorless_skills.py:56 (Alchemize) and potions.py:1270 (Entropic Brew's in-combat `use`) both call `try_to_procure`. STILL UNGATED: relics/delicate_frond.py:24-25 (`while player.has_open_potion_slot: player.add_potion(self.combat._rng.choice(pool)())`) and relics/petrified_toad.py:20 (`self.player.add_potion(PotionShapedRock())`) call PlayerCombatState.add_potion directly, and player.py:107-121 still runs neither Hook.ShouldProcurePotion nor Hook.AfterPotionProcured -- its docstring concedes exactly this at player.py:112-115. Both C# counterparts are gated: DelicateFrond.cs:18 `if (!(await PotionCmd.TryToProcure(potion, base.Owner)).success) break;` and PetrifiedToad.cs:19 `await PotionCmd.TryToProcure<PotionShapedRock>(base.Owner);`. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b15.py b15-sozu`): `PlayerCombatState.add_potion` with Sozu held returns kept=True and belt ['fire_potion', None, None] where C# refuses, and the probe's own live grep of ungated callers now lists exactly relics/delicate_frond.py:25 and relics/petrified_toad.py:20 (plus potions.py:1371, which is the helper's own internal call). Both sides remain ported content: Sozu comes from the ported Darv shrine (events/darv.py), and Delicate Frond and Petrified Toad are ported relics that fire at combat start. TWO observables at each remaining site: the Sozu owner keeps a potion the game refuses, and Belt Buckle's AfterPotionProcured never fires for it. NOTE FOR THE FIX: DelicateFrond's C# loop breaks on a failed procure; the sim's `while player.has_open_potion_slot` loop has no break, so simply swapping in `try_to_procure` there would spin forever under Sozu -- port the break with it. SCOPE NOTE unchanged: this is a relic whose entire stated effect is the gate, and the divergent observable is the potion BELT, which the conformance runner asserts and resyncs slot-by-slot.  NARROWED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): the rest of this entry is closed in today's code. The issue it replaced read: MECHANISM: in C# there is exactly ONE procure entry point -- PotionCmd.TryToProcure (PotionCmd.cs:27-52) -- and its first statement is the Hook.ShouldProcurePotion gate (PotionCmd.cs:31); an executed grep finds all ten callers go through it (PotionReward, MerchantPotionEntry, AlchemicalCoffer, DelicateFrond, PhialHolster, EntropicBrew, Alchemize, the console and the multiplayer synchroniser). The sim splits the operation: RunState.add_potion (run.py:474-485) runs the gate, but PlayerCombatState.add_potion (player.py:107-121) does NOT -- its own docstring concedes it at player.py:112-115. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b15.py b15-sozu): `RunState.add_potion` with Sozu held returns kept=False and an empty belt (correct), while `PlayerCombatState.add_potion` with the same relic returns kept=True and belt ['fire_potion', None, None] where C# refuses. Both sides are ported content: Sozu comes from the ported Darv shrine (events/darv.py) and the ungated path has FOUR ported callers, printed by the probe -- cards/colorless_skills.py:53 (Alchemize, a ported Colorless Skill that generates a random combat potion), potions.py:1217 (Entropic Brew), relics/delicate_frond.py:25 and relics/petrified_toad.py:20. SCOPE NOTE: the shared contract defers potions, but this is not a potion-content audit finding -- it is a relic whose entire stated effect is the gate, and the divergent observable is the potion BELT, which the conformance runner asserts and resyncs slot-by-slot. Same reasoning as relic/belt_buckle's AfterPotionProcured entry, which likewise filed rather than waived."
     },
     {
       "what": "N1: `return player != base.Owner;` (Sozu.cs:17-20) vs the sim's unconditional `return False` (sozu.py:27); and the same missing owner check on ModifyMaxEnergy (Sozu.cs:24-27)",

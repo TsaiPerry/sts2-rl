@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\silken_tress.py",
-    "sha256": "ae34c594c5c9502ded4b0cf86cb7921cdcde004b1d80c81532ab3ee7dcbabcdf"
+    "sha256": "9ad69387603f7a68000e51cdecd81d6382fcda51997ad75dfb8c0ee883ed81f5"
   },
   "extra_sources": [
     {
@@ -56,7 +56,7 @@
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31",
+      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
       "side": "sim"
     },
     {
@@ -66,27 +66,27 @@
     },
     {
       "path": "sts2_rl/events/brain_leech.py",
-      "sha256": "fac921dd919360e9cdd8e9f94adda7c67072e63db82bf2a7debefed60b76d0d9",
+      "sha256": "dcccfa7348ca10d72727a0cd03772b29e60af4e2ca752f457456339ed022e5cf",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/neow.py",
-      "sha256": "32be19d527d887b8085c5106696635b65271f2974d6c65d1e4ac842ea4862114",
+      "sha256": "df11695f9bff2d43c3408f0fb60403bdd3957015edcc052b424c4e1d242bde6c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/_eggs.py",
-      "sha256": "e9598b67bc030bfdcf3ac3cc7c326141f6318630a8db35c417f4e32fa2111995",
+      "sha256": "cd60f1cee6043d72cf3f6fa56180bca7c5dcd4757826a3bb1ad2d151014f2c1a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/glitter.py",
-      "sha256": "80a3cc48290426c8412c3df7413d64c7c8d3acf0b3321f0be4e21e83c7b0c460",
+      "sha256": "965af417b76bb79c967a15db1bc2e0e7d861a2db6db9932db1bf936e7d95c88d",
       "side": "sim"
     },
     {
@@ -96,17 +96,17 @@
     },
     {
       "path": "sts2_rl/relics/silver_crucible.py",
-      "sha256": "9a8147346c7c1fa77a0ebb3b1a61402e0e67663fd7686345e6f31fb0686641eb",
+      "sha256": "e9375424cc41d2dbb18f7f49b1dc08bc6246d1d0a7c57b4257510a904cccd033",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "9f8f94386154df9acfd780c8e5549419bffd7d5ed2448495595c9aa33fce4e83",
+      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -128,20 +128,20 @@
     },
     "TryModifyCardRewardOptionsLate": {
       "maps_to": "modify_card_reward_options (silken_tress.py:27-35), dispatched by rewards.create_reward_cards (rewards.py:299-301)",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. The phase half (G2) is CLOSED: the plain and Late passes are separate base members dispatched as two complete walks (sts2_rl/relics/base.py:241-251, sts2_rl/rewards.py:304-315 = Hook.cs:1444-1466), and sts2_rl/relics/silken_tress.py:27 is a Late implementer. WHAT REMAINS is guard G1, the dropped `!options.Flags.HasFlag(CardCreationFlags.IsCardReward)` clause (SilkenTress.cs:53-56): the sim still has no card-creation-flag concept at all -- grepping `is_card_reward` over sts2_rl/ returns nothing -- so create_reward_cards' `modify_hooks` argument (which is NoModifyHooks, not IsCardReward) is the only gate, and non-reward generations still burn the one-shot. The owner clause (N1, clone-vs-mutate) is unchanged."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): both halves. (1) THE FLAG EXISTS: rewards.py now carries `CardCreationFlags` (src/Core/Runs/CardCreationFlags.cs, the source's own values) on CardCreationOptions, and `IS_CARD_REWARD` is set exactly where C# sets it -- CardReward.cs:114-115 and :134, i.e. a card reward SCREEN and nothing else -- so SilkenTress.cs:53-56's `!options.Flags.HasFlag(CardCreationFlags.IsCardReward)` is now a real guard and a relic or event generation no longer burns the one-shot. (2) THE CHARGE MOVED TO ITS OWN HOOK: the two modifier passes now collect the listeners that returned TRUE (Hook.cs:1445-1467) and `after_modify_card_reward_options` notifies exactly those (Hook.cs:679-690, dispatched from CardFactory.cs:106 and CardReward.cs:153), which is where SilkenTress.cs:75-81 sets IsUsed. The sim's fused write inside the modifier is gone. Pinned by test_silken_tress_does_not_spend_itself_on_a_non_reward.  The text it replaced read: NARROWED 2026-07-27. The phase half (G2) is CLOSED: the plain and Late passes are separate base members dispatched as two complete walks (sts2_rl/relics/base.py:241-251, sts2_rl/rewards.py:304-315 = Hook.cs:1444-1466), and sts2_rl/relics/silken_tress.py:27 is a Late implementer. WHAT REMAINS is guard G1, the dropped `!options.Flags.HasFlag(CardCreationFlags.IsCardReward)` clause (SilkenTress.cs:53-56): the sim still has no card-creation-flag concept at all -- grepping `is_card_reward` over sts2_rl/ returns nothing -- so create_reward_cards' `modify_hooks` argument (which is NoModifyHooks, not IsCardReward) is the only gate, and non-reward generations still burn the one-shot. The owner clause (N1, clone-vs-mutate) is unchanged."
     },
     "AfterModifyingCardRewardOptions": {
       "maps_to": "the `self.is_used = True` tail of modify_card_reward_options (silken_tress.py:35) -- the sim fuses C#'s separate companion hook into the modifier",
-      "verdict": "gap",
-      "issue": "MECHANISM: C# spends the charge from a SEPARATE hook, and Hook.AfterModifyingCardRewardOptions only notifies models that RETURNED TRUE from the modifier pass (Hook.cs:679-690 walks the listeners and skips any not in the `modifiers` list collected at Hook.cs:1445-1467). So the charge is spent exactly when the relic declined to return false -- and SilkenTress.cs:47-73 returns false on three conditions: wrong owner, not a card reward, already used. The sim's fused write at silken_tress.py:35 is reached after only ONE of those three (the `is_used` check at line 30). The owner check is structurally satisfied (single-player), so the observable divergence is the IsCardReward clause: guard G1's executed evidence shows Lead Paperweight's pickup burning the one-shot. Correct in one respect worth pinning: C# returns true (and therefore spends the charge) even when the loop enchanted NOTHING -- the `return true` at SilkenTress.cs:72 is unconditional after the loop -- so the sim setting is_used unconditionally at line 35 is right, and a 'only spend it if something got enchanted' fix would be a NEW divergence. Rule 7: Hook.cs and rewards.py are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): both halves. (1) THE FLAG EXISTS: rewards.py now carries `CardCreationFlags` (src/Core/Runs/CardCreationFlags.cs, the source's own values) on CardCreationOptions, and `IS_CARD_REWARD` is set exactly where C# sets it -- CardReward.cs:114-115 and :134, i.e. a card reward SCREEN and nothing else -- so SilkenTress.cs:53-56's `!options.Flags.HasFlag(CardCreationFlags.IsCardReward)` is now a real guard and a relic or event generation no longer burns the one-shot. (2) THE CHARGE MOVED TO ITS OWN HOOK: the two modifier passes now collect the listeners that returned TRUE (Hook.cs:1445-1467) and `after_modify_card_reward_options` notifies exactly those (Hook.cs:679-690, dispatched from CardFactory.cs:106 and CardReward.cs:153), which is where SilkenTress.cs:75-81 sets IsUsed. The sim's fused write inside the modifier is gone. Pinned by test_silken_tress_does_not_spend_itself_on_a_non_reward.  The text it replaced read: MECHANISM: C# spends the charge from a SEPARATE hook, and Hook.AfterModifyingCardRewardOptions only notifies models that RETURNED TRUE from the modifier pass (Hook.cs:679-690 walks the listeners and skips any not in the `modifiers` list collected at Hook.cs:1445-1467). So the charge is spent exactly when the relic declined to return false -- and SilkenTress.cs:47-73 returns false on three conditions: wrong owner, not a card reward, already used. The sim's fused write at silken_tress.py:35 is reached after only ONE of those three (the `is_used` check at line 30). The owner check is structurally satisfied (single-player), so the observable divergence is the IsCardReward clause: guard G1's executed evidence shows Lead Paperweight's pickup burning the one-shot. Correct in one respect worth pinning: C# returns true (and therefore spends the charge) even when the loop enchanted NOTHING -- the `return true` at SilkenTress.cs:72 is unconditional after the loop -- so the sim setting is_used unconditionally at line 35 is right, and a 'only spend it if something got enchanted' fix would be a NEW divergence. Rule 7: Hook.cs and rewards.py are not hashed here."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the port drops `!options.Flags.HasFlag(CardCreationFlags.IsCardReward)` (SilkenTress.cs:53-56), so the one-shot is spent by generations that are not card rewards",
-      "verdict": "gap",
-      "issue": "MECHANISM: C# refuses to touch the options unless `options.Flags.HasFlag(CardCreationFlags.IsCardReward)`, and that flag is set by exactly two places in the whole game -- CardReward's two constructors (CardReward.cs:113-115 and :134) and the SealedDeck modifier (SealedDeck.cs:30). Every other CardFactory.CreateForReward caller leaves it clear, and CardFactory dispatches the hook regardless (CardFactory.cs:104, gated on the DIFFERENT flag NoModifyHooks), so this flag is the relic's own gate and nothing else enforces it. The sim has no flag at all: rewards.py:299-301 runs modify_card_reward_options for every create_reward_cards call whose `modify_hooks` argument is True -- and that argument is NoModifyHooks, not IsCardReward. Three ported call sites are therefore wrong, EXECUTED (py audit/tools/relic_probes_b14.py card-reward-flag): (a) relics/lead_paperweight.py:24-29 passes modify_hooks=True where LeadPaperweight.cs:21-22 builds a bare CardCreationOptions and calls CreateForReward directly -- IsCardReward CLEAR, so C# skips both relics; the probe offers [('restlessness', 1, 'glam'), ('impatience', 1, 'glam')] and reports Silver Crucible's times_used 0 -> 1 and Silken Tress's is_used False -> True, where C# offers two unmodified level-0 Colorless cards and spends neither relic. (b) events/brain_leech.py:44's SHARE_KNOWLEDGE leaves modify_hooks at its True default where BrainLeech.cs:66 is also a bare CreateForReward (ForNonCombatWithDefaultOdds) -- IsCardReward CLEAR; the probe reports six upgraded options and times_used 1. (c) the OPPOSITE direction: events/brain_leech.py:60's RIP passes modify_hooks=False, but BrainLeech.cs:57 builds a real `new CardReward(options, 3, Owner)` whose Populate sets IsCardReward -- so C# DOES modify those options and the sim does not; the probe reports three level-0 options and times_used 0. The reference case is correct on both sides: a normal combat card reward fires (probe case (d): three level-1 options, times_used 1). REACHABILITY (LIVE): both relics come from Neow's curse pool at floor 0 (events/neow.py:47); Lead Paperweight is in Neow's positive pool (events/neow.py:39) and Brain Leech is a ported event any run can roll (events/__init__.py:118) -- so a run holding either relic and reaching either site diverges, with no further content needed. The observable is compound: the wrong CARDS are offered, and a limited charge is spent (or not spent), which changes what the NEXT card reward looks like. The fix is a field, not a flag flip: create_reward_cards needs an is_card_reward parameter distinct from modify_hooks, and its four ported callers need auditing against their C# counterparts -- brain_leech's two arms are currently inverted. Rule 7: CardReward.cs, CardFactory.cs, SealedDeck.cs, LeadPaperweight.cs, BrainLeech.cs, rewards.py, relics/lead_paperweight.py, events/brain_leech.py and events/neow.py are not hashed here. AT THIS UNIT'S SITE specifically: Silken Tress is one-shot, so a wrongly-fired enchant does not merely add Glam to the wrong cards -- it permanently consumes the relic, and the player's NEXT card reward (the one the relic is for) comes out unenchanted."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): both halves. (1) THE FLAG EXISTS: rewards.py now carries `CardCreationFlags` (src/Core/Runs/CardCreationFlags.cs, the source's own values) on CardCreationOptions, and `IS_CARD_REWARD` is set exactly where C# sets it -- CardReward.cs:114-115 and :134, i.e. a card reward SCREEN and nothing else -- so SilkenTress.cs:53-56's `!options.Flags.HasFlag(CardCreationFlags.IsCardReward)` is now a real guard and a relic or event generation no longer burns the one-shot. (2) THE CHARGE MOVED TO ITS OWN HOOK: the two modifier passes now collect the listeners that returned TRUE (Hook.cs:1445-1467) and `after_modify_card_reward_options` notifies exactly those (Hook.cs:679-690, dispatched from CardFactory.cs:106 and CardReward.cs:153), which is where SilkenTress.cs:75-81 sets IsUsed. The sim's fused write inside the modifier is gone. Pinned by test_silken_tress_does_not_spend_itself_on_a_non_reward.  The text it replaced read: MECHANISM: C# refuses to touch the options unless `options.Flags.HasFlag(CardCreationFlags.IsCardReward)`, and that flag is set by exactly two places in the whole game -- CardReward's two constructors (CardReward.cs:113-115 and :134) and the SealedDeck modifier (SealedDeck.cs:30). Every other CardFactory.CreateForReward caller leaves it clear, and CardFactory dispatches the hook regardless (CardFactory.cs:104, gated on the DIFFERENT flag NoModifyHooks), so this flag is the relic's own gate and nothing else enforces it. The sim has no flag at all: rewards.py:299-301 runs modify_card_reward_options for every create_reward_cards call whose `modify_hooks` argument is True -- and that argument is NoModifyHooks, not IsCardReward. Three ported call sites are therefore wrong, EXECUTED (py audit/tools/relic_probes_b14.py card-reward-flag): (a) relics/lead_paperweight.py:24-29 passes modify_hooks=True where LeadPaperweight.cs:21-22 builds a bare CardCreationOptions and calls CreateForReward directly -- IsCardReward CLEAR, so C# skips both relics; the probe offers [('restlessness', 1, 'glam'), ('impatience', 1, 'glam')] and reports Silver Crucible's times_used 0 -> 1 and Silken Tress's is_used False -> True, where C# offers two unmodified level-0 Colorless cards and spends neither relic. (b) events/brain_leech.py:44's SHARE_KNOWLEDGE leaves modify_hooks at its True default where BrainLeech.cs:66 is also a bare CreateForReward (ForNonCombatWithDefaultOdds) -- IsCardReward CLEAR; the probe reports six upgraded options and times_used 1. (c) the OPPOSITE direction: events/brain_leech.py:60's RIP passes modify_hooks=False, but BrainLeech.cs:57 builds a real `new CardReward(options, 3, Owner)` whose Populate sets IsCardReward -- so C# DOES modify those options and the sim does not; the probe reports three level-0 options and times_used 0. The reference case is correct on both sides: a normal combat card reward fires (probe case (d): three level-1 options, times_used 1). REACHABILITY (LIVE): both relics come from Neow's curse pool at floor 0 (events/neow.py:47); Lead Paperweight is in Neow's positive pool (events/neow.py:39) and Brain Leech is a ported event any run can roll (events/__init__.py:118) -- so a run holding either relic and reaching either site diverges, with no further content needed. The observable is compound: the wrong CARDS are offered, and a limited charge is spent (or not spent), which changes what the NEXT card reward looks like. The fix is a field, not a flag flip: create_reward_cards needs an is_card_reward parameter distinct from modify_hooks, and its four ported callers need auditing against their C# counterparts -- brain_leech's two arms are currently inverted. Rule 7: CardReward.cs, CardFactory.cs, SealedDeck.cs, LeadPaperweight.cs, BrainLeech.cs, rewards.py, relics/lead_paperweight.py, events/brain_leech.py and events/neow.py are not hashed here. AT THIS UNIT'S SITE specifically: Silken Tress is one-shot, so a wrongly-fired enchant does not merely add Glam to the wrong cards -- it permanently consumes the relic, and the player's NEXT card reward (the one the relic is for) comes out unenchanted."
     },
     {
       "what": "G2 (DORMANT): TryModifyCardRewardOptionsLate is C#'s SECOND dispatch pass and the sim runs one flat walk (PROMPT.md class 25)",
@@ -179,6 +179,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CheckIfUsedUp's status write / CanonicalVars / ExtraHoverTips / Title / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, the localized name, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

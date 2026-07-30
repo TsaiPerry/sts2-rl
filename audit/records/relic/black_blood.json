@@ -6,12 +6,12 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\black_blood.py",
-    "sha256": "254547adb216c08edb51fc54b3d39bc01ffd343615ecddf1d4bb073a8dbd684e"
+    "sha256": "01bd886db9276e72f4f092b2cd9753d389c1e1963cfe61b0b2b03a8200b5b689"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     }
   ],
@@ -21,7 +21,7 @@
       "verdict": "faithful"
     },
     "AfterCombatVictory": {
-      "maps_to": "on_combat_end(player_won=True) (black_blood.py:17-20)",
+      "maps_to": "on_combat_victory (black_blood.py)",
       "verdict": "faithful",
       "rationale": "BlackBlood.cs:9-16 heals HealVar(12m).BaseValue on combat VICTORY if the owner is not dead. The sim's on_combat_end carries the player_won flag (relics/base.py:18 maps AfterCombatVictory to exactly this), and the port checks both `player_won` and `not self.player.is_dead` (black_blood.py:18) -- the same pair. 12 matches with no AscensionHelper branch in the file. The IsDead guard is not redundant on either side: a victory can coincide with the player's death (simultaneous lethal Thorns), which is exactly the case the guard exists for."
     }
@@ -35,7 +35,7 @@
     {
       "what": "N2: AfterCombatVictory only -- neither side heals after a combat the player did not win",
       "verdict": "faithful",
-      "rationale": "C# overrides AfterCombatVictory, not AfterCombatEnd, so a fled/lost combat heals nothing; the sim's `if player_won` reproduces that. Recorded because the sim's Relic base offers BOTH an on_combat_end combat hook and a run-level after_combat_end (relics/base.py:251), and picking the wrong one would heal on defeat."
+      "rationale": "AfterCombatVictory only -- neither side heals after a combat the player did not win, and since round 5 that is structural rather than a test the port performs: ProcessPendingLoss (CombatManager.cs:956-965) fires no hook, so `on_combat_victory` has no losing dispatch."
     }
   ],
   "verdict": "waiver",

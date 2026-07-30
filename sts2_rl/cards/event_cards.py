@@ -265,10 +265,12 @@ class SquashCard(Card):
         from ..powers import VulnerablePower
         target = ctx.resolve_target(target_idx)
         DamageCmd.deal(ctx.hooks, target, self._damage, dealer=ctx.player, card=self)
-        if not target.is_gone:
-            PowerCmd.apply(
-                ctx.hooks, target, VulnerablePower, self._vulnerable, applier=ctx.player
-            )
+        # No liveness guard: C# applies this unconditionally and the only
+        # gate is `Creature.CanReceivePowers` (Creature.cs:308-322), now
+        # enforced inside PowerCmd.apply.
+        PowerCmd.apply(
+            ctx.hooks, target, VulnerablePower, self._vulnerable, applier=ctx.player
+        )
 
 
 @register_card
@@ -300,7 +302,7 @@ class MetamorphosisCard(Card):
         from ..cards.pool import random_pool_cards
         from ..cmds import CardPileCmd
         for card in random_pool_cards(
-            ctx.combat._rng, self._cards, _CT.ATTACK,
+            ctx.combat.combat_rng.card_gen, self._cards, _CT.ATTACK,
             pool=ctx.combat.card_pool,
         ):
             card.set_cost_this_combat(0)
@@ -333,7 +335,12 @@ class EnlightenmentCard(Card):
             if self.upgrade_level > 0:
                 card.set_cost_this_combat(1)
             else:
-                card.add_cost_this_turn(1 - card.energy_cost)
+                # Enlightenment.cs:21-24 registers an ABSOLUTE LocalCostModifier
+                # of value 1 (CardEnergyCost.cs:197-203), not a delta computed
+                # from the cost at this instant: a 3-cost card upgraded to base
+                # 2 later in the same turn reads 1 in the game and 0 under a
+                # relative -2. `set_cost_this_turn` is the absolute form.
+                card.set_cost_this_turn(1)
 
 
 @register_card
@@ -370,8 +377,9 @@ class LanternKeyCard(Card):
     """Quest — Unplayable. Kept from The Lantern Key event (Keep the Key).
 
     Source: LanternKey.cs — Cost -1 | Quest | Quest | Unplayable |
-    MaxUpgradeLevel 0. In the game it redirects the next Act-3 event to War
-    Historian Repy; the sim has no map, so it is an inert unplayable card.
+    MaxUpgradeLevel 0. Two hooks, both gated on the Glory act: it forces every
+    act-3 "?" node to roll an Event, and it redirects the next act-3 event to
+    War Historian Repy (Hook.ModifyNextEvent). BOTH are ported.
     """
     id = "lantern_key"
     name = "Lantern Key"
@@ -383,8 +391,36 @@ class LanternKeyCard(Card):
     is_unpowered = True
     can_be_generated_by_modifiers = False
 
+    # LanternKey.cs:9 — `private const int _gloryActIndex = 2`.
+    GLORY_ACT_INDEX = 2
+
     def _init_vars(self) -> None:
         self._energy_cost = 0
+
+    def modify_unknown_map_point_room_types(self, run, room_types):
+        """LanternKey.cs:21-28 — outside act 3 the set passes through; inside
+        it, it is REPLACED by {Event} rather than filtered, so the key beats
+        any other listener's narrowing."""
+        from ..rooms import RoomType
+
+        if run.act_index != self.GLORY_ACT_INDEX:
+            return room_types
+        return {RoomType.EVENT}
+
+    def modify_next_event(self, run, event_id):
+        """LanternKey.cs:29-36 — inside the Glory act the next event is REPLACED
+        by War Historian Repy; outside it the incoming event passes through.
+
+        That the target event's own `IsAllowed` is False is the POINT, not an
+        obstacle: IsAllowed gates the random pool and this hook bypasses it, so
+        any run carrying a Lantern Key into act 3 is routed there. The port used
+        to justify omitting this with "the sim has no map", which was false twice
+        over — the sim has a map, and it already dispatched the companion hook
+        over the deck.
+        """
+        if run.act_index != self.GLORY_ACT_INDEX:
+            return event_id
+        return "war_historian_repy"
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         pass

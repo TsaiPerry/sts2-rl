@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     }
   ],
@@ -47,8 +47,8 @@
     },
     "AfterPlayerTurnStart": {
       "maps_to": "powers.py:738-745 InfernoPower.on_player_turn_start",
-      "verdict": "gap",
-      "issue": "SLOT, identical to power/crimson_mantle's: AfterPlayerTurnStart is post-draw and the sim uses the pre-draw on_player_turn_start. The sim's on_player_turn_start (player.py:169) fires BEFORE the hand draw (player.py:171-186); C#'s side-turn-start dispatchers run at CombatManager.cs:458 (Before) and :522 (After), i.e. either side of SetupPlayerTurn at :514. EXECUTED: a spy records [on_player_turn_start hand=5, 4x on_card_drawn, on_player_turn_started hand=9]. Third-file citations, not hashed here. Inferno's self-damage can be lethal, so in the sim it can cancel a hand draw the game already made. The sim additionally guards on `self.self_damage > 0` (powers.py:739) where C# fires the 0-damage call unconditionally -- same dormant sub-finding as power/crimson_mantle's, with the same named trigger."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. Both halves. The SLOT: InfernoPower declares AfterPlayerTurnStart and is now on `on_player_turn_started`, post-draw -- see power/crimson_mantle's entry for the split. The SUB-FINDING: the sim's `self.self_damage > 0` guard is gone; InfernoPower.cs:26-35 fires `CreatureCmd.Damage(..., SelfDamage, ...)` with no such test, so a turn-1 Inferno runs a 0-damage command through the whole pipeline -- modifiers, block, and the on-damage hooks a listener could be watching.  The gap it replaced read: SLOT, identical to power/crimson_mantle's: AfterPlayerTurnStart is post-draw and the sim uses the pre-draw on_player_turn_start. The sim's on_player_turn_start (player.py:169) fires BEFORE the hand draw (player.py:171-186); C#'s side-turn-start dispatchers run at CombatManager.cs:458 (Before) and :522 (After), i.e. either side of SetupPlayerTurn at :514. EXECUTED: a spy records [on_player_turn_start hand=5, 4x on_card_drawn, on_player_turn_started hand=9]. Third-file citations, not hashed here. Inferno's self-damage can be lethal, so in the sim it can cancel a hand draw the game already made. The sim additionally guards on `self.self_damage > 0` (powers.py:739) where C# fires the 0-damage call unconditionally -- same dormant sub-finding as power/crimson_mantle's, with the same named trigger."
     },
     "AfterDamageReceived": {
       "maps_to": "powers.py:747-767 InfernoPower.on_damage_received",

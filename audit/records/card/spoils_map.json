@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\spoils_map.py",
-    "sha256": "cd4880769f90dd631b9b39102faa291f5b600e1f2763ee77b05706b4289c184c"
+    "sha256": "5dfefa066d40393aca4a8dd154d5e2d90cd5b178614aab1d767286a4576d0e3f"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -73,8 +73,8 @@
     },
     "BeforeCardRemoved": {
       "maps_to": "NOT PORTED -- SpoilsMapCard has no such hook, and the sim's Card base has none (spoils_map.py)",
-      "verdict": "gap",
-      "issue": "`if (card != this) return; if (SpoilsActIndex != Owner.RunState.CurrentActIndex) return; if (!SpoilsCoord.HasValue) return; Owner.RunState.Map.GetPoint(SpoilsCoord.Value)?.RemoveQuest(this);` (SpoilsMap.cs:100-116) is the CLEANUP path: if the Spoils Map card leaves the deck by any route OTHER than completing its own quest, the quest marker is taken off the map point. The sim removes the marker only inside `on_quest_complete` (spoils_map.py:145-148), and its `Card` base exposes no `before_card_removed` hook at all, so there is nowhere to put it. Observable: remove Spoils Map at a shop or event during Act 2 and the treasure node keeps a quest pointing at a card that is no longer in the deck. LIVE -- `RunState.remove_cards` (run.py:356-358) is the ported deck-removal verb and card removal is ordinary Act-2 play; the dangling marker then makes the treasure node behave as a quest node with an owner that is gone. Recorded as a gap, not a waiver: \"the hook category is unported\" is explicitly a dormant-or-live gap per rule 1, and here the removal path IS ported, so it is live. RATIONALE CITES A THIRD FILE (rule 7): sts2_rl/run.py is not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): `Hook.BeforeCardRemoved` exists and every deck removal fires it. `RunState.remove_cards` is now CardPileCmd.RemoveFromDeck's shape (CardPileCmd.cs:52-70): one card at a time, `before_card_removed` BEFORE the unlink. `RunState.before_card_removed` is the dispatcher (Hook.cs:299-305) and walks the DECK as well as the relics, because RunState.IterateHookListeners yields the deck and the hook's only implementer in the whole decompiled game is a CARD -- SpoilsMap.cs:100-116, now ported on sts2_rl/cards/spoils_map.py with its three guards in source order. The four relics that bypassed the verb -- preserved_fog (which called `run.deck.remove` directly), biiig_hug, meat_cleaver and paels_tooth -- go through `remove_cards` now, so precarious_shears and precise_scissors get the dispatch through the same path they already used. EXECUTED: with the old bare removal a removed Spoils Map left its treasure-node quest pinned and the node still payable; test_shop_and_map_mods.py::test_spoils_map_unpins_its_quest_when_removed_from_the_deck pins it. NOT closed: the `HasBeenRemovedFromState` marking this entry also named -- no sim card carries the flag and nothing reads it.  The text it replaced read: `if (card != this) return; if (SpoilsActIndex != Owner.RunState.CurrentActIndex) return; if (!SpoilsCoord.HasValue) return; Owner.RunState.Map.GetPoint(SpoilsCoord.Value)?.RemoveQuest(this);` (SpoilsMap.cs:100-116) is the CLEANUP path: if the Spoils Map card leaves the deck by any route OTHER than completing its own quest, the quest marker is taken off the map point. The sim removes the marker only inside `on_quest_complete` (spoils_map.py:145-148), and its `Card` base exposes no `before_card_removed` hook at all, so there is nowhere to put it. Observable: remove Spoils Map at a shop or event during Act 2 and the treasure node keeps a quest pointing at a card that is no longer in the deck. LIVE -- `RunState.remove_cards` (run.py:356-358) is the ported deck-removal verb and card removal is ordinary Act-2 play; the dangling marker then makes the treasure node behave as a quest node with an owner that is gone. Recorded as a gap, not a waiver: \"the hook category is unported\" is explicitly a dormant-or-live gap per rule 1, and here the removal path IS ported, so it is live. RATIONALE CITES A THIRD FILE (rule 7): sts2_rl/run.py is not hashed by this record."
     },
     "ctor": {
       "maps_to": "class attrs (spoils_map.py:69-75) + _init_vars (81-84)",

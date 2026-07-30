@@ -6,12 +6,12 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\biiig_hug.py",
-    "sha256": "66d3ae58953be95479e12d670714d4f9777ee41d6b67068359085e3f25701ece"
+    "sha256": "27e2a7f6358a957a6f8d47b8099304dede4cf10a5f01fd4b6dabd950eca1f2e4"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\bag_of_marbles.py",
-    "sha256": "ce6e84ee53972a4df5dba44198342a8a2dc07e5b06a574c86fd4fa24a8e0e778"
+    "sha256": "64e91e0aba9e3dacb2a1b367f930ff8ae2abe15576ace49889824efd6a4d6ed6"
   },
   "extra_sources": [
     {
@@ -21,17 +21,17 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     }
   ],
@@ -43,7 +43,7 @@
     "BeforeSideTurnStart": {
       "maps_to": "on_player_turn_started (bag_of_marbles.py:18-23) -- the POST-draw slot, not the pre-block-clear one the C# hook names",
       "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The effect is right -- 1 Vulnerable (PowerVar<VulnerablePower>(1m), BagOfMarbles.cs:19) to every enemy on turn 1, applier = the player -- but the hook slot and the enemy set are both off."
+      "issue": "STILL OPEN on the ENEMY SET only. The HOOK SLOT is CLOSED: BagOfMarbles.cs:23 declares BeforeSideTurnStart and the relic is on the sim's new `before_side_turn_start` dispatcher (CombatManager.cs:458), which fires before the block clear -- the slot this rollup's G1 was filed for. WHAT REMAINS is G2, the enemy set built from a weaker predicate than the source's.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: Rollup of guards G1 and G2 per binding rule 4. The effect is right -- 1 Vulnerable (PowerVar<VulnerablePower>(1m), BagOfMarbles.cs:19) to every enemy on turn 1, applier = the player -- but the hook slot and the enemy set are both off."
     }
   },
   "guards": [

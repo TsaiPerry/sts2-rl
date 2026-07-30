@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -36,17 +36,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "e4a89332099b3f25fcec72eed648058e9edcacca209b76f28c20255295e61a2f",
+      "sha256": "b52d8d15ba11856c157ae544d7837db5c35df881260a0065cf1d2b97917bd392",
       "side": "sim"
     },
     {
@@ -72,8 +72,8 @@
     },
     "ShouldStopCombatFromEnding": {
       "maps_to": "no sim counterpart",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. THE HOOK NOW EXISTS: `hooks.should_stop_combat_from_ending` (hooks.py:813-824) is the last gate of `CombatState._all_enemies_dead` (combat.py:300-303), mirroring CombatManager.cs:196, and three ported powers use it (AdaptablePower powers.py:3529, SteamEruptionPower :2138, InfestedPower :1495). WHAT REMAINS is that THIS power does not implement it -- an AST scan of powers.py finds no `should_stop_combat_from_ending` on its class -- so it still reaches the same outcome by the mid-death spawn / death-prevention route rather than by the mechanism. Dormant, as before; the trigger is now one line rather than a missing hook."
+      "verdict": "faithful",
+      "issue": "CLOSED. `StockPower.should_stop_combat_from_ending` returns True unconditionally (StockPower.cs:28-31). Found by the command-liveness work rather than by inspection: once `PowerCmd.apply` started honouring `CombatManager.IsEnding` (creature_card_cmds G14 / power_cmd G6), the last Axebot's death made the combat 'ending' and the respawn's own Stock application was refused, so the chain stopped after one link. That is precisely the veto this override exists to provide -- IsEnding consults Hook.ShouldStopCombatFromEnding at CombatManager.cs:196. EXECUTED: test/test_glory.py::TestAxebot::test_stock_respawn_chain.  FIXED 2026-07-28 (round 4). The text it replaced read: NARROWED 2026-07-27. THE HOOK NOW EXISTS: `hooks.should_stop_combat_from_ending` (hooks.py:813-824) is the last gate of `CombatState._all_enemies_dead` (combat.py:300-303), mirroring CombatManager.cs:196, and three ported powers use it (AdaptablePower powers.py:3529, SteamEruptionPower :2138, InfestedPower :1495). WHAT REMAINS is that THIS power does not implement it -- an AST scan of powers.py finds no `should_stop_combat_from_ending` on its class -- so it still reaches the same outcome by the mid-death spawn / death-prevention route rather than by the mechanism. Dormant, as before; the trigger is now one line rather than a missing hook."
     }
   },
   "guards": [
@@ -103,6 +103,6 @@
       "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

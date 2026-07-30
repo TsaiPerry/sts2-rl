@@ -338,7 +338,7 @@ class TestCrimsonMantle:
         cs = fresh()
         play(cs, CrimsonMantleCard())
         hp0 = cs.player.hp
-        cs.hooks.on_player_turn_start(cs.player)
+        cs.hooks.on_player_turn_started(cs.player)
         assert cs.player.hp == hp0 - 1  # 1 Crimson Mantle played
         assert cs.player.block == 8
 
@@ -350,7 +350,7 @@ class TestCrimsonMantle:
         assert power.amount == 16
         assert power.self_damage == 2
         hp0 = cs.player.hp
-        cs.hooks.on_player_turn_start(cs.player)
+        cs.hooks.on_player_turn_started(cs.player)
         assert cs.player.hp == hp0 - 2
         assert cs.player.block == 16
 
@@ -379,7 +379,7 @@ class TestInferno:
         play(cs, InfernoCard())
         hp0 = cs.player.hp
         before = cs.enemy.hp
-        cs.hooks.on_player_turn_start(cs.player)
+        cs.hooks.on_player_turn_started(cs.player)
         assert cs.player.hp == hp0 - 1
         assert cs.enemy.hp == before - 6
 
@@ -531,9 +531,40 @@ class TestSetupStrike:
         assert cs.player.strength == 2
         play(cs, StrikeCard())
         assert cs.enemy.hp == before - 7 - 8  # 6 + 2 Strength
+        # TemporaryStrengthPower.cs:173-181 is AfterSideTurnEnd, so the revert
+        # rides Hook.AfterTurnEnd, not BeforeTurnEnd.
         cs.hooks.on_player_turn_end(cs.player)
+        assert cs.player.strength == 2
+        cs.hooks.after_player_turn_end(cs.player)
         assert cs.player.strength == 0
         assert "setup_strike" not in cs.player.powers
+
+    def test_temporary_strength_survives_the_turn_end_cards_and_the_flush(self):
+        """AfterSideTurnEnd for the player side is CombatManager.cs:1307 —
+        after DoTurnEnd's card effects AND after FlushPlayerHand — so nothing
+        in either step sees the Strength already gone, and the revert cannot
+        race a BeforeTurnEnd listener on registration order."""
+        cs = fresh()
+        play(cs, SetupStrikeCard())
+        assert cs.player.strength == 2
+        seen = []
+
+        class _Probe:
+            def on_player_turn_end(self, player):
+                seen.append(("before_turn_end", cs.player.strength))
+
+            def after_player_turn_end(self, player):
+                seen.append(("after_turn_end", cs.player.strength))
+
+        # Registered LAST, so under the old single-pass model the revert (which
+        # registered first, with the card) had already run by the time the
+        # probe's BeforeTurnEnd leg ran. Its AfterTurnEnd leg is genuinely
+        # order-dependent in C# too — both are AfterSideTurnEnd — so only the
+        # BeforeTurnEnd reading is asserted.
+        cs.hooks.register(_Probe())
+        cs.end_turn()
+        assert seen[0] == ("before_turn_end", 2)
+        assert cs.player.strength == 0
 
     def test_has_strike_tag(self):
         assert "strike" in SetupStrikeCard.tags
@@ -571,7 +602,7 @@ class TestUnmovable:
         play(cs, UnmovableCard())
         play(cs, DefendCard())
         assert cs.player.block == 10
-        cs.hooks.on_player_turn_start(cs.player)
+        cs.hooks.before_side_turn_start(cs.player)
         play(cs, DefendCard())
         assert cs.player.block == 20
 

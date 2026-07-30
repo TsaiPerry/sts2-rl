@@ -128,27 +128,27 @@ class Ovicopter(MachineMonster):
     def _lay_eggs(self, ctx: CombatCtx) -> None:
         from ...cmds import CreatureCmd, PowerCmd
         from ...powers import MinionPower
+        combat = ctx.hooks.combat
+        encounter = combat.encounter if combat is not None else None
         for _ in range(_EGGS_PER_LAY):
-            live_eggs = sum(
-                1 for e in ctx.enemies if isinstance(e, ToughEgg) and not e.is_gone
-            )
-            if live_eggs >= _EGG_SLOTS:
+            # Ovicopter.cs:87-88 — `Slots.LastOrDefault(s => Enemies.All(c =>
+            # c.SlotName != s))`, then `if (text != null)`. The row itself is the
+            # egg cap: a full row yields None and the lay simply stops, so there
+            # is no separate live-egg count to keep in step with it.
+            #
+            # The sim used to approximate this with an INDEX — insert in front of
+            # the Ovicopter and every live egg — which is right only for a fresh
+            # row. A slot freed in the MIDDLE (kill the egg next to the Ovicopter,
+            # game slot egg5) was never refilled in place: the sim put the new egg
+            # at enemy index 2 where the game puts it at index 4. The observables
+            # are index-addressed targeting, enemy turn order and the obs vector's
+            # enemy order. The slot sort takes no RNG draw, so this holds on the
+            # legacy/RL path too.
+            slot = encounter.last_free_slot(combat) if encounter is not None else None
+            if slot is None:
                 break
             egg = ToughEgg(ctx.hooks, self._rng)
-            # Game LayEggsMove: each egg fills `Slots.LastOrDefault(unoccupied)`,
-            # i.e. the slots just BEFORE the Ovicopter, filling backwards — so the
-            # newest egg sits furthest left and the display order is
-            # [egg3, egg2, egg1, Ovicopter]. Model that by inserting each egg
-            # before this Ovicopter and the eggs it has already laid. The slot
-            # sort (CombatManager.AddCreature -> SortEnemiesBySlotName) is not a
-            # random draw, so it holds on the legacy/RL path too.
-            idx = min(
-                (i for i, c in enumerate(ctx.enemies)
-                 if c is self
-                 or (isinstance(c, ToughEgg) and not c.is_gone)),
-                default=len(ctx.enemies),
-            )
-            CreatureCmd.add(ctx.hooks, egg, index=idx)
+            CreatureCmd.add(ctx.hooks, egg, slot_name=slot)
             PowerCmd.apply(ctx.hooks, egg, MinionPower, 1, applier=self)
 
     def _smash(self, ctx: CombatCtx) -> None:
@@ -171,4 +171,9 @@ class Ovicopter(MachineMonster):
 OVICOPTER_NORMAL = Encounter(
     id="ovicopter_normal",
     monster_classes=[Ovicopter],
+    # OvicopterNormal.cs:16 — five egg slots and then the Ovicopter, which is
+    # why `Slots.LastOrDefault(unoccupied)` fills backwards from egg5.
+    slots=("egg1", "egg2", "egg3", "egg4", "egg5", "ovicopter"),
+    # OvicopterNormal.cs:36-39.
+    monster_slots=("ovicopter",),
 )

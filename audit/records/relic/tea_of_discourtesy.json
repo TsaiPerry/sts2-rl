@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\tea_of_discourtesy.py",
-    "sha256": "36488c84b798b632e9d0a19646487f2c99920aadfd11fb254ab44c77388efd10"
+    "sha256": "c52c38b173aa553aecb1bab01a99cf420b6576f01322f9dd902c82e2ecd010e8"
   },
   "extra_sources": [
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/cards/event_cards.py",
-      "sha256": "e2252c0e6b225be22f1da3051e67dc0f235f6b82ec2ccf0ea6158a20701730df",
+      "sha256": "57208afe6ae70f9dd177e57aee53a7f5b5624a5ba5d830a46de5263c8732e691",
       "side": "sim"
     },
     {
@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
@@ -56,7 +56,7 @@
     },
     {
       "path": "sts2_rl/monsters/glory/fabricator.py",
-      "sha256": "fbbb6a395caf6cbecfec4090e9870ba56967a6a8014ce8f5c2b3a973da8506e3",
+      "sha256": "0ff27ed874500a6003bf19d100d95848dae28c8afbc7b3ed38cc22891cffbddb",
       "side": "sim"
     },
     {
@@ -71,17 +71,17 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/biiig_hug.py",
-      "sha256": "66d3ae58953be95479e12d670714d4f9777ee41d6b67068359085e3f25701ece",
+      "sha256": "27e2a7f6358a957a6f8d47b8099304dede4cf10a5f01fd4b6dabd950eca1f2e4",
       "side": "sim"
     },
     {
@@ -113,15 +113,15 @@
     },
     "BeforeCombatStart": {
       "maps_to": "on_combat_start (tea_of_discourtesy.py:27-40)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The SHAPE is right -- 2 Dazed into the draw pile at a random position, one charge, decrement after -- but the port hand-rolls CardPileCmd.AddToCombatAndPreview instead of calling the sim's own CardPileCmd.add_to_draw, and so loses that helper's pile-orientation bridge (G1, LIVE) and its _enter_combat step (G2, dormant)."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The insert goes through the shared helper. CardPileCmd.cs:514 resolves CardPilePosition.Random as `card.Owner.RunState.Rng.Shuffle.NextInt(targetPile.Cards.Count + 1)`, an index into a pile whose TOP is index 0, and the sim stores its draw pile with the top at the END of the list. `CardPileCmd.add_to_draw` is the sim's port of exactly that call and already carries both the orientation bridge (insert at `count - p`) and the `_enter_combat` step that registers the new card as a hook listener; relics/tea_of_discourtesy.py hand-rolled the insert and used the raw game index as a sim index. It now calls the helper. EXECUTED 2026-07-29: with the same seed and the same 5-card starting pile, the relic's two Dazed now land exactly where two direct `add_to_draw` calls put them, and the pre-fix body put them at [1, 6] against the helper's [0, 5] -- near the BOTTOM of the sim pile where the game puts them at the top, so the player drew them at completely different times. Seven other ported sites already called the helper (including relics/blessed_antler.py, which adds Dazed to the draw pile the correct way), so this was a one-site defect rather than a house convention. The G2 half -- the missing `_enter_combat` -- closes with it, which is why the BeforeCombatStart rollup closes too.  Pinned by test/test_relic_live_tail.py.  NOT CLOSED: nothing at either site. The relic's SHAPE (2 Dazed, one charge, decrement after) was already right and is untouched.  The text it replaced read: Rollup of guards G1 and G2 per binding rule 4. The SHAPE is right -- 2 Dazed into the draw pile at a random position, one charge, decrement after -- but the port hand-rolls CardPileCmd.AddToCombatAndPreview instead of calling the sim's own CardPileCmd.add_to_draw, and so loses that helper's pile-orientation bridge (G1, LIVE) and its _enter_combat step (G2, dormant)."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the hand-rolled random draw-pile insert drops the game-index-to-sim-index bridge, so the two Dazed land at MIRRORED positions in the draw pile",
-      "verdict": "gap",
-      "issue": "MECHANISM: CardPileCmd.cs:514 resolves CardPilePosition.Random as `card.Owner.RunState.Rng.Shuffle.NextInt(targetPile.Cards.Count + 1)`, an index into a pile whose TOP is index 0. The sim stores the draw pile with its top at the END of the list, and it already has the correct port of exactly this call: CardPileCmd.add_to_draw (cmds.py:474-497) draws `p` off the shuffle stream and then inserts at `count - p`, with the reason spelled out in its own docstring (cmds.py:483-489). tea_of_discourtesy.py:35-39 instead uses the raw game index as a sim index. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b16.py tea-position): with a 5-card draw pile and the shuffle stream pinned to NextInt -> 1, the relic puts the two Dazed at sim indices [1, 2] where CardPileCmd.add_to_draw puts them at [4, 5]; 4-5 is the TOP of the sim pile (drawn first), 1-2 is near the bottom, so the player draws the Dazed at completely different times. Both sides ported: the relic is the free option at the ported Tea Master event (events/tea_master.py:59-60) and fires at the very next combat start. SEVEN other ported sites do call the helper -- cards/event_cards.py:304, monsters/glory/fabricator.py:67, monsters/hive/the_insatiable.py:66, monsters/underdocks/soul_fysh.py:64, powers.py:2398, relics/biiig_hug.py:32 and relics/blessed_antler.py:33 (which adds Dazed to the draw pile the correct way) -- so this is a one-site defect, not a house convention. The legacy leg is NOT affected: CombatRng.legacy maps every accessor onto the one shared Random (combat_rng.py:38-39), so `combat_rng.shuffle` in an RL run is the same object cmds.py's legacy branch uses; only the orientation is wrong. Rule 7: cmds.py, combat_rng.py and the seven cited call sites are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The insert goes through the shared helper. CardPileCmd.cs:514 resolves CardPilePosition.Random as `card.Owner.RunState.Rng.Shuffle.NextInt(targetPile.Cards.Count + 1)`, an index into a pile whose TOP is index 0, and the sim stores its draw pile with the top at the END of the list. `CardPileCmd.add_to_draw` is the sim's port of exactly that call and already carries both the orientation bridge (insert at `count - p`) and the `_enter_combat` step that registers the new card as a hook listener; relics/tea_of_discourtesy.py hand-rolled the insert and used the raw game index as a sim index. It now calls the helper. EXECUTED 2026-07-29: with the same seed and the same 5-card starting pile, the relic's two Dazed now land exactly where two direct `add_to_draw` calls put them, and the pre-fix body put them at [1, 6] against the helper's [0, 5] -- near the BOTTOM of the sim pile where the game puts them at the top, so the player drew them at completely different times. Seven other ported sites already called the helper (including relics/blessed_antler.py, which adds Dazed to the draw pile the correct way), so this was a one-site defect rather than a house convention. The G2 half -- the missing `_enter_combat` -- closes with it, which is why the BeforeCombatStart rollup closes too.  Pinned by test/test_relic_live_tail.py.  NOT CLOSED: nothing at either site. The relic's SHAPE (2 Dazed, one charge, decrement after) was already right and is untouched.  The text it replaced read: MECHANISM: CardPileCmd.cs:514 resolves CardPilePosition.Random as `card.Owner.RunState.Rng.Shuffle.NextInt(targetPile.Cards.Count + 1)`, an index into a pile whose TOP is index 0. The sim stores the draw pile with its top at the END of the list, and it already has the correct port of exactly this call: CardPileCmd.add_to_draw (cmds.py:474-497) draws `p` off the shuffle stream and then inserts at `count - p`, with the reason spelled out in its own docstring (cmds.py:483-489). tea_of_discourtesy.py:35-39 instead uses the raw game index as a sim index. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b16.py tea-position): with a 5-card draw pile and the shuffle stream pinned to NextInt -> 1, the relic puts the two Dazed at sim indices [1, 2] where CardPileCmd.add_to_draw puts them at [4, 5]; 4-5 is the TOP of the sim pile (drawn first), 1-2 is near the bottom, so the player draws the Dazed at completely different times. Both sides ported: the relic is the free option at the ported Tea Master event (events/tea_master.py:59-60) and fires at the very next combat start. SEVEN other ported sites do call the helper -- cards/event_cards.py:304, monsters/glory/fabricator.py:67, monsters/hive/the_insatiable.py:66, monsters/underdocks/soul_fysh.py:64, powers.py:2398, relics/biiig_hug.py:32 and relics/blessed_antler.py:33 (which adds Dazed to the draw pile the correct way) -- so this is a one-site defect, not a house convention. The legacy leg is NOT affected: CombatRng.legacy maps every accessor onto the one shared Random (combat_rng.py:38-39), so `combat_rng.shuffle` in an RL run is the same object cmds.py's legacy branch uses; only the orientation is wrong. Rule 7: cmds.py, combat_rng.py and the seven cited call sites are NOT hashed by this record."
     },
     {
       "what": "G2 (DORMANT): the port skips CardPileCmd._enter_combat, so the two generated Dazed are never registered as combat hook listeners and AfterCardEnteredCombat never fires for them",

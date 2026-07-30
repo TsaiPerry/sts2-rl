@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\paels_wing.py",
-    "sha256": "6ebcf3b54cc79d720b2869c72565daae501c78764d99531bbba464a6805556ff"
+    "sha256": "2359c124386237f661a9ce2f2ed0324f9298c9f79bf32346257a476ec3805bc4"
   },
   "extra_sources": [
     {
@@ -46,17 +46,17 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "8baf28896c58e846435a5e208bb9014f7306cf4b1051f582d7b6347cfedc697a",
+      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/brain_leech.py",
-      "sha256": "fac921dd919360e9cdd8e9f94adda7c67072e63db82bf2a7debefed60b76d0d9",
+      "sha256": "dcccfa7348ca10d72727a0cd03772b29e60af4e2ca752f457456339ed022e5cf",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/dream_catcher.py",
-      "sha256": "141dbc25ea89fffa0ad2bc118e1fda19ac29406d7331b76c6ff75b90c4af6e95",
+      "sha256": "54b2c1215a62f8708a05d531dc49aa020e196a52784e121d8ac0074ac4456b09",
       "side": "sim"
     },
     {
@@ -71,12 +71,12 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "9f8f94386154df9acfd780c8e5549419bffd7d5ed2448495595c9aa33fce4e83",
+      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -109,8 +109,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): the SACRIFICE alternative is attached to combat rewards only. C# attaches it to EVERY CardReward, including the rest-site card reward Dream Catcher adds",
-      "verdict": "gap",
-      "issue": "MECHANISM: C# builds the alternatives list in `CardRewardAlternative.Generate(CardReward)` (CardRewardAlternative.cs:53-73), whose line 68 calls Hook.ModifyCardRewardAlternatives (Hook.cs:1413-1420) -- and Generate takes a CardReward, so ANY CardReward gets the offer regardless of where it came from. (SpecialCardReward is a sibling of CardReward, not a subclass -- SpecialCardReward.cs:22 vs CardReward.cs:33 -- so the take-or-skip single-card offers are correctly excluded on both sides.) The sim's port hangs the offer off `modify_combat_rewards`, which is dispatched from exactly one place: rewards.py:499-500, inside generate_combat_rewards. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b11.py wing-rewards`): the only other sim path that populates a reward screen's `cards` is `RunState.rest_heal_rewards` (run.py:1097-1110), which builds a CombatRewards, runs `modify_rest_site_heal_rewards` over the relics, and does NOT run modify_combat_rewards -- so a Dream Catcher rest-site card choice carries `sacrifice_relic = None` and the player cannot sacrifice it. Both sides ported: relic/dream_catcher (Event rarity, granted by the ported Trash Heap event) adds a 3-card choice at every rest (relics/dream_catcher.py:22-25, mirroring DreamCatcher.cs:22's `new CardReward(...)`), and Pael's Wing is Ancient from the ported Pael shrine. Observable: a missed sacrifice is a missed grab-bag relic AND a missed `PullNextRelicFromFront` draw, which shifts every later pull. Two further sim paths generate card choices from a relic (relics/lost_coffer.py:17-19, relics/lead_paperweight.py:18-24) and one from an event (events/brain_leech.py:42-60); LostCoffer.cs:20 is a real `new CardReward(...)` on the C# side too, so it is a second instance of the same omission, while the other two need their own units audited before being counted."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 by the gap-queue continuation's section-A fix pass (this is a CODE change, not a re-reading of the old code). TryModifyCardRewardAlternatives has no room gate (PaelsWing.cs:73-81) and the sim's dispatch now reaches the rest-site screen for the same reason Driftwood's does -- apply_reward_modifiers runs on every reward set. paels_wing.py also sets the alternative on EVERY card group rather than only the first, since the C# hook is dispatched per CardReward. EXECUTED: test_paels_wing_offers_its_sacrifice_on_the_rest_site_card_reward.  The gap it replaced read: MECHANISM: C# builds the alternatives list in `CardRewardAlternative.Generate(CardReward)` (CardRewardAlternative.cs:53-73), whose line 68 calls Hook.ModifyCardRewardAlternatives (Hook.cs:1413-1420) -- and Generate takes a CardReward, so ANY CardReward gets the offer regardless of where it came from. (SpecialCardReward is a sibling of CardReward, not a subclass -- SpecialCardReward.cs:22 vs CardReward.cs:33 -- so the take-or-skip single-card offers are correctly excluded on both sides.) The sim's port hangs the offer off `modify_combat_rewards`, which is dispatched from exactly one place: rewards.py:499-500, inside generate_combat_rewards. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b11.py wing-rewards`): the only other sim path that populates a reward screen's `cards` is `RunState.rest_heal_rewards` (run.py:1097-1110), which builds a CombatRewards, runs `modify_rest_site_heal_rewards` over the relics, and does NOT run modify_combat_rewards -- so a Dream Catcher rest-site card choice carries `sacrifice_relic = None` and the player cannot sacrifice it. Both sides ported: relic/dream_catcher (Event rarity, granted by the ported Trash Heap event) adds a 3-card choice at every rest (relics/dream_catcher.py:22-25, mirroring DreamCatcher.cs:22's `new CardReward(...)`), and Pael's Wing is Ancient from the ported Pael shrine. Observable: a missed sacrifice is a missed grab-bag relic AND a missed `PullNextRelicFromFront` draw, which shifts every later pull. Two further sim paths generate card choices from a relic (relics/lost_coffer.py:17-19, relics/lead_paperweight.py:18-24) and one from an event (events/brain_leech.py:42-60); LostCoffer.cs:20 is a real `new CardReward(...)` on the C# side too, so it is a second instance of the same omission, while the other two need their own units audited before being counted."
     },
     {
       "what": "N1: `if (rewards.cards)` (paels_wing.py:23) -- the sim only offers the option when the screen actually has a card choice; C# adds it unconditionally for the owner",

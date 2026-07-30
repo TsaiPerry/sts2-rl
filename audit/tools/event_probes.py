@@ -78,8 +78,14 @@ def probe_maxhp() -> None:
     run.max_hp, run.hp = 80, 80
     run.add_relic(make_relic("tungsten_rod"))
     run.lose_max_hp(10)
+    # CORRECTED 2026-07-29: this leg expected 71 and the sim was right at 70.
+    # C#: overflow damage 10 -> Rod -1 -> 9 lost -> CurrentHp 71, and THEN
+    # SetMaxHp(70) runs SetMaxHpInternal (Creature.cs:497-501), whose
+    # `CurrentHp = Min(CurrentHp, MaxHp)` clamps it straight back to 70. The
+    # Rod's saved point is unobservable on this path -- the probe was reading
+    # the damage step and stopping before the clamp.
     _say("max HP 80/80, lose 10 max HP with Tungsten Rod: current HP",
-         run.hp, 71)               # C#: damage 10 -> Rod -1 -> 9 lost -> 71
+         run.hp, 70)
 
     # Leg 2: losing more max HP than you have. C# computes the damage against
     # the UNFLOORED new max (80 - 100 = -20 -> 100 damage -> dead) and only
@@ -103,8 +109,20 @@ def probe_eventrng() -> None:
         if p.name in ("__init__.py", "base.py", "ancient.py"):
             continue
         src = p.read_text(encoding="utf-8")
-        rolls = bool(_RNG_CALL.search(src)) or "run.transform_card(" in src
-        has_parity = "event_rng" in src
+        # CORRECTED 2026-07-29: `run.transform_card(x, into=y)` names its
+        # replacement (CardCmd.TransformTo<T>, an explicit type argument) and
+        # draws NOTHING; only the pick-a-random-replacement form rolls. Wood
+        # Carvings was reported off-stream on the strength of two calls that
+        # take no draw in either language.
+        transforms = [m for m in re.finditer(r"run\.transform_card\(([^)]*)",
+                                             src)
+                      if "into=" not in m.group(1)]
+        rolls = bool(_RNG_CALL.search(src)) or bool(transforms)
+        # A NAMED stream is parity too: Potion Courier's pick is
+        # `PlayerRng.Rewards.NextItem` (PotionCourier.cs:52), not the event's
+        # own Rng, so requiring the literal `event_rng` mis-flagged it.
+        has_parity = ("event_rng" in src or "player_rng" in src
+                      or "rng_set" in src)
         if rolls and has_parity:
             both.append(p.stem)
         elif rolls:

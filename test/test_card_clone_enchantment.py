@@ -80,10 +80,17 @@ def test_every_enchantment_rides_along_on_a_clone(eid):
     raise AssertionError(f"no host card for {eid}")
 
 
-def test_clone_reapplies_a_static_card_modification():
-    # The sim rebuilds the card from its class, so the copy must re-run the
-    # enchantment's modification to reach the state the game's memberwise
-    # clone already carries.
+def test_clone_carries_a_static_card_modification():
+    # MOVED 2026-07-29 (round 7, creature_card_cmds/step52's clone sibling).
+    # It used to read "the sim rebuilds the card from its class, so the copy
+    # must RE-RUN the enchantment's modification". `create_clone` is a
+    # memberwise copy now, so the modification is already in the copy and
+    # `DeepCloneFields` uses `EnchantInternal` rather than the normal enchant
+    # path -- EnchantmentModel.cs:350-353: "It is NOT called when a card is
+    # cloned, because the enchantment's effects will already be reflected in
+    # the card's values." Souls is the case that forces it: its CanEnchant
+    # demands the Exhaust its own ModifyCard removes. The assertion below is
+    # unchanged; only the route to it is.
     discovery = make_card("discovery")
     enchant("souls", discovery)
     assert not create_clone(discovery).exhausts  # C#: Souls came along

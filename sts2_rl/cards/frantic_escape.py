@@ -39,4 +39,10 @@ class FranticEscapeCard(Card):
                 PowerCmd.apply(ctx.hooks, enemy, SandpitPower, 1)
                 break
         # AddThisCombat(1): permanent for this combat, not cleared at turn end.
-        self._energy_cost += 1
+        # FranticEscape.cs:45 is `EnergyCost.AddThisCombat(1)`, a
+        # LocalCostModifier with EndOfCombat expiration — so the card is back
+        # to cost 1 in the NEXT combat. Mutating `_energy_cost` changed the
+        # card's BASE cost, and `reset_combat_state` does not re-run
+        # `_init_vars`, so a Frantic Escape played twice and carried into the
+        # next fight started it at 3.
+        self.set_cost_this_combat(self.energy_cost + 1)

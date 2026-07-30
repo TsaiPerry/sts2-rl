@@ -180,7 +180,19 @@ class Fabricator(MachineMonster):
         bot = cls(ctx.hooks, combat._rng)
         from ...cmds import CreatureCmd, PowerCmd
         from ...powers import MinionPower
-        CreatureCmd.add(ctx.hooks, bot)
+        # Fabricator.cs:115 passes `CombatState.Encounter.GetNextSlot(
+        # CombatState)` to CreatureCmd.Add — the FIRST unoccupied entry of
+        # [bot1, bot2, fabricator, bot3, bot4]. Since the Fabricator itself holds
+        # the middle entry, the first two bots seat IN FRONT of it: the game's
+        # Enemies after the opening FABRICATE are [bot, bot, Fabricator]. The sim
+        # appended, so the Fabricator came out FIRST — the same reversal
+        # monster/living_fog is verdicted live for, and it also arms the
+        # turn_structure block-clearing gap, because Guardbot's GUARD grants
+        # block to a creature LATER in the list.
+        slot = None
+        if combat.encounter is not None and combat.encounter.slots:
+            slot = combat.encounter.get_next_slot(combat)
+        CreatureCmd.add(ctx.hooks, bot, slot_name=slot)
         PowerCmd.apply(ctx.hooks, bot, MinionPower, 1, applier=self)
 
     def _fabricate(self, ctx: CombatCtx) -> None:
@@ -198,4 +210,9 @@ class Fabricator(MachineMonster):
 FABRICATOR_NORMAL = Encounter(
     id="fabricator_normal",
     monster_classes=[Fabricator],
+    # FabricatorNormal.cs:19 — the Fabricator sits in the MIDDLE of the row, so
+    # the first two bots seat in FRONT of it and the last two behind it.
+    slots=("bot1", "bot2", "fabricator", "bot3", "bot4"),
+    # FabricatorNormal.cs:46-49 — `GenerateMonsters` seats it in "fabricator".
+    monster_slots=("fabricator",),
 )

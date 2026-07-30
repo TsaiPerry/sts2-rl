@@ -66,9 +66,8 @@
     },
     "TriggerDeadState": {
       "maps_to": "test_subject.py:115-119 trigger_dead_state (called from powers.py:3369 AdaptablePower.should_die)",
-      "verdict": "gap",
-      "live": true,
-      "issue": "NARROWED 2026-07-28. CLOSED: cmds.py:30-65's `_resolve_death` now dispatches `hooks.on_death` on both arms and leaves a prevented death at 0 HP instead of flooring it at 1 -- EXECUTED on a real TEST_SUBJECT_BOSS combat, a lethal 500 gives hp=0 is_dead=True retained_after_death=True with on_death dispatched and RESPAWN_MOVE forced, so Gremlin Horn (relics/gremlin_horn.py, no wasRemovalPrevented guard, matching GremlinHorn.cs:24-32) now pays out on each form as the game's three Hook.AfterDeath dispatches do. WHAT REMAINS: AdaptablePower is STILL ported onto `should_die` (powers.py:3548-3553) where AdaptablePower.cs implements no ShouldDie at all -- only ShouldCreatureBeRemovedFromCombatAfterDeath (:58-65), ShouldStopCombatFromEnding (:53-56) and ShouldPowerBeRemovedAfterOwnerDeath (:67-70) -- so the sim takes CreatureCmd.cs:565's PREVENTED arm rather than the real-death arm at :506-533. Three consequences survive: Hook.AfterDeath carries wasRemovalPrevented TRUE where CreatureCmd.cs:519 passes false; `hooks.after_preventing_death` fires where the game reaches Hook.AfterPreventingDeath only on a genuine prevention; and `_strip_powers_after_death` (cmds.py:67-84, the port of Creature.RemoveAllPowersAfterDeath) is never reached -- see this record's g2 for the executed evidence. STILL LIVE, and still the monster-side half of audit/records/power/adaptable.json's AfterDeath entry (rule 3, not re-derived). UNCHANGED AND STILL FAITHFUL: the four-statement reading of TestSubject.cs:166-172 -- the two presentation calls, the deliberately unported TestSubjectKills counter, and SetMoveImmediate(DeadState, forceTransition: true) ported as `machine.force_current_state(self._dead_state)` plus `_current_move = self._dead_state` (test_subject.py:115-119), which is what MonsterModel.cs:420-432 does; monster_state_machine G5 clause b stays inert here because the one caller forces."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): both powers are off `should_die`. Neither AdaptablePower nor IllusionPower overrides ShouldDie in C# -- grep the decompiled sources and there is no such member on either. What they implement is `ShouldCreatureBeRemovedFromCombatAfterDeath` (AdaptablePower.cs:58-66, IllusionPower.cs:108-116) and `AfterDeath` (:32-39, :76-90), so the death is REAL: Hook.ShouldDie returns true, CreatureCmd.cs:508 computes shouldRemoveFromCombat false, and :519 dispatches Hook.AfterDeath with wasRemovalPrevented FALSE. The sim answered `should_die` False and took the PREVENTED branch, so every listener without a wasRemovalPrevented guard -- Gremlin Horn is one, GremlinHorn.cs:24-32 -- saw the wrong arm. powers.py now carries `should_remove_from_combat_after_death` on both and arms the revive from `on_death`'s `not was_removal_prevented` arm, which is where AfterDeath does it. Pinned by test_glory.py::TestDeathPreventionBranch, which asserts hp 0, retained_after_death, and a single on_death dispatch carrying False on both the Test Subject and an Eye With Teeth.  The text it replaced read: NARROWED 2026-07-28. CLOSED: cmds.py:30-65's `_resolve_death` now dispatches `hooks.on_death` on both arms and leaves a prevented death at 0 HP instead of flooring it at 1 -- EXECUTED on a real TEST_SUBJECT_BOSS combat, a lethal 500 gives hp=0 is_dead=True retained_after_death=True with on_death dispatched and RESPAWN_MOVE forced, so Gremlin Horn (relics/gremlin_horn.py, no wasRemovalPrevented guard, matching GremlinHorn.cs:24-32) now pays out on each form as the game's three Hook.AfterDeath dispatches do. WHAT REMAINS: AdaptablePower is STILL ported onto `should_die` (powers.py:3548-3553) where AdaptablePower.cs implements no ShouldDie at all -- only ShouldCreatureBeRemovedFromCombatAfterDeath (:58-65), ShouldStopCombatFromEnding (:53-56) and ShouldPowerBeRemovedAfterOwnerDeath (:67-70) -- so the sim takes CreatureCmd.cs:565's PREVENTED arm rather than the real-death arm at :506-533. Three consequences survive: Hook.AfterDeath carries wasRemovalPrevented TRUE where CreatureCmd.cs:519 passes false; `hooks.after_preventing_death` fires where the game reaches Hook.AfterPreventingDeath only on a genuine prevention; and `_strip_powers_after_death` (cmds.py:67-84, the port of Creature.RemoveAllPowersAfterDeath) is never reached -- see this record's g2 for the executed evidence. STILL LIVE, and still the monster-side half of audit/records/power/adaptable.json's AfterDeath entry (rule 3, not re-derived). UNCHANGED AND STILL FAITHFUL: the four-statement reading of TestSubject.cs:166-172 -- the two presentation calls, the deliberately unported TestSubjectKills counter, and SetMoveImmediate(DeadState, forceTransition: true) ported as `machine.force_current_state(self._dead_state)` plus `_current_move = self._dead_state` (test_subject.py:115-119), which is what MonsterModel.cs:420-432 does; monster_state_machine G5 clause b stays inert here because the one caller forces."
     }
   },
   "guards": [
@@ -80,9 +79,8 @@
     },
     {
       "what": "The powers the corpse should have lost: Creature.RemoveAllPowersAfterDeath",
-      "verdict": "gap",
-      "live": true,
-      "issue": "NARROWED 2026-07-28. THE MECHANISM NOW EXISTS: cmds.py:67-84's `_strip_powers_after_death` ports Creature.RemoveAllPowersAfterDeath (Creature.cs:668-671) with BOTH of its filters -- `p.should_power_be_removed_after_owner_death()` (PowerModel default true, PowerModel.cs:637-640; only AdaptablePower.cs:67-70 and PainfulStabsPower.cs:24-27 opt out, and both opt-outs are ported in powers.py) and `hooks.should_power_be_removed_on_death(p)` (Hook.ShouldPowerBeRemovedOnDeath) -- and it runs on the real-death arm: EXECUTED, a Waterfall Giant killed while Vulnerable loses Vulnerable and keeps SteamEruption. WHAT REMAINS: it is never REACHED for the Test Subject, because AdaptablePower still vetoes the death from `should_die` (powers.py:3548-3553) and `_resolve_death`'s prevented arm (cmds.py:56-65) contains no strip at all. EXECUTED on a real TEST_SUBJECT_BOSS combat: after the lethal 500 the boss still carries ['adaptable', 'enrage', 'vulnerable'], and form 2 comes back holding ['adaptable', 'enrage', 'painful_stabs', 'vulnerable'] -- so Enrage 2 and a player-applied Vulnerable survive a reset the game clears, and Enrage keeps converting every Skill into permanent Strength across all three forms. STILL LIVE, still the same mechanism as audit/records/seam/creature_card_cmds.json step 8b, carried per rule 3 and not re-verdicted here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): STALE, not open. The entry's remaining claim was that the strip is 'never REACHED for the Test Subject, because AdaptablePower still vetoes the death from `should_die`'. There IS no such override any more -- `'should_die' in AdaptablePower.__dict__` is False, executed today -- and there never was one in the game: AdaptablePower.cs overrides AfterDeath, ShouldAllowHitting, ShouldStopCombatFromEnding, ShouldCreatureBeRemovedFromCombatAfterDeath and ShouldPowerBeRemovedAfterOwnerDeath, and NOT ShouldDie. So the boss really dies (CreatureCmd.cs:505 takes the true arm), is merely kept in the combat, and `RemoveAllPowersAfterDeath` (Creature.cs:668-671) runs on it -- which is what powers.py now models via `should_remove_from_combat_after_death` plus the round-7 `is_removed_from_combat` machinery. EXECUTED 2026-07-29 on a real TEST_SUBJECT_BOSS combat: give the boss a player-applied Vulnerable 3 (powers ['adaptable', 'enrage', 'vulnerable']) and land the lethal 500 -- it now holds ['adaptable'] alone, with the corpse still in `enemies`. Enrage AND the Vulnerable are gone and Adaptable is kept, which is both filters of RemoveAllPowersAfterDeath doing their job (PowerModel.cs:637-640 default true, AdaptablePower.cs:67-70 opting out). The entry's own recorded 2026-07-28 result -- ['adaptable', 'enrage', 'vulnerable'] surviving -- no longer reproduces. NOT CLOSED: nothing at this site.  The text it replaced read: NARROWED 2026-07-28. THE MECHANISM NOW EXISTS: cmds.py:67-84's `_strip_powers_after_death` ports Creature.RemoveAllPowersAfterDeath (Creature.cs:668-671) with BOTH of its filters -- `p.should_power_be_removed_after_owner_death()` (PowerModel default true, PowerModel.cs:637-640; only AdaptablePower.cs:67-70 and PainfulStabsPower.cs:24-27 opt out, and both opt-outs are ported in powers.py) and `hooks.should_power_be_removed_on_death(p)` (Hook.ShouldPowerBeRemovedOnDeath) -- and it runs on the real-death arm: EXECUTED, a Waterfall Giant killed while Vulnerable loses Vulnerable and keeps SteamEruption. WHAT REMAINS: it is never REACHED for the Test Subject, because AdaptablePower still vetoes the death from `should_die` (powers.py:3548-3553) and `_resolve_death`'s prevented arm (cmds.py:56-65) contains no strip at all. EXECUTED on a real TEST_SUBJECT_BOSS combat: after the lethal 500 the boss still carries ['adaptable', 'enrage', 'vulnerable'], and form 2 comes back holding ['adaptable', 'enrage', 'painful_stabs', 'vulnerable'] -- so Enrage 2 and a player-applied Vulnerable survive a reset the game clears, and Enrage keeps converting every Skill into permanent Strength across all three forms. STILL LIVE, still the same mechanism as audit/records/seam/creature_card_cmds.json step 8b, carried per rule 3 and not re-verdicted here."
     },
     {
       "what": "MustPerformOnceBeforeTransitioning on RESPAWN_MOVE (TestSubject.cs:192-195) -- monster_state_machine G5's named trigger, now actually ported onto MachineMonster",
@@ -206,32 +204,32 @@
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "e4a89332099b3f25fcec72eed648058e9edcacca209b76f28c20255295e61a2f",
+      "sha256": "b52d8d15ba11856c157ae544d7837db5c35df881260a0065cf1d2b97917bd392",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/creatures.py",
-      "sha256": "11658743b59d1dce2d07d838b6c65594e00dcdf1a4227fac57d24b0cd538fc42",
+      "sha256": "34e44031a337c75e1c2685e0521a075d95fa7a1478ca8594e6a138651c361078",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     },
     {

@@ -106,6 +106,16 @@ class Power:
         """
         return True
 
+    def should_owner_death_trigger_fatal(self) -> bool:
+        """`PowerModel.ShouldOwnerDeathTriggerFatal` (PowerModel.cs:646).
+
+        **Defaults to True.** A false answer does NOT prevent the death — the
+        creature dies normally — it only suppresses the killer's Fatal payout
+        (Feed's Max HP, Hand of Greed's gold). Exactly two non-mock powers
+        override it and both are ported: MinionPower and ReattachPower.
+        """
+        return True
+
     def on_removed(self, owner: Creature) -> None:
         """PowerModel.AfterRemoved — awaited for each power stripped by
         `Creature.RemoveAllPowersAfterDeath` (CreatureCmd.cs:533-537). Default
@@ -114,16 +124,19 @@ class Power:
     # ── Internal helpers ─────────────────────────────────────────────────
 
     def _tick(self) -> None:
-        """Decrement duration by 1; expire when it reaches 0."""
-        self.amount -= 1
-        self.hooks.on_power_amount_changed(self.id, self.owner, -1)
-        if self.amount <= 0:
-            self._expire()
+        """PowerCmd.Decrement (PowerCmd.cs:179-182) — `ModifyAmount(power, -1)`.
+
+        Routed through the command rather than mutating `amount` in place, so
+        the tick picks up ModifyAmount's `IsEnding` guard (power_cmd G6).
+        """
+        from .cmds import PowerCmd
+        PowerCmd.modify_amount(self.hooks, self, -1)
 
     def _tick_duration(self) -> None:
-        """_tick, but honouring skip_next_tick (mirrors PowerCmd.TickDownDuration —
-        used by Vulnerable/Weak/Frail so a debuff applied to the player during
-        the enemy turn survives its first side-end tick)."""
+        """PowerCmd.TickDownDuration (PowerCmd.cs:190-200) — Decrement, but
+        SkipNextDurationTick is consumed FIRST and returns without calling it,
+        so a debuff applied to the player during the enemy turn survives its
+        first side-end tick (Vulnerable/Weak/Frail)."""
         if self.skip_next_tick:
             self.skip_next_tick = False
             return
@@ -214,12 +227,15 @@ class RegenPower(Power):
         CreatureCmd.heal(self.hooks, self.owner, self.amount)
         self._tick()
 
-    def on_enemy_turn_end(self, enemy: Creature) -> None:
-        if self.owner is enemy:
+    def on_enemy_side_end(self) -> None:
+        # RegenPower.cs:20 is AfterSideTurnEnd — ONE dispatch for the whole
+        # side, so the `!Owner.IsDead` half of its guard has to be tested here:
+        # on the old per-enemy slot the loop had already returned.
+        if self.owner.side == "enemy" and not self.owner.is_dead:
             self._apply_regen()
 
     def after_player_turn_end(self, player: Creature) -> None:
-        if self.owner is player:
+        if self.owner is player and not self.owner.is_dead:
             self._apply_regen()
 
 
@@ -243,9 +259,14 @@ class RitualPower(Power):
         applier: Creature | None = None,
     ) -> None:
         super().__init__(owner, amount, hooks, applier)
-        self._was_just_applied = (
-            applier is not None and applier.side != owner.side
-        )
+        # RitualPower.cs:36-43 — `AfterApplied` sets WasJustAppliedByEnemy
+        # whenever **base.Owner.IsEnemy**. The APPLIER is not consulted at all,
+        # and every ported Ritual source is a monster buffing ITSELF — so the
+        # old `applier.side != owner.side` test was False exactly where C#'s is
+        # True, and the enemy took one extra Strength on the turn it cast
+        # Ritual. The player-side direction is unchanged: Owner.IsEnemy is
+        # false there and so was the applier-side test.
+        self._was_just_applied = (owner.side == "enemy")
 
     def _trigger(self) -> None:
         if self._was_just_applied:
@@ -254,8 +275,9 @@ class RitualPower(Power):
         from .cmds import StrengthCmd
         StrengthCmd.apply(self.hooks, self.owner, self.amount)
 
-    def on_enemy_turn_end(self, enemy: Creature) -> None:
-        if self.owner is enemy:
+    def on_enemy_side_end(self) -> None:
+        # RitualPower.cs:45 — AfterSideTurnEnd, once for the side.
+        if self.owner.side == "enemy":
             self._trigger()
 
     def after_player_turn_end(self, player: Creature) -> None:
@@ -270,12 +292,13 @@ class DemonFormPower(Power):
     name = "Demon Form"
     power_type = PowerType.BUFF
 
-    def on_enemy_turn_start(self, enemy: Creature) -> None:
-        if self.owner is enemy:
+    def after_enemy_side_start(self) -> None:
+        # DemonFormPower.cs:21 — AfterSideTurnStart, once for the side.
+        if self.owner.side == "enemy":
             from .cmds import StrengthCmd
             StrengthCmd.apply(self.hooks, self.owner, self.amount)
 
-    def on_player_turn_start(self, player: Creature) -> None:
+    def after_side_turn_start(self, player: Creature) -> None:
         if self.owner is player:
             from .cmds import StrengthCmd
             StrengthCmd.apply(self.hooks, self.owner, self.amount)
@@ -291,7 +314,14 @@ class FeelNoPainPower(Power):
     def on_card_exhausted(self, card: Card,
                           caused_by_ethereal: bool = False) -> None:
         from .cmds import BlockCmd
-        BlockCmd.apply(self.hooks, self.owner, self.amount)
+        # FeelNoPainPower.cs:23 is `GainBlock(Owner, Amount, ValueProp.Unpowered,
+        # null)`. BlockCmd.apply defaults to ValueProp.MOVE, which
+        # `is_powered_attack` accepts, so the block was running the modifier
+        # families: with Dexterity 3 the sim gave 6 where the game gives 3, and
+        # under Frail it gave 2 where the game gives 3. Eight sibling powers
+        # already pass this prop explicitly.
+        BlockCmd.apply(self.hooks, self.owner, self.amount,
+                       props=ValueProp.UNPOWERED)
 
 
 class DarkEmbracePower(Power):
@@ -325,11 +355,37 @@ class EnragePower(Power):
 
 
 class RupturePower(Power):
-    """Gain N Strength whenever the owner loses HP from damage."""
+    """Gain N Strength whenever the owner loses HP from damage ON ITS OWN
+    TURN — i.e. from self-inflicted HP loss, not from being attacked."""
 
     id = "rupture"
     name = "Rupture"
     power_type = PowerType.BUFF
+
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        # RupturePower.cs:31-43's `playedCards` dictionary: the card currently
+        # being played by the owner, and the Strength accumulated for it.
+        self._pending_card: Card | None = None
+        self._pending_amount = 0
+
+    def before_card_played(self, card: Card, is_auto_play: bool = False) -> None:
+        # RupturePower.cs:31-43 — every card the owner STARTS playing during
+        # its own side turn opens an accumulator entry. That is the whole point
+        # of the deferral: a card that damages its own player several times
+        # must not have its later hits boosted by the Strength its earlier hits
+        # earned.
+        combat = self.hooks.combat
+        if combat is None or combat.current_side != self.owner.side:
+            return
+        self._pending_card = card
+        self._pending_amount = 0
 
     def on_damage_received(
         self,
@@ -339,9 +395,29 @@ class RupturePower(Power):
         card: Card | None,
         props: ValueProp = ValueProp.NONE,
     ) -> None:
-        if target is self.owner and amount > 0:
+        if target is not self.owner or amount <= 0:
+            return
+        # RupturePower.cs:47 — `CombatState.CurrentSide == Owner.Side`. Without
+        # it a self-harm payoff card became a free Strength engine that grew
+        # whenever the player was hit on the ENEMY's turn.
+        combat = self.hooks.combat
+        if combat is not None and combat.current_side != self.owner.side:
+            return
+        if self._pending_card is not None:
+            self._pending_amount += self.amount   # accumulate, do not apply
+            return
+        from .cmds import StrengthCmd
+        StrengthCmd.apply(self.hooks, self.owner, self.amount)
+
+    def on_card_played(self, card: Card, is_auto_play: bool = False) -> None:
+        # The accumulated total lands once the card has fully resolved.
+        if card is not self._pending_card:
+            return
+        self._pending_card = None
+        pending, self._pending_amount = self._pending_amount, 0
+        if pending:
             from .cmds import StrengthCmd
-            StrengthCmd.apply(self.hooks, self.owner, self.amount)
+            StrengthCmd.apply(self.hooks, self.owner, pending)
 
 
 class CurlUpPower(Power):
@@ -351,6 +427,16 @@ class CurlUpPower(Power):
     name = "Curl Up"
     power_type = PowerType.BUFF
 
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self._played_card: Card | None = None
+
     def on_damage_received(
         self,
         target: Creature,
@@ -359,12 +445,29 @@ class CurlUpPower(Power):
         card: Card | None,
         props: ValueProp = ValueProp.NONE,
     ) -> None:
-        # Mirror STS2: block is granted after damage resolves (AfterDamageReceived),
-        # so the triggering hit takes full damage before the block appears.
-        if target is self.owner and dealer is not None:
-            from .cmds import BlockCmd
-            BlockCmd.apply(self.hooks, self.owner, self.amount)
-            self._expire()
+        # CurlUpPower.cs:34-54 only LATCHES the triggering card here and grants
+        # NOTHING. Granting on the spot meant the second and later hits of a
+        # multi-hit attack were absorbed by block the game had not handed out
+        # yet. The three C# guards come with it: the owner, a POWERED attack,
+        # a non-null cardSource, and no re-latch onto a different card.
+        if target is not self.owner or card is None:
+            return
+        if not is_powered_attack(props):
+            return
+        if self._played_card is not None and card is not self._played_card:
+            return
+        self._played_card = card
+
+    def on_card_played(self, card: Card, is_auto_play: bool = False) -> None:
+        # CurlUpPower.cs:56-70 — the block lands once the whole card play has
+        # resolved, UNPOWERED, and the power is removed with it.
+        if card is not self._played_card:
+            return
+        self._played_card = None
+        from .cmds import BlockCmd
+        BlockCmd.apply(self.hooks, self.owner, self.amount,
+                       props=ValueProp.UNPOWERED)
+        self._expire()
 
 
 class ArtifactPower(Power):
@@ -412,8 +515,19 @@ class ThornsPower(Power):
             return
         from .cmds import DamageCmd
         from .valueprops import DamageProps
+        # ThornsPower.cs:22 deals the reflect BY `base.Owner`:
+        # `CreatureCmd.Damage(ctx, dealer, Amount, Unpowered|SkipHurtAnim,
+        #                     base.Owner, null)`
+        # — the 5th argument is the DEALER. The port left it None, which is not
+        # a cosmetic omission: `on_damage_dealt` is gated on `dealer is not
+        # None` (cmds.py), so Hook.AfterDamageGiven (CreatureCmd.cs:390) never
+        # fired for a reflect and no Thorns-on-Thorns chain was possible, and
+        # the dead-dealer early return (CreatureCmd.cs:242-245) had nothing to
+        # test. FlameBarrierPower, the same shape one power over, already
+        # passed it.
         DamageCmd.deal(
-            self.hooks, dealer, self.amount, props=DamageProps.NON_CARD_UNPOWERED
+            self.hooks, dealer, self.amount,
+            dealer=self.owner, props=DamageProps.NON_CARD_UNPOWERED,
         )
 
 
@@ -554,11 +668,14 @@ class PoisonPower(Power):
         )
         self._tick()
 
-    def on_enemy_turn_start(self, enemy: Creature) -> None:
-        if self.owner is enemy:
+    def after_enemy_side_start(self) -> None:
+        # PoisonPower.cs:55-73 — AfterSideTurnStart, ONE dispatch for the whole
+        # side before any enemy moves, so a three-enemy board takes all three
+        # poison ticks up front.
+        if self.owner.side == "enemy":
             self._apply_poison()
 
-    def on_player_turn_start(self, player: Creature) -> None:
+    def after_side_turn_start(self, player: Creature) -> None:
         if self.owner is player:
             self._apply_poison()
 
@@ -574,7 +691,7 @@ class AggressionPower(Power):
     name = "Aggression"
     power_type = PowerType.BUFF
 
-    def on_player_turn_start(self, player: Creature) -> None:
+    def before_side_turn_start(self, player: Creature) -> None:
         if player is not self.owner:
             return
         combat = self.hooks.combat
@@ -715,7 +832,7 @@ class CrimsonMantlePower(Power):
     def increment_self_damage(self) -> None:
         self.self_damage += 1
 
-    def on_player_turn_start(self, player: Creature) -> None:
+    def on_player_turn_started(self, player: Creature) -> None:
         if player is not self.owner:
             return
         from .cmds import BlockCmd, DamageCmd
@@ -817,8 +934,12 @@ class InfernoPower(Power):
     def increment_self_damage(self) -> None:
         self.self_damage += 1
 
-    def on_player_turn_start(self, player: Creature) -> None:
-        if player is self.owner and self.self_damage > 0:
+    def on_player_turn_started(self, player: Creature) -> None:
+        # InfernoPower.cs:26-35 fires `CreatureCmd.Damage(..., SelfDamage, ...)`
+        # with NO `> 0` test, so a turn-1 Inferno still runs a 0-damage command
+        # through the whole pipeline — modifiers, block, and the on-damage
+        # hooks a listener could be watching. The sim short-circuited it.
+        if player is self.owner:
             from .cmds import DamageCmd
             from .valueprops import DamageProps
             DamageCmd.deal(
@@ -870,8 +991,11 @@ class JuggernautPower(Power):
             return
         from .cmds import DamageCmd
         from .valueprops import DamageProps
+        # `RunState.Rng.CombatTargets.NextItem(hittableEnemies)`
+        # (JuggernautPower.cs:24) — the named targets stream, not the shared
+        # combat rng.
         DamageCmd.deal(
-            self.hooks, combat._rng.choice(living), self.amount,
+            self.hooks, combat.combat_rng.targets.choice(living), self.amount,
             dealer=self.owner, props=DamageProps.NON_CARD_UNPOWERED,
         )
 
@@ -951,7 +1075,13 @@ class TemporaryStrengthPower(Power):
             PowerCmd.apply(self.hooks, self.owner, StrengthPower, -self._sign * self.amount)
         self._expire()
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
+        # TemporaryStrengthPower.cs:173-181 overrides AfterSideTurnEnd, which
+        # Hook.AfterTurnEnd dispatches (Hook.cs:1267-1292) — for the player
+        # side at CombatManager.cs:1307, i.e. AFTER the turn-end card effects
+        # and the hand flush, not in the BeforeTurnEnd pass. So the Strength is
+        # still standing for everything those two steps do, and the revert can
+        # never race a BeforeTurnEnd listener on registration order.
         if player is self.owner:
             self._revert()
 
@@ -1025,7 +1155,9 @@ class TemporaryDexterityPower(Power):
             PowerCmd.apply(self.hooks, self.owner, DexterityPower, -self._sign * self.amount)
         self._expire()
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def after_player_turn_end(self, player: Creature) -> None:
+        # TemporaryDexterityPower.cs:169-177 — AfterSideTurnEnd, the same slot
+        # its line-for-line Strength twin uses. See TemporaryStrengthPower.
         if player is self.owner:
             self._revert()
 
@@ -1146,8 +1278,16 @@ class PlatingPower(Power):
     name = "Plating"
     power_type = PowerType.BUFF
 
-    def on_combat_start(self) -> None:
-        if self.owner.side == "enemy":
+    def before_side_turn_start(self, player: Creature) -> None:
+        """PlatingPower.cs:41-56 — the round-1 arm of a turn-start hook used as
+        a stand-in for combat start ("We want enemies that start with Plating to
+        also start combat with block"). It fires on the PLAYER's side turn
+        start, for a non-player owner, while RoundNumber <= 1. The sim used
+        `on_combat_start`, which is one dispatch earlier: any combat-start
+        listener registered after this power saw the enemy already blocked.
+        """
+        combat = self.hooks.combat
+        if self.owner.side == "enemy" and (combat is None or combat.turn <= 1):
             self._gain_block()
 
     def _gain_block(self) -> None:
@@ -1160,20 +1300,31 @@ class PlatingPower(Power):
         if combat is not None and combat.turn > 1:
             self._tick()
 
-    def on_player_turn_end(self, player: Creature) -> None:
+    def on_player_turn_end_early(self, player: Creature) -> None:
+        # PlatingPower.cs:61 is BeforeSideTurnEndEARLY, not the plain pass:
+        # "We do this in early so that it triggers before end-of-turn damage
+        # effects." The sim ran it plain on both sides, which put it after any
+        # _very_early or _early listener that reads the owner's block.
         if player is self.owner:
             self._gain_block()
 
-    def on_player_turn_start(self, player: Creature) -> None:
+    def after_side_turn_start(self, player: Creature) -> None:
+        # PlatingPower.cs:70 — AfterSideTurnStart, and `participants.Contains
+        # (Owner)` is what the `player is self.owner` test reproduces: an
+        # enemy-owned Plating decays on the ENEMY side's pass instead
+        # (after_enemy_side_start below).
         if player is self.owner:
             self._decay()
 
-    def on_enemy_turn_end(self, enemy: Creature) -> None:
-        if enemy is self.owner and not self.owner.is_dead:
+    def before_enemy_side_end_early(self) -> None:
+        # PlatingPower.cs:61, the enemy leg. AsleepPower's _very_early pass
+        # removes this power first on the last sleeping turn, so the sleeper
+        # gains no block on the turn it wakes.
+        if self.owner.side == "enemy" and not self.owner.is_dead:
             self._gain_block()
 
-    def on_enemy_turn_start(self, enemy: Creature) -> None:
-        if enemy is self.owner:
+    def after_enemy_side_start(self) -> None:
+        if self.owner.side == "enemy":
             self._decay()
 
 
@@ -1223,7 +1374,7 @@ class UnmovablePower(Power):
             self._plays_used += 1
             self._active_card = None
 
-    def on_player_turn_start(self, player: Creature) -> None:
+    def before_side_turn_start(self, player: Creature) -> None:
         if player is self.owner:
             self._plays_used = 0
             self._active_card = None
@@ -1233,28 +1384,47 @@ class FreeAttackPower(Power):
     """The owner's next N Attack cards cost 0. Playing any Attack consumes a
     stack; persists across turns.
 
-    The stack is consumed in on_energy_spent, which fires before the card
-    resolves (mirrors BeforeCardPlayed) — so the stack Unrelenting applies
-    during its own resolution is not consumed by Unrelenting itself.
-    Auto-plays fire on_energy_spent with 0 energy, so they consume a stack
-    just like the game's BeforeCardPlayed."""
+    The stack is consumed in `before_card_played`, which is
+    `Hook.BeforeCardPlayed` — the hook FreeAttackPower.cs:43 actually declares —
+    and which the sim dispatches INSIDE the play-count loop (CardModel.cs:1929),
+    once per `CardPlay`. The port used to hang it on `on_energy_spent`, which
+    combat.py fires ONCE per logical play, outside `_resolve_card_play`: a
+    Throwing-Axe- or Duplication-doubled Attack consumed two stacks in the game
+    and one in the sim.
+
+    Both of this power's hooks carry the same pile guard —
+    `card.Pile?.Type is Hand or Play` (FreeAttackPower.cs:26-39, :48-59)."""
 
     id = "free_attack"
     name = "Free Attack"
     power_type = PowerType.BUFF
 
+    # FreeAttackPower.cs:26-39 / :48-59 — the switch both hooks run.
+    _LIVE_PILES = ("hand", "play")
+
+    def _in_a_live_pile(self, card: Card) -> bool:
+        combat = self.hooks.combat
+        if combat is None:
+            return True
+        return combat.player.pile_type_of(card) in self._LIVE_PILES
+
     def modify_card_energy_cost_late(self, card: Card, cost: int) -> int:
         # FreeAttackPower.cs:14 is TryModifyEnergyCostInCombatLate: the Late
         # pass runs after Tangled's plain one, so the Attack is free
         # regardless of which power was applied first.
+        #
+        # The pile guard is load-bearing HERE, unlike on BeforeCardPlayed: the
+        # cost hook is queried for cards in every pile (previews.py, the RL
+        # observation, CardModel.CostsEnergyOrStars filters), and without it a
+        # draw- or discard-pile Attack reads as free.
         from .cards import CardType
-        if card.card_type == CardType.ATTACK:
+        if card.card_type == CardType.ATTACK and self._in_a_live_pile(card):
             return 0
         return cost
 
-    def on_energy_spent(self, card: Card, amount: int) -> None:
+    def before_card_played(self, card: Card, target=None) -> None:
         from .cards import CardType
-        if card.card_type == CardType.ATTACK:
+        if card.card_type == CardType.ATTACK and self._in_a_live_pile(card):
             self._tick()
 
 
@@ -1349,8 +1519,9 @@ class SlowPower(Power):
                        is_auto_play: bool = False) -> None:
         self._cards_this_turn += 1
 
-    def on_enemy_turn_start(self, enemy: Creature) -> None:
-        if enemy is self.owner:
+    def after_enemy_side_start(self) -> None:
+        # SlowPower.cs:52 — AfterSideTurnStart, once for the side.
+        if self.owner.side == "enemy":
             self._cards_this_turn = 0
 
     def modify_damage_multiplicative(
@@ -1453,7 +1624,7 @@ class RingingPower(Power):
                        is_auto_play: bool = False) -> None:
         self._card_played_this_turn = True
 
-    def on_player_turn_start(self, player: Creature) -> None:
+    def before_side_turn_start(self, player: Creature) -> None:
         if player is self.owner:
             self._card_played_this_turn = False
 
@@ -1548,9 +1719,14 @@ class ConstrictPower(Power):
     def _squeeze(self) -> None:
         from .cmds import DamageCmd
         from .valueprops import DamageProps
-        # Blockable, unpowered damage from a power (like Thorns).
+        # Blockable, unpowered damage from a power (like Thorns). ConstrictPower
+        # .cs:23's 5th argument is `base.Owner` — the squeeze is dealt BY the
+        # creature it hurts, so `on_damage_dealt` (Hook.AfterDamageGiven) fires.
+        # The port left the dealer None; same omission as ThornsPower's, closed
+        # together under binding rule 3.
         DamageCmd.deal(
-            self.hooks, self.owner, self.amount, props=DamageProps.NON_CARD_UNPOWERED
+            self.hooks, self.owner, self.amount,
+            dealer=self.owner, props=DamageProps.NON_CARD_UNPOWERED,
         )
 
     def after_player_turn_end(self, player: Creature) -> None:
@@ -1558,12 +1734,25 @@ class ConstrictPower(Power):
             self._squeeze()
 
     def on_enemy_side_end(self) -> None:
-        if self.owner.side == "enemy" and not self.owner.is_dead:
-            self._squeeze()
+        # ConstrictPower.cs:21 is `participants.Contains(base.Owner)` and
+        # nothing else — no is_dead test. The port added one, which now
+        # matters: a PREVENTED death leaves the creature dead at 0 HP and
+        # retained in the combat (cmds.py `_resolve_death`) rather than floored
+        # at 1, so an added `is_dead` guard silently stops squeezing a creature
+        # the game still squeezes. `_side_participants` is the sim's
+        # `participants` list and already excludes creatures that left.
+        if self.owner.side == "enemy":
+            combat = self.hooks.combat
+            if combat is None or self.owner in combat._side_participants():
+                self._squeeze()
 
     def on_death(self, creature: Creature,
                  was_removal_prevented: bool = False) -> None:
-        if creature is self.applier:
+        # ConstrictPower.cs:29 — `!wasRemovalPrevented && creature ==
+        # base.Applier`. The port ignored the flag it is handed, so a PREVENTED
+        # death of the applier dropped the power in the sim and keeps it in the
+        # game.
+        if not was_removal_prevented and creature is self.applier:
             self._expire()
 
 
@@ -1660,6 +1849,12 @@ class MinionPower(Power):
     def should_power_be_removed_after_owner_death(self) -> bool:
         return False   # MinionPower.cs:15-18
 
+    def should_owner_death_trigger_fatal(self) -> bool:
+        # MinionPower.cs:20-23 — unconditional. Killing a minion never pays a
+        # Fatal bonus, which is what stops Feed and Hand of Greed farming the
+        # Fabricator's bots, the Queen's minions and the Ovicopter's eggs.
+        return False
+
 
 class IllusionPower(Power):
     """The owner cannot truly die: lethal damage leaves it at 1 HP, untargetable,
@@ -1693,11 +1888,22 @@ class IllusionPower(Power):
             from .cmds import PowerCmd
             PowerCmd.apply(hooks, owner, MinionPower, 1)
 
-    def should_die(self, creature: Creature) -> bool:
-        if creature is self.owner:
-            self.is_reviving = True
-            return False
-        return True
+    def should_remove_from_combat_after_death(self, creature: Creature) -> bool:
+        # IllusionPower.cs:108-116. This is the ONLY death-side predicate the
+        # power implements — it has no ShouldDie override at all, so the death
+        # is REAL and only the removal is refused. The sim used to answer
+        # `should_die` False, which took the prevented branch instead: the
+        # corpse never fired AfterDeath with wasRemovalPrevented=false, so
+        # Gremlin Horn (GremlinHorn.cs:24-32, no such guard) never paid out.
+        return creature is not self.owner
+
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
+        # IllusionPower.cs:76-90 — the revive is armed from AfterDeath, on the
+        # `!wasRemovalPrevented` arm and for the owner only.
+        if was_removal_prevented or creature is not self.owner:
+            return
+        self.is_reviving = True
 
     def should_allow_hitting(self, target: Creature) -> bool:
         if target is self.owner and self.is_reviving:
@@ -1893,7 +2099,7 @@ class SmoggyPower(Power):
         from .afflictions import SmogAffliction
         return not isinstance(card.affliction, SmogAffliction)
 
-    def on_player_turn_start(self, player: Creature) -> None:
+    def before_side_turn_start(self, player: Creature) -> None:
         if player is self.owner:
             self._skill_played_this_turn = False
 
@@ -1982,14 +2188,16 @@ class AsleepPower(Power):
             self._expire()
             self.owner.wake_up(stunned=True)
 
-    def on_enemy_turn_start(self, enemy: Creature) -> None:
-        # Mirrors BeforeSideTurnEndVeryEarly: drop Plating on the final
-        # sleeping turn so no block is gained at that turn's end.
-        if enemy is self.owner and self.amount <= 1:
+    def before_enemy_side_end_very_early(self) -> None:
+        # AsleepPower.cs:38 — BeforeSideTurnEndVeryEarly, so the Plating is
+        # gone before PlatingPower's _early grant on the final sleeping turn.
+        # The sim had this on the enemy turn START, one whole slot early.
+        if self.owner.side == "enemy" and self.amount <= 1:
             self._remove_plating()
 
-    def on_enemy_turn_end(self, enemy: Creature) -> None:
-        if enemy is not self.owner:
+    def on_enemy_side_end(self) -> None:
+        # AsleepPower.cs:46 — AfterSideTurnEnd.
+        if self.owner.side != "enemy":
             return
         self.amount -= 1
         self.hooks.on_power_amount_changed(self.id, self.owner, -1)
@@ -2129,12 +2337,15 @@ class HardenedShellPower(Power):
         if target is self.owner and amount > 0:
             self._damage_received_this_turn += amount
 
-    def on_player_turn_start(self, player: Creature) -> None:
+    def before_side_turn_start(self, player: Creature) -> None:
         self._damage_received_this_turn = 0
 
-    def on_enemy_turn_start(self, enemy: Creature) -> None:
-        if enemy is self.owner:
-            self._damage_received_this_turn = 0
+    def before_enemy_side_start(self) -> None:
+        # HardenedShellPower.cs:71 — BeforeSideTurnStart with NO participants
+        # or side filter, so the counter resets at the start of BOTH sides'
+        # turns. The sim's enemy leg was owner-filtered, which the per-creature
+        # slot forced on it.
+        self._damage_received_this_turn = 0
 
 
 class SteamEruptionPower(Power):
@@ -2277,8 +2488,10 @@ class HatchPower(Power):
     name = "Hatch"
     power_type = PowerType.BUFF
 
-    def on_enemy_turn_end(self, enemy: Creature) -> None:
-        if enemy is self.owner:
+    def on_enemy_side_end(self) -> None:
+        # HatchPower.cs:18 — AfterSideTurnEnd, so every egg's timer ticks after
+        # the whole side has moved, not as each egg's own turn ends.
+        if self.owner.side == "enemy":
             self._tick()
 
 
@@ -2310,8 +2523,9 @@ class SlumberPower(Power):
         if target is self.owner and amount > 0:
             self._count_down(woke_from_damage=True)
 
-    def on_enemy_turn_end(self, enemy: Creature) -> None:
-        if enemy is self.owner:
+    def on_enemy_side_end(self) -> None:
+        # SlumberPower.cs:40 — AfterSideTurnEnd.
+        if self.owner.side == "enemy":
             self._count_down(woke_from_damage=False)
 
 
@@ -2324,8 +2538,9 @@ class EscapeArtistPower(Power):
     name = "Escape Artist"
     power_type = PowerType.BUFF
 
-    def on_enemy_turn_end(self, enemy: Creature) -> None:
-        if enemy is self.owner and self.amount > 1:
+    def on_enemy_side_end(self) -> None:
+        # EscapeArtistPower.cs:21 — AfterSideTurnEnd.
+        if self.owner.side == "enemy" and self.amount > 1:
             self.amount -= 1
             self.hooks.on_power_amount_changed(self.id, self.owner, -1)
 
@@ -2469,10 +2684,37 @@ class BurrowedPower(Power):
         self, target: Creature, dealer: Creature | None = None,
         card: Card | None = None,
     ) -> None:
-        if target is self.owner:
-            self.owner.get_stunned()
-            self._expire()
-            self.owner.block = 0  # AfterRemoved: LoseBlock(all)
+        if target is not self.owner:
+            return
+        # BurrowedPower.cs:24-36, in order and now clause for clause:
+        #   tunneler.GetStunned()
+        #   CreatureCmd.Stun(Owner, tunneler.StillDizzyMove, "BITE_MOVE")
+        #   PowerCmd.Remove<BurrowedPower>(Owner)
+        # and AfterRemoved (:38-40) then dumps the block.
+        #
+        # `GetStunned()` is Tunneler.cs:130-134 -- `IsStunned = true` plus a
+        # TriggerAnim -- and `IsStunned`'s only readers in the whole source are
+        # two animator predicates (Tunneler.cs:162-163), so it is presentation.
+        # THE STATE CHANGE IS THE SECOND CALL, and the port did not make it: it
+        # called the monster's own `get_stunned()`, which forces the REGISTERED
+        # DIZZY_MOVE state. `CreatureCmd.Stun` goes through
+        # `Creature.StunInternal` (Creature.cs:524-544), which builds a SYNTHETIC
+        # move with `MustPerformOnceBeforeTransitioning = true` and
+        # `FollowUpStateId = nextMoveId` -- so without it the machine could
+        # transition away before the stunned turn was ever performed and the
+        # Tunneler would not lose its turn at all. It also never set `stunned`.
+        #
+        # Note the registered DIZZY_MOVE state has NO incoming edge in the
+        # source's own machine (BITE -> BURROW -> BELOW -> BELOW is the whole
+        # graph, Tunneler.cs:69-85), so the synthetic state is the only way in.
+        from .cmds import CreatureCmd
+
+        get_stunned = getattr(self.owner, "get_stunned", None)
+        if get_stunned is not None:
+            get_stunned()
+        CreatureCmd.stun(self.hooks, self.owner, next_move_key="BITE_MOVE")
+        self._expire()
+        self.owner.block = 0  # AfterRemoved: LoseBlock(all)
 
 
 class ReattachPower(Power):
@@ -2488,6 +2730,11 @@ class ReattachPower(Power):
 
     def should_power_be_removed_after_owner_death(self) -> bool:
         return False   # ReattachPower.cs:98-101
+
+    def should_owner_death_trigger_fatal(self) -> bool:
+        # ReattachPower.cs:106-109 — "Killing Decimillipede Segment shouldn't
+        # trigger fatal unless all other segments are dead too."
+        return self._all_others_down()
 
     def __init__(
         self,
@@ -2791,9 +3038,13 @@ class SandpitPower(Power):
     name = "Sandpit"
     power_type = PowerType.BUFF
 
-    def on_enemy_turn_start(self, enemy: Creature) -> None:
-        if enemy is self.owner:
-            self._tick()
+    def after_enemy_side_start_late(self) -> None:
+        # SandpitPower.cs:70 — AfterSideTurnStartLATE, gated on
+        # `side == CombatSide.Enemy` with no owner or participants filter at
+        # all, so the countdown is guaranteed last among the side-start
+        # listeners. The sim ran it on the per-enemy turn start, where the
+        # phase did not exist and the order was whatever registration gave.
+        self._tick()
 
     def _expire(self) -> None:
         owner_gone = self.owner.is_gone
@@ -2864,7 +3115,7 @@ class SlothPower(Power):
                        is_auto_play: bool = False) -> None:
         self._cards_played_this_turn += 1
 
-    def on_player_turn_start(self, player: Creature) -> None:
+    def before_side_turn_start(self, player: Creature) -> None:
         if player is self.owner:
             self._cards_played_this_turn = 0
 
@@ -2943,7 +3194,7 @@ class DrawCardsNextTurnPower(Power):
             return count
         return count + self.amount
 
-    def on_player_turn_started(self, player: Creature) -> None:
+    def after_side_turn_start(self, player: Creature) -> None:
         # Post-draw turn start: the bonus has been drawn — expire.
         if player is self.owner:
             self._expire()
@@ -3019,7 +3270,16 @@ class HelloWorldPower(Power):
         if not commons:
             return
         n = min(self.amount, len(commons))
-        for cid in combat._rng.sample(commons, n):
+        # `CardFactory.GetDistinctForCombat(..., Rng.CombatCardGeneration)`
+        # (HelloWorldPower.cs:23-27) ends in `TakeRandom(count, rng)`, which is
+        # `collection.ToList().UnstableShuffle(rng).Take(count)`
+        # (IEnumerableExtensions.cs:17-20): a FULL Fisher-Yates shuffle of the
+        # candidates on the CombatCardGeneration stream, then the first N.
+        # `random.sample` on the shared rng is a different algorithm on a
+        # different stream.
+        pool = list(commons)
+        combat.combat_rng.card_gen.shuffle(pool)
+        for cid in pool[:n]:
             CardPileCmd.add_to_hand(self.hooks, player, make_card(cid))
 
 
@@ -3087,16 +3347,49 @@ class CuriousPower(Power):
 class ImprovementPower(Power):
     """After combat, upgrade [amount] random upgradable deck cards.
 
-    Source: ImprovementPower.cs — AfterCombatEnd upgrades Amount random
-    upgradable cards in the deck. Applied by the Mad Science card's Improvement
-    rider (Tinker Time event). The sim fights over a deep-copied deck and does
-    not sync card upgrades back to the run, so the after-combat upgrade is a
-    documented no-op here (the power is modelled so the rider is constructible
-    and its in-combat presence is faithful)."""
+    Source: ImprovementPower.cs:17-31 — AfterCombatEnd. Applied by the Mad
+    Science card's Improvement rider (the Act-3 Glory event Tinker Time).
+
+    The pile it reads is `PileType.Deck.GetPile(Owner.Player)`: the RUN deck, not
+    this combat's copy of it. That is why the effect is dispatched from
+    `RunState.finish_combat` and not from the combat-level `on_combat_end` — a
+    `CombatState` holds no run back-reference by design, and `Hook.AfterCombatEnd`
+    reaches this power from the RUN's walk anyway, because
+    `runState.IterateHookListeners(combatState)` appends the whole combat
+    listener list while `childCombatState` is still set (seam/hook_dispatch
+    step 18).
+    """
 
     id = "improvement"
     name = "Improvement"
     power_type = PowerType.BUFF
+
+    def after_combat_end(self, run) -> None:
+        from .cmds import CardCmd
+
+        # `.Where(c => c.IsUpgradable)` is evaluated ONCE, before the loop, and
+        # each pick is removed from that candidate list rather than the list
+        # being re-filtered — so the picks are distinct, and `Amount` larger than
+        # the candidate pool is not an error (`if (list.Count == 0) break`).
+        candidates = [c for c in run.deck if c.is_upgradable]
+        # `Owner.Player.RunState.Rng.CombatCardSelection` — the per-player
+        # CombatCardSelection stream, which is `combat_rng.card_selection` here
+        # and NOT the shared `combat._rng`. Six earlier powers in this seam took
+        # their draw off the wrong object; this is the trap power/improvement/g1
+        # was recorded to warn about, and it is now a real draw rather than a
+        # note.
+        rng = self.hooks.combat.combat_rng.card_selection
+        for _ in range(self.amount):
+            if not candidates:
+                break
+            card = rng.choice(candidates)
+            candidates.remove(card)
+            # CardCmd.Upgrade, so the per-card IsUpgradable re-test and the
+            # MaxUpgradeLevel guard apply. `hooks=None`: CardCmd.Upgrade's outer
+            # `!IsEnding` is a COMBAT guard, and this is a run-level effect
+            # running after the fight — passing the finished combat's hooks would
+            # let a stale ending flag swallow the upgrade.
+            CardCmd.upgrade(None, card)
 
 
 class BattlewornDummyTimeLimitPower(Power):
@@ -3111,8 +3404,9 @@ class BattlewornDummyTimeLimitPower(Power):
     name = "Time Limit"
     power_type = PowerType.BUFF
 
-    def on_enemy_turn_end(self, enemy: Creature) -> None:
-        if enemy is not self.owner:
+    def on_enemy_side_end(self) -> None:
+        # BattlewornDummyTimeLimitPower.cs:19 — AfterSideTurnEnd.
+        if self.owner.side != "enemy":
             return
         if self.amount > 1:
             self.amount -= 1
@@ -3165,6 +3459,14 @@ class StockPower(Power):
     name = "Stock"
     power_type = PowerType.BUFF
 
+    def should_stop_combat_from_ending(self) -> bool:
+        """StockPower.cs:28-31 — an unconditional `return true`, and the sim
+        had not ported it. It is what holds the fight open across the death:
+        `CombatManager.IsEnding` consults Hook.ShouldStopCombatFromEnding
+        (CombatManager.cs:196), so without it the last Axebot's death makes the
+        combat "ending" and every command the respawn issues is refused."""
+        return True
+
     def on_death(self, creature: Creature,
                  was_removal_prevented: bool = False) -> None:
         if creature is not self.owner or self.amount <= 0:
@@ -3189,9 +3491,16 @@ class RampartPower(Power):
     name = "Rampart"
     power_type = PowerType.BUFF
 
-    def on_player_turn_start(self, player: Creature) -> None:
+    def after_side_turn_start(self, player: Creature) -> None:
         combat = self.hooks.combat
         if combat is None:
+            return
+        # RampartPower.cs:23 — `side != CombatSide.Player ||
+        # CombatManager.Instance.PlayersTakingExtraTurn.Count > 0` -> return.
+        # The block is refused on a player's EXTRA turn, and the sim had no such
+        # flag at all: hold Pael's Eye, end a turn without playing a card, and
+        # the sim re-blocked the Turret Operator where the game leaves it bare.
+        if combat.players_taking_extra_turn:
             return
         from .cmds import BlockCmd
         from .monsters.glory.turret_operator import TurretOperator
@@ -3371,7 +3680,10 @@ class DampenPower(Power):
         for card in getattr(owner, "all_cards", ()):
             if card.upgrade_level > 0 and card not in self._downgraded:
                 self._downgraded[card] = card.upgrade_level
-                card.downgrade()
+                # DampenPower.cs:35 goes through CardCmd.Downgrade, which
+                # refuses while the combat is ending (CardCmd.cs:214).
+                from .cmds import CardCmd
+                CardCmd.downgrade(hooks, card)
 
     def on_stack(self, amount: int) -> None:
         pass  # PowerStackType.None
@@ -3575,12 +3887,20 @@ class AdaptablePower(Power):
     def on_stack(self, amount: int) -> None:
         pass  # PowerStackType.Single
 
-    def should_die(self, creature: Creature) -> bool:
-        if creature is not self.owner:
-            return True
+    def should_remove_from_combat_after_death(self, creature: Creature) -> bool:
+        # AdaptablePower.cs:58-66 — the only death-side predicate the power
+        # implements. There is no ShouldDie override, so the Test Subject
+        # really dies and is merely kept in the combat. See IllusionPower.
+        return creature is not self.owner
+
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
+        # AdaptablePower.cs:32-39 — AfterDeath, `!wasRemovalPrevented` arm,
+        # owner only: arm the revive and force the boss's dead state.
+        if was_removal_prevented or creature is not self.owner:
+            return
         self.is_reviving = True
         self.owner.trigger_dead_state()
-        return False
 
     def should_allow_hitting(self, target: Creature) -> bool:
         if target is self.owner and self.is_reviving:
@@ -3793,18 +4113,20 @@ class MayhemPower(Power):
     power_type = PowerType.BUFF
 
     def after_auto_pre_play_phase_entered(self, player: Creature) -> None:
-        # MayhemPower.cs is AfterAutoPrePlayPhaseEntered.
+        # MayhemPower.cs:20 is one call: `CardPileCmd.AutoPlayFromDrawPile(
+        # choiceContext, Owner.Player, Amount, CardPilePosition.Top,
+        # forceExhaust: false)`, and that verb is TWO-PHASE
+        # (CardPileCmd.cs:931-966). The sim interleaved — pick, play, pick,
+        # play — so at Mayhem 2 the first card's effect could change which card
+        # was played second, where the game commits both picks up front and
+        # holds the second in PileType.Play while the first resolves.
+        from .cmds import CardPileCmd
+
         if player is not self.owner:
             return
-        combat = self.hooks.combat
-        for _ in range(self.amount):
-            if combat.is_over or player.is_dead:
-                return
-            if not player.draw_pile and player.discard_pile:
-                player.reshuffle_discard_into_draw()
-            if not player.draw_pile:
-                return
-            combat.auto_play_card(player.draw_pile[-1])
+        CardPileCmd.auto_play_from_draw_pile(
+            self.hooks, player, self.amount, position="top",
+            force_exhaust=False)
 
 
 class NostalgiaPower(Power):
@@ -3818,20 +4140,25 @@ class NostalgiaPower(Power):
 
     def modify_card_play_result_pile(self, card: Card, pile: str) -> str:
         from .cards import CardType
-        from .history import CardPlayedEntry
+        from .history import CardPlayStartedEntry
         if pile != "discard" or card.card_type not in (
             CardType.ATTACK, CardType.SKILL
         ):
             return pile
         combat = self.hooks.combat
-        # Plays already finished this turn (the current play is recorded
-        # after this hook, so it is not counted against the allowance).
-        finished = sum(
+        # NostalgiaPower.cs:31-42 counts `History.CardPlaysStarted`, NOT
+        # CardPlaysFinished. The hook runs from CardModel.cs:1922, before this
+        # card's own started row is pushed (:1930), so the current play is still
+        # not counted against the allowance — but an OUTER play whose OnPlay
+        # auto-played this card IS, because its row went in before it called us.
+        # Counting finished plays instead sent BOTH cards to the top of the draw
+        # pile where the game sends only the outer one.
+        started = sum(
             1
-            for e in combat.history.of_type(CardPlayedEntry, this_turn=True)
+            for e in combat.history.of_type(CardPlayStartedEntry, this_turn=True)
             if e.card.card_type in (CardType.ATTACK, CardType.SKILL)
         )
-        if finished >= self.amount:
+        if started >= self.amount:
             return pile
         return "draw_top"
 
@@ -3917,7 +4244,7 @@ class PrepTimePower(Power):
     name = "Prep Time"
     power_type = PowerType.BUFF
 
-    def on_player_turn_started(self, player: Creature) -> None:
+    def after_side_turn_start(self, player: Creature) -> None:
         from .cmds import PowerCmd
         if player is self.owner:
             PowerCmd.apply(self.hooks, self.owner, VigorPower, self.amount)
@@ -4083,6 +4410,11 @@ class ConfusedPower(Power):
     Source: ConfusedPower.cs — AfterCardDrawn sets EnergyCost.SetThisCombat
     (NextInt(4)), skipping X-cost cards (EnergyCost.Canonical < 0). Applied
     by Snecko Eye at the start of every combat.
+
+    The draw is NAMED: NextEnergyCost (ConfusedPower.cs:47-54) ends in
+    `base.Owner.Player.RunState.Rng.CombatEnergyCosts.NextInt(4)`, which is
+    `combat_rng.energy` here — the shared legacy Random in RL mode and the
+    CombatEnergyCosts stream in a parity run (relic/_off_stream_draw).
     """
 
     id = "confused"
@@ -4098,7 +4430,7 @@ class ConfusedPower(Power):
         combat = self.hooks.combat
         if combat is None:
             return
-        card.set_cost_this_combat(combat._rng.randrange(4))
+        card.set_cost_this_combat(combat.combat_rng.energy.randrange(4))
 
 
 # ── Potion powers ────────────────────────────────────────────────────────
@@ -4125,7 +4457,7 @@ class ClarityPower(Power):
             return count
         return count + 1
 
-    def on_player_turn_started(self, player: Creature) -> None:
+    def after_side_turn_start(self, player: Creature) -> None:
         if player is self.owner:
             self._tick()
 

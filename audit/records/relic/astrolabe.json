@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\astrolabe.py",
-    "sha256": "53783efec80e451fcbad1278da4218f539cef8a85fdffd519ec6a9501bf99856"
+    "sha256": "44a4b3335ef90802494b8be716081b281a065bd3afeadcb1ab2c39a735baa57b"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
+      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -58,8 +58,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): `CardCmd.Upgrade(cardModel)` (Astrolabe.cs:26) silently skips a card whose IsUpgradable is false; the sim's `run.transform_card(card).upgrade()` (astrolabe.py:23) always increments upgrade_level",
-      "verdict": "gap",
-      "issue": "MECHANISM: CardCmd.Upgrade(IEnumerable<CardModel>, style) guards each card with `if (!card.IsUpgradable)` and skips it; IsUpgradable is `CurrentUpgradeLevel < MaxUpgradeLevel` (CardModel.cs:785-789) with MaxUpgradeLevel virtual and defaulting to 1 (line 781). Card.upgrade() in the sim (cards/base.py:146-147) is a bare `self.upgrade_level += 1` with no guard, and astrolabe.py:23 calls it directly rather than through anything that checks Card.is_upgradable (cards/base.py:168-170) -- unlike relic/bellows, which does check. REACHABILITY (LIVE, executed): CURSES ARE TRANSFORMABLE. RunState.transformable_cards() returns removable_cards() (run.py:406-408) and a probe confirms a Clumsy in the deck is included; C#'s own filter (CardSelectCmd.cs:487, `c.Type != CardType.Quest && c.IsTransformable`) likewise admits curses. Transforming a curse rolls another curse (run.transform_card routes CURSE cards to CURSE_POOL), and an executed run rolled curse_of_the_bell, whose max_upgrade_level is 0 -- an executed census finds 35 such cards (every curse and every status) -- and the unconditional .upgrade() then left it at upgrade_level 1, where C# leaves it at 0. The divergence is observable outside cosmetics: conformance/runner.py:618 compares the live deck as `(c.id, c.upgrade_level)` pairs against the save, so a spuriously-upgraded curse is a deck-parity failure; conformance/combat_driver.py:34 renders the '+' suffix from the same field. Astrolabe itself is obtainable via the ported Darv shrine (events/darv.py)."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `CardCmd.upgrade(hooks, card)` exists (cmds.py) and is CardCmd.cs:265-290's per-card body: the verb sits inside `if (!IsEnding)` and skips any card whose `IsUpgradable` is false, i.e. `CurrentUpgradeLevel < MaxUpgradeLevel` (CardModel.cs:785-789). 35 of the 203 ported cards are at MaxUpgradeLevel 0 (18 Curse, 14 Status, 3 Quest), and C# THROWS if CurrentUpgradeLevel is ever set above MaxUpgradeLevel (CardModel.cs:773-776) -- so the bare `card.upgrade()` was producing a state the source treats as impossible, and one conformance compares against the save as an (id, upgrade_level) pair. astrolabe.py routes its transformed cards through it. The reachability this entry established stands and is now the test: a Curse is transformable, transforms into another Curse, and every Curse is level-0.  Pinned by test/test_procure_and_upgrade_verbs.py.  NOT CLOSED: nothing at this site.  The text it replaced read: MECHANISM: CardCmd.Upgrade(IEnumerable<CardModel>, style) guards each card with `if (!card.IsUpgradable)` and skips it; IsUpgradable is `CurrentUpgradeLevel < MaxUpgradeLevel` (CardModel.cs:785-789) with MaxUpgradeLevel virtual and defaulting to 1 (line 781). Card.upgrade() in the sim (cards/base.py:146-147) is a bare `self.upgrade_level += 1` with no guard, and astrolabe.py:23 calls it directly rather than through anything that checks Card.is_upgradable (cards/base.py:168-170) -- unlike relic/bellows, which does check. REACHABILITY (LIVE, executed): CURSES ARE TRANSFORMABLE. RunState.transformable_cards() returns removable_cards() (run.py:406-408) and a probe confirms a Clumsy in the deck is included; C#'s own filter (CardSelectCmd.cs:487, `c.Type != CardType.Quest && c.IsTransformable`) likewise admits curses. Transforming a curse rolls another curse (run.transform_card routes CURSE cards to CURSE_POOL), and an executed run rolled curse_of_the_bell, whose max_upgrade_level is 0 -- an executed census finds 35 such cards (every curse and every status) -- and the unconditional .upgrade() then left it at upgrade_level 1, where C# leaves it at 0. The divergence is observable outside cosmetics: conformance/runner.py:618 compares the live deck as `(c.id, c.upgrade_level)` pairs against the save, so a spuriously-upgraded curse is a deck-parity failure; conformance/combat_driver.py:34 renders the '+' suffix from the same field. Astrolabe itself is obtainable via the ported Darv shrine (events/darv.py)."
     },
     {
       "what": "N1: CreateRandomCardForTransform(item, isInCombat: false, Rng.Niche) (Astrolabe.cs:25) vs run.transform_card's default roll (astrolabe.py:23, no pick_rng argument)",

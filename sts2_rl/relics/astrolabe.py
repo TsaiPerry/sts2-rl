@@ -24,5 +24,9 @@ class Astrolabe(Relic):
         # RunState.Rng.Niche)), one NextItem per transformed card. Legacy runs
         # keep the shared rng.
         niche = run.rng_set.niche if run.rng_set is not None else None
+        from ..cmds import CardCmd
         for card in chosen:
-            run.transform_card(card, pick_rng=niche).upgrade()
+            # Astrolabe.cs:26 is CardCmd.Upgrade, which SKIPS a card whose
+            # IsUpgradable is false -- and a transformed Curse rolls another
+            # Curse, every one of which has MaxUpgradeLevel 0.
+            CardCmd.upgrade(None, run.transform_card(card, pick_rng=niche))

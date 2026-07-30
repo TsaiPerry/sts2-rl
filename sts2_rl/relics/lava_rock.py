@@ -22,7 +22,8 @@ class LavaRock(Relic):
 
         if (
             self.has_triggered
-            or rewards.room_type != RoomType.BOSS
+            # LavaRock.cs `room == null || room.RoomType != Boss`.
+            or rewards.room != RoomType.BOSS
             or run.act_index != 0
         ):
             return

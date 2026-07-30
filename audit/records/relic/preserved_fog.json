@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\preserved_fog.py",
-    "sha256": "3990b9562be96f93d62f71b22b8b0471beefaaada390b3b589b581744afdeb2a"
+    "sha256": "256f8a90f6693385ab7f728b047c5045619dffefee52fa504b5b3f3300a26675"
   },
   "extra_sources": [
     {
@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -33,15 +33,15 @@
     },
     "AfterObtained": {
       "maps_to": "after_obtained (preserved_fog.py:17-22), dispatched by RunState.add_relic (run.py:552)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. Both halves land in the source's order -- three removable cards removed, then a Folly curse added, executed at b12-cutters (deck 10 -> 8 with folly_in_deck=True, i.e. -3 +1) -- but the removals drop the Hook.BeforeCardRemoved dispatch (G1)."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): `Hook.BeforeCardRemoved` exists and every deck removal fires it. `RunState.remove_cards` now has CardPileCmd.RemoveFromDeck's shape (CardPileCmd.cs:52-70): one card at a time, `before_card_removed` BEFORE the unlink. `RunState.before_card_removed` is the dispatcher (Hook.cs:299-305) and walks the DECK as well as the relics, because RunState.IterateHookListeners yields the deck and the hook's only implementer in the whole decompiled game is a CARD -- SpoilsMap.cs:100-116, now ported on sts2_rl/cards/spoils_map.py with its three guards in source order. The four relics that bypassed the verb -- preserved_fog (which called `run.deck.remove` directly), biiig_hug, meat_cleaver and paels_tooth -- go through `remove_cards` now, so precarious_shears and precise_scissors get the dispatch through the path they already used. EXECUTED: with the old bare removal a removed Spoils Map left its treasure-node quest pinned and the node still payable; test_shop_and_map_mods.py::test_spoils_map_unpins_its_quest_when_removed_from_the_deck pins it. NOT closed: the `HasBeenRemovedFromState` marking this entry also named -- no sim card carries the flag and nothing reads it.  The text it replaced read: Rollup of guard G1 per binding rule 4. Both halves land in the source's order -- three removable cards removed, then a Folly curse added, executed at b12-cutters (deck 10 -> 8 with folly_in_deck=True, i.e. -3 +1) -- but the removals drop the Hook.BeforeCardRemoved dispatch (G1)."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the same missing `Hook.BeforeCardRemoved` dispatch as relic/precise_scissors, over three cards",
-      "verdict": "gap",
-      "issue": "PreservedFog.cs:24 calls `await CardPileCmd.RemoveFromDeck(item)`, which fires `Hook.BeforeCardRemoved` at src/Core/Commands/CardPileCmd.cs:61. preserved_fog.py:21 calls `run.deck.remove(card)` DIRECTLY -- one step further from the source than its siblings, which at least go through RunState.remove_cards -- and the sim has no before_card_removed hook at all (`grep -rn 'before_card_removed' sts2_rl/` returns zero hits). Same mechanism, same verdict, same executed evidence as audit/records/relic/precise_scissors.json guard G1 (binding rule 3, not re-derived): removing a Spoils Map leaves its treasure-node quest armed and the node still pays 600 gold (`py audit/tools/relic_probes_b12.py b12-cardremoved`). NOTE per binding rule 7: CardPileCmd.cs, run.py and precise_scissors.json are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): `Hook.BeforeCardRemoved` exists and every deck removal fires it. `RunState.remove_cards` now has CardPileCmd.RemoveFromDeck's shape (CardPileCmd.cs:52-70): one card at a time, `before_card_removed` BEFORE the unlink. `RunState.before_card_removed` is the dispatcher (Hook.cs:299-305) and walks the DECK as well as the relics, because RunState.IterateHookListeners yields the deck and the hook's only implementer in the whole decompiled game is a CARD -- SpoilsMap.cs:100-116, now ported on sts2_rl/cards/spoils_map.py with its three guards in source order. The four relics that bypassed the verb -- preserved_fog (which called `run.deck.remove` directly), biiig_hug, meat_cleaver and paels_tooth -- go through `remove_cards` now, so precarious_shears and precise_scissors get the dispatch through the path they already used. EXECUTED: with the old bare removal a removed Spoils Map left its treasure-node quest pinned and the node still payable; test_shop_and_map_mods.py::test_spoils_map_unpins_its_quest_when_removed_from_the_deck pins it. NOT closed: the `HasBeenRemovedFromState` marking this entry also named -- no sim card carries the flag and nothing reads it.  The text it replaced read: PreservedFog.cs:24 calls `await CardPileCmd.RemoveFromDeck(item)`, which fires `Hook.BeforeCardRemoved` at src/Core/Commands/CardPileCmd.cs:61. preserved_fog.py:21 calls `run.deck.remove(card)` DIRECTLY -- one step further from the source than its siblings, which at least go through RunState.remove_cards -- and the sim has no before_card_removed hook at all (`grep -rn 'before_card_removed' sts2_rl/` returns zero hits). Same mechanism, same verdict, same executed evidence as audit/records/relic/precise_scissors.json guard G1 (binding rule 3, not re-derived): removing a Spoils Map leaves its treasure-node quest armed and the node still pays 600 gold (`py audit/tools/relic_probes_b12.py b12-cardremoved`). NOTE per binding rule 7: CardPileCmd.cs, run.py and precise_scissors.json are not hashed here."
     },
     {
       "what": "N1: `run.deck.remove(card)` (preserved_fog.py:21) instead of `run.remove_cards(chosen)`, which the two sibling relics use",
@@ -69,6 +69,6 @@
       "rationale": "ExtraHoverTips / HoverTipFactory / prompt text / the card-fly-away animation are presentation only -- the relic bar's hover text and the removal screen. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

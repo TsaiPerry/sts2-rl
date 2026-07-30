@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\dusty_tome.py",
-    "sha256": "aad118937d47d9327afe186894c277a03650cc2ab24ccb104c9fea94f479a333"
+    "sha256": "23db6067b5c0bd30ed304835ecc6c2cf2f4462fdd6b50ed9b1f6a737c679e20d"
   },
   "extra_sources": [
     {
@@ -31,27 +31,27 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "879d6791db6dd9ec5d35355d75e3e784be4c380fb7d0bcd65b0ede93ff8cd339",
+      "sha256": "03b13195368f9b62ffdaef867883b236c1573dd14c05724c40c439ede14a6fbf",
       "side": "sim"
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
+      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -74,8 +74,8 @@
     },
     {
       "what": "G2 (LIVE on the add_relic path): C# rolls AncientCard once, at OFFER time, on PlayerRng.Rewards (DustyTome.cs:50-56); dusty_tome.py:53-54 re-rolls LAZILY inside after_obtained when setup was skipped, and dusty_tome.py:48 falls back to the shared run rng outside the parity path",
-      "verdict": "gap",
-      "issue": "MECHANISM: in C# the card is chosen when the relic option is BUILT -- SetupForPlayer assigns the [SavedProperty] AncientCard from `player.PlayerRng.Rewards.NextItem(items)` -- and AfterObtained merely reads it (`ModelDb.GetById<CardModel>(AncientCard)`, DustyTome.cs:60), so the draw happens at offer time whether or not the player takes the relic, and cannot happen twice. dusty_tome.py:53-54 adds a fallback that calls setup_for_player from inside after_obtained when ancient_card is still None, which moves the draw to PICKUP time and onto whichever rng the run carries. REACHABILITY: the normal path is correct -- executed, events/darv.py does call setup_for_player when it builds the option, and dusty_tome.py:45-46 uses run.player_rng.rewards.next_item in the parity path, which is the right stream. LIVE on the OTHER path: `run.add_relic(make_relic('dusty_tome'))` with no prior setup returns ancient_card='corruption' rolled at pickup (executed), and the conformance runner grants relics by id straight through add_relic (conformance/runner.py:465, 698, 751), so a Dusty Tome that arrives via the runner's relic resync draws at the wrong time and from the wrong stream, shifting the Rewards counter for everything after it. DORMANT for the card IDENTITY specifically, and this is why the gap is small today: the candidate list has exactly ONE member (guard G3), so every stream yields 'corruption'. Porting a second Ancient Ironclad card makes the identity divergent too. PROMPT.md class 16, second half -- and the stream IS consumed on both sides (NextItem over a one-element list still draws), so the class-16 caveat about unconsumed streams does not apply. RULE 7: events/darv.py, run.py and conformance/runner.py are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): the pickup-time re-roll is gone. AfterObtained (DustyTome.cs:58-64) READS the SavedProperty that SetupForPlayer assigned at OFFER time; it never rolls. relics/dusty_tome.py's `after_obtained` no longer calls `setup_for_player` as a fallback -- a relic granted without an offer (the conformance runner's relic resync, which is the LIVE path this entry named) now resolves its card WITHOUT a draw, so the PlayerRng.Rewards counter no longer moves at pickup and no later Rewards consumer is shifted. C# cannot reach the unset state at all, so there is no source behaviour to copy for it; the port says so, and says that porting a second Ancient Ironclad card would make the fallback observable. test_darv.py::test_dusty_tome_pickup_does_not_roll_the_rewards_stream pins the counter.  The text it replaced read: MECHANISM: in C# the card is chosen when the relic option is BUILT -- SetupForPlayer assigns the [SavedProperty] AncientCard from `player.PlayerRng.Rewards.NextItem(items)` -- and AfterObtained merely reads it (`ModelDb.GetById<CardModel>(AncientCard)`, DustyTome.cs:60), so the draw happens at offer time whether or not the player takes the relic, and cannot happen twice. dusty_tome.py:53-54 adds a fallback that calls setup_for_player from inside after_obtained when ancient_card is still None, which moves the draw to PICKUP time and onto whichever rng the run carries. REACHABILITY: the normal path is correct -- executed, events/darv.py does call setup_for_player when it builds the option, and dusty_tome.py:45-46 uses run.player_rng.rewards.next_item in the parity path, which is the right stream. LIVE on the OTHER path: `run.add_relic(make_relic('dusty_tome'))` with no prior setup returns ancient_card='corruption' rolled at pickup (executed), and the conformance runner grants relics by id straight through add_relic (conformance/runner.py:465, 698, 751), so a Dusty Tome that arrives via the runner's relic resync draws at the wrong time and from the wrong stream, shifting the Rewards counter for everything after it. DORMANT for the card IDENTITY specifically, and this is why the gap is small today: the candidate list has exactly ONE member (guard G3), so every stream yields 'corruption'. Porting a second Ancient Ironclad card makes the identity divergent too. PROMPT.md class 16, second half -- and the stream IS consumed on both sides (NextItem over a one-element list still draws), so the class-16 caveat about unconsumed streams does not apply. RULE 7: events/darv.py, run.py and conformance/runner.py are not hashed here."
     },
     {
       "what": "G3: the candidate filter -- `GetUnlockedCards(...).Where(c => c.Rarity == CardRarity.Ancient && !ArchaicTooth.TranscendenceCards.Contains(c))` (DustyTome.cs:52-54) vs candidates() (dusty_tome.py:26-37)",

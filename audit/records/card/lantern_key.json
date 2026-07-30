@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\event_cards.py",
-    "sha256": "e2252c0e6b225be22f1da3051e67dc0f235f6b82ec2ccf0ea6158a20701730df"
+    "sha256": "57208afe6ae70f9dd177e57aee53a7f5b5624a5ba5d830a46de5263c8732e691"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
@@ -43,8 +43,8 @@
     },
     "ModifyUnknownMapPointRoomTypes": {
       "maps_to": "NOT PORTED -- LanternKeyCard does not override the hook, which DOES exist on the sim's Card base (cards/base.py:296-299)",
-      "verdict": "gap",
-      "issue": "`if (2 != Owner.RunState.CurrentActIndex) return roomTypes; return new HashSet<RoomType> { RoomType.Event };` (LanternKey.cs:21-28) forces every \"?\" node in ACT 3 (act index 2, the Glory act) to roll an Event room. The sim's `Card.modify_unknown_map_point_room_types` exists precisely for this shape of hook and `RunState.start_act` runs deck cards through the map pipeline (cards/base.py:277-299 documents it, naming the Spoils Map card as the one card that uses it), but LanternKeyCard overrides nothing, so the hook is a no-op. The sim's docstring justifies this with \"the sim has no map\" -- THAT CLAIM IS FALSE, and it is the third instance of the same false premise after card/debt's \"no gold\" and card/guilty's \"no persistent deck\": the sim generates a per-act map, `card/spoils_map` already rewrites it through this very pipeline, and `modify_unknown_map_point_room_types` is wired. Observable across a run: in the game a kept Lantern Key turns every act-3 unknown node into an event; in the sim act 3's unknown nodes roll normally. LIVE. Note this is a rule-1 case -- \"not modelled\" is a GAP, never a waiver. RATIONALE CITES A THIRD FILE (rule 7): sts2_rl/cards/base.py is not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `LanternKeyCard.modify_unknown_map_point_room_types` is LanternKey.cs:21-28: outside `_gloryActIndex = 2` the set passes through, and inside it the set is REPLACED by {Event} rather than filtered -- so the key beats any other listener's narrowing rather than intersecting with it.  The stub's premise was checked before the code (PROMPT.md bug class 12) and was false, which is the fifth round running that has held. The sim generates a per-act map and `RunState._unknown_allowed_room_types` already chained the hook over every relic AND deck card.  Pinned by test/test_false_premise_stubs.py.  NOT CLOSED: `card/lantern_key/ModifyNextEvent`, the other half, stays a DORMANT gap with the blocker it already names -- the sim has no `modify_next_event` listener category and WarHistorianRepy is unported.  The text it replaced read: `if (2 != Owner.RunState.CurrentActIndex) return roomTypes; return new HashSet<RoomType> { RoomType.Event };` (LanternKey.cs:21-28) forces every \"?\" node in ACT 3 (act index 2, the Glory act) to roll an Event room. The sim's `Card.modify_unknown_map_point_room_types` exists precisely for this shape of hook and `RunState.start_act` runs deck cards through the map pipeline (cards/base.py:277-299 documents it, naming the Spoils Map card as the one card that uses it), but LanternKeyCard overrides nothing, so the hook is a no-op. The sim's docstring justifies this with \"the sim has no map\" -- THAT CLAIM IS FALSE, and it is the third instance of the same false premise after card/debt's \"no gold\" and card/guilty's \"no persistent deck\": the sim generates a per-act map, `card/spoils_map` already rewrites it through this very pipeline, and `modify_unknown_map_point_room_types` is wired. Observable across a run: in the game a kept Lantern Key turns every act-3 unknown node into an event; in the sim act 3's unknown nodes roll normally. LIVE. Note this is a rule-1 case -- \"not modelled\" is a GAP, never a waiver. RATIONALE CITES A THIRD FILE (rule 7): sts2_rl/cards/base.py is not hashed by this record."
     },
     "ModifyNextEvent": {
       "maps_to": "NOT PORTED, and the sim's Card base has no such hook at all",

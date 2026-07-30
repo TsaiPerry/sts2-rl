@@ -20,6 +20,14 @@ hidden stochasticity from selection effects:
   the player confirm *any number* including none, so the pick filters the
   candidates instead of taking ``count`` of them. Junk is worth
   exhausting/redrawing, everything else is kept.
+* ``"choose_a_card"``, ``"choose_a_card_optional"`` — the cheapest playable
+  card, junk last. These are the generator screens
+  (``CardSelectCmd.FromChooseACardScreen``): the four generator potions,
+  Toolbox and Choices Paradox all create fresh cards and offer three. The
+  card is free, so the only question is whether it can be played this turn —
+  cheapest wins, ties by offered order. ``*_optional`` is the ``canSkip:
+  true`` twin, so an all-junk screen is declined instead of taking dead
+  weight; the non-optional one has to take something.
 * any other purpose — the first candidates, in offered order.
 
 Every branch is a stable sort over the candidate order, so ties resolve
@@ -87,4 +95,17 @@ def scripted_card_selector(
         # build CardSelectorPrefs(prompt, 0, ...), which CardSelectCmd.cs:708
         # never auto-resolves.
         keyed = [p for p in keyed if _is_junk(p[1])]
+    elif purpose in ("choose_a_card", "choose_a_card_optional"):
+        # `CardSelectCmd.FromChooseACardScreen` — a screen of freshly created
+        # cards (the four generator potions, Toolbox, Choices Paradox). The
+        # card costs nothing to take, so rank by whether it can be played this
+        # turn: junk last, then cheapest, ties by offered order. The selector
+        # used to fall through to "the first candidate", which took whatever
+        # the generator happened to roll first.
+        keyed.sort(key=lambda p: (_is_junk(p[1]), _cost(p[1]), p[0]))
+        if purpose == "choose_a_card_optional":
+            # The canSkip:true twin (CardSelectCmd.cs:216-261). Declining is a
+            # real outcome, so an all-junk screen takes nothing; Toolbox and
+            # Choices Paradox (canSkip:false) must still take one.
+            keyed = [p for p in keyed if not _is_junk(p[1])]
     return [card for _, card in keyed[:count]]

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\self_forming_clay.py",
-    "sha256": "cefd4f24b222b27002bb6d9f7f601b64f05f42485b0a81455fa9b4a21a7ab22e"
+    "sha256": "f757af832d356d803228427496e693ebe14aa4a1c7f05df081d719f6051e68a2"
   },
   "extra_sources": [
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
@@ -56,7 +56,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     }
   ],
@@ -80,8 +80,8 @@
     },
     {
       "what": "G2 (LIVE): the payout moved from AfterBlockCleared (turn_structure step ~11) to on_player_turn_started (step 23), so damage taken IN BETWEEN is paid out the same turn instead of the next",
-      "verdict": "gap",
-      "issue": "MECHANISM: SelfFormingClayPower.AfterBlockCleared (SelfFormingClayPower.cs:19-25) fires in the block-clear pass, before the energy reset, before ModifyHandDraw and before the whole AfterPlayerTurnStart / AfterSideTurnStart region (audit/records/seam/turn_structure.json steps 11 through 23). self_forming_clay.py:40 uses on_player_turn_started, the LAST turn-start slot. Any effect that damages the player between those two points is therefore banked and paid in the SAME turn by the sim, and banked now / paid next turn by C#. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b14.py clay-slot): Royal Poison damages its owner from AfterPlayerTurnStart (RoyalPoison.cs:18, step 22, ported at relics/royal_poison.py), which is inside the window. With relics registered [royal_poison, self_forming_clay] the sim opens turn 1 with block = 3; with [self_forming_clay, royal_poison] it opens with block = 0 and `_pending_block = 3`. C# gives turn-1 block 0 in both cases, because the Clay power is applied after the block clear has already run. Both sides ported and obtainable: Royal Poison is a ported relic and Self-Forming Clay is Uncommon in the grab bag. The sentinel trace in the same probe shows the payout is invisible at every earlier slot (on_block_cleared / on_energy_reset / on_player_turn_start / modify_hand_draw all read block 0). Note this is NOT merely seam guard G12's flat-pass problem: the two relics are in DIFFERENT C# passes AND the sim's Clay is in the wrong slot entirely, so separating the passes alone would not fix it. Rule 7: turn_structure.json, relics/royal_poison.py, RoyalPoison.cs and SelfFormingClayPower.cs are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The payout moved to the block-clear pass. SelfFormingClayPower.AfterBlockCleared (SelfFormingClayPower.cs:19-25) fires in the block-clear pass -- turn_structure step ~11, before the energy reset, before ModifyHandDraw and before the whole AfterPlayerTurnStart / AfterSideTurnStart region -- and relics/self_forming_clay.py used `on_player_turn_started`, the LAST turn-start slot (step 23). Anything that damaged the player between those two points was therefore banked and paid out in the SAME turn by the sim and banked-now/paid-next-turn by C#. The relic now implements `on_block_cleared`, with an owner guard. EXECUTED: a combat with Royal Poison -- which damages its owner from AfterPlayerTurnStart (RoyalPoison.cs:18, step 22), inside the window -- now opens turn 1 on 0 block in BOTH registration orders, matching the game; the sim used to open on 3 with [royal_poison, self_forming_clay] and 0 with the other order, i.e. the outcome depended on relic acquisition order. As the entry notes, this was not merely seam guard G12's flat-pass problem: the two relics are in different C# passes AND the Clay was in the wrong slot entirely, so separating the passes alone would not have fixed it. Pinned by test/test_relic_live_tail.py::test_self_forming_clay_pays_out_in_the_block_clear_pass. NOT CLOSED: nothing at this site; G12 remains the seam's.  The text it replaced read: MECHANISM: SelfFormingClayPower.AfterBlockCleared (SelfFormingClayPower.cs:19-25) fires in the block-clear pass, before the energy reset, before ModifyHandDraw and before the whole AfterPlayerTurnStart / AfterSideTurnStart region (audit/records/seam/turn_structure.json steps 11 through 23). self_forming_clay.py:40 uses on_player_turn_started, the LAST turn-start slot. Any effect that damages the player between those two points is therefore banked and paid in the SAME turn by the sim, and banked now / paid next turn by C#. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b14.py clay-slot): Royal Poison damages its owner from AfterPlayerTurnStart (RoyalPoison.cs:18, step 22, ported at relics/royal_poison.py), which is inside the window. With relics registered [royal_poison, self_forming_clay] the sim opens turn 1 with block = 3; with [self_forming_clay, royal_poison] it opens with block = 0 and `_pending_block = 3`. C# gives turn-1 block 0 in both cases, because the Clay power is applied after the block clear has already run. Both sides ported and obtainable: Royal Poison is a ported relic and Self-Forming Clay is Uncommon in the grab bag. The sentinel trace in the same probe shows the payout is invisible at every earlier slot (on_block_cleared / on_energy_reset / on_player_turn_start / modify_hand_draw all read block 0). Note this is NOT merely seam guard G12's flat-pass problem: the two relics are in DIFFERENT C# passes AND the sim's Clay is in the wrong slot entirely, so separating the passes alone would not fix it. Rule 7: turn_structure.json, relics/royal_poison.py, RoyalPoison.cs and SelfFormingClayPower.cs are not hashed here."
     },
     {
       "what": "N3: the sim has no SelfFormingClayPower at all, so the pending Block is not a visible, stackable, removable power on the player",

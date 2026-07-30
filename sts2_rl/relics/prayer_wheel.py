@@ -9,12 +9,23 @@ class PrayerWheel(Relic):
     the same Monster odds (`TryModifyRewards` adds
     `new CardReward(CardCreationOptions.ForRoom(player, RoomType.Monster), 3)`).
 
-    STILL A NO-OP, and the reason is structural rather than "out of combat":
-    `rewards.CombatRewards` models exactly ONE pick-one-of-N card group
-    (`cards`) plus independent take-or-skip singles (`special_cards`), so a
-    second CardReward group has no field to live in and no driver action to
-    surface it. Same shape as White Star."""
+    It is a separate CardReward on the set, so it is a separate pick-one-of-3
+    and the player can keep a card from each. Its options are drawn when
+    RewardsSet.GenerateWithoutOffering populates the rewards the hooks added,
+    i.e. AFTER both ModifyRewards passes (RewardsSet.cs:137-143) — appending an
+    unpopulated group here is what puts those three Rewards-stream draws in the
+    right place.
+    """
 
     id = "prayer_wheel"
     name = "Prayer Wheel"
     rarity = RelicRarity.RARE
+
+    def modify_combat_rewards(self, run, rewards) -> None:
+        from ..rewards import CardRewardGroup
+        from ..rooms import RoomType
+
+        # `room == null || room.RoomType != RoomType.Monster` -> false.
+        if rewards.room != RoomType.MONSTER:
+            return
+        rewards.card_rewards.append(CardRewardGroup(room_type=RoomType.MONSTER))

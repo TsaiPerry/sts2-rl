@@ -34,10 +34,31 @@ class PunchConstruct(MachineMonster):
         starts_with_fast_punch: bool = False,
     ) -> None:
         self._starts_with_fast_punch = starts_with_fast_punch  # read by build_machine
+        # `PunchConstruct.StartingHpReduction` (PunchConstruct.cs:60-69) — a
+        # FIELD the encounter sets on the model, spent later by
+        # AfterAddedToRoom. Keeping it a field rather than applying it at
+        # construction is what makes the lifecycle right: the reduction is
+        # taken off the CURRENT HP the Niche roll has already assigned, where
+        # applying it in create_monsters put it before that roll, which then
+        # overwrote it (`_roll_parity_hp` sets hp = max_hp = rolled).
+        self.starting_hp_reduction = 0
         super().__init__(hooks, rng or random.Random())
         from ...cmds import PowerCmd
         from ...powers import ArtifactPower
         PowerCmd.apply(hooks, self, ArtifactPower, 1)
+
+    def adjust_hp_after_added(self, teammates) -> None:
+        """`PunchConstruct.AfterAddedToRoom` (PunchConstruct.cs:71-79):
+
+            base.Creature.SetCurrentHpInternal(
+                Math.Max(1, base.Creature.CurrentHp - StartingHpReduction))
+
+        CURRENT HP only — MaxHp is untouched and stays at the model's flat 55.
+        The Artifact 1 the same override applies is a pool-wide deliberate
+        divergence (SHARED-FINDINGS section 2) and stays in __init__.
+        """
+        if self.starting_hp_reduction > 0:
+            self.hp = max(1, self.hp - self.starting_hp_reduction)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         ready = MoveState("READY_MOVE", self._ready, Intent(MoveType.DEFEND))

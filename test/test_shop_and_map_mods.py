@@ -447,3 +447,23 @@ def test_without_the_courier_a_bought_slot_clears():
     entry = inv.card_entries[0]
     assert entry.purchase() is True
     assert not entry.is_stocked
+
+
+def test_spoils_map_unpins_its_quest_when_removed_from_the_deck():
+    """creature_card_cmds/step68 + card/spoils_map/BeforeCardRemoved.
+    SpoilsMap.cs:100-116 is the whole decompiled game's only implementer of
+    Hook.BeforeCardRemoved, which CardPileCmd.RemoveFromDeck fires before
+    unlinking the card (CardPileCmd.cs:61). The sim's removals were a bare
+    `deck.remove` loop, so a removed Spoils Map left a payable treasure node
+    behind."""
+    from sts2_rl.cards import make_card
+
+    card = make_card("spoils_map")
+    run = fresh_run(deck=[make_card("strike"), card])
+    run.start_act("underdocks", act_index=card.spoils_act_index)
+    point = run.map.get_point(*card.spoils_coord)
+    assert card in point.quests
+
+    run.remove_cards([card])
+    assert card not in point.quests
+    assert card not in run.deck

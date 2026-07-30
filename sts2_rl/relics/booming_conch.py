@@ -28,7 +28,7 @@ class BoomingConch(Relic):
             return count + self.CARDS
         return count
 
-    def on_player_turn_start(self, player) -> None:
+    def after_side_turn_start(self, player) -> None:
         # AfterSideTurnStart, turn 1 only: +1 energy (fires post-energy-reset).
         if self._in_elite_first_turn():
             player.energy += self.ENERGY

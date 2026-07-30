@@ -15,7 +15,7 @@ class BloodVial(Relic):
     name = "Blood Vial"
     rarity = RelicRarity.COMMON
 
-    def on_player_turn_started(self, player: PlayerCombatState) -> None:
+    def on_player_turn_started_late(self, player: PlayerCombatState) -> None:
         if self.turn <= 1:
             from ..cmds import CreatureCmd
             CreatureCmd.heal(self.hooks, player, 2)

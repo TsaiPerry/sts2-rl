@@ -37,17 +37,24 @@ class BreakthroughCard(Card):
     def _on_upgrade(self) -> None:
         self._damage += 4
 
+    HP_LOSS = 1     # HpLossVar(1m), Breakthrough.cs:16 — no upgrade, no ascension
+
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cmds import DamageCmd
-        # 1 unblockable HP loss to self (bypasses block; no Strength scaling).
-        p = ctx.player
-        old_hp = p.hp
-        p.hp = max(0, p.hp - 1)
-        hp_lost = old_hp - p.hp
-        if hp_lost > 0:
-            ctx.hooks.on_hp_changed(p, -hp_lost)
-            if p.hp <= 0 and ctx.hooks.should_die(p):
-                ctx.hooks.on_death(p)
+        from ..valueprops import ValueProp
+
+        # Breakthrough.cs:27 is `CreatureCmd.Damage(choiceContext,
+        # Owner.Creature, DynamicVars.HpLoss.BaseValue, Unblockable | Unpowered
+        # | Move, this)` — the FULL damage pipeline, with the damage modifiers,
+        # the cap, Hook.AfterCurrentHpChanged, Hook.AfterDamageReceived, the
+        # death check and Kill. The sim hand-rolled it (`p.hp = max(0, p.hp - 1)`
+        # plus a bare on_hp_changed and a manual should_die/on_death), so
+        # `on_damage_received` never fired and no damage modifier was consulted:
+        # play Breakthrough holding Rupture and the game gains Strength while the
+        # sim did not. The bypass also skipped the Intangible cap and Buffer.
+        DamageCmd.deal(
+            ctx.hooks, ctx.player, self.HP_LOSS, dealer=ctx.player, card=self,
+            props=ValueProp.UNBLOCKABLE | ValueProp.UNPOWERED | ValueProp.MOVE)
         if ctx.player.is_dead:
             return
         # 9 (+ Strength) damage to each living enemy.

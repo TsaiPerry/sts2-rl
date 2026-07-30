@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\rainbow_ring.py",
-    "sha256": "2de97886b8b6f46259a170c499d9478a11d2551d1f37fb06bbfffdbb00ea8013"
+    "sha256": "d730c40f5c82f1e053f70059fae2410e9fa95b045298ff980a030d87abe3b29d"
   },
   "extra_sources": [
     {

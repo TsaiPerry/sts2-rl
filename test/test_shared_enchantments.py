@@ -121,3 +121,60 @@ def test_corrupted_only_enchants_attacks():
     corrupted = make_enchantment("corrupted")
     assert corrupted.can_enchant(make_card("strike"))
     assert not corrupted.can_enchant(make_card("defend"))
+
+
+# ── Royally Approved + Royal Stamp (relic/royal_stamp) ───────────────────
+
+
+def test_royally_approved_grants_innate_and_retain():
+    """RoyallyApproved.cs OnEnchant adds CardKeyword.Innate and
+    CardKeyword.Retain."""
+    strike = make_card("strike")
+    assert not strike.innate and not strike.retain
+    enchant("royally_approved", strike)
+    assert strike.innate and strike.retain
+
+
+def test_royally_approved_enchants_attacks_and_skills_only():
+    """`CanEnchantCardType` compiles to `(uint)(cardType - 1) <= 1u`, i.e.
+    exactly {Attack, Skill} of CardType's None/Attack/Skill/Power/Status/
+    Curse/Quest."""
+    e = make_enchantment("royally_approved")
+    assert e.can_enchant(make_card("strike"))       # Attack
+    assert e.can_enchant(make_card("defend"))       # Skill
+    assert not e.can_enchant(make_card("inflame"))  # Power
+
+
+def test_royal_stamp_enchants_a_deck_card_and_burns_the_niche_shuffle():
+    """relic/royal_stamp. AfterObtained shuffles the candidates on
+    RunState.Rng.Niche (RoyalStamp.cs:36) before the enchant screen, so the
+    draw happens whether or not the player picks."""
+    from sts2_rl.relics import make_relic
+    from sts2_rl.run import RunState
+
+    run = RunState(string_seed="89U21BV1TZ")
+    before = run.rng_set.niche.counter
+    run.add_relic(make_relic("royal_stamp"))
+    assert run.rng_set.niche.counter > before
+    enchanted = [c for c in run.deck if c.enchantment is not None]
+    assert len(enchanted) == 1
+    assert enchanted[0].enchantment.id == "royally_approved"
+    assert enchanted[0].innate and enchanted[0].retain
+
+
+def test_a_clone_carries_the_source_s_this_combat_cost():
+    """enchantment/EG2's Slither residue. CardModel.DeepCloneFields runs
+    `_energyCost = _energyCost?.Clone(this)` (CardModel.cs:1202), and
+    CardEnergyCost.Clone copies `_localModifiers` — where `SetThisCombat`
+    parks its Absolute/EndOfCombat modifier (CardEnergyCost.cs:238-244). So a
+    copy of a Slither card starts at the cost that was already rolled for the
+    source; the sim rebuilt the card from its class and showed the printed
+    cost instead."""
+    from sts2_rl.cards.base import create_clone
+
+    strike = make_card("strike")
+    printed = strike.energy_cost
+    strike.set_cost_this_combat(printed + 2)
+    clone = create_clone(strike)
+    assert clone.energy_cost == printed + 2
+    assert clone.energy_cost == strike.energy_cost

@@ -35,7 +35,9 @@ class WongosMysteryTicket(Relic):
     def modify_combat_rewards(self, run, rewards) -> None:
         from ..rooms import RoomType
 
-        if self.gave_relic or rewards.room_type not in (
+        # WongosMysteryTicket.cs:86 `!(room is CombatRoom)` -> false: a custom
+        # reward set carries no room, so the ticket never pays out on one.
+        if self.gave_relic or rewards.room not in (
             RoomType.MONSTER, RoomType.ELITE, RoomType.BOSS,
         ):
             return

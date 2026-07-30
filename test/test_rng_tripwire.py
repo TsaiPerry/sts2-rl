@@ -9,8 +9,13 @@ import pytest
 # (file, line) pairs to skip: a genuine, currently-unfixable debt, OR a site
 # that is provably not game content. Each entry must cite the specific reason
 # — never add an entry just to make the gate pass.
-_ALLOWLIST: set[tuple[str, int]] = {
-    # driver.py:252 is RunDriver._ask's `self._ask_fn(request)` call — the
+# Keyed by (file, FUNCTION), not (file, line): the one allow-listed site is
+# allowed because of what it IS, and pinning its line number meant any edit
+# above it in driver.py re-opened the gate on an unrelated change (it did —
+# adding six comment lines to SKIPPABLE_PURPOSES moved `_ask` from 252 to 259
+# and failed seeds 4 and 18 with a site that had been allow-listed all along).
+_ALLOWLIST: set[tuple[str, str]] = {
+    # RunDriver._ask's `self._ask_fn(request)` call — the
     # decision-relay seam. play_random_run's random_asker(rng) (driver.py:182)
     # answers every DecisionRequest (which card/target/discard/... to pick)
     # by drawing on the shared run.rng *by design* (driver.py "asker" is a
@@ -22,8 +27,8 @@ _ALLOWLIST: set[tuple[str, int]] = {
     # actually gates — never calls _ask at all; it replays recorded actions
     # directly, so this site is unique to the play_random_run smoke-test
     # harness used here.)
-    ("sts2_rl\\driver.py", 252),
-    ("sts2_rl/driver.py", 252),
+    ("sts2_rl\\driver.py", "_ask"),
+    ("sts2_rl/driver.py", "_ask"),
 }
 
 _N_RUNS = 20
@@ -83,8 +88,9 @@ def test_no_wrong_stream_draws_in_random_run(i):
     finally:
         run_mod.RunState.__init__ = orig_init
 
+    # bug_sites() keys are (file, line, function, owner).
     sites = {k: v for k, v in tw.bug_sites().items()
-             if (k[0], k[1]) not in _ALLOWLIST}
+             if (k[0], k[2]) not in _ALLOWLIST}
     assert not sites, (
         "wrong-stream in-combat draws:\n" + "\n".join(
             f"  {n}x {f}:{ln} ({fn}) near={own or '?'}"

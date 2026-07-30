@@ -22,8 +22,8 @@ class MeatOnTheBone(Relic):
     HP_THRESHOLD_PCT = 50
     HEAL = 12
 
-    def on_combat_end_early(self, player_won: bool) -> None:
-        if not player_won or self.player.is_dead:
+    def on_combat_victory_early(self) -> None:
+        if self.player.is_dead:
             return
         threshold = self.player.max_hp * self.HP_THRESHOLD_PCT // 100
         if self.player.hp <= threshold:

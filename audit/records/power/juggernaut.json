@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
@@ -74,8 +74,8 @@
   "guards": [
     {
       "what": "JuggernautPower.cs:24 Rng.CombatTargets.NextItem(hittableEnemies)",
-      "verdict": "gap",
-      "issue": "WRONG RNG STREAM. combat._rng is the SHARED unseeded random.Random (combat.py:88), NOT the per-purpose accessor object -- that is combat.combat_rng, built one line later at combat.py:94, whose seven named accessors (combat_rng.py:17-25: shuffle, monster_ai, card_gen, card_selection, targets, energy, potion_gen) are GameRandomAdapters over the matching RunRngSet streams in a parity run. This is the sixth and seventh power unit in this stream with the same defect -- power/aggression (main report section 4 item 8), then power/hello_world, power/entropy, power/stampede and power/confused in half A -- so it is systematic, not incidental, and it is proposed as its own PROMPT.md bug class in .superpowers/sdd/content-power-report-a.md section 7 item 11. LIVE under seed parity by construction: the draw comes off a different stream in a different order AND every later consumer of the shared rng is perturbed. Third-file citations, not hashed here. Juggernaut is the sharpest of the seven because the RIGHT accessor is used three lines away in the same engine for the same purpose: combat.py:546 picks an auto-play's target with combat_rng.targets.choice(living), citing CardCmd.cs:77's Rng.CombatTargets.NextItem(HittableEnemies) -- and powers.py:792 picks Juggernaut's target with combat._rng.choice(living). Same C# stream, two different sim objects. Reachable: Juggernaut is a ported Ironclad card power and every block gain triggers it, so a Juggernaut run diverges on its first block in a multi-enemy fight."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): the target pick is on CombatTargets. `RunState.Rng.CombatTargets.NextItem(hittableEnemies)` (JuggernautPower.cs:24) is `combat.combat_rng.targets.choice(living)` now, where it was the shared `combat._rng`.  The text it replaced read: WRONG RNG STREAM. combat._rng is the SHARED unseeded random.Random (combat.py:88), NOT the per-purpose accessor object -- that is combat.combat_rng, built one line later at combat.py:94, whose seven named accessors (combat_rng.py:17-25: shuffle, monster_ai, card_gen, card_selection, targets, energy, potion_gen) are GameRandomAdapters over the matching RunRngSet streams in a parity run. This is the sixth and seventh power unit in this stream with the same defect -- power/aggression (main report section 4 item 8), then power/hello_world, power/entropy, power/stampede and power/confused in half A -- so it is systematic, not incidental, and it is proposed as its own PROMPT.md bug class in .superpowers/sdd/content-power-report-a.md section 7 item 11. LIVE under seed parity by construction: the draw comes off a different stream in a different order AND every later consumer of the shared rng is perturbed. Third-file citations, not hashed here. Juggernaut is the sharpest of the seven because the RIGHT accessor is used three lines away in the same engine for the same purpose: combat.py:546 picks an auto-play's target with combat_rng.targets.choice(living), citing CardCmd.cs:77's Rng.CombatTargets.NextItem(HittableEnemies) -- and powers.py:792 picks Juggernaut's target with combat._rng.choice(living). Same C# stream, two different sim objects. Reachable: Juggernaut is a ported Ironclad card power and every block gain triggers it, so a Juggernaut run diverges on its first block in a multi-enemy fight."
     },
     {
       "what": "JuggernautPower.cs:21-22 CombatState.HittableEnemies and the empty check",

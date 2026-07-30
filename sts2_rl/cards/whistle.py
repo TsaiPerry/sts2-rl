@@ -34,5 +34,8 @@ class WhistleCard(Card):
         DamageCmd.deal(
             ctx.hooks, target, self._damage, dealer=ctx.player, card=self,
         )
-        if not target.is_gone:
-            CreatureCmd.stun(ctx.hooks, target)
+        # Whistle.cs:33 calls CreatureCmd.Stun unconditionally, and Stun has no
+        # liveness test in either overload (CreatureCmd.cs:870-903) -- not even
+        # a CombatState null-check. A removal-vetoed corpse still takes turns,
+        # so stunning one really does cost it a turn.
+        CreatureCmd.stun(ctx.hooks, target)

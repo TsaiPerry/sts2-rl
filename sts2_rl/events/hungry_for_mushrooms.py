@@ -30,8 +30,10 @@ class HungryForMushrooms(Event):
         ]
 
     def _big_mushroom(self) -> None:
+        # The +20 Max HP is the RELIC's own pickup effect
+        # (BigMushroom.cs:24-28, fired via add_relic), like Fragrant
+        # Mushroom's below. The event used to apply it here instead.
         self.run.add_relic(make_relic("big_mushroom"))
-        self.run.gain_max_hp(_BIG_MUSHROOM_MAX_HP)
         self._finish("BIG_MUSHROOM")
 
     def _fragrant_mushroom(self) -> None:

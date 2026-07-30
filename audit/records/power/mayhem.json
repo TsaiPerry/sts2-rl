@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     }
   ],
@@ -64,8 +64,8 @@
     },
     {
       "what": "MayhemPower.cs:20 CardPileCmd.AutoPlayFromDrawPile is TWO-PHASE",
-      "verdict": "gap",
-      "issue": "CardPileCmd.cs:931-966 first moves ALL `count` cards out of the draw pile into PileType.Play (the loop at :939-955, one ShuffleIfNecessary per pick), and only THEN plays them (:956-965). The sim interleaves: it picks and plays one card per iteration (powers.py:3576-3583). So at Mayhem 2 the game commits both cards before either resolves, and the sim lets the first card's effect change which card is played second. Any draw, reshuffle or pile redirect the first card causes therefore diverges -- and the game's cards sit in PileType.Play while waiting, so a reshuffle the first card triggers excludes them (PROMPT.md bug class 7, pile limbo), where the sim's second pick can be a card the reshuffle just moved. Reachable: Mayhem is Counter-stacked at 1 per play (cards/colorless_powers.py:174), so two plays give Mayhem 2, and the Ironclad pool is full of cards that draw. Not executed -- it needs a two-stack Mayhem plus a drawing first card, and the phase gap above already carries this unit's LIVE label."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The verb is ported, once, and both callers now use it: `CardPileCmd.auto_play_from_draw_pile` (sts2_rl/cmds.py) is CardPileCmd.AutoPlayFromDrawPile (CardPileCmd.cs:931-966) with BOTH phases. Phase 1 (:939-955) pulls all `count` picks out of the draw pile into PileType.Play -- one ShuffleIfNecessary per pick (:939), `break` not `continue` on an empty pile (:949-952) -- and phase 2 (:956-965) plays them, setting `ExhaustOnNextPlay = forceExhaust` on each (:960) and breaking if the owner has died (:958). So every pick is COMMITTED before any of them resolves, and because the waiting cards sit in PileType.Play a reshuffle the first one triggers excludes them (bug class 7). `force_exhaust` goes through `exhaust_on_next_play` rather than a hand-move, which is what routes an UNPLAYABLE pick to CardCmd.Exhaust (CardModel.cs:2098-2101) and still lets a Power card vanish to PileType.None (:2071-2074). Supporting ports, both cited in place: `PlayerCombatState.shuffle_if_necessary` (CardPileCmd.cs:972-981) and `CombatState._move_to_result_pile_without_playing` (CardModel.cs:2089-2107, which the sim had as a bare `discard_pile.append`).  This site: MayhemPower.cs:20 is that one call with count Amount, Top, forceExhaust FALSE, and powers.py's MayhemPower.after_auto_pre_play_phase_entered is now that one call. EXECUTED: at Mayhem 2 over a draw pile of [strike, defend, pommel_strike], both top cards are committed before either resolves, so the Strike that Pommel Strike draws lands in the HAND and cannot become the second pick -- where the interleaved version let the first card's effect choose the second. Pinned by test/test_auto_play_from_draw_pile.py::test_mayhem_commits_both_cards_before_either_resolves. NOT CLOSED: nothing at this site.  The text it replaced read: CardPileCmd.cs:931-966 first moves ALL `count` cards out of the draw pile into PileType.Play (the loop at :939-955, one ShuffleIfNecessary per pick), and only THEN plays them (:956-965). The sim interleaves: it picks and plays one card per iteration (powers.py:3576-3583). So at Mayhem 2 the game commits both cards before either resolves, and the sim lets the first card's effect change which card is played second. Any draw, reshuffle or pile redirect the first card causes therefore diverges -- and the game's cards sit in PileType.Play while waiting, so a reshuffle the first card triggers excludes them (PROMPT.md bug class 7, pile limbo), where the sim's second pick can be a card the reshuffle just moved. Reachable: Mayhem is Counter-stacked at 1 per play (cards/colorless_powers.py:174), so two plays give Mayhem 2, and the Ironclad pool is full of cards that draw. Not executed -- it needs a two-stack Mayhem plus a drawing first card, and the phase gap above already carries this unit's LIVE label."
     },
     {
       "what": "MayhemPower.cs:20 CardPilePosition.Top",
@@ -88,6 +88,6 @@
       "rationale": "CardPileCmd.cs:933 and :958 vs powers.py:3577 (combat.is_over or player.is_dead, checked per iteration). Equivalent, and the sim needs the explicit check because it has no IsOverOrEnding dispatch gate (hook_dispatch's G8)."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

@@ -44,10 +44,22 @@ class SelfFormingClay(Relic):
         if target is self.player and amount > 0:
             self._pending_block += self.BLOCK
 
-    def on_player_turn_started(self, player: PlayerCombatState) -> None:
+    def on_block_cleared(self, target: Creature) -> None:
+        # SelfFormingClayPower.AfterBlockCleared (SelfFormingClayPower.cs:19-25)
+        # fires in the BLOCK-CLEAR pass — turn_structure step ~11, before the
+        # energy reset, before ModifyHandDraw and before the whole
+        # AfterPlayerTurnStart / AfterSideTurnStart region. The port used
+        # `on_player_turn_started`, the LAST turn-start slot (step 23), so
+        # anything that damages the player in between was banked and paid out the
+        # SAME turn instead of the next one. Royal Poison damages its owner from
+        # AfterPlayerTurnStart (RoyalPoison.cs:18, step 22), which is inside the
+        # window: with the relics registered [royal_poison, self_forming_clay] the
+        # sim opened turn 1 on 3 block where the game gives 0 in either order.
+        if target is not self.player:
+            return
         if self._pending_block:
             from ..cmds import BlockCmd
             BlockCmd.apply(
-                self.hooks, player, self._pending_block, props=ValueProp.UNPOWERED
+                self.hooks, target, self._pending_block, props=ValueProp.UNPOWERED
             )
             self._pending_block = 0

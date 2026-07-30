@@ -43,10 +43,14 @@ class EggRelic(Relic):
             return False
         return not (self.ONLY_UNUPGRADED and card.upgrade_level >= 1)
 
-    def modify_card_reward_options_late(self, run, cards) -> None:
+    def modify_card_reward_options_late(self, run, cards, options=None):
+        # The C# overrides return a bool (`ToxicEgg.cs` and siblings return
+        # true after the owner check); the dispatcher hands the true-returners
+        # to Hook.AfterModifyingCardRewardOptions.
         for card in cards:
             if self._applies(card):
                 card.upgrade()
+        return True
 
     def modify_merchant_card_results(self, run, cards) -> None:
         self.modify_card_reward_options_late(run, cards)

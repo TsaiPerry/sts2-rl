@@ -46,6 +46,17 @@ class DrumOfBattleCard(Card):
         from ..cmds import EnergyCmd
         if card is not self or self.combat is None:
             return
-        play_count = self.combat.hooks.modify_card_play_count(self, None, 1)
+        # DrumOfBattle.cs:35 calls `GeneratePlayCount(CombatState, null)`, which
+        # is `GetEnchantedReplayCount() + 1` fed through Hook.ModifyCardPlayCount
+        # (CardModel.cs:2015-2021), and GetEnchantedReplayCount falls back to
+        # `BaseReplayCount` when there is no enchantment (:1129-1132). The sim
+        # passed a bare `1`, dropping `base_replay_count` — the field Hidden Gem
+        # raises and the field the normal play path already includes
+        # (combat.py's `1 + card.base_replay_count`). So a Hidden-Gem'd Drum of
+        # Battle paid out once where the game pays out twice. The enchantment's
+        # own contribution arrives through the hook walk, as it does on the
+        # normal path, so it must not be added a second time here.
+        play_count = self.combat.hooks.modify_card_play_count(
+            self, None, 1 + self.base_replay_count)
         for _ in range(play_count):
             EnergyCmd.gain(self.combat.hooks, self.combat.player, self._energy)

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\trash_heap_cards.py",
-    "sha256": "89ec1d15e3dd0db928e3c3a4a04aa21564c5d9b04dc5008761242025e88db7db"
+    "sha256": "f93265bdcd41fa82dd09ab914501270537ae907e02f97679dd58dd2345183e20"
   },
   "extra_sources": [
     {
@@ -16,22 +16,22 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/reflections.py",
-      "sha256": "80a1def7cd4014f2b74098038e1845bde9fda4874f0ea95fff7b775630cdfb05",
+      "sha256": "944bc8f2a1aabee7893510cd9663ca48d02770011227912a55d12f446f3b233a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/welcome_to_wongos.py",
-      "sha256": "bb654fc90b58c17ee0573381dc1859c91e72cf6a89e97f8934db58801612a946",
+      "sha256": "12d10fe0120fd1db28b8ded9f938c5246e3b466faa3127a84d8aae91c5b0d92f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     }
   ],
@@ -53,11 +53,11 @@
     },
     "OnUpgrade": {
       "maps_to": "HelloWorldCard._on_upgrade (trash_heap_cards.py:197-198)",
-      "verdict": "gap",
-      "issue": "`AddKeyword(CardKeyword.Innate)` (HelloWorld.cs:27) maps to `self.innate = True`, which is correct at upgrade level 1. DOWNGRADE IS STICKY: `Card.downgrade` (cards/base.py:150-165) rebuilds by re-running `_init_vars` and re-applying upgrades, and `_init_vars` does not re-seed the flag, so the instance attribute written by `_on_upgrade` survives. C# `DowngradeInternal` rebuilds the whole keyword set from canonical (`_keywords = cardModel.GetKeywordsWithSources(KeywordSources.Local).ToHashSet()`, CardModel.cs:2143). EXECUTED: `py audit/tools/card_probes.py downgrade` lists this card among the 5 of 203 that do not restore. LIVE -- `downgrade()` is reachable from `events/reflections.py:40`, `events/welcome_to_wongos.py:90` (both registered in `events/__init__.py`) and `powers.py:3171` (DampenPower). Same mechanism and same verdict as card/aggression's and card/apparition's OnUpgrade entries (rule 3). The fix is one line: re-seed the flag in `_init_vars`, as card/anointed, card/discovery, card/entropy and card/gold_axe all do. Observable: a downgraded Hello World still starts every combat in the opening hand in the sim; in the game it does not."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): STICKY KEYWORD FIXED AT THE SEAM, per binding rule 3 -- see creature_card_cmds/step52. `Card.downgrade` (cards/base.py) now deletes the instance-level shadow of every CardKeyword-backed attribute before re-running `_init_vars`, which is `DowngradeInternal`'s `_keywords = cardModel.GetKeywordsWithSources(KeywordSources.Local).ToHashSet()` (CardModel.cs:2143). The card file itself is UNCHANGED: the defect was never in `_on_upgrade`, which faithfully ports `AddKeyword`/`RemoveKeyword`, but in the rebuild that was supposed to undo it -- which is why a per-card `_init_vars` line would have been the wrong fix, needing to be repeated for every future card. `py audit/tools/card_probes.py downgrade` goes 5 of 203 -> **0 of 203**. Pinned by test/test_downgrade_rebuild.py::test_upgrade_then_downgrade_restores_the_keyword and by a pool-wide sweep over all seven keywords. NOT CLOSED: nothing at this site.  The text it replaced read: `AddKeyword(CardKeyword.Innate)` (HelloWorld.cs:27) maps to `self.innate = True`, which is correct at upgrade level 1. DOWNGRADE IS STICKY: `Card.downgrade` (cards/base.py:150-165) rebuilds by re-running `_init_vars` and re-applying upgrades, and `_init_vars` does not re-seed the flag, so the instance attribute written by `_on_upgrade` survives. C# `DowngradeInternal` rebuilds the whole keyword set from canonical (`_keywords = cardModel.GetKeywordsWithSources(KeywordSources.Local).ToHashSet()`, CardModel.cs:2143). EXECUTED: `py audit/tools/card_probes.py downgrade` lists this card among the 5 of 203 that do not restore. LIVE -- `downgrade()` is reachable from `events/reflections.py:40`, `events/welcome_to_wongos.py:90` (both registered in `events/__init__.py`) and `powers.py:3171` (DampenPower). Same mechanism and same verdict as card/aggression's and card/apparition's OnUpgrade entries (rule 3). The fix is one line: re-seed the flag in `_init_vars`, as card/anointed, card/discovery, card/entropy and card/gold_axe all do. Observable: a downgraded Hello World still starts every combat in the opening hand in the sim; in the game it does not."
     }
   },
   "guards": [],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

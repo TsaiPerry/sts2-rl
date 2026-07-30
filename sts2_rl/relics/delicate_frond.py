@@ -14,15 +14,29 @@ class DelicateFrond(Relic):
     rarity = RelicRarity.ANCIENT
 
     def on_combat_start(self) -> None:
-        from ..potions import _POTION_CLASSES
+        from ..potion_pools import (
+            generate_random_potion, legacy_random_potion_out_of_combat,
+        )
+        from ..potions import try_to_procure
 
         player = self.player
-        pool = sorted(
-            (
-                c for c in _POTION_CLASSES.values()
-                if c.in_reward_pool and self.combat.owns_potion(c)
-            ),
-            key=lambda c: c.id,
-        )
+        rng_set = self.combat.rng_set
         while player.has_open_potion_slot:
-            player.add_potion(self.combat._rng.choice(pool)())
+            # DelicateFrond.cs:17 -- PotionFactory.CreateRandomPotionOutOfCombat,
+            # which is a RARITY ROLL (NextFloat; Rare <= 0.1, Uncommon <= 0.35,
+            # else Common) and then NextItem inside that bucket
+            # (PotionFactory.cs:67-81). A uniform pick over the whole pool handed
+            # out Rares three times too often.
+            if rng_set is not None:
+                potion = generate_random_potion(
+                    rng_set.combat_potion_generation,
+                    pool=self.combat.potion_pool)
+            else:
+                potion = legacy_random_potion_out_of_combat(
+                    self.combat._rng, pool=self.combat.potion_pool)
+            # DelicateFrond.cs:18-21 -- `if (!(...TryToProcure(...)).success)
+            # break;`. The break is load-bearing, not tidiness: under Sozu the
+            # procure always fails and the belt never fills, so a loop without
+            # it would spin forever.
+            if not try_to_procure(self.hooks, player, potion):
+                break

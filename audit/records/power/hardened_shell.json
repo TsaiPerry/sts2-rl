@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -36,17 +36,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
@@ -56,7 +56,7 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     }
   ],
@@ -97,8 +97,8 @@
     },
     "BeforeSideTurnStart": {
       "maps_to": "powers.py:1996-2001 on_player_turn_start (player.py:169) + on_enemy_turn_start (combat.py:301)",
-      "verdict": "gap",
-      "issue": "C#'s BeforeSideTurnStart (HardenedShellPower.cs:71-77) has NO side filter and NO participants filter, so the cap resets at the start of EVERY side's turn. The sim reproduces that with two listeners: on_player_turn_start unfiltered (powers.py:1996, and BeforeSideTurnStart -> on_player_turn_start is the CORRECT player-side mapping per the section-5 slot table, CombatManager.cs:458) and on_enemy_turn_start filtered to `enemy is self.owner` (powers.py:1999-2000). The enemy half is turn_structure gap G5 (per-creature where the game is per-side) and carries the identical verdict (rule 3). DORMANT, executed: SKULKING_COLONY_ELITE is a solo encounter (n=1, order=['SkulkingColony'], `py audit/tools/power_slot_probes.py rosters`), so the owner's own turn start IS the enemy side start. Trigger: a Skulking Colony fought alongside another enemy AND something that damages the colony during the enemy side before its own turn -- the sim would still be carrying the previous turn's accumulator. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "CLOSED. The enemy half is `before_enemy_side_start` -- Hook.BeforeSideTurnStart (CombatManager.cs:458), once for the side before any block is cleared -- and, matching HardenedShellPower.cs:71-77, it is UNFILTERED: C#'s override tests neither `side` nor `participants`, so the counter resets at the start of BOTH sides' turns. The owner-filtered enemy leg the per-creature slot forced on the sim is gone. EXECUTED: test_enemy_side_per_side.py::test_hardened_shell_resets_on_both_sides_unfiltered.  FIXED 2026-07-28 (round 4). The text it replaced read: STILL OPEN on the enemy half only. The player leg now uses the REAL hook rather than a mapping onto a later slot: HardenedShellPower.cs:71-77 declares BeforeSideTurnStart and the power is on the sim's new `before_side_turn_start` dispatcher (CombatManager.cs:458), fired before the block clear and the energy reset instead of after both. WHAT REMAINS is what this entry always said carried the verdict: the enemy half is turn_structure gap G5 (per-creature where the game is per-side), and rule 3 holds it here.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: C#'s BeforeSideTurnStart (HardenedShellPower.cs:71-77) has NO side filter and NO participants filter, so the cap resets at the start of EVERY side's turn. The sim reproduces that with two listeners: on_player_turn_start unfiltered (powers.py:1996, and BeforeSideTurnStart -> on_player_turn_start is the CORRECT player-side mapping per the section-5 slot table, CombatManager.cs:458) and on_enemy_turn_start filtered to `enemy is self.owner` (powers.py:1999-2000). The enemy half is turn_structure gap G5 (per-creature where the game is per-side) and carries the identical verdict (rule 3). DORMANT, executed: SKULKING_COLONY_ELITE is a solo encounter (n=1, order=['SkulkingColony'], `py audit/tools/power_slot_probes.py rosters`), so the owner's own turn start IS the enemy side start. Trigger: a Skulking Colony fought alongside another enemy AND something that damages the colony during the enemy side before its own turn -- the sim would still be carrying the previous turn's accumulator. Third-file citations, not hashed here."
     }
   },
   "guards": [

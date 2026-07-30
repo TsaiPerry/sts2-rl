@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\seal_of_gold.py",
-    "sha256": "300738c5f9b4317d2c872315804a22168bfcb305488ec1580d6f1b93213b58ee"
+    "sha256": "ab6e21eafa9ac84d791133a3d01c665180ff6408723d596b9a743388df45dacd"
   },
   "extra_sources": [
     {
@@ -21,22 +21,22 @@
     },
     {
       "path": "sts2_rl/cards/colorless_attacks.py",
-      "sha256": "2e92a8261cb05edbecdfa9281fd940b1a96d7c5004e064d9d03204123b6be24e",
+      "sha256": "c968f51d1badb64580afa265bb1e71b26b30cb4c0aeaf5f529cd437e445a1ce2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "879d6791db6dd9ec5d35355d75e3e784be4c380fb7d0bcd65b0ede93ff8cd339",
+      "sha256": "03b13195368f9b62ffdaef867883b236c1573dd14c05724c40c439ede14a6fbf",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
@@ -46,12 +46,12 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -63,15 +63,15 @@
     },
     "AfterSideTurnStart": {
       "maps_to": "on_player_turn_started (seal_of_gold.py:23-31) -- the sim's post-draw turn-start slot, executed-confirmed as the last of the five turn-start hooks (py audit/tools/relic_probes.py turn-order)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The relic pays 5 gold for 1 Energy at the start of every player turn on both sides and the constants match, but the sim reads the WRONG gold balance -- it omits combat.gold_gained, so gold won during the fight cannot be spent (G1, LIVE) -- and the hook sits in a collapsed turn-start pass where C# separates two (G2 = seam guard G12). Rule 7: turn_structure.json and combat.py are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The balance includes `combat.gold_gained`. SealOfGold.cs:27 gates on `Owner.Gold`, and PlayerCmd.GainGold updates Player.Gold live (PlayerCmd.cs:141-170), so gold won mid-combat is immediately spendable; the port summed `player_gold - gold_stolen - gold_spent` and omitted the accumulator the sim uses for in-combat gains until `finish_combat` settles them. This was an inconsistency INSIDE the sim, not a missing concept: ThieveryPower already computed the balance with `gold_gained` in it. EXECUTED: with 20 gold won this combat and none banked, the relic now pays its energy and debits 5.  Pinned by test/test_relic_residue_gaps.py.  The AfterSideTurnStart SLOT was already correct (G2 closed in an earlier round) and is untouched. NOT CLOSED: nothing at this site.  The text it replaced read: STILL OPEN at G1, the LIVE one. G2 is CLOSED: SealOfGold.cs declares AfterSideTurnStart and the relic moved onto the new `after_side_turn_start` dispatcher (CombatManager.cs:522), so the collapsed turn-start pass G2 cited is split -- see relic/mercury_hourglass's g1. WHAT REMAINS is G1: the relic reads the WRONG gold balance, omitting combat.gold_gained, so gold won during the fight cannot be spent.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: Rollup of guards G1 and G2 per binding rule 4. The relic pays 5 gold for 1 Energy at the start of every player turn on both sides and the constants match, but the sim reads the WRONG gold balance -- it omits combat.gold_gained, so gold won during the fight cannot be spent (G1, LIVE) -- and the hook sits in a collapsed turn-start pass where C# separates two (G2 = seam guard G12). Rule 7: turn_structure.json and combat.py are not hashed here."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the in-combat gold balance omits `combat.gold_gained`, so gold gained during the fight is invisible to the relic",
-      "verdict": "gap",
-      "issue": "MECHANISM: SealOfGold.cs:27 gates on `base.Owner.Gold >= base.DynamicVars.Gold.IntValue` and PlayerCmd.GainGold updates Player.Gold live (PlayerCmd.cs:141-170), so gold won mid-combat is immediately spendable. seal_of_gold.py:25 computes `balance = combat.player_gold - combat.gold_stolen - combat.gold_spent` and never adds combat.gold_gained -- the field the sim uses to accumulate in-combat gains until RunState.finish_combat settles them (combat.py:178, run.py:1187). The sim already has the correct expression at the OTHER site that needs it: ThieveryPower computes `available = combat.player_gold + combat.gold_gained - combat.gold_stolen` (powers.py:1660), so this is an inconsistency inside the sim, not a missing capability. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b14.py seal-gold): entering a combat with 4 gold, turn 1 correctly grants no energy on either side; after `combat.gold_gained += 20` (the exact mutation cards/colorless_attacks.py:208 performs) turn 2 still grants no energy and spends no gold in the sim, where C# grants 1 Energy and takes 5. Both sides ported: Seal of Gold comes from the ported Tezcatara shrine (events/tezcatara.py:19) and Hand of Greed -- the only in-combat gold source -- is a ported Colorless card (cards/colorless_attacks.py, 'hand_of_greed' in cards/pool.py:49's COLORLESS_POOL) reachable through Lead Paperweight, Neow's positive pool. The baseline behaviour is correct and was executed too: entering with 12 gold yields 1 Energy on turns 1 and 2 and none on turn 3. Rule 7: powers.py, combat.py, run.py, cards/colorless_attacks.py, cards/pool.py and PlayerCmd.cs are not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The balance includes `combat.gold_gained`. SealOfGold.cs:27 gates on `Owner.Gold`, and PlayerCmd.GainGold updates Player.Gold live (PlayerCmd.cs:141-170), so gold won mid-combat is immediately spendable; the port summed `player_gold - gold_stolen - gold_spent` and omitted the accumulator the sim uses for in-combat gains until `finish_combat` settles them. This was an inconsistency INSIDE the sim, not a missing concept: ThieveryPower already computed the balance with `gold_gained` in it. EXECUTED: with 20 gold won this combat and none banked, the relic now pays its energy and debits 5.  Pinned by test/test_relic_residue_gaps.py.  The AfterSideTurnStart SLOT was already correct (G2 closed in an earlier round) and is untouched. NOT CLOSED: nothing at this site.  The text it replaced read: MECHANISM: SealOfGold.cs:27 gates on `base.Owner.Gold >= base.DynamicVars.Gold.IntValue` and PlayerCmd.GainGold updates Player.Gold live (PlayerCmd.cs:141-170), so gold won mid-combat is immediately spendable. seal_of_gold.py:25 computes `balance = combat.player_gold - combat.gold_stolen - combat.gold_spent` and never adds combat.gold_gained -- the field the sim uses to accumulate in-combat gains until RunState.finish_combat settles them (combat.py:178, run.py:1187). The sim already has the correct expression at the OTHER site that needs it: ThieveryPower computes `available = combat.player_gold + combat.gold_gained - combat.gold_stolen` (powers.py:1660), so this is an inconsistency inside the sim, not a missing capability. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b14.py seal-gold): entering a combat with 4 gold, turn 1 correctly grants no energy on either side; after `combat.gold_gained += 20` (the exact mutation cards/colorless_attacks.py:208 performs) turn 2 still grants no energy and spends no gold in the sim, where C# grants 1 Energy and takes 5. Both sides ported: Seal of Gold comes from the ported Tezcatara shrine (events/tezcatara.py:19) and Hand of Greed -- the only in-combat gold source -- is a ported Colorless card (cards/colorless_attacks.py, 'hand_of_greed' in cards/pool.py:49's COLORLESS_POOL) reachable through Lead Paperweight, Neow's positive pool. The baseline behaviour is correct and was executed too: entering with 12 gold yields 1 Energy on turns 1 and 2 and none on turn 3. Rule 7: powers.py, combat.py, run.py, cards/colorless_attacks.py, cards/pool.py and PlayerCmd.cs are not hashed here."
     },
     {
       "what": "G2 (DORMANT at this site, LIVE as a mechanism): AfterSideTurnStart is C#'s second turn-start pass and the sim runs one flat walk (seam guard G12, PROMPT.md class 25)",

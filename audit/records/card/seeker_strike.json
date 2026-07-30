@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_attacks.py",
-    "sha256": "2e92a8261cb05edbecdfa9281fd940b1a96d7c5004e064d9d03204123b6be24e"
+    "sha256": "c968f51d1badb64580afa265bb1e71b26b30cb4c0aeaf5f529cd437e445a1ce2"
   },
   "extra_sources": [
     {
@@ -16,17 +16,17 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     },
     {
       "path": "test/test_rng_tripwire.py",
-      "sha256": "c34c8bc722ef8c237fc8f09cb3bb0b09e789c97f16fc3cc11619ffabc270a008",
+      "sha256": "2265d317d867d7f296c12774adb73b43d9828aca995f80bb15e1a53deb29451f",
       "side": "sim"
     }
   ],
@@ -48,8 +48,8 @@
     },
     "OnPlay": {
       "maps_to": "SeekerStrikeCard.on_play (colorless_attacks.py:434-447)",
-      "verdict": "gap",
-      "issue": "Attack first, then the offer-three-take-one selection -- and the SHAPE is right, including that only one card moves and the hand-size cap applies. WRONG RNG STREAM AND WRONG ALGORITHM for building the offer. C# does `PileType.Draw.GetPile(Owner).Cards.ToList().StableShuffle(Owner.RunState.Rng.CombatCardSelection).Take(Cards.IntValue)` (SeekerStrike.cs:36) -- the stabilising sort plus Fisher-Yates on the named CombatCardSelection stream, then take-first-3 -- and the sim does `ctx.combat._rng.sample(player.draw_pile, min(self._cards, len(player.draw_pile)))` (colorless_attacks.py:440-442): the unseeded shared `random.Random`, `random.sample` rather than shuffle-then-take, and no stabilising pre-sort, so identical draw-pile CONTENTS in a different ORDER offer different cards. Same three stacked divergences as card/beat_down's OnPlay entry and the same verdict (rule 3); LIVE, and this is the 11th of the 21 cards the `shared-rng` probe lists. card/catastrophe shows the correct shape -- `stable_shuffled_cards(options, ctx.combat.combat_rng)` with the pile reversed into the game's top-first orientation. BLAST RADIUS, not re-verdicted here per rule 3: `CardSelectCmd` auto-selects with no player choice and no RNG at or below MinSelect (CardSelectCmd.cs:287-290) where the sim's `select_cards` always delegates to the installed selector and otherwise falls back to `self._rng.sample` (combat.py:575-581) -- creature_card_cmds steps 104/105 and guard N10. REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): All THREE stacked divergences closed. SeekerStrike.cs:36 is `PileType.Draw.GetPile(Owner).Cards.ToList().StableShuffle(Rng.CombatCardSelection).Take(Cards.IntValue)`, so the site calls `player.stable_shuffled_cards` -- which brings the STABILISING SORT (ListExtensions.cs:22-31, the reason identical draw-pile contents in a different order no longer offer different cards) and shuffle-then-take instead of `sample` -- with the pile REVERSED into the game's top-first orientation, as card/catastrophe already does. `stable_shuffled_cards` gained an explicit `stream` argument for this: StableShuffle is NOT always on Rng.Shuffle, and this site names CombatCardSelection.  Pinned by test/test_card_residue_gaps.py.  NOT CLOSED: the BLAST RADIUS clause this entry carries (CardSelectCmd's MinSelect auto-select) is creature_card_cmds steps 104/105 and guard N10, untouched here.  The text it replaced read: Attack first, then the offer-three-take-one selection -- and the SHAPE is right, including that only one card moves and the hand-size cap applies. WRONG RNG STREAM AND WRONG ALGORITHM for building the offer. C# does `PileType.Draw.GetPile(Owner).Cards.ToList().StableShuffle(Owner.RunState.Rng.CombatCardSelection).Take(Cards.IntValue)` (SeekerStrike.cs:36) -- the stabilising sort plus Fisher-Yates on the named CombatCardSelection stream, then take-first-3 -- and the sim does `ctx.combat._rng.sample(player.draw_pile, min(self._cards, len(player.draw_pile)))` (colorless_attacks.py:440-442): the unseeded shared `random.Random`, `random.sample` rather than shuffle-then-take, and no stabilising pre-sort, so identical draw-pile CONTENTS in a different ORDER offer different cards. Same three stacked divergences as card/beat_down's OnPlay entry and the same verdict (rule 3); LIVE, and this is the 11th of the 21 cards the `shared-rng` probe lists. card/catastrophe shows the correct shape -- `stable_shuffled_cards(options, ctx.combat.combat_rng)` with the pile reversed into the game's top-first orientation. BLAST RADIUS, not re-verdicted here per rule 3: `CardSelectCmd` auto-selects with no player choice and no RNG at or below MinSelect (CardSelectCmd.cs:287-290) where the sim's `select_cards` always delegates to the installed selector and otherwise falls back to `self._rng.sample` (combat.py:575-581) -- creature_card_cmds steps 104/105 and guard N10. REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
     },
     "OnUpgrade": {
       "maps_to": "SeekerStrikeCard._on_upgrade (colorless_attacks.py:431-432)",
@@ -58,6 +58,6 @@
     }
   },
   "guards": [],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

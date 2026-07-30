@@ -50,6 +50,6 @@ class MusicBox(Relic):
         self.used_this_turn = True
         self._card_being_played = None
 
-    def on_player_turn_start(self, player: "PlayerCombatState") -> None:
+    def before_side_turn_start(self, player: "PlayerCombatState") -> None:
         self.used_this_turn = False
         self._card_being_played = None

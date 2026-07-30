@@ -41,5 +41,5 @@ class DemonTongue(Relic):
             self._triggered_this_turn = True
             CreatureCmd.heal(self.hooks, self.player, amount)
 
-    def on_player_turn_start(self, player: PlayerCombatState) -> None:
+    def before_side_turn_start(self, player: PlayerCombatState) -> None:
         self._triggered_this_turn = False

@@ -19,6 +19,7 @@ from .combat import CombatState, CombatCtx
 from .creatures import Creature
 from .player import PlayerCombatState
 from .hooks import HookSystem
+from .turn_phase import PlayerTurnPhase
 
 # ── Command layer ────────────────────────────────────────────────────────────
 from .cmds import DamageCmd, BlockCmd, StrengthCmd, PowerCmd, CreatureCmd
@@ -210,6 +211,7 @@ __all__ = [
     "CombatCtx",
     "Creature",
     "PlayerCombatState",
+    "PlayerTurnPhase",
     "HookSystem",
     # Command layer
     "DamageCmd",

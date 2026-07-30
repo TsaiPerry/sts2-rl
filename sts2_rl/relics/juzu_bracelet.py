@@ -4,11 +4,18 @@ from .base import Relic, RelicRarity, is_before_act3_treasure_chest, register_re
 
 @register_relic
 class JuzuBracelet(Relic):
-    """Unknown map rooms are no longer combats — map-only effect, stub."""
+    """JuzuBracelet.cs — a "?" node can never roll a combat."""
 
     id = "juzu_bracelet"
     name = "Juzu Bracelet"
     rarity = RelicRarity.COMMON
+
+    def modify_unknown_map_point_room_types(self, run, room_types):
+        """JuzuBracelet.cs:17-27 — copy the incoming set and drop Monster.
+        Only Monster: an Elite "?" is still possible."""
+        from ..rooms import RoomType
+
+        return set(room_types) - {RoomType.MONSTER}
 
     @classmethod
     def is_allowed(cls, run) -> bool:

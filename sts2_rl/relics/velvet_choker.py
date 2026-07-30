@@ -36,7 +36,7 @@ class VelvetChoker(Relic):
                        is_auto_play: bool = False) -> None:
         self.cards_played_this_turn += 1
 
-    def on_player_turn_start(self, player: PlayerCombatState) -> None:
+    def before_side_turn_start(self, player: PlayerCombatState) -> None:
         # The source resets on AfterRoomEntered (once per combat); the sim
         # resets per turn, which is what the 6-cards-PER-TURN rule needs and
         # what the counter display implies (DisplayAmount is per turn).

@@ -73,9 +73,17 @@ class OrobasEvent(AncientEvent):
             pool3.append("archaic_tooth")
 
         options = [self._relic_option(first), self._relic_option(second)]
-        if pool3:
-            options.append(self._relic_option(pick(pool3)))
-        else:
-            # Orobas.cs: a locked placeholder option (null onChosen).
+        # Orobas.cs:54-56 adds the locked placeholder (null onChosen) INTO
+        # OptionPool3 when both gates fail, and Orobas.cs:75 then calls
+        # `base.Rng.NextItem(OptionPool3)` unconditionally — so the game takes a
+        # NextItem draw even over a one-element list. Branching around `pick` (as
+        # the sim did) offers the identical option but takes ONE FEWER draw off
+        # the event stream, which desyncs it for the rest of the event and every
+        # later consumer in a string-seeded parity run.
+        pool3 = pool3 or ["OPTION_POOL_3_LOCKED"]
+        chosen3 = pick(pool3)
+        if chosen3 == "OPTION_POOL_3_LOCKED":
             options.append(EventOption("OPTION_POOL_3_LOCKED", None))
+        else:
+            options.append(self._relic_option(chosen3))
         return options

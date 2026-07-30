@@ -54,7 +54,21 @@ class BrainLeech(Event):
         from ..cards.pool import COLORLESS_POOL
         from ..rewards import RarityOddsType, create_reward_cards
 
+        from ..rewards import CardRewardGroup, CombatRewards
+        from ..rooms import RoomType
+
         self.run.lose_hp(_RIP_HP_LOSS)
+        # BrainLeech.cs:51-61 hands its RewardCount 3-card colourless CardRewards
+        # to `RewardsCmd.OfferCustom` — a SKIPPABLE screen. The sim ran them
+        # through `select_cards`, which always returns a card when the candidate
+        # list is non-empty (run.py), so the player could not decline: the
+        # colourless pool holds curses and situational cards, and the source
+        # distinguishes the two screens deliberately — SHARE_KNOWLEDGE sets
+        # `Cancelable = false` and this branch does not. `pending_rewards` is the
+        # sim's mid-event OfferCustom channel (the driver offers and clears it as
+        # soon as the option returns), the same one Dense Vegetation's rest heal
+        # uses.
+        groups = []
         for _ in range(_REWARD_COUNT):
             # CardCreationFlags.NoRarityModification|NoCardPoolModifications.
             cards = create_reward_cards(
@@ -62,6 +76,8 @@ class BrainLeech(Event):
                 mutate_pity=False, modify_hooks=False,
                 pool=list(COLORLESS_POOL),
             )
-            for card in self.run.select_cards("card_reward", cards, 1):
-                self.run.add_card(card)
+            groups.append(CardRewardGroup(cards=cards, room_type=RoomType.MONSTER,
+                                          count=3, populated=True))
+        self.pending_rewards = CombatRewards(room_type=RoomType.MONSTER,
+                                             card_rewards=groups)
         self._finish("RIP")

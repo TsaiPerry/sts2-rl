@@ -169,11 +169,19 @@ def test_empty_cage_removes_two():
 
 
 def test_calling_bell_gives_curse_and_three_relics():
+    """One Common, one Uncommon and one Rare from the grab bag
+    (CallingBell.cs:53-63 — the shipping arm; the fixed Anchor / Gremlin Horn /
+    Mummified Hand list at :39-52 is the TestMode branch). No selector is
+    installed here, so RunState.offer_relic takes all three."""
+    from sts2_rl.relics import ALL_RELICS, RelicRarity
+
     run = fresh_run(8)
     run.add_relic("calling_bell")
     assert [c for c in run.deck if c.id == "curse_of_the_bell"]
-    ids = {r.id for r in run.relics}
-    assert {"anchor", "gremlin_horn", "mummified_hand"} <= ids
+    gained = [r for r in run.relics if r.id != "calling_bell"]
+    assert [ALL_RELICS[r.id].rarity for r in gained] == [
+        RelicRarity.COMMON, RelicRarity.UNCOMMON, RelicRarity.RARE,
+    ]
 
 
 def test_pandoras_box_transforms_every_basic_strike_and_defend():
@@ -191,11 +199,13 @@ def test_black_star_adds_a_relic_to_elite_rewards_only():
     run.add_relic(star)
     from sts2_rl.rewards import CombatRewards
 
-    monster = CombatRewards(room_type=RoomType.MONSTER)
+    # `room` is RewardsSet.Room — a real combat screen has one; BlackStar.cs's
+    # first clause is `room == null || room.RoomType != Elite`.
+    monster = CombatRewards(room_type=RoomType.MONSTER, room=RoomType.MONSTER)
     star.modify_combat_rewards(run, monster)
     assert monster.relics == []
 
-    elite = CombatRewards(room_type=RoomType.ELITE)
+    elite = CombatRewards(room_type=RoomType.ELITE, room=RoomType.ELITE)
     star.modify_combat_rewards(run, elite)
     assert len(elite.relics) == 1
 
@@ -300,3 +310,16 @@ def test_dusty_tome_excludes_transcendence_cards():
     # Break is Bash's transcendence upgrade (Archaic Tooth), so it is never
     # the Dusty Tome's card.
     assert "break" not in make_relic("dusty_tome").candidates(IRONCLAD_POOL)
+
+
+def test_dusty_tome_pickup_does_not_roll_the_rewards_stream():
+    """relic/dusty_tome/g2. C# rolls AncientCard in SetupForPlayer, when the
+    OPTION is built (DustyTome.cs:50-56), and AfterObtained only reads the
+    SavedProperty (:60). The sim used to re-roll lazily inside after_obtained
+    when setup had been skipped — which the conformance runner's relic resync
+    always skips — burning a PlayerRng.Rewards draw at pickup and shifting
+    every later Rewards consumer in the run."""
+    run = RunState(string_seed="89U21BV1TZ")
+    before = run.player_rng.rewards.counter
+    run.add_relic(make_relic("dusty_tome"))     # granted with no prior setup
+    assert run.player_rng.rewards.counter == before

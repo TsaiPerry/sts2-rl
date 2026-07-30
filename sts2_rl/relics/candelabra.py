@@ -15,7 +15,7 @@ class Candelabra(Relic):
     name = "Candelabra"
     rarity = RelicRarity.UNCOMMON
 
-    def on_player_turn_started(self, player: PlayerCombatState) -> None:
+    def after_side_turn_start(self, player: PlayerCombatState) -> None:
         if self.turn == 2:
             from ..cmds import EnergyCmd
             EnergyCmd.gain(self.hooks, player, 2)

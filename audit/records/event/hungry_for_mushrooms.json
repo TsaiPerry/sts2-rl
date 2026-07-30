@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\hungry_for_mushrooms.py",
-    "sha256": "a4e4d128eec5f074343ab46cd4d3c7edd50ce072a2aaa619ebbe9bc43243e9b6"
+    "sha256": "7ee36211d04c44c1bacf6e5e1ed8289ea662c15775adf5b00643b25cb98bc7c9"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/relics/big_mushroom.py",
-      "sha256": "d2cc32319de1f178d350da05fb8d26bd6a693b5ae3ff17955780103936e78d6e",
+      "sha256": "c98f37b90a18d0c0b5ba50f23e86947d86865ba54c64c27f7374ced0b90c3314",
       "side": "sim"
     },
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],

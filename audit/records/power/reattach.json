@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -26,22 +26,22 @@
     },
     {
       "path": "sts2_rl/cards/feed.py",
-      "sha256": "f2e63fe747a76df842f0cf81675f30927896a08ec7b19827c5a554bb18bc10aa",
+      "sha256": "e372cb9bde1b71df68d00212189ed0912bcd54b169a1e42f591c5e07affe365e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     }
   ],
@@ -82,8 +82,8 @@
     },
     "ShouldOwnerDeathTriggerFatal": {
       "maps_to": "no sim counterpart",
-      "verdict": "gap",
-      "issue": "Same missing hook as MinionPower's, and here the override is CONDITIONAL: `ShouldOwnerDeathTriggerFatal() => AreAllOtherSegmentsDead()` (ReattachPower.cs:106-109), so killing a segment while others stand must NOT trigger a Fatal payoff and killing the last one must. The sim has no hook and cards/feed.py:45 tests only `target.is_dead`, which is True for a withered segment (it really sits at 0 HP -- the sim's own `_all_others_down` comment says so, powers.py:2334-2336). So Feed on a non-final segment grants +3 max HP in the sim and 0 in the game. LIVE by the same executed witness as power/minion's (Feed x a Minion-marked creature, delta 3 vs 0); reachability here is the ported Hive Decimillipede (monsters/hive/decimillipede.py) plus the ported Rare Ironclad Feed. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `PowerModel.ShouldOwnerDeathTriggerFatal` EXISTS in the sim now. `Power.should_owner_death_trigger_fatal` defaults to True (PowerModel.cs:646) and the two non-mock overrides are ported at their own sites -- MinionPower unconditionally (MinionPower.cs:20-23) and ReattachPower as `_all_others_down()` (ReattachPower.cs:106-109, whose own comment says \"shouldn't trigger fatal unless all other segments are dead too\"). `cmds.should_trigger_fatal(target)` is the `Target.Powers.All(...)` test, and BOTH Fatal cards call it BEFORE their attack, which is where C# reads it and is load-bearing: the killing blow strips the very powers the test asks about (Creature.RemoveAllPowersAfterDeath). This is NOT death prevention -- the minion really dies -- which is exactly why the `is_dead` check both cards already had did not cover it. ReattachPower's override reuses the power's own `_all_others_down()`, which is `AreAllOtherSegmentsDead` -- so killing the LAST standing segment does trigger Fatal and killing any earlier one does not.  Pinned by test/test_card_residue_gaps.py.  NOT CLOSED: nothing at this site.  The text it replaced read: Same missing hook as MinionPower's, and here the override is CONDITIONAL: `ShouldOwnerDeathTriggerFatal() => AreAllOtherSegmentsDead()` (ReattachPower.cs:106-109), so killing a segment while others stand must NOT trigger a Fatal payoff and killing the last one must. The sim has no hook and cards/feed.py:45 tests only `target.is_dead`, which is True for a withered segment (it really sits at 0 HP -- the sim's own `_all_others_down` comment says so, powers.py:2334-2336). So Feed on a non-final segment grants +3 max HP in the sim and 0 in the game. LIVE by the same executed witness as power/minion's (Feed x a Minion-marked creature, delta 3 vs 0); reachability here is the ported Hive Decimillipede (monsters/hive/decimillipede.py) plus the ported Rare Ironclad Feed. Third-file citations, not hashed here."
     }
   },
   "guards": [
@@ -118,6 +118,6 @@
       "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

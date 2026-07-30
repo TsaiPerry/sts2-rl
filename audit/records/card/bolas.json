@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_attacks.py",
-    "sha256": "2e92a8261cb05edbecdfa9281fd940b1a96d7c5004e064d9d03204123b6be24e"
+    "sha256": "c968f51d1badb64580afa265bb1e71b26b30cb4c0aeaf5f529cd437e445a1ce2"
   },
   "extra_sources": [
     {
@@ -28,8 +28,8 @@
   "hooks": {
     "BeforeHandDraw": {
       "maps_to": "BolasCard.on_player_turn_start -> _return_to_hand_if_played_last_turn (colorless_attacks.py:47-48, 514-536)",
-      "verdict": "gap",
-      "issue": "The trigger condition is faithful -- C# checks `CombatManager.Instance.History.CardPlaysFinished.Any(e => e.HappenedLastPlayerTurn(Owner) && e.CardPlay.Card == this)` (Bolas.cs:41) and the sim checks `e.card is card and e.turn == combat.turn - 1` over `CardPlayedEntry` (colorless_attacks.py:523-526) -- and so is the pre-draw turn-start slot. THE PILE SEARCH IS NOT. C# tests only `pile == null || pile.Type != PileType.Hand` and then calls `CardPileCmd.Add(this, PileType.Hand)` (Bolas.cs:43-47), which moves the card to hand from WHEREVER it is -- including the EXHAUST pile. The sim's helper searches only `(player.draw_pile, player.discard_pile)` (colorless_attacks.py:532-535) and silently gives up otherwise, so an exhausted Bolas never comes back. Observable: play Bolas, then exhaust it -- next turn the game returns it to hand and the sim does not. LIVE: card/brand (brand.py:46) and card/burning_pact (burning_pact.py:36) are ported hand-exhausters that pass a NULL filter, so either can select a Bolas that has already returned to hand, and card/second_wind and card/fiend_fire exhaust the hand wholesale. The same helper backs card/thrumming_hatchet (colorless_attacks.py:479-480), which inherits the finding."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `_return_to_hand_if_played_last_turn` searches the EXHAUST pile too. Bolas.cs:43-47 and the byte-identical ThrummingHatchet.cs:37-41 test only `pile == null || pile.Type != PileType.Hand` and then `CardPileCmd.Add(this, PileType.Hand)`, which moves the card from wherever it is; searching only draw and discard silently stranded an exhausted card, and card/brand, card/burning_pact, card/second_wind and card/fiend_fire are four ported ways to exhaust one from hand. EXECUTED: played, then exhausted, the card is back in hand at the next turn start and out of the exhaust pile.  Pinned by test/test_card_residue_gaps.py.  NOT CLOSED: nothing at this site.  The text it replaced read: The trigger condition is faithful -- C# checks `CombatManager.Instance.History.CardPlaysFinished.Any(e => e.HappenedLastPlayerTurn(Owner) && e.CardPlay.Card == this)` (Bolas.cs:41) and the sim checks `e.card is card and e.turn == combat.turn - 1` over `CardPlayedEntry` (colorless_attacks.py:523-526) -- and so is the pre-draw turn-start slot. THE PILE SEARCH IS NOT. C# tests only `pile == null || pile.Type != PileType.Hand` and then calls `CardPileCmd.Add(this, PileType.Hand)` (Bolas.cs:43-47), which moves the card to hand from WHEREVER it is -- including the EXHAUST pile. The sim's helper searches only `(player.draw_pile, player.discard_pile)` (colorless_attacks.py:532-535) and silently gives up otherwise, so an exhausted Bolas never comes back. Observable: play Bolas, then exhaust it -- next turn the game returns it to hand and the sim does not. LIVE: card/brand (brand.py:46) and card/burning_pact (burning_pact.py:36) are ported hand-exhausters that pass a NULL filter, so either can select a Bolas that has already returned to hand, and card/second_wind and card/fiend_fire exhaust the hand wholesale. The same helper backs card/thrumming_hatchet (colorless_attacks.py:479-480), which inherits the finding."
     },
     "ctor": {
       "maps_to": "class attrs (colorless_attacks.py:29-33) + _init_vars (35-37)",
@@ -64,6 +64,6 @@
       "rationale": "Multiplayer-only ownership check; the sim is single-player. Noted in the mapping, not a divergence."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

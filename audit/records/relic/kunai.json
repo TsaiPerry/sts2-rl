@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\kunai.py",
-    "sha256": "f8319728a23908e6e495c8edbda924aa82ebf43b75acc72d070ffbb2f74a07b3"
+    "sha256": "447919123e2c912edd6eb060603a9ae34a24970d31cad1e0628a730ae54cd271"
   },
   "extra_sources": [
     {
@@ -26,22 +26,22 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "48189f8605836083eeaa8e6201fb60ac6af5cf28328956731e662c5c87b29b31",
+      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     },
     {
@@ -72,8 +72,8 @@
     },
     "BeforeSideTurnStart": {
       "maps_to": "on_player_turn_start (kunai.py:26-27)",
-      "verdict": "gap",
-      "issue": "C#'s Hook.BeforeSideTurnStart is audit/records/seam/turn_structure.json step 9 -- it fires for BOTH sides BEFORE any block is cleared. The sim has no such slot; `py audit/tools/relic_probes.py turn-order` shows on_player_turn_start executes AFTER on_block_cleared and on_energy_reset, i.e. step ~18. That record's step 9 verdicts the mechanism a gap, lists **Kunai by name** among the 26 ported implementers, and labels the player-side half DORMANT because every ported one is a per-turn counter reset that reads neither block nor energy. One verdict per mechanism (binding rule 3), so this entry reproduces it rather than re-deriving it. Kunai's body here is exactly that shape: `AttacksPlayedThisTurn = 0` plus a Status write. DORMANT: porting a relic or power whose BeforeSideTurnStart reads block or energy, or an ENEMY-side listener (turn_structure guard G5), makes it live. The `participants.Contains(base.Owner.Creature)` filter is structurally satisfied -- on_player_turn_start is only fired for the player side (hooks.py:279-283). Rule 7: hooks.py and audit/records/seam/turn_structure.json are not hashed by this record."
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. The sim now has the slot. `before_side_turn_start` is Hook.BeforeSideTurnStart (CombatManager.cs:458), fired at the top of PlayerCombatState.start_turn BEFORE the block clear and the energy reset, and Kunai (with Shuriken, Orichalcum, Red Mask, Velvet Choker, Bag of Marbles, Music Box, Ornamental Fan, Ripple Basin, Pocketwatch and the Plating/HardenedShell/Aggression/Sloth powers) is on it. `participants.Contains(Owner.Creature)` is still structurally satisfied -- only the player side is dispatched. The enemy-side half remains turn_structure's G5, which is where this entry always put it. EXECUTED: test/test_turn_start_split.py::test_before_side_turn_start_runs_ahead_of_the_block_clear.  The gap it replaced read: C#'s Hook.BeforeSideTurnStart is audit/records/seam/turn_structure.json step 9 -- it fires for BOTH sides BEFORE any block is cleared. The sim has no such slot; `py audit/tools/relic_probes.py turn-order` shows on_player_turn_start executes AFTER on_block_cleared and on_energy_reset, i.e. step ~18. That record's step 9 verdicts the mechanism a gap, lists **Kunai by name** among the 26 ported implementers, and labels the player-side half DORMANT because every ported one is a per-turn counter reset that reads neither block nor energy. One verdict per mechanism (binding rule 3), so this entry reproduces it rather than re-deriving it. Kunai's body here is exactly that shape: `AttacksPlayedThisTurn = 0` plus a Status write. DORMANT: porting a relic or power whose BeforeSideTurnStart reads block or energy, or an ENEMY-side listener (turn_structure guard G5), makes it live. The `participants.Contains(base.Owner.Creature)` filter is structurally satisfied -- on_player_turn_start is only fired for the player side (hooks.py:279-283). Rule 7: hooks.py and audit/records/seam/turn_structure.json are not hashed by this record."
     },
     "AfterCardPlayed": {
       "maps_to": "on_card_played (sts2_rl/relics/kunai.py), fired once per Replay iteration by CombatState._resolve_card_play (sts2_rl/combat.py:597-600)",
@@ -118,6 +118,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / IsActivating / CanonicalVars / ExtraHoverTips / IconBaseName / Cmd.Wait / CardCmd.Preview / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. Kunai's entire _isActivating field exists only to drive DisplayAmount and Status, and the sim omits both."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

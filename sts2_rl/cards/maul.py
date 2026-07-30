@@ -21,6 +21,13 @@ class MaulCard(Card):
     rarity = CardRarity.ANCIENT
     target_type = TargetType.ANY_ENEMY
 
+    # `_extraDamage*`, the private field (Maul.cs:19, :72-76). `DowngradeInternal` rebuilds
+    # the damage var from canonical and does NOT touch this, which is the
+    # whole point: `AfterDowngraded` then re-adds it. Deliberately a CLASS
+    # default rather than an `_init_vars` line, because `_init_vars` is what
+    # the downgrade re-runs.
+    _extra_damage = 0
+
     def _init_vars(self) -> None:
         self._energy_cost = 1
         self._damage = 5
@@ -43,4 +50,12 @@ class MaulCard(Card):
             )
         for card in ctx.player.all_cards:
             if isinstance(card, MaulCard):
-                card._damage += self._increase
+                card._buff_from_maul_play(self._increase)
+
+    def _buff_from_maul_play(self, extra_damage: int) -> None:
+        # Maul.cs:72-76 — the buff and the tally are the same statement.
+        self._damage += extra_damage
+        self._extra_damage += extra_damage
+
+    def _after_downgraded(self) -> None:
+        self._damage += self._extra_damage   # Maul.cs:66-70

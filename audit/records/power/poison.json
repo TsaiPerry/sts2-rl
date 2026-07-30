@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
@@ -58,7 +58,7 @@
     "AfterSideTurnStart": {
       "maps_to": "powers.py:473-490 PoisonPower._apply_poison via on_enemy_turn_start / on_player_turn_start",
       "verdict": "gap",
-      "issue": "Three divergences, all DORMANT for one shared reason: **nothing in the sim applies Poison at all.** An executed grep for PoisonPower outside powers.py and the package re-exports returns no applier -- no card, relic, event, monster or potion. (a) SLOT: The sim's on_player_turn_start (player.py:169) fires BEFORE the hand draw (player.py:171-186), where C#'s AfterSideTurnStart is dispatched at CombatManager.cs:522, AFTER SetupPlayerTurn (:514) has reset energy and drawn the hand. The sim's matching post-draw slot is on_player_turn_started (player.py:186). EXECUTED: a spy listener records [on_player_turn_start hand=5, 4x on_card_drawn, on_player_turn_started hand=9]. Third-file citations, not hashed here. EXECUTED -- with Poison 5 on the player a spy records ['hp-5', 'draw', 'draw', 'draw', 'draw'], i.e. the tick lands before the hand draw, where PoisonPower.cs:55 runs at CombatManager.cs:522 after it. That is conformance-visible even when nothing dies, because a lethal tick would cancel a draw the game already made. (b) TRIGGER COUNT: C# loops `TriggerCount` times (PoisonPower.cs:31-40,61-73), which is `min(Amount, 1 + the sum of AccelerantPower across living opponents)`; the sim always fires exactly once. AccelerantPower is unported, so per binding rule 1 this is a dormant gap rather than a waiver; named trigger = porting Accelerant. (c) DECREMENT GUARD: C# decrements only `if (Owner.IsAlive)` (PoisonPower.cs:65-68) whereas powers.py:482 always ticks; conversely the sim adds an entry guard C# does not have (`if self.owner.is_dead: return`, powers.py:474-475). Named trigger for the whole unit: porting any Poison source."
+      "issue": "STILL OPEN at (b) and (c). Clause (a), the SLOT, is CLOSED: PoisonPower.cs:55 declares AfterSideTurnStart and the power is on the new `after_side_turn_start` dispatcher (CombatManager.cs:522), post-draw, so the tick no longer lands before the hand draw and a lethal tick can no longer cancel a draw the game already made. WHAT REMAINS: (b) TRIGGER COUNT -- C# loops `TriggerCount` times where the sim fires once (AccelerantPower is unported, so this stays a dormant gap); and (c) the DECREMENT GUARD -- C# decrements only `if (Owner.IsAlive)` while the sim always ticks, and the sim adds an entry guard C# does not have. Named trigger for the unit is unchanged: porting any Poison source.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: Three divergences, all DORMANT for one shared reason: **nothing in the sim applies Poison at all.** An executed grep for PoisonPower outside powers.py and the package re-exports returns no applier -- no card, relic, event, monster or potion. (a) SLOT: The sim's on_player_turn_start (player.py:169) fires BEFORE the hand draw (player.py:171-186), where C#'s AfterSideTurnStart is dispatched at CombatManager.cs:522, AFTER SetupPlayerTurn (:514) has reset energy and drawn the hand. The sim's matching post-draw slot is on_player_turn_started (player.py:186). EXECUTED: a spy listener records [on_player_turn_start hand=5, 4x on_card_drawn, on_player_turn_started hand=9]. Third-file citations, not hashed here. EXECUTED -- with Poison 5 on the player a spy records ['hp-5', 'draw', 'draw', 'draw', 'draw'], i.e. the tick lands before the hand draw, where PoisonPower.cs:55 runs at CombatManager.cs:522 after it. That is conformance-visible even when nothing dies, because a lethal tick would cancel a draw the game already made. (b) TRIGGER COUNT: C# loops `TriggerCount` times (PoisonPower.cs:31-40,61-73), which is `min(Amount, 1 + the sum of AccelerantPower across living opponents)`; the sim always fires exactly once. AccelerantPower is unported, so per binding rule 1 this is a dormant gap rather than a waiver; named trigger = porting Accelerant. (c) DECREMENT GUARD: C# decrements only `if (Owner.IsAlive)` (PoisonPower.cs:65-68) whereas powers.py:482 always ticks; conversely the sim adds an entry guard C# does not have (`if self.owner.is_dead: return`, powers.py:474-475). Named trigger for the whole unit: porting any Poison source."
     }
   },
   "guards": [

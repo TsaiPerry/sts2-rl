@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\debt.py",
-    "sha256": "dff73b641b392db0cc516c94f49dcc3b7d7633363fd71e77ad827b6ca8a530bc"
+    "sha256": "cbe43103c1f8a544dc3bdb33a75dcb6a98d61163c82d9b20d3ef2af4687ff038"
   },
   "extra_sources": [
     {
@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/event_cards.py",
-      "sha256": "e2252c0e6b225be22f1da3051e67dc0f235f6b82ec2ccf0ea6158a20701730df",
+      "sha256": "57208afe6ae70f9dd177e57aee53a7f5b5624a5ba5d830a46de5263c8732e691",
       "side": "sim"
     },
     {
@@ -36,17 +36,17 @@
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "72840c98dd4eb14b3f77142dc08078d535fb5f223a14b5d7fea981010502b1a7",
+      "sha256": "06f9d38ecefba5bb61280da2dae7e92350e163a00481f23bfe8443b722327ad8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/mummified_hand.py",
-      "sha256": "73fdb3d2362a0a0c5ac005722a4bdec0e7e0bbcd20473b079dd58c00266d02b4",
+      "sha256": "2e2afb8dc7e30f83d826d61efa992dac7d4067d28b521fced1b8a041a576ab56",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -68,8 +68,8 @@
     },
     "OnTurnEndInHand": {
       "maps_to": "NOT PORTED -- DebtCard has no `on_turn_end_in_hand` override (debt.py)",
-      "verdict": "gap",
-      "issue": "`Mathf.Min(DynamicVars.Gold.IntValue, Owner.Gold)` then `PlayerCmd.LoseGold(num, Owner)` (Debt.cs:26-30) is simply absent from the sim. The sim's own docstring (debt.py:20-21) justifies it with \"The sim has no gold\" -- THAT CLAIM IS FALSE. `RunState.gold` exists and `RunState.lose_gold` is implemented with the matching floor-at-zero semantics and a `PlayerCmd.LoseGold` citation (run.py:335-337); ported content spends and loses gold routinely (e.g. events/welcome_to_wongos.py buys with `lose_gold`). So Debt is a strictly weaker curse in the sim: in the game, holding it at end of turn costs up to 10 gold per turn, which compounds across a combat and changes what the player can afford at the next shop. LIVE -- Debt is a ported curse and gold is a ported, spendable resource. Note this is a rule-1 case: \"the sim does not model it\" is a dormant-or-live GAP, never a waiver, and here the resource IS modelled so it is live. RATIONALE CITES A THIRD FILE (rule 7): sts2_rl/run.py is not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): Debt costs gold now. Debt.cs:26-30 is `Mathf.Min(DynamicVars.Gold.IntValue, Owner.Gold)` then `PlayerCmd.LoseGold(num, Owner)`, and cards/debt.py implements it against the same four-term in-combat ledger SealOfGold.cs:27 reads -- `player_gold + gold_gained - gold_stolen - gold_spent`, which RunState.finish_combat settles. The loss type is the default (voluntary, not Stolen), so it lands on `gold_spent` and leaves `gold_stolen` meaning Thievery. The port's stated premise, 'The sim has no gold', was FALSE -- bug class 12: RunState.gold exists, RunState.lose_gold is implemented with the matching floor-at-zero semantics and a PlayerCmd.LoseGold citation, and ported content spends gold routinely. EXECUTED: 55 gold in the ledger -> 10 spent; 3 gold -> 3 spent (the Mathf.Min floor); 25 won this combat with nothing banked -> 10 spent, i.e. the balance really is live; and the whole loss reaches the run through finish_combat (55 -> 45). Rule 1: 'the sim does not model it' is a gap, never a waiver, and here the resource was modelled all along. Pinned by test/test_card_residue_gaps2.py (5 tests). NOT CLOSED: nothing at this site.  The text it replaced read: `Mathf.Min(DynamicVars.Gold.IntValue, Owner.Gold)` then `PlayerCmd.LoseGold(num, Owner)` (Debt.cs:26-30) is simply absent from the sim. The sim's own docstring (debt.py:20-21) justifies it with \"The sim has no gold\" -- THAT CLAIM IS FALSE. `RunState.gold` exists and `RunState.lose_gold` is implemented with the matching floor-at-zero semantics and a `PlayerCmd.LoseGold` citation (run.py:335-337); ported content spends and loses gold routinely (e.g. events/welcome_to_wongos.py buys with `lose_gold`). So Debt is a strictly weaker curse in the sim: in the game, holding it at end of turn costs up to 10 gold per turn, which compounds across a combat and changes what the player can afford at the next shop. LIVE -- Debt is a ported curse and gold is a ported, spendable resource. Note this is a rule-1 case: \"the sim does not model it\" is a dormant-or-live GAP, never a waiver, and here the resource IS modelled so it is live. RATIONALE CITES A THIRD FILE (rule 7): sts2_rl/run.py is not hashed by this record."
     },
     "ctor": {
       "maps_to": "class attrs (debt.py:23-30) + _init_vars (32-33)",

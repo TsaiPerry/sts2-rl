@@ -13,6 +13,7 @@ from sts2_rl.run_env import (
     MAX_POTION_SLOTS,
     N_ACTIONS,
     N_COMBAT_ACTIONS,
+    POTION_BASE,
     RUN_OBS_SCHEMA_VERSION,
     SELECT_BASE,
     STS2RunEnv,
@@ -55,13 +56,16 @@ def test_action_layout():
     # section (SHOP_CARD_SLOTS 5 → 7); v4: run.boss.identity +
     # run.map.grid/meta (boss + whole-map visibility); v5: DecisionKind gained
     # REWARD_RELIC (the take-or-skip relic offer, relic/_auto_keep), widening
-    # the leading phase segment.
-    assert RUN_OBS_SCHEMA_VERSION == 5
+    # the leading phase segment; v6: the out-of-combat potion block appended
+    # to the ACTION layout (potion/_any_time_usage) — the observation is
+    # byte-identical to v5.
+    assert RUN_OBS_SCHEMA_VERSION == 6
     # Combat block sized for a Phial-Holster belt: 1 + 10×6 + 4×6 = 85.
     assert N_COMBAT_ACTIONS == combat_action_count(MAX_POTION_SLOTS) == 85
     assert CHOICE_BASE == 85
     assert SELECT_BASE == 85 + CHOICE_SLOTS == 101
-    assert N_ACTIONS == SELECT_BASE + 2 * N_CARDS
+    assert POTION_BASE == SELECT_BASE + 2 * N_CARDS
+    assert N_ACTIONS == POTION_BASE + MAX_POTION_SLOTS
     env = shared_env()
     assert env.action_space.n == env.n_actions == N_ACTIONS
 

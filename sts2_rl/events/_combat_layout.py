@@ -115,7 +115,11 @@ def pregenerate_monster_hp(run: "RunState", encounter: Encounter | None) -> list
     hooks = HookSystem()
     hooks.combat = _RoomEntryCombat(run)
     monsters = encounter.create_monsters(hooks, random.Random(0), selection_rng)
-    # CombatState.CreateCreature -> Creature.SetUniqueMonsterHpValue, then
-    # MonsterModel.AfterAddedToRoom's HP fix-up — the same pass the combat runs.
+    # CombatState.CreateCreature -> Creature.SetUniqueMonsterHpValue. Only the
+    # roll: MonsterModel.AfterAddedToRoom's HP fix-up belongs to
+    # CombatState.after_creature_added and runs when the fight builds the
+    # creatures for real. It could not matter here in any case — this returns
+    # MAX HP, and the one ported fix-up that moves max HP (Decimillipede's
+    # even-and-unique pass) is re-applied there on the real creatures.
     CombatState._assign_parity_monster_hp(monsters, run.rng_set.niche)
     return [m.max_hp for m in monsters]

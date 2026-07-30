@@ -18,11 +18,13 @@ from sts2_rl import run_env as RE
 from sts2_rl.checkpoints import (
     ModelSpec,
     _V4_NEW_SEGMENTS,
+    _actor_head_key,
     _new_column_blocks,
     _segment_out_width,
     check_checkpoint,
     make_model,
     migrate_checkpoint,
+    migrate_checkpoint_actions,
     model_obs_segments,
 )
 from sts2_rl.curriculum_env import STS2CurriculumRunEnv
@@ -30,6 +32,7 @@ from sts2_rl.rooms import _ACT_ROOMS_FACTORIES, act_rooms
 from sts2_rl.run_env import (
     MAP_GRID_NODE,
     MAP_GRID_ROWS,
+    MAX_POTION_SLOTS,
     N_ACTIONS,
     STS2RunEnv,
     run_obs_segments,
@@ -191,6 +194,125 @@ def test_check_checkpoint_points_v3_users_at_the_migration():
     spec = ModelSpec(env_kind="column", arch="mlp", hidden=_HIDDEN)
     with pytest.raises(SystemExit, match="migrate_ckpt.py"):
         check_checkpoint(v3, spec, obs_dim, N_ACTIONS)
+
+
+# ── v5 → v6: the out-of-combat potion action block ───────────────────────
+
+def _fabricate_v5(arch: str) -> tuple[dict, int]:
+    """A synthetic v5 checkpoint: the current model with the v6 potion block's
+    rows deleted from the policy head and its Adam moments. The observation is
+    identical across the bump, so only the head is narrower."""
+    spec = ModelSpec(env_kind="column", arch=arch, hidden=_HIDDEN)
+    obs_dim = sum(w for _, w in model_obs_segments(spec))
+    torch.manual_seed(11)
+    model = make_model(spec, obs_dim, N_ACTIONS)
+
+    optim = torch.optim.Adam(model.parameters())
+    _, logp, ent, val = model.get_action_and_value(
+        torch.rand(4, obs_dim), torch.ones(4, N_ACTIONS, dtype=torch.bool))
+    (logp.sum() + ent.sum() + val.sum()).backward()
+    optim.step()
+
+    state = {k: v.clone() for k, v in model.state_dict().items()}
+    ostate = optim.state_dict()
+    names = [n for n, _ in model.named_parameters()]
+    head_w = _actor_head_key(state)
+    head_b = head_w[:-len("weight")] + "bias"
+    keep = N_ACTIONS - MAX_POTION_SLOTS
+    for key in (head_w, head_b):
+        state[key] = state[key][:keep]
+        pstate = ostate["state"][names.index(key)]
+        for moment in ("exp_avg", "exp_avg_sq"):
+            pstate[moment] = pstate[moment][:keep]
+
+    ckpt = {
+        "model": state, "optim": ostate, "iteration": 12, "global_step": 4242,
+        "best_score": 2.5, "obs_dim": obs_dim, "n_actions": keep,
+        "hidden": _HIDDEN, "arch": arch, "obs_schema": 5, "env_kind": "column",
+    }
+    return ckpt, obs_dim
+
+
+@pytest.mark.parametrize("arch", ["mlp", "entity"])
+def test_action_migration_appends_zero_rows_and_keeps_everything_else(arch):
+    v5, obs_dim = _fabricate_v5(arch)
+    head_w = _actor_head_key(v5["model"])
+    head_b = head_w[:-len("weight")] + "bias"
+    old_head = v5["model"][head_w].clone()
+    old_critic = v5["model"]["critic.0.weight"].clone()
+
+    migrated = migrate_checkpoint_actions(v5)
+
+    assert migrated["obs_schema"] == 6
+    assert migrated["n_actions"] == N_ACTIONS
+    assert migrated["obs_dim"] == obs_dim          # observation untouched
+    assert migrated["iteration"] == 12 and migrated["global_step"] == 4242
+    assert v5["obs_schema"] == 5                   # input not mutated
+
+    new_head = migrated["model"][head_w]
+    assert new_head.shape == (N_ACTIONS, old_head.shape[1])
+    assert torch.equal(new_head[:-MAX_POTION_SLOTS], old_head)
+    assert (new_head[-MAX_POTION_SLOTS:] == 0).all()
+    assert (migrated["model"][head_b][-MAX_POTION_SLOTS:] == 0).all()
+    assert torch.equal(migrated["model"]["critic.0.weight"], old_critic)
+
+
+@pytest.mark.parametrize("arch", ["mlp", "entity"])
+def test_action_migration_preserves_the_old_policy_and_the_value(arch):
+    """The potion block is appended at the END of the layout, so every old
+    action keeps its index. With the new block masked off — every state the old
+    policy could reach holding no AnyTime potion — logits and values must be
+    bit-identical."""
+    v5, obs_dim = _fabricate_v5(arch)
+    spec = ModelSpec(env_kind="column", arch=arch, hidden=_HIDDEN)
+    old = make_model(spec, obs_dim, N_ACTIONS - MAX_POTION_SLOTS)
+    old.load_state_dict(v5["model"])
+    old.eval()
+
+    migrated = migrate_checkpoint_actions(v5)
+    new = make_model(spec, obs_dim, N_ACTIONS)
+    new.load_state_dict(migrated["model"])
+    new.eval()
+
+    torch.manual_seed(2)
+    obs = torch.rand(8, obs_dim)
+    old_mask = torch.ones(8, N_ACTIONS - MAX_POTION_SLOTS, dtype=torch.bool)
+    new_mask = torch.ones(8, N_ACTIONS, dtype=torch.bool)
+    new_mask[:, -MAX_POTION_SLOTS:] = False
+    with torch.no_grad():
+        assert torch.equal(old.action_logits(obs, old_mask),
+                           new.action_logits(obs, new_mask)[:, :-MAX_POTION_SLOTS])
+        assert torch.equal(old.get_value(obs), new.get_value(obs))
+
+
+@pytest.mark.parametrize("arch", ["mlp", "entity"])
+def test_action_migrated_optimizer_state_loads_and_steps(arch):
+    v5, obs_dim = _fabricate_v5(arch)
+    migrated = migrate_checkpoint_actions(v5)
+    model = make_model(ModelSpec("column", arch=arch, hidden=_HIDDEN),
+                       obs_dim, N_ACTIONS)
+    model.load_state_dict(migrated["model"])
+    optim = torch.optim.Adam(model.parameters())
+    optim.load_state_dict(migrated["optim"])
+    _, logp, ent, val = model.get_action_and_value(
+        torch.rand(2, obs_dim), torch.ones(2, N_ACTIONS, dtype=torch.bool))
+    (logp.sum() + ent.sum() + val.sum()).backward()
+    optim.step()
+
+
+def test_action_migration_refuses_wrong_schema_and_env():
+    v5, _ = _fabricate_v5("mlp")
+    with pytest.raises(SystemExit, match="schema 5"):
+        migrate_checkpoint_actions({**v5, "obs_schema": 4})
+    with pytest.raises(SystemExit, match="run-scale"):
+        migrate_checkpoint_actions({**v5, "env_kind": "combat"})
+
+
+def test_check_checkpoint_points_v5_users_at_the_action_migration():
+    v5, obs_dim = _fabricate_v5("mlp")
+    spec = ModelSpec(env_kind="column", arch="mlp", hidden=_HIDDEN)
+    with pytest.raises(SystemExit, match="migrate_ckpt.py"):
+        check_checkpoint(v5, spec, obs_dim, N_ACTIONS)
 
 
 # ── the whole-map grid observation ───────────────────────────────────────

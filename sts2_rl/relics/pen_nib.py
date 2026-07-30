@@ -45,7 +45,29 @@ class PenNib(Relic):
     ) -> float:
         if not is_powered_attack(props):   # PenNib.cs:108
             return 1.0
-        if dealer is self.player and card is not None and card is self._card_to_double:
+        if card is None:                   # :112
+            return 1.0
+        if dealer is not self.player:      # :116
+            return 1.0
+        if self._card_to_double is None:
+            # PenNib.cs:120-128, the arm the port had no counterpart for: with
+            # no latched card, a cardSource that is NOT in PileType.Play doubles
+            # once AttacksPlayed == 9. A card mid-OnPlay IS in PileType.Play
+            # (bug class 7), so this arm can only be taken for a card the game is
+            # PREVIEWING — the relic's promise made visible on the tenth Attack
+            # while it still sits in hand. The pile clause is load-bearing: drop
+            # it and the real play would double twice.
+            #
+            # The sim's PileType.Play analogue is `player._playing_card`, set for
+            # the duration of the play by `_resolve_card_play`. The sim consumes
+            # the previewed number in its OBSERVATION vector (previews.
+            # preview_card_damage -> full_env), not only in a sprite, which is
+            # why this is a gap and not presentation.
+            playing = getattr(self.player, "_playing_card", None)
+            if card is not playing and self._attacks_played == self.ATTACKS - 1:
+                return 2.0
+            return 1.0
+        if card is self._card_to_double:   # :129
             return 2.0
         return 1.0
 

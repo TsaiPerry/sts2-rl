@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\trial.py",
-    "sha256": "874efbc1186317f8c47464e9109f6ae030886af0f1221ac45d3cd25524f05aea"
+    "sha256": "81126ff12472dfa21a12eab6624e70cc3dad89e5bad426e03d7a27af88867209"
   },
   "extra_sources": [
     {
@@ -66,12 +66,12 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c41cb03e5a2d36200abfccf13a43b0b7da84780102fcd6b2e6ae57265d7e351",
+      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/brain_leech.py",
-      "sha256": "fac921dd919360e9cdd8e9f94adda7c67072e63db82bf2a7debefed60b76d0d9",
+      "sha256": "dcccfa7348ca10d72727a0cd03772b29e60af4e2ca752f457456339ed022e5cf",
       "side": "sim"
     },
     {
@@ -86,7 +86,7 @@
     },
     {
       "path": "sts2_rl/events/morphic_grove.py",
-      "sha256": "0d9a837427dfc9aa49e41c562695d67da2bb4149e636bafbe79b6ea94ee5648c",
+      "sha256": "df7287ffd04d4cf5ea31bc20a2d879b81ee43c65b2a0bd7d0e69c258e940b554",
       "side": "sim"
     },
     {
@@ -116,7 +116,7 @@
     },
     {
       "path": "sts2_rl/relics/astrolabe.py",
-      "sha256": "53783efec80e451fcbad1278da4218f539cef8a85fdffd519ec6a9501bf99856",
+      "sha256": "44a4b3335ef90802494b8be716081b281a065bd3afeadcb1ab2c39a735baa57b",
       "side": "sim"
     },
     {
@@ -126,12 +126,12 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "9f8f94386154df9acfd780c8e5549419bffd7d5ed2448495595c9aa33fce4e83",
+      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     },
     {
@@ -190,8 +190,8 @@
     },
     {
       "what": "UNIT GAP: NondescriptGuilty's two card-reward screens are not modelled at all. Trial.cs:177-187 adds Doubt and then builds TWO `CardReward(CardCreationOptions.ForNonCombatWithDefaultOdds([Owner.Character.CardPool]), 3, Owner)` entries and hands them to RewardsCmd.OfferCustom; events/trial.py:90-93 adds Doubt and finishes, with a comment ('Two card-reward offers (RewardsCmd.OfferCustom) are not modelled') naming the omission",
-      "verdict": "gap",
-      "issue": "This is a MISSING EFFECT, wider than EV-4 (which is a modelled grant that should have been an offer) and wider than EV-6 (which is the wrong factory): here the screens, the cards and the draws are all absent. The sim has both halves of the capability -- rewards.create_reward_cards (rewards.py:235-275) is the faithful CreateForReward port for exactly the ForNonCombatWithDefaultOdds(characterPool) shape and events/brain_leech.py:44-47 already calls it, while Event.pending_reward_extras / resume_after_combat (events/base.py:94-99, 116-122) is the sim's take-or-skip channel -- so nothing was missing to build it with. EXECUTED (`py audit/tools/event_probes_b.py trialoffer`): driving the NONDESCRIPT page and choosing GUILTY raises ZERO card-selection screens and offers 0 cards where the game offers 2 screens x 3 = 6, and the deck delta is always exactly 1 (Doubt) where the game's is 1 to 3. LIVE: NONDESCRIPT is one of three equally weighted trials on an ungated event, and taking two card rewards is a large, permanent deck change. It also drops every draw CreateForReward would take off the Rewards stream, so the whole EV-6 observable set (rarity odds, the act-scaled upgrade draw, the stream) is absent rather than merely wrong."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The screens are OFFERED through the mid-event OfferCustom channel. `Event.pending_rewards` is the sim's port of an `await RewardsCmd.OfferCustom(player, rewards)` that an option itself awaits: the driver reads it as soon as the option returns and offers it before asking for the next page, which is where the await sits. (That channel was itself verified live this round -- see creature_card_cmds/step38a, closed STALE on an executed Dense Vegetation run.) `rewards.create_reward_cards` is the faithful CreateForReward port and was already in place.  This site: Trial.cs:177-187 adds Doubt and then builds TWO `CardReward(CardCreationOptions.ForNonCombatWithDefaultOdds([Owner.Character.CardPool]), 3, Owner)` entries for RewardsCmd.OfferCustom. events/trial.py added Doubt and finished, with a comment naming the omission -- so the screens, the cards AND every Rewards-stream draw CreateForReward takes were absent, a deck delta of exactly 1 where the game's is 1 to 3. It now builds both groups with `create_reward_cards(run, RarityOddsType.REGULAR, count=3)`, the ForNonCombatWithDefaultOdds(characterPool) shape events/brain_leech.py already used, and parks them on `pending_rewards`. EXECUTED: NONDESCRIPT/GUILTY adds exactly the Doubt and offers two 3-card groups. This also closes the wider consequence the entry recorded -- the EV-6 observable set (rarity odds, the act-scaled upgrade draw, the Rewards stream) is now present rather than absent.  Pinned by test/test_event_live_tail.py.  NOT CLOSED: nothing at this site.  The text it replaced read: This is a MISSING EFFECT, wider than EV-4 (which is a modelled grant that should have been an offer) and wider than EV-6 (which is the wrong factory): here the screens, the cards and the draws are all absent. The sim has both halves of the capability -- rewards.create_reward_cards (rewards.py:235-275) is the faithful CreateForReward port for exactly the ForNonCombatWithDefaultOdds(characterPool) shape and events/brain_leech.py:44-47 already calls it, while Event.pending_reward_extras / resume_after_combat (events/base.py:94-99, 116-122) is the sim's take-or-skip channel -- so nothing was missing to build it with. EXECUTED (`py audit/tools/event_probes_b.py trialoffer`): driving the NONDESCRIPT page and choosing GUILTY raises ZERO card-selection screens and offers 0 cards where the game offers 2 screens x 3 = 6, and the deck delta is always exactly 1 (Doubt) where the game's is 1 to 3. LIVE: NONDESCRIPT is one of three equally weighted trials on an ungated event, and taking two card rewards is a large, permanent deck change. It also drops every draw CreateForReward would take off the Rewards stream, so the whole EV-6 observable set (rarity odds, the act-scaled upgrade draw, the stream) is absent rather than merely wrong."
     },
     {
       "what": "NondescriptInnocent (Trial.cs:189-198): AddCurseToDeck<Doubt>, CardSelectCmd.FromDeckForTransformation with CardSelectorPrefs(TransformSelectionPrompt, 2), then CardCmd.TransformToRandom on each",
@@ -229,6 +229,6 @@
       "rationale": "multiplayer-only: the C# predicate is `runState.Players.All(p => ...)`, a quantifier over the party. The sim is single-player, so the quantifier collapses to the one player's clause, which the sim implements exactly. Out of scope per the shared contract's multiplayer waiver."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

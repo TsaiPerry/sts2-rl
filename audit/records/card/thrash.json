@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\thrash.py",
-    "sha256": "034f36bcc83c695672fb15e1a7c0804bdc5a50b30dc083b3ad0c0613d05717ad"
+    "sha256": "0686a828b21882eb0f471570cf00cb514a8c4b01fd30e19d726f9204e2937e30"
   },
   "extra_sources": [
     {
@@ -16,22 +16,22 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/reflections.py",
-      "sha256": "80a1def7cd4014f2b74098038e1845bde9fda4874f0ea95fff7b775630cdfb05",
+      "sha256": "944bc8f2a1aabee7893510cd9663ca48d02770011227912a55d12f446f3b233a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/welcome_to_wongos.py",
-      "sha256": "bb654fc90b58c17ee0573381dc1859c91e72cf6a89e97f8934db58801612a946",
+      "sha256": "12d10fe0120fd1db28b8ded9f938c5246e3b466faa3127a84d8aae91c5b0d92f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     }
   ],
@@ -58,8 +58,8 @@
     },
     "AfterDowngraded": {
       "maps_to": "NOT PORTED -- ThrashCard has no downgrade hook (thrash.py)",
-      "verdict": "gap",
-      "issue": "`AfterDowngraded()` calls base and then `DynamicVars.Damage.BaseValue += ExtraDamage` (Thrash.cs:77-81), where `ExtraDamage` is the running total of every absorbed Attack's damage (72). C# tracks the accumulation in a private field precisely so `AfterDowngraded()` can re-add it after `DowngradeInternal` rebuilds the damage var from canonical (CardModel.cs:2140); the sim mutates `_damage` directly and tracks nothing, so `Card.downgrade`'s `_init_vars` rebuild (cards/base.py:150-165) destroys it. LIVE via `powers.py:3171` (DampenPower downgrades every upgraded card in AllCards IN COMBAT, which is exactly when the accumulation exists) and also `events/reflections.py:40` / `events/welcome_to_wongos.py:90`. Same mechanism and same verdict as card/maul's and card/rampage's AfterDowngraded entries (rule 3) -- these THREE cards are the pool's only `AfterDowngraded` overrides and all three are unported. Not caught by `card_probes.py downgrade`, which compares a FRESH card against upgrade+downgrade and so never sees the accumulation. Observable: absorb a 20-damage Bludgeon into an upgraded Thrash (6 -> 26 per hit), then have it downgraded -- the game keeps 4 + 20 = 24, the sim drops to 4."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `AfterDowngraded` EXISTS NOW. `Card._after_downgraded` (cards/base.py) is CardModel.cs:2150-2155, dispatched from `Card.downgrade` between the canonical rebuild and `Enchantment?.ModifyCard()` exactly as CardModel.cs:2144 does, and this card carries the override its C# does: a `_extra_damage` tally, kept as a CLASS default rather than an `_init_vars` line precisely because `_init_vars` is what the downgrade re-runs -- the mirror of C# holding it in a private field that `DowngradeInternal` does not touch. Pinned by test/test_downgrade_rebuild.py. NOT CLOSED: nothing at this site; the seam's remaining residue is listed on creature_card_cmds/step52.  thrash.py tallies the absorbed figure (Thrash.cs:71-72). Executed: an upgraded Thrash that absorbs a 32-damage Bludgeon reaches 6+32 and downgrades to 4+32, where it used to drop to 4.  The text it replaced read: `AfterDowngraded()` calls base and then `DynamicVars.Damage.BaseValue += ExtraDamage` (Thrash.cs:77-81), where `ExtraDamage` is the running total of every absorbed Attack's damage (72). C# tracks the accumulation in a private field precisely so `AfterDowngraded()` can re-add it after `DowngradeInternal` rebuilds the damage var from canonical (CardModel.cs:2140); the sim mutates `_damage` directly and tracks nothing, so `Card.downgrade`'s `_init_vars` rebuild (cards/base.py:150-165) destroys it. LIVE via `powers.py:3171` (DampenPower downgrades every upgraded card in AllCards IN COMBAT, which is exactly when the accumulation exists) and also `events/reflections.py:40` / `events/welcome_to_wongos.py:90`. Same mechanism and same verdict as card/maul's and card/rampage's AfterDowngraded entries (rule 3) -- these THREE cards are the pool's only `AfterDowngraded` overrides and all three are unported. Not caught by `card_probes.py downgrade`, which compares a FRESH card against upgrade+downgrade and so never sees the accumulation. Observable: absorb a 20-damage Bludgeon into an upgraded Thrash (6 -> 26 per hit), then have it downgraded -- the game keeps 4 + 20 = 24, the sim drops to 4."
     }
   },
   "guards": [
@@ -69,6 +69,6 @@
       "rationale": "C#'s `Hook.ModifyDamage` already clamps its result at 0 inside the damage pipeline, so the two agree; recorded because the clamp is explicit in the sim and implicit in the source."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

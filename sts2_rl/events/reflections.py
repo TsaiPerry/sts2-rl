@@ -41,7 +41,10 @@ class Reflections(Event):
             card = (er.next_item(upgraded) if er is not None
                     else self.rng.choice(upgraded))
             upgraded.remove(card)
-            card.downgrade()
+            # Reflections.cs:43 -- CardCmd.Downgrade. Out of combat, so its
+            # IsEnding guard is vacuously false.
+            from ..cmds import CardCmd
+            CardCmd.downgrade(None, card)
         upgradable = [c for c in self.run.deck if c.is_upgradable]
         for _ in range(_UPGRADES):
             if not upgradable:

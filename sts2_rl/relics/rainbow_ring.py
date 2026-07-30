@@ -26,7 +26,7 @@ class RainbowRing(Relic):
         self._power = False
         self._activated = False
 
-    def on_player_turn_start(self, player: PlayerCombatState) -> None:
+    def before_side_turn_start(self, player: PlayerCombatState) -> None:
         self._attack = self._skill = self._power = self._activated = False
 
     def on_card_played(self, card: Card,

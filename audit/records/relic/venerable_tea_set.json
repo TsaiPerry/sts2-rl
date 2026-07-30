@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\venerable_tea_set.py",
-    "sha256": "3e00583428beb56b0aee34d4a01149ae26c88c1d468cc4f61a5e28e01804df9a"
+    "sha256": "29b58aa52af9550ade2e5f1e4a25a464d182ff1649993e84f34296c5c786964a"
   },
   "extra_sources": [
     {
@@ -31,22 +31,22 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
@@ -56,7 +56,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -85,8 +85,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): FROZEN CONSTRUCTOR STATE -- nothing in the sim ever sets `_pending`, so the relic does nothing in any run that picks it up",
-      "verdict": "gap",
-      "issue": "MECHANISM: the port's entire trigger is `self._pending = rested`, a constructor default (venerable_tea_set.py:23-25). RunState.add_relic builds relics through `make_relic(id)`, which is `_RELIC_CLASSES[relic_id]()` with no arguments (sts2_rl/relics/base.py:73-74, called from run.py:546-552), so `_pending` is False for the whole run and the spend half at venerable_tea_set.py:29 can never run. The sim is NOT missing the pipeline the port needs: Relic.after_room_entered is a real base hook (sts2_rl/relics/base.py:194-195) and run.py:983 dispatches it to every relic on entering EVERY room with the room type in hand -- and sts2_rl/relics/eternal_feather.py:19-22 is a ported relic that uses exactly that hook with exactly the RoomType.REST_SITE test this relic needs. PROMPT.md bug class 12 applied: the premise behind the constructor-injection design ('whether you rested is out-of-combat state, injected via the constructor') is false today. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b17.py teaset): make_relic('venerable_tea_set') gives _pending=False; the class has no after_room_entered override; the next combat's turn-1 energy is 3 where C# gives 5; forcing _pending=True gives 5, which isolates the defect to the missing latch. Both sides ported: Common in the transcribed grab bag (probe `pool`), rest sites are a ported room type that dispatches after_room_entered, and every act has them. RULE 3 -- this is the SAME mechanism audit/records/relic/fake_venerable_tea_set.json guard G1 already verdicted `gap` and proved LIVE by execution (batch 5, turn-1 energy 3 vs 4 there because the knock-off's EnergyVar is 1); this record confirms it at the real relic's site with its own execution rather than re-deriving it, and reaches the same verdict. That record's guard G2 named this unit as pre-populated work for batch 17 and issued no verdict for it; this is that verdict. The fix is one method copied from sts2_rl/relics/eternal_feather.py:19-22. Rule 7: sts2_rl/relics/base.py, run.py, sts2_rl/relics/eternal_feather.py, sts2_rl/relics/fake_venerable_tea_set.py and audit/records/relic/fake_venerable_tea_set.json are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `after_room_entered` latches the relic on `RoomType.REST_SITE`, which is VenerableTeaSet.cs's AfterRoomEntered / `room is RestSiteRoom`. The constructor argument survives only so a test can pre-arm the relic; `make_relic(id)` still passes none, and that no longer matters because the latch is written by the room dispatch `run.py` already made to every relic. Copied from the sibling relics/eternal_feather.py, which read the same hook with the same room test all along -- so the constructor-injection premise ('whether you rested is out-of-combat state') was false, PROMPT.md bug class 12. EXECUTED: enter a rest site, then start a combat -- turn-1 energy is 5 where it was 3, and `_pending` is back to False.  Pinned by test/test_false_premise_stubs.py.  NOT CLOSED: relic/fake_venerable_tea_set G2's THIRD relic, relic/girya, is untouched -- its lifts come from a rest-site OPTION the relic itself appends, a different path, and it is not this entry's line.  The text it replaced read: MECHANISM: the port's entire trigger is `self._pending = rested`, a constructor default (venerable_tea_set.py:23-25). RunState.add_relic builds relics through `make_relic(id)`, which is `_RELIC_CLASSES[relic_id]()` with no arguments (sts2_rl/relics/base.py:73-74, called from run.py:546-552), so `_pending` is False for the whole run and the spend half at venerable_tea_set.py:29 can never run. The sim is NOT missing the pipeline the port needs: Relic.after_room_entered is a real base hook (sts2_rl/relics/base.py:194-195) and run.py:983 dispatches it to every relic on entering EVERY room with the room type in hand -- and sts2_rl/relics/eternal_feather.py:19-22 is a ported relic that uses exactly that hook with exactly the RoomType.REST_SITE test this relic needs. PROMPT.md bug class 12 applied: the premise behind the constructor-injection design ('whether you rested is out-of-combat state, injected via the constructor') is false today. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b17.py teaset): make_relic('venerable_tea_set') gives _pending=False; the class has no after_room_entered override; the next combat's turn-1 energy is 3 where C# gives 5; forcing _pending=True gives 5, which isolates the defect to the missing latch. Both sides ported: Common in the transcribed grab bag (probe `pool`), rest sites are a ported room type that dispatches after_room_entered, and every act has them. RULE 3 -- this is the SAME mechanism audit/records/relic/fake_venerable_tea_set.json guard G1 already verdicted `gap` and proved LIVE by execution (batch 5, turn-1 energy 3 vs 4 there because the knock-off's EnergyVar is 1); this record confirms it at the real relic's site with its own execution rather than re-deriving it, and reaches the same verdict. That record's guard G2 named this unit as pre-populated work for batch 17 and issued no verdict for it; this is that verdict. The fix is one method copied from sts2_rl/relics/eternal_feather.py:19-22. Rule 7: sts2_rl/relics/base.py, run.py, sts2_rl/relics/eternal_feather.py, sts2_rl/relics/fake_venerable_tea_set.py and audit/records/relic/fake_venerable_tea_set.json are NOT hashed by this record."
     },
     {
       "what": "N1: EnergyVar(2) (VenerableTeaSet.cs:19) read as `Energy.BaseValue` at the single call site (:56) vs the sim's ENERGY = 2 (venerable_tea_set.py:21)",

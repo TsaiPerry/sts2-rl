@@ -29,7 +29,12 @@ class Kusarigama(Relic):
     def on_combat_start(self) -> None:
         self._attacks_this_turn = 0
 
-    def on_player_turn_end(self, player: PlayerCombatState) -> None:
+    def after_player_turn_end(self, player: PlayerCombatState) -> None:
+        # Kusarigama.cs is AfterSideTurnEnd (turn_structure step 64), which
+        # runs AFTER the hand flush; `on_player_turn_end` is Hook.BeforeTurnEnd
+        # (step 48), ~16 steps too early. StampedePower auto-plays Attacks from
+        # the later slot, so the counter was being cleared before those plays
+        # could count toward it.
         self._attacks_this_turn = 0
 
     def on_card_played(self, card: Card,

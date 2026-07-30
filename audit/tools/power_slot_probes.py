@@ -131,17 +131,20 @@ def enemy_hook_order() -> None:
     class Spy:
         """A listener on every enemy-side slot, recording (slot, creature)."""
 
-        def on_enemy_turn_start(self, enemy):
-            log.append(f"start:{type(enemy).__name__}")
+        def before_enemy_side_start(self):
+            log.append("side_start_before")
 
         def on_block_cleared(self, creature):
             log.append(f"clear:{type(creature).__name__}")
 
-        def on_enemy_turn_end(self, enemy):
-            log.append(f"end:{type(enemy).__name__}")
+        def after_enemy_side_start(self):
+            log.append("side_start_after")
+
+        def before_enemy_side_end(self):
+            log.append("side_end_before")
 
         def on_enemy_side_end(self):
-            log.append("side_end")
+            log.append("side_end_after")
 
     combat = _make_combat(SLUMBERING_BEETLE_NORMAL)
     for e in combat.enemies:
@@ -156,9 +159,10 @@ def enemy_hook_order() -> None:
     print("move*n, BeforeTurnEnd, AfterTurnEnd].")
     print()
     beetle_last = type(combat.enemies[-1]).__name__ == "SlumberingBeetle"
-    print(f"SlumberingBeetle is the LAST enemy: {beetle_last}  -> its per-creature")
-    print("turn-end slot is adjacent to the side-end slot, so SlumberPower's")
-    print("natural wake fires at the same point in both models.")
+    print(f"SlumberingBeetle is the LAST enemy: {beetle_last}  -> under the OLD")
+    print("per-creature model its turn-end slot was adjacent to the side-end")
+    print("slot, which is why SlumberPower's natural wake was dormant. The")
+    print("slots are side-scoped now, so roster position no longer matters.")
 
 
 def ungated_modifiers() -> None:

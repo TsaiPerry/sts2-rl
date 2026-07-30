@@ -65,3 +65,23 @@ def test_legacy_shuffle_sequence_unchanged():
     # random.Random(0).shuffle of the deck would — i.e. nothing rerouted.
     c = CombatState(rng=random.Random(1234))
     assert c.combat_rng.shuffle is c._rng  # still the shared Random
+
+
+def test_confused_cost_draws_from_the_energy_cost_stream():
+    """relic/snecko_eye/g1. ConfusedPower.NextEnergyCost (ConfusedPower.cs:47-54)
+    ends in `RunState.Rng.CombatEnergyCosts.NextInt(4)`, not the shuffle stream
+    and not a shared rng."""
+    from sts2_rl.cards import make_card
+    from sts2_rl.cmds import PowerCmd
+    from sts2_rl.powers import ConfusedPower
+    from sts2_rl.combat import CombatState
+    from sts2_rl.rng import RunRngSet
+
+    rs = RunRngSet("89U21BV1TZ")
+    c = CombatState(rng_set=rs)
+    PowerCmd.apply(c.hooks, c.player, ConfusedPower, 1)
+    before_energy = rs.combat_energy_costs.counter
+    before_shuffle = rs.shuffle.counter
+    c.hooks.on_card_drawn(make_card("strike"))
+    assert rs.combat_energy_costs.counter == before_energy + 1
+    assert rs.shuffle.counter == before_shuffle

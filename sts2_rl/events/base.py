@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from ..combat import CombatState
     from ..monsters import Encounter
     from ..potions import Potion
-    from ..rewards import RewardExtra
+    from ..rewards import CombatRewards, RewardExtra
     from ..run import RunState
 
 
@@ -108,6 +108,15 @@ class Event:
         # relic + potion, The Lantern Key's card). The driver transfers them
         # to run.pending_reward_extras when it runs the fight.
         self.pending_reward_extras: list["RewardExtra"] = []
+        # A reward screen the option itself awaits, in the middle of the event
+        # rather than after a fight: `await RewardsCmd.OfferCustom(player,
+        # rewards)` at the end of HealRestSiteOption.ExecuteRestSiteHeal
+        # (HealRestSiteOption.cs:112), which PlayerCmd.MimicRestSiteHeal
+        # (PlayerCmd.cs:264-271) routes Dense Vegetation's Rest through. The
+        # driver offers and clears it as soon as the option returns, which is
+        # where the await sits -- before DenseVegetation.Rest's SetEventState
+        # puts up the FIGHT page (DenseVegetation.cs:88-99).
+        self.pending_rewards: "CombatRewards | None" = None
         # Creature.SetUniqueMonsterHpValue's results for a Combat-layout
         # event's encounter, rolled at room entry by
         # generate_internal_combat_state. Empty for every other event (and in

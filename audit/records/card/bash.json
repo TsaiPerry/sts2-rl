@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\bash.py",
-    "sha256": "0ca7440e59a66925e07717821334816a777ebd07b0f366712e7242e77256f0f0"
+    "sha256": "c8bb6a18af0e98004049a451ff996e2c80269a50f6328a510f28e9f2104e0f4b"
   },
   "extra_sources": [
     {
@@ -26,27 +26,27 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/creatures.py",
-      "sha256": "11658743b59d1dce2d07d838b6c65594e00dcdf1a4227fac57d24b0cd538fc42",
+      "sha256": "34e44031a337c75e1c2685e0521a075d95fa7a1478ca8594e6a138651c361078",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     },
     {
@@ -68,8 +68,8 @@
     },
     "OnPlay": {
       "maps_to": "BashCard.on_play (bash.py:35-41)",
-      "verdict": "gap",
-      "issue": "The damage, the ordering (damage BEFORE the debuff) and both amounts are faithful. The divergence is the sim's extra liveness guard: `if not target.is_gone: PowerCmd.apply(..., VulnerablePower, ...)` (bash.py:40-41). C# applies the Vulnerable UNCONDITIONALLY (`PowerCmd.Apply<VulnerablePower>(choiceContext, cardPlay.Target, ...)`, Bash.cs:35) and the only gate is `Creature.CanReceivePowers` (Creature.cs:308-321), whose own doc comment says the quiet part out loud: \"a creature is not hittable if it's dead, but dead creatures CAN still have powers applied to them\" -- it refuses only when `CombatState == null` (the corpse was REMOVED) or `Hook.ShouldAllowHitting` says no. For an ordinary monster the two agree, because `CreatureCmd.Damage` runs `await Kill(killedCreatures)` before returning (CreatureCmd.cs:409) and `KillWithoutCheckingWinCondition` removes the creature from combat at CreatureCmd.cs:523-525, nulling its CombatState before Bash's next statement. They DIVERGE for a corpse whose removal was vetoed: `Hook.ShouldCreatureBeRemovedFromCombatAfterDeath` (CreatureCmd.cs:508) can return false, the sim models exactly that as `target.retained_after_death = not hooks.should_remove_from_combat_after_death(target)` (cmds.py:100-104, with ReattachPower/Decimillipede named as the case), and `is_gone` is `is_dead or escaped` (creatures.py:44-46), so the sim SKIPS a creature C# still powers. Observable via a ported listener: `ViciousPower` draws `Amount` cards on any Vulnerable the owner applies, with no liveness test on the target (`ViciousPower.cs:19-26`: `if (!(amount <= 0m) && applier == Owner && power is VulnerablePower)`), and the sim's port is the same shape (powers.py:1160-1179). So: hold Vicious, Bash a retained-corpse enemy to death -- the game draws cards, the sim does not. LIVE: card/vicious, card/bash, ViciousPower and the retained-corpse path (`powers.py:2360-2365` ReattachPower, `combat.py:292,306`) are all ported. EXECUTED: `py audit/tools/card_probes.py dead-target-guards` enumerates the pool-wide pattern -- 41 sim card classes test liveness, and bash is one of the `if not target.is_gone:` form. RATIONALE CITES THIRD FILES (rule 7): CreatureCmd.cs, Creature.cs, ViciousPower.cs, cmds.py, creatures.py and powers.py are not hashed by this record. Presentation, folded in: ExtraHoverTips -> HoverTipFactory.FromPower<VulnerablePower> (Bash.cs:16) is hover-tip wiring."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The card's own `if not target.is_gone:` is DELETED and PowerCmd.apply now carries the WHOLE of `Creature.CanReceivePowers` (Creature.cs:308-322): `cmds.can_receive_powers` is `not target.is_removed_from_combat and hooks.should_allow_hitting(target)`, and `Creature.is_removed_from_combat` (creatures.py) is `is_gone and not retained_after_death` -- the sim's expression of `CombatState == null`, since it never drops a corpse from `enemies` (conformance addresses enemies by index). The two edits are a MATCHED PAIR: round 6 had wired only the ShouldAllowHitting half here, so deleting the card guard on its own would have powered the ordinary corpse that CreatureCmd.cs:523-531 removes. Pinned by test/test_can_receive_powers.py -- ordinary corpse refused, removal-vetoed corpse powered, mid-revival corpse still refused. WHAT THIS DOES NOT CLOSE: the observable the entry proposed -- a Vicious draw off a retained corpse -- is not reachable in the sim's SHIPPED content, and the enumeration is the finding. Every sim producer of a retained corpse also makes it unhittable for as long as it lasts (IllusionPower.cs:95-105, AdaptablePower.cs:68-78 and ReattachPower.cs:74-86 each pair the removal veto with ShouldAllowHitting), the sole exception being a Decimillipede segment killed with every other segment already down -- and that ends the combat, so PowerCmd.Apply's own IsEnding guard (PowerCmd.cs:69-72) swallows it first. The game's third case, PainfulStabsPower.cs:29-32 on Test Subject phase 2, retains WITHOUT vetoing hits and the sim's PainfulStabsPower omits that override; recorded here rather than fixed, because it is not this entry's line. The code is now the source's shape either way.  The text it replaced read: The damage, the ordering (damage BEFORE the debuff) and both amounts are faithful. The divergence is the sim's extra liveness guard: `if not target.is_gone: PowerCmd.apply(..., VulnerablePower, ...)` (bash.py:40-41). C# applies the Vulnerable UNCONDITIONALLY (`PowerCmd.Apply<VulnerablePower>(choiceContext, cardPlay.Target, ...)`, Bash.cs:35) and the only gate is `Creature.CanReceivePowers` (Creature.cs:308-321), whose own doc comment says the quiet part out loud: \"a creature is not hittable if it's dead, but dead creatures CAN still have powers applied to them\" -- it refuses only when `CombatState == null` (the corpse was REMOVED) or `Hook.ShouldAllowHitting` says no. For an ordinary monster the two agree, because `CreatureCmd.Damage` runs `await Kill(killedCreatures)` before returning (CreatureCmd.cs:409) and `KillWithoutCheckingWinCondition` removes the creature from combat at CreatureCmd.cs:523-525, nulling its CombatState before Bash's next statement. They DIVERGE for a corpse whose removal was vetoed: `Hook.ShouldCreatureBeRemovedFromCombatAfterDeath` (CreatureCmd.cs:508) can return false, the sim models exactly that as `target.retained_after_death = not hooks.should_remove_from_combat_after_death(target)` (cmds.py:100-104, with ReattachPower/Decimillipede named as the case), and `is_gone` is `is_dead or escaped` (creatures.py:44-46), so the sim SKIPS a creature C# still powers. Observable via a ported listener: `ViciousPower` draws `Amount` cards on any Vulnerable the owner applies, with no liveness test on the target (`ViciousPower.cs:19-26`: `if (!(amount <= 0m) && applier == Owner && power is VulnerablePower)`), and the sim's port is the same shape (powers.py:1160-1179). So: hold Vicious, Bash a retained-corpse enemy to death -- the game draws cards, the sim does not. LIVE: card/vicious, card/bash, ViciousPower and the retained-corpse path (`powers.py:2360-2365` ReattachPower, `combat.py:292,306`) are all ported. EXECUTED: `py audit/tools/card_probes.py dead-target-guards` enumerates the pool-wide pattern -- 41 sim card classes test liveness, and bash is one of the `if not target.is_gone:` form. RATIONALE CITES THIRD FILES (rule 7): CreatureCmd.cs, Creature.cs, ViciousPower.cs, cmds.py, creatures.py and powers.py are not hashed by this record. Presentation, folded in: ExtraHoverTips -> HoverTipFactory.FromPower<VulnerablePower> (Bash.cs:16) is hover-tip wiring."
     },
     "OnUpgrade": {
       "maps_to": "BashCard._on_upgrade (bash.py:31-33)",
@@ -89,6 +89,6 @@
       "rationale": "The sim passes `applier=ctx.player`, which is what ViciousPower's `applier == Owner` test needs. The dropped `cardSource` argument on `PowerCmd.apply` is the power_cmd seam's finding, not a card-level one."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\phial_holster.py",
-    "sha256": "50c6f6e8477e9207fbfaf020a905451cbfdb217ef55e9bfb033732b6b761a606"
+    "sha256": "434d61d59012de038c655eef5c4cc5fc567760a946595300d96cbda0d53c4ec9"
   },
   "extra_sources": [
     {
@@ -16,17 +16,17 @@
     },
     {
       "path": "sts2_rl/potion_pools.py",
-      "sha256": "7755c9d3ead187a051c3b1b9e98f94d7de551673ce9e71d3af695b46cb933b90",
+      "sha256": "d3a31cbdd8277a5ea1c3ea274d295ca22ca3b431a6a6eec5abc0aa6b06e81fad",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/alchemical_coffer.py",
-      "sha256": "f9e6aa12198b020a1da16966ad7d30c86840d55f24967f572a69eb470b26e26e",
+      "sha256": "bc3203bf74e01eff428f4a523864d28cf93882933a4838b4293e9ab28b85a8ee",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
+      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
       "side": "sim"
     }
   ],
@@ -65,8 +65,8 @@
   "guards": [
     {
       "what": "G1 (LIVE for RNG parity): PhialHolster.cs:29 names `base.Owner.RunState.Rng.CombatPotionGeneration` explicitly and the port draws on the LEGACY shared run.rng instead, with a flat instead of a rarity-weighted pool",
-      "verdict": "gap",
-      "issue": "MECHANISM: PhialHolster.cs:29 calls `PotionFactory.CreateRandomPotionsOutOfCombat(Owner, 2, RunState.Rng.CombatPotionGeneration)`, which is `rng.NextFloat()` for the rarity band (<= 0.1f Rare, <= 0.35f Uncommon, else Common) plus `rng.NextItem(...)` inside that band, per potion, removing each pick from the working list (src/Core/Factories/PotionFactory.cs:46-81). phial_holster.py:19 calls `run.random_potions(2, distinct=True)`, which is `self.rng.choice(pool)` over the WHOLE reward pool sorted by id (run.py:522-540) -- a different distribution AND a different stream. This is PROMPT.md bug class 16's second half, and the check the class demands (is the stream CONSUMED, not merely named?) answers yes: two draws per potion. The correct helper already exists and the sibling relic with the IDENTICAL C# call uses it -- alchemical_coffer.py:25-31 branches on `run.rng_set is not None` and calls potion_pools.generate_random_potions (potion_pools.py:148-164), which is the line-for-line port. REACHABILITY (LIVE for conformance/RNG parity, executed -- py audit/tools/relic_probes_b12.py b12-phial): on a string-seeded run the CombatPotionGeneration stream sits at 0 draws before AND after add_relic('phial_holster'), where alchemical_coffer's 4 potions advance the same stream from 0 to 8 -- so the game's 4 draws for Phial Holster are never taken, every later CombatPotionGeneration draw in the run is shifted, and the potions themselves are drawn from the wrong distribution. Both sides ported: the relic is granted by the ported Neow event, the stream exists (rng.py:382) and the helper exists. Same verdict and same mechanism as relic/astrolabe N1 (binding rule 3), which recorded a named-but-unpassed stream as a gap that is live for RNG parity and dormant for RL play. NOTE per binding rule 7: PotionFactory.cs, run.py, alchemical_coffer.py, potion_pools.py and rng.py are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The two potions come off CombatPotionGeneration, with the game's distribution. PhialHolster.cs:29 is `PotionFactory.CreateRandomPotionsOutOfCombat(Owner, 2, RunState.Rng.CombatPotionGeneration)`, which per potion takes an `rng.NextFloat()` for the rarity band (<= 0.1f Rare, <= 0.35f Uncommon, else Common) and then an `rng.NextItem` inside that band, removing each pick from the working list (PotionFactory.cs:46-81) -- four draws for two potions. relics/phial_holster.py called `run.random_potions(2, distinct=True)`, a uniform `choice` over the WHOLE reward pool on the shared run rng: a different DISTRIBUTION and a different STREAM. It now branches on `run.rng_set` and calls `potion_pools.generate_random_potions`, the line-for-line port -- which is exactly what the sibling relic with the identical C# call (alchemical_coffer) already did, so the helper needed no work. EXECUTED on a string-seeded run: the CombatPotionGeneration counter now advances by 4 across `add_relic('phial_holster')` and two potions land on the belt, where the stream sat at 0 draws before and after. Same mechanism and verdict as relic/astrolabe N1 (rule 3): live for RNG parity, dormant for RL play. Pinned by test/test_relic_live_tail.py::test_phial_holster_draws_on_the_combat_potion_generation_stream. NOT CLOSED: nothing at this site.  The text it replaced read: MECHANISM: PhialHolster.cs:29 calls `PotionFactory.CreateRandomPotionsOutOfCombat(Owner, 2, RunState.Rng.CombatPotionGeneration)`, which is `rng.NextFloat()` for the rarity band (<= 0.1f Rare, <= 0.35f Uncommon, else Common) plus `rng.NextItem(...)` inside that band, per potion, removing each pick from the working list (src/Core/Factories/PotionFactory.cs:46-81). phial_holster.py:19 calls `run.random_potions(2, distinct=True)`, which is `self.rng.choice(pool)` over the WHOLE reward pool sorted by id (run.py:522-540) -- a different distribution AND a different stream. This is PROMPT.md bug class 16's second half, and the check the class demands (is the stream CONSUMED, not merely named?) answers yes: two draws per potion. The correct helper already exists and the sibling relic with the IDENTICAL C# call uses it -- alchemical_coffer.py:25-31 branches on `run.rng_set is not None` and calls potion_pools.generate_random_potions (potion_pools.py:148-164), which is the line-for-line port. REACHABILITY (LIVE for conformance/RNG parity, executed -- py audit/tools/relic_probes_b12.py b12-phial): on a string-seeded run the CombatPotionGeneration stream sits at 0 draws before AND after add_relic('phial_holster'), where alchemical_coffer's 4 potions advance the same stream from 0 to 8 -- so the game's 4 draws for Phial Holster are never taken, every later CombatPotionGeneration draw in the run is shifted, and the potions themselves are drawn from the wrong distribution. Both sides ported: the relic is granted by the ported Neow event, the stream exists (rng.py:382) and the helper exists. Same verdict and same mechanism as relic/astrolabe N1 (binding rule 3), which recorded a named-but-unpassed stream as a gap that is live for RNG parity and dormant for RL play. NOTE per binding rule 7: PotionFactory.cs, run.py, alchemical_coffer.py, potion_pools.py and rng.py are NOT hashed by this record."
     },
     {
       "what": "N1: `PlayerCmd.GainMaxPotionCount(PotionSlots = 1, Owner)` (PhialHolster.cs:28) vs `run.add_potion_slots(1)` (sts2_rl/relics/phial_holster.py:18) -- the port implements it",

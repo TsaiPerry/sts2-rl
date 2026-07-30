@@ -27,7 +27,14 @@ class MorphicGrove(Event):
 
     @classmethod
     def is_allowed(cls, run: RunState) -> bool:
-        return run.gold >= _MIN_GOLD and len(run.transformable_cards()) >= _TRANSFORMS
+        # MorphicGrove.cs:26 counts `c.IsTransformable` and has NO Quest clause,
+        # unlike CardSelectCmd.FromDeckForTransformation (CardSelectCmd.cs:487),
+        # which the GROUP screen below correctly uses. `removable_cards()` is the
+        # IsTransformable half alone, which is what this gate wants: with the
+        # Quest-filtered predicate here the sim REFUSED an event node the game
+        # serves (deck [strike, spoils_map], 100 gold), shifting every later
+        # event pick.
+        return run.gold >= _MIN_GOLD and len(run.removable_cards()) >= _TRANSFORMS
 
     def initial_options(self) -> list[EventOption]:
         return [

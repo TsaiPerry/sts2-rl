@@ -226,6 +226,44 @@ def test_dream_catcher_rest_heal_offers_card_reward():
     assert len(run.deck) == deck_before + 1
 
 
+def test_mimicked_rest_heal_offers_its_rewards_too():
+    """HealRestSiteOption.ExecuteRestSiteHeal (HealRestSiteOption.cs:106-113)
+    ends with `await RewardsCmd.OfferCustom(player, rewards)`, and
+    PlayerCmd.MimicRestSiteHeal (PlayerCmd.cs:264-271) goes through the very
+    same method — so Dense Vegetation's Rest shows Dream Catcher's 3-card
+    screen exactly like a real rest site does.  The await is inside
+    DenseVegetation.Rest (DenseVegetation.cs:88-99) BEFORE its SetEventState,
+    so the screen comes up before the FIGHT page is offered."""
+    run = fresh_run(16, max_hp=100000, hp=100000)
+    run.add_relic("dream_catcher")
+    log = []
+
+    def scripted(request):
+        # option_keys() has to be snapshotted here — the event mutates.
+        keys = request.event.option_keys() if request.kind == DecisionKind.EVENT else []
+        log.append((request.kind, keys, request.rewards))
+        if request.kind == DecisionKind.EVENT:
+            return keys.index("REST") if "REST" in keys else keys.index("FIGHT")
+        if request.kind == DecisionKind.REWARD_CARD:
+            return 0                       # take the first card
+        return request.legal_actions()[0]
+
+    driver = RunDriver(run, scripted)
+    deck_before = len(run.deck)
+    driver._run_event(make_event("dense_vegetation", run))
+    offers = [
+        i for i, (kind, _, rewards) in enumerate(log)
+        if kind == DecisionKind.REWARD_CARD
+        and rewards is not None and len(rewards.cards) == 3
+    ]
+    assert offers, "the mimicked rest heal never offered Dream Catcher's cards"
+    # ...and it came up before the ambush was even chosen.
+    fight = next(i for i, (kind, keys, _) in enumerate(log)
+                 if kind == DecisionKind.EVENT and "FIGHT" in keys)
+    assert offers[0] < fight
+    assert len(run.deck) > deck_before
+
+
 def test_no_dream_catcher_no_reward_card_after_rest_heal():
     run = fresh_run(17)
     run.hp = 40

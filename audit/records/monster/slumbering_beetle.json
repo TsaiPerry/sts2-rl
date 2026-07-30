@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\hive\\slumbering_beetle.py",
-    "sha256": "3626d45cbc1eb2ba4a3452cf72e041f25be036f7b78c80459adfdb96220c5ec4"
+    "sha256": "2a264eecf850f49e270a01a06b253908a72aa4b314bed90f9d6f9ccac8745ef2"
   },
   "hooks": {
     "MinInitialHp": {

@@ -27,8 +27,15 @@ class _PunchOffEncounter(Encounter):
         monsters = []
         for i in range(2):
             m = PunchConstruct(hooks, rng, starts_with_fast_punch=(i == 0))
-            reduction = rng.randint(2, 9)  # NextInt(2, 10)
-            m.hp = max(1, m.hp - reduction)
+            # PunchOffEventEncounter.cs:17,:19 roll `base.Rng.NextInt(2, 10)`
+            # on the per-encounter EncounterModel Rng (EncounterModel.cs:259-270),
+            # not on the shared combat stream. `selection_rng` IS that stream
+            # and was being accepted and ignored; five sibling encounters
+            # already thread it (scroll_of_biting, corpse_slug,
+            # slithering_strangler, decimillipede, slimes).
+            m.starting_hp_reduction = (
+                selection_rng.next_int_range(2, 10) if selection_rng is not None
+                else rng.randint(2, 9))
             monsters.append(m)
         return monsters
 
@@ -67,7 +74,13 @@ class PunchOff(Event):
 
     def calculate_vars(self) -> None:
         # GoldVar rolled for fidelity but never granted by either option.
-        self.rng.randint(91, 98)  # NextInt(91, 99)
+        # `base.Rng.NextInt(91, 99)` (PunchOff.cs:103) — the event's own Rng
+        # (event/EV-3); the draw exists only to advance that stream.
+        er = self.event_rng
+        if er is not None:
+            er.next_int_range(91, 99)
+        else:
+            self.rng.randint(91, 98)
 
     def initial_options(self) -> list[EventOption]:
         return [

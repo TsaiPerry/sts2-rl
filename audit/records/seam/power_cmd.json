@@ -17,22 +17,22 @@
   "sim_sources": [
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead"
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc"
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
     }
   ],
   "steps": [
     {
       "what": "1. Apply<T>: guard CombatManager.Instance.IsEnding -> return null (PowerCmd.cs:69-72)",
-      "verdict": "gap",
-      "issue": "PowerCmd.apply (cmds.py) has no combat-ending guard at all. See guard G6."
+      "verdict": "faithful",
+      "issue": "CLOSED. `PowerCmd.apply` opens on `if is_ending(hooks): return` (sts2_rl/cmds.py), reproducing PowerCmd.cs:69-72. `IsEnding`, not `IsOverOrEnding`: CombatManager.cs:184-187 opens `if (!IsInProgress) return false`, which is what keeps the out-of-combat callers working. EXECUTED: test/test_combat_ending_command_guards.py::TestPowerCmd.  FIXED 2026-07-28 (round 4). The text it replaced read: PowerCmd.apply (cmds.py) has no combat-ending guard at all. See guard G6."
     },
     {
       "what": "2. Apply<T>: guard !target.CanReceivePowers -> return null (PowerCmd.cs:73-76; CanReceivePowers = CombatState!=null && Hook.ShouldAllowHitting, Creature.cs:308-322)",
@@ -106,8 +106,8 @@
     },
     {
       "what": "16. Guard target.CanReceivePowers (re-checked) (PowerCmd.cs:133)",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27: the parenthetical claim is no longer true -- the sim DOES have a CanReceivePowers concept in the power pipeline now, at the ENTRY (PowerCmd.apply's opening `if not hooks.should_allow_hitting(target): return`, sts2_rl/cmds.py; see step 2). WHAT REMAINS is this step's own subject: there is no MID-PIPELINE re-check. C# re-tests target.CanReceivePowers at PowerCmd.cs:133, after the given/received modifier chains have run and after any listener they invoked could have changed the target's hittability; the sim tests it once, before hooks.modify_power_amount. Guard G6."
+      "verdict": "faithful",
+      "issue": "CLOSED. The mid-pipeline re-check exists: `PowerCmd.apply` re-tests `hooks.should_allow_hitting(target)` after `modify_power_amount` and the Artifact branch, immediately before the power is constructed (PowerCmd.cs:133). It guards the NEW-power path alone, as C# does -- Apply<T> routes an existing instance to ModifyAmount, which never consults CanReceivePowers. EXECUTED: test_combat_ending_command_guards.py::test_a_mid_pipeline_hittability_change_refuses_the_power.  FIXED 2026-07-28 (round 4). The text it replaced read: NARROWED 2026-07-27: the parenthetical claim is no longer true -- the sim DOES have a CanReceivePowers concept in the power pipeline now, at the ENTRY (PowerCmd.apply's opening `if not hooks.should_allow_hitting(target): return`, sts2_rl/cmds.py; see step 2). WHAT REMAINS is this step's own subject: there is no MID-PIPELINE re-check. C# re-tests target.CanReceivePowers at PowerCmd.cs:133, after the given/received modifier chains have run and after any listener they invoked could have changed the target's hittability; the sim tests it once, before hooks.modify_power_amount. Guard G6."
     },
     {
       "what": "17. power.ApplyInternal(target, modifiedAmount, silent): complete no-op if modifiedAmount==0m (power never registered, Owner never set); otherwise sets Owner, SetAmount, registers via Owner.ApplyPowerInternal (PowerCmd.cs:135; PowerModel.cs:564-573)",
@@ -146,8 +146,8 @@
     },
     {
       "what": "24. ModifyAmount: guard CombatManager.Instance.IsEnding -> return 0 (PowerCmd.cs:217-220)",
-      "verdict": "gap",
-      "issue": "Folded into guard G6 -- the sim's single code path has no IsEnding guard anywhere, including the stacking case."
+      "verdict": "faithful",
+      "issue": "CLOSED by the same entry guard as step 1: the sim has ONE code path through `PowerCmd.apply` and both C# guards (Apply<T> at :69-72 and ModifyAmount at :217-220) sit on the same call, so the stacking branch is refused too. EXECUTED: test_combat_ending_command_guards.py::test_stacking_onto_an_existing_power_is_refused, which stacks onto an EXISTING power and so exercises the ModifyAmount branch specifically.  FIXED 2026-07-28 (round 4). The text it replaced read: Folded into guard G6 -- the sim's single code path has no IsEnding guard anywhere, including the stacking case."
     },
     {
       "what": "25. ModifyAmount: guard combatState==null -> return 0; NO CanReceivePowers check in this path (PowerCmd.cs:221-226)",
@@ -263,8 +263,8 @@
     },
     {
       "what": "G6: No CombatManager.IsEnding / CanReceivePowers guard backstop anywhere in PowerCmd.apply",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27: the CanReceivePowers ENTRY guard now exists. PowerCmd.apply opens with `if not hooks.should_allow_hitting(target): return` (sts2_rl/cmds.py), reproducing PowerCmd.cs:73-76 (spec step 2) with the same predicate damage_pipeline's note N1 covers for the damage path. WHAT REMAINS: (a) no IsEnding guard anywhere in the sim's single code path -- neither Apply<T>'s (PowerCmd.cs:69-72, step 1), nor Apply's (PowerCmd.cs:103, step 6), nor ModifyAmount's separate re-check (PowerCmd.cs:217-220, step 24); (b) no mid-pipeline CanReceivePowers re-check (PowerCmd.cs:133, step 16). The IsEnding half belongs to the same family as hook_dispatch's guard G8, which is still pinned by two strict xfails. ORIGINAL: none of these guards existed at any point in PowerCmd.apply."
+      "verdict": "faithful",
+      "issue": "CLOSED, including the observation round 4 carried forward. Duration ticks route through the command now: `Power._tick` is PowerCmd.Decrement (PowerCmd.cs:179-182) calling the new `PowerCmd.modify_amount`, which opens on ModifyAmount's `IsEnding` guard (:217-220) and closes on its ShouldRemoveDueToAmount tail (:247-250); `_tick_duration` is TickDownDuration (:190-200), consuming SkipNextDurationTick before the guard is ever reached. NOT included, and deliberately: the ModifyPowerAmountGiven / ModifyPowerAmountReceived chains ModifyAmount runs at :229-233. Wiring them into the decrement path is blocked on THIS record's own guard G2 -- the sim's Unsettling Lamp is missing C#'s `amount <= 0` early bail, so it would double a -1 duration tick into -2. FIXED 2026-07-29 (round 5). The text it replaced read: CLOSED. Both halves: (a) the IsEnding guard is at the top of `PowerCmd.apply`, covering Apply<T> (:69-72), Apply (:103) and ModifyAmount (:217-220), which are one path in the sim; (b) the mid-pipeline CanReceivePowers re-check (:133) is in place on the new-power branch. `CombatState.is_ending` is the predicate (CombatManager.cs:180-202): not `phase == COMBAT_OVER`, but a live recomputation of `a loss is pending OR no primary enemy is alive with nothing vetoing the end`, which already carries Hook.ShouldStopCombatFromEnding. NOTE, carried forward as a separate observation and not claimed closed: the sim's duration ticks go through `Power._tick`, which mutates `amount` directly rather than routing through PowerCmd, so ModifyAmount's guard does not reach them.  FIXED 2026-07-28 (round 4). The text it replaced read: NARROWED 2026-07-28 (round 3), same observation as creature_card_cmds' G14: `HookSystem._each` now stops a guarded-bucket dispatch once the combat is over, so a PowerCmd.apply running in the ending window no longer reaches listeners on those hooks. WHAT REMAINS is unchanged: (a) PowerCmd.apply has no IsEnding guard anywhere in its single code path -- neither Apply<T>'s (PowerCmd.cs:69-72) nor ModifyAmount's (:217-220) -- so the power is still applied; and (b) there is no MID-PIPELINE CanReceivePowers re-check (PowerCmd.cs:133), only the entry one.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: NARROWED 2026-07-27: the CanReceivePowers ENTRY guard now exists. PowerCmd.apply opens with `if not hooks.should_allow_hitting(target): return` (sts2_rl/cmds.py), reproducing PowerCmd.cs:73-76 (spec step 2) with the same predicate damage_pipeline's note N1 covers for the damage path. WHAT REMAINS: (a) no IsEnding guard anywhere in the sim's single code path -- neither Apply<T>'s (PowerCmd.cs:69-72, step 1), nor Apply's (PowerCmd.cs:103, step 6), nor ModifyAmount's separate re-check (PowerCmd.cs:217-220, step 24); (b) no mid-pipeline CanReceivePowers re-check (PowerCmd.cs:133, step 16). The IsEnding half belongs to the same family as hook_dispatch's guard G8, which is still pinned by two strict xfails. ORIGINAL: none of these guards existed at any point in PowerCmd.apply."
     },
     {
       "what": "N1: IsVisible is entirely absent from the sim's Power model; C#'s power.IsVisible gate (UnsettlingLamp.cs:93, ArtifactPower.cs:29-33) provably never varies",

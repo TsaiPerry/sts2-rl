@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\lizard_tail.py",
-    "sha256": "db1016ec1705fcc1260cfbcf797254dab54a3f3636688a4eacf2b171b095ff36"
+    "sha256": "b00e2681b565ee639eb58e7f9d66353f1cfafa227e6face47286ecefa446123f"
   },
   "extra_sources": [
     {
@@ -16,37 +16,37 @@
     },
     {
       "path": "sts2_rl/cards/breakthrough.py",
-      "sha256": "4192660bb07c535a49e5f3f4faffd4bfd1f1294bfd49c64f00d60c1eb193ed28",
+      "sha256": "5dcda8546a221d075c89ce0b0de38e2ce3f849e0d2c7e51aa11cec85e26e4297",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/colorless_skills.py",
-      "sha256": "582eae297c48ba02774195e37e6ddb76d3874c28f7007d4c54267ed41da7e6d8",
+      "sha256": "a94c279e15e166c280c399871da2c21a4ed6c4bf2b827bcf3cf4d1bb9c22b4ca",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "72840c98dd4eb14b3f77142dc08078d535fb5f223a14b5d7fea981010502b1a7",
+      "sha256": "06f9d38ecefba5bb61280da2dae7e92350e163a00481f23bfe8443b722327ad8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5",
+      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     }
   ],
@@ -84,8 +84,8 @@
     },
     {
       "what": "G3 (LIVE): the port sets `_used` inside should_die, where C# sets WasUsed in AfterPreventingDeath -- so a should_die call that is only a PREDICATE burns the relic",
-      "verdict": "gap",
-      "issue": "MECHANISM: LizardTail.ShouldDieLate (LizardTail.cs:40-51) is pure -- it reads WasUsed and returns -- and the charge is spent in AfterPreventingDeath (line 56). lizard_tail.py:35-39 mutates `self._used = True` and `self._heal_pending = True` inside the predicate. Every sim caller that queries should_die without going on to run the prevention path therefore consumes the relic for nothing. EXECUTED (b08-lizard): cards/breakthrough.py:49's `if p.hp <= 0 and ctx.hooks.should_die(p)` is exactly that shape -- the veto makes the `if` false, so breakthrough does nothing at all: no HP floor, no after_preventing_death, no on_damage_received -- and the player is left at hp=0 with _used=True. CreatureCmd.kill (cmds.py:192-207) is the second such caller. This is the SAME mechanism audit/records/seam/damage_pipeline.json guard G4 describes from the other side (the killing-blow AfterDamageReceived skip that the port relies on), and that record explicitly notes the port 'relies on this on_damage_received re-fire to perform its heal'. What it does not record, and this entry does, is that the reliance also puts the CHARGE in the wrong place. FIX-ORDERING CONSTRAINT: moving the heal to after_preventing_death (which exists, hooks.py:596-601) fixes G1, G2 and G3 together, but it also means DamageCmd.deal must pass a preventer list on every path -- CreatureCmd.kill currently does not. Rule 7: cmds.py, cards/breakthrough.py, hooks.py and audit/records/seam/damage_pipeline.json are not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 8): `ShouldDieLate` is a pure predicate now, and the entry's stated blocker was itself stale. THE FIX: LizardTail.cs:40-51 reads `WasUsed` and returns -- `creature != Owner.Creature -> true`, `WasUsed -> true`, else false -- and the charge is spent in AfterPreventingDeath (:53-59, `Flash(); WasUsed = true;` then the heal). relics/lizard_tail.py set `_used` INSIDE the predicate, so a second query in the same breath answered the wrong way and any caller that queried without continuing to the prevention path burned the relic. `should_die_late` now only reads, `after_preventing_death` sets `_used`, and the `_heal_pending` shim is GONE -- `Hook.AfterPreventingDeath` is dispatched to the VETOING listener alone (CreatureCmd.cs:567; the sim's dispatcher walks the `preventer` list), so there was nothing to re-check. THE BLOCKER WAS STALE: the entry's FIX-ORDERING CONSTRAINT said this needed `DamageCmd.deal` to pass a preventer list on every path and that `CreatureCmd.kill` did not. It does -- `cmds._resolve_death` builds the list, passes it to `hooks.should_die` and calls `hooks.after_preventing_death(preventer, target)` on the else-arm, and `CreatureCmd.kill` routes through `_resolve_death`. And the entry's named LIVE witness was `cards/breakthrough.py`'s bare `if p.hp <= 0 and ctx.hooks.should_die(p)`, which ROUND 7 DELETED when card/breakthrough/OnPlay moved the self-damage into DamageCmd.deal. ENUMERATED 2026-07-29: `hooks.should_die(` has exactly ONE caller in sts2_rl (`_resolve_death`), and it always continues to the prevention path; the run-level walk (run.py) iterates the POTION BELT only, which is Fairy in a Bottle, not this relic. So the impurity was no longer observable at the moment it was fixed -- recorded here rather than used as an excuse to leave it, because the predicate now has the shape the source has. EXECUTED: three consecutive `should_die_late` queries all answer False and leave `is_used_up` False; a real lethal hit spends the charge, heals off 0 and leaves the player alive; a second lethal hit kills; another creature's death answers True and spends nothing.  Pinned by test/test_tier1_last_five.py.  NOT CLOSED: nothing at this site. damage_pipeline/G4's own disposition is that record's.  The text it replaced read: MECHANISM: LizardTail.ShouldDieLate (LizardTail.cs:40-51) is pure -- it reads WasUsed and returns -- and the charge is spent in AfterPreventingDeath (line 56). lizard_tail.py:35-39 mutates `self._used = True` and `self._heal_pending = True` inside the predicate. Every sim caller that queries should_die without going on to run the prevention path therefore consumes the relic for nothing. EXECUTED (b08-lizard): cards/breakthrough.py:49's `if p.hp <= 0 and ctx.hooks.should_die(p)` is exactly that shape -- the veto makes the `if` false, so breakthrough does nothing at all: no HP floor, no after_preventing_death, no on_damage_received -- and the player is left at hp=0 with _used=True. CreatureCmd.kill (cmds.py:192-207) is the second such caller. This is the SAME mechanism audit/records/seam/damage_pipeline.json guard G4 describes from the other side (the killing-blow AfterDamageReceived skip that the port relies on), and that record explicitly notes the port 'relies on this on_damage_received re-fire to perform its heal'. What it does not record, and this entry does, is that the reliance also puts the CHARGE in the wrong place. FIX-ORDERING CONSTRAINT: moving the heal to after_preventing_death (which exists, hooks.py:596-601) fixes G1, G2 and G3 together, but it also means DamageCmd.deal must pass a preventer list on every path -- CreatureCmd.kill currently does not. Rule 7: cmds.py, cards/breakthrough.py, hooks.py and audit/records/seam/damage_pipeline.json are not hashed by this record."
     },
     {
       "what": "G4 (LIVE): C#'s ShouldDie/ShouldDieLate two-pass priority is collapsed to one flat pass, so the sim can spend Lizard Tail while Fairy in a Bottle is held -- correcting audit/records/seam/damage_pipeline.json guard N4's 'currently inert'",

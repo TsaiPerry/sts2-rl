@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_skills.py",
-    "sha256": "582eae297c48ba02774195e37e6ddb76d3874c28f7007d4c54267ed41da7e6d8"
+    "sha256": "a94c279e15e166c280c399871da2c21a4ed6c4bf2b827bcf3cf4d1bb9c22b4ca"
   },
   "extra_sources": [
     {
@@ -16,17 +16,17 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "879d6791db6dd9ec5d35355d75e3e784be4c380fb7d0bcd65b0ede93ff8cd339",
+      "sha256": "03b13195368f9b62ffdaef867883b236c1573dd14c05724c40c439ede14a6fbf",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     },
     {
       "path": "test/test_rng_tripwire.py",
-      "sha256": "c34c8bc722ef8c237fc8f09cb3bb0b09e789c97f16fc3cc11619ffabc270a008",
+      "sha256": "2265d317d867d7f296c12774adb73b43d9828aca995f80bb15e1a53deb29451f",
       "side": "sim"
     }
   ],
@@ -58,8 +58,8 @@
     },
     "OnPlay": {
       "maps_to": "DiscoveryCard.on_play (colorless_skills.py:218-225)",
-      "verdict": "gap",
-      "issue": "The SHAPE is right -- generate 3 distinct cards, choose 1, make it free this turn, add it to hand -- and both sides apply `SetToFreeThisTurn` BEFORE the pile add, which matters because the sim's `set_free_this_turn` is cleared by the turn-start reset (cards/base.py:265-269) exactly like C#'s EndOfTurn expiration. TWO DIVERGENCES. (1) WRONG RNG STREAM: `CardFactory.GetDistinctForCombat(Owner, Owner.Character.CardPool.GetUnlockedCards(...), 3, Owner.RunState.Rng.CombatCardGeneration)` (Discovery.cs:27) names the CombatCardGeneration stream; the sim calls `random_pool_cards(ctx.combat._rng, 3, distinct=True)` (colorless_skills.py:222), i.e. the unseeded shared `random.Random`, even though `ctx.combat.combat_rng.card_gen` maps to `combat_card_generation` (combat_rng.py:20,52). `random_pool_cards` also uses `rng.sample` (pool.py:158) where GetDistinctForCombat draws from the named stream, so the draw count differs too. Same mechanism and same verdict as card/anointed's and card/beat_down's OnPlay entries (rule 3); LIVE, and this card is one of the 21 the `shared-rng` probe lists. (2) `canSkip: true` (Discovery.cs:28) is not modelled: `CombatState.select_cards` always returns a card when candidates exist (combat.py:575-581), so the sim cannot decline. DORMANT for the skip half -- declining is strictly worse play and no replay command for it is wired -- but it is a missing player choice, not a re-architecture. REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `cards.pool.take_random` is `IEnumerableExtensions.TakeRandom` (IEnumerableExtensions.cs:17-20) -- `collection.ToList().UnstableShuffle(rng).Take(count)` -- and it encodes all three things `random.sample` got wrong: a FULL Fisher-Yates whatever `count` is (so the stream lands where the game's does), over a COPY (`.ToList()`), with no clamp on `count` (`Take(n)` on a shorter sequence yields the whole thing). Discovery.cs:27 names `Rng.CombatCardGeneration`, so the site calls `get_distinct_for_combat_parity(<rng>.card_gen, ...)` -- the ready-made port of `CardFactory.GetDistinctForCombat`, whose body IS shuffle-then-take over `FilterForCombat`'s id list. The `is_parity` branch is gone rather than added to: the ALGORITHM was wrong in legacy mode too, and 'original means game source' says fix the engine rather than preserve the old sim sequence.  Pinned by test/test_take_random_streams.py, which gives every named accessor its own Random and asserts the site advanced the one its C# names and did NOT touch the shared `combat._rng`.  NOT CLOSED: `canSkip: true` (Discovery.cs:28) is still unmodelled -- `CombatState.select_cards` always returns a card when candidates exist. That half was already recorded DORMANT in this entry and is unchanged.  The text it replaced read: The SHAPE is right -- generate 3 distinct cards, choose 1, make it free this turn, add it to hand -- and both sides apply `SetToFreeThisTurn` BEFORE the pile add, which matters because the sim's `set_free_this_turn` is cleared by the turn-start reset (cards/base.py:265-269) exactly like C#'s EndOfTurn expiration. TWO DIVERGENCES. (1) WRONG RNG STREAM: `CardFactory.GetDistinctForCombat(Owner, Owner.Character.CardPool.GetUnlockedCards(...), 3, Owner.RunState.Rng.CombatCardGeneration)` (Discovery.cs:27) names the CombatCardGeneration stream; the sim calls `random_pool_cards(ctx.combat._rng, 3, distinct=True)` (colorless_skills.py:222), i.e. the unseeded shared `random.Random`, even though `ctx.combat.combat_rng.card_gen` maps to `combat_card_generation` (combat_rng.py:20,52). `random_pool_cards` also uses `rng.sample` (pool.py:158) where GetDistinctForCombat draws from the named stream, so the draw count differs too. Same mechanism and same verdict as card/anointed's and card/beat_down's OnPlay entries (rule 3); LIVE, and this card is one of the 21 the `shared-rng` probe lists. (2) `canSkip: true` (Discovery.cs:28) is not modelled: `CombatState.select_cards` always returns a card when candidates exist (combat.py:575-581), so the sim cannot decline. DORMANT for the skip half -- declining is strictly worse play and no replay command for it is wired -- but it is a missing player choice, not a re-architecture. REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
     },
     "OnUpgrade": {
       "maps_to": "DiscoveryCard._on_upgrade (colorless_skills.py:215-216)",
@@ -74,6 +74,6 @@
       "rationale": "The seam's step 52 names a SOULS-enchanted Discovery as its witness: `DowngradeInternal` re-applies `Enchantment?.ModifyCard()` (CardModel.cs:2145) and the sim's `downgrade()` does not, so an enchantment that removes Exhaust is not re-applied after upgrade+downgrade. Flagged here, not re-verdicted: the mechanism is `Card.downgrade`'s, and Discovery's own keyword handling is correct."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

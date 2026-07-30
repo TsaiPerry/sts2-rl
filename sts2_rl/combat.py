@@ -14,6 +14,7 @@ and Cmds during resolution, and the `Phase` / `CombatResult` value types.
 from __future__ import annotations
 
 import random
+from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, TYPE_CHECKING
@@ -26,6 +27,7 @@ from .monsters import Encounter, Monster, FUZZY_WURM_ENCOUNTER
 from .monsters.state_machine import STUN_STATE_ID
 from .player import PlayerCombatState
 from .potions import Potion
+from .turn_phase import PlayerTurnPhase
 
 if TYPE_CHECKING:
     from .relics import Relic
@@ -65,6 +67,11 @@ class CombatCtx:
         if target_idx is not None and target_idx < len(self.enemies) and not self.enemies[target_idx].is_gone:
             return self.enemies[target_idx]
         return self.enemy
+
+    @property
+    def hittable_enemies(self) -> list[Monster]:
+        """`ICombatState.HittableEnemies` — see `CombatState.hittable_enemies`."""
+        return self.combat.hittable_enemies
 
 
 class CombatState:
@@ -118,7 +125,18 @@ class CombatState:
 
         self.hooks = HookSystem()
         self.hooks.combat = self
+        # PlayerCombatState.TurnNumber — bumped for EVERY player turn, extra
+        # turns included (CombatManager.cs:1417). This is what turn-numbered
+        # content reads: Horn Cleat, Captain's Wheel, Sparkling Rouge, Royal
+        # Poison, Anchor.
         self.turn = 1
+        # CombatState.RoundNumber (CombatState.cs:102, initialised to 1 at
+        # :156) — bumped only on a NORMAL round (CombatManager.cs:1413), so an
+        # extra player turn is still the same round. CombatHistory stamps every
+        # entry with it (CombatHistory.cs:40-120), which is what makes "did X
+        # happen this turn" survive an extra turn, and AbstractModel.cs:1125
+        # tells content to pair AfterSideTurnStart "with a RoundNumber check".
+        self.round_number = 1
         # Combat event log (mirrors CombatManager.History). Registered before
         # any other listener so entries exist by the time powers/cards react.
         self.history = CombatHistory(self)
@@ -144,7 +162,11 @@ class CombatState:
                 card.enchantment.reset()
                 card.enchantment.combat = self
                 self.hooks.register(card.enchantment)
-        self.enemies: list[Monster] = (encounter or FUZZY_WURM_ENCOUNTER).create_monsters(
+        # `CombatState.Encounter` — kept because it is not just provenance:
+        # `SortEnemiesBySlotName` reads `Encounter.Slots` to order the enemy list
+        # (CombatState.cs:495-501) and the summoners read it to pick their slot.
+        self.encounter: Encounter = encounter or FUZZY_WURM_ENCOUNTER
+        self.enemies: list[Monster] = self.encounter.create_monsters(
             self.hooks, self._rng, encounter_selection_rng
         )
         # Stable creature ids (CombatState.CombatId): the player is 0, initial
@@ -181,6 +203,13 @@ class CombatState:
         # Which side is currently acting ("player" / "enemy"); mirrors the
         # game's CombatState.CurrentSide (used by e.g. Inferno).
         self.current_side = "player"
+        # `CombatManager.PlayersTakingExtraTurn` (_playersTakingExtraTurn).
+        # Cleared and refilled in SwitchFromPlayerToEnemySide
+        # (CombatManager.cs:1360-1373) and still populated while StartTurn runs
+        # (:435/:439) and therefore while Hook.AfterSideTurnStart fires (:522) —
+        # which is how content tells an EXTRA player turn from an ordinary one.
+        # RampartPower.cs:23 is the first reader.
+        self.players_taking_extra_turn: list = []
         # Pluggable in-combat card chooser (see select_cards); None = random.
         # Accepted as a constructor arg because turn-1 effects (Gambling Chip)
         # can request a selection during __init__, before callers could set it.
@@ -225,14 +254,32 @@ class CombatState:
         # …) awaiting the player's pick. The conformance driver resolves it from
         # the recording's `SelectCardFromScreen N`; legacy resolves it inline.
         self._pending_screen_cards: Optional[list["Card"]] = None
+        # CombatManager._cardOrPotionEffectDepth (CombatManager.cs:310-338).
+        # The sim has a single player, so one counter rather than a per-player
+        # dict. See _card_or_potion_effect.
+        self._card_or_potion_effect_depth = 0
+        # CombatManager._inPlayerTurnSetup / _deferredEndTurnTransition
+        # (CombatManager.cs:470-471, 702-714, 722-735). See
+        # _start_player_turn.
+        self._in_player_turn_setup = False
+        self._deferred_end_turn_transition = None
+        # CombatManager._pendingLoss (CombatManager.cs:945-965). See
+        # lose_combat / _process_pending_loss.
+        self._pending_loss = None
+
+        # StartCombatInternal's per-creature AfterCreatureAdded loop
+        # (CombatManager.cs:394-398), which runs BEFORE Hook.BeforeCombatStart
+        # (:404) and is where every starting enemy's FIRST intent is rolled.
+        for _enemy in list(self.enemies):
+            self.after_creature_added(_enemy)
 
         self.hooks.on_combat_start()
         # CombatManager.StartCombat ends in StartTurn (CombatManager.cs:418),
         # so turn 1 runs the enemy-intent pass like every other player turn.
         # Nothing has performed a move yet, so it is a no-op — the enemies'
-        # opening intents come from AfterCreatureAdded's roll.
+        # opening intents came from the AfterCreatureAdded loop above.
         self._roll_enemy_intents()
-        self.player.start_turn()
+        self._start_player_turn()
         # CombatManager.cs:573 calls CheckWinCondition immediately after
         # SetupPlayerTurn. The sim checked after each enemy move, after the
         # enemy side and after the NEXT player turn's setup, but nothing
@@ -248,6 +295,21 @@ class CombatState:
             if not e.is_gone:
                 return e
         return self.enemies[0]
+
+    @property
+    def hittable_enemies(self) -> list[Monster]:
+        """`CombatState.HittableEnemies` (CombatState.cs:142) —
+        `Enemies.Where(e => e.IsHittable).ToList()`.
+
+        Every AoE and every random-enemy draw in the game reads THIS, not "the
+        enemies that are not gone": `IsHittable` also consults
+        `Hook.ShouldAllowHitting` (Creature.cs:285-299), so a creature that is
+        alive but mid-revival (Illusion, Adaptable, Reattach) is not a
+        candidate — and that matters twice over for the RNG sites, because the
+        `CombatTargets` index is drawn against the list's LENGTH.
+        """
+        from .cmds import is_hittable
+        return [e for e in self.enemies if is_hittable(self.hooks, e)]
 
     @property
     def card_pool(self) -> tuple[str, ...]:
@@ -307,11 +369,11 @@ class CombatState:
         assigned: list[int] = []
         for e in enemies:
             assigned.append(cls._roll_parity_hp(e, assigned, niche))
-        # MonsterModel.AfterAddedToRoom fires per creature once it is on the
-        # board, after its HP roll; the only porting monster reshapes MaxHp
-        # (Decimillipede's even-and-unique pass), so re-read the live values.
-        for e in enemies:
-            e.adjust_hp_after_added([o for o in enemies if o is not e])
+        # MonsterModel.AfterAddedToRoom's HP fix-up used to run here. It has
+        # moved to `after_creature_added`, the port of the C# hook that owns
+        # it — this method is only the `CreateCreature` HP roll that precedes
+        # it, and it does not run in legacy mode or for a mid-combat spawn,
+        # where the fix-up must.
 
     def assign_parity_hp(self, creature) -> None:
         """Roll a mid-combat-spawned enemy's HP on the Niche stream, mirroring
@@ -338,6 +400,63 @@ class CombatState:
         # and about to revive (AdaptablePower, InfestedPower).
         return not self.hooks.should_stop_combat_from_ending()
 
+    def after_creature_added(self, creature) -> None:
+        """`CombatManager.AfterCreatureAdded` (CombatManager.cs:858-867):
+
+            await creature.AfterAddedToRoom();
+            if (creature.IsEnemy && _state.CurrentSide == CombatSide.Player)
+                creature.Monster.RollMove(_state.Players.Select(p => p.Creature));
+
+        **The side gate is the whole point.** A creature summoned during the
+        ENEMY side gets no opening roll: it keeps `MonsterModel.NextMove`'s
+        initial `new MoveState()` (UNSET_MOVE) and is first rolled by the next
+        player-turn-start pass, at its position in the enemy list. The sim
+        rolled unconditionally in `MachineMonster.__init__`, which put the draw
+        at spawn time instead — one MonsterAi draw in the wrong stream
+        position, and, because the pass then skipped the spawn, the draws of
+        the spawn and its already-acting siblings were swapped for the rest of
+        the combat.
+
+        Called from combat setup — `StartCombatInternal` loops
+        `_state.Creatures` here, before `Hook.BeforeCombatStart`
+        (CombatManager.cs:394-403) — and from `CreatureCmd.add`. C# walks
+        every creature and gates on `IsEnemy`; the sim walks `self.enemies`,
+        which is that gate. `Creature.AfterAddedToRoom`'s other half, the
+        MaxHp fix-up, is `Monster.adjust_hp_after_added` and runs here, as its
+        first statement does — `await creature.AfterAddedToRoom()`. It used to
+        hang off `_assign_parity_monster_hp`, which meant it never ran in
+        legacy mode and never ran for a mid-combat spawn at all; C# runs it on
+        every creature in both cases, always after `CreateCreature`'s HP roll.
+        """
+        creature.adjust_hp_after_added(
+            [o for o in self.enemies if o is not creature])
+        if self.current_side == "player":
+            self._prepare_for_next_turn(creature)
+
+    @staticmethod
+    def _prepare_for_next_turn(enemy) -> None:
+        """`Creature.PrepareForNextTurn` -> `MonsterModel.RollMove` ->
+        `MonsterMoveStateMachine.FindNextMoveState`, whose first guard is
+
+            if (!CanTransitionAway || (!_performedFirstMove && IsMove)) return;
+
+        (MonsterMoveStateMachine.cs:60-63) — so rolling a monster that has not
+        yet PERFORMED a move returns its telegraphed one unchanged, without
+        touching the Rng. Both callers of the roll go through here because both
+        need that stickiness: the AfterCreatureAdded roll and the
+        player-turn-start pass.
+
+        `MachineMonster` has the guard inside its own machine, but the
+        hand-rolled monsters do not — their `telegraph_next_move` advances
+        unconditionally — which is what `Monster.performed_first_move` stands in
+        for (monsters/base.py). `has_rolled_a_move` is the other half: a
+        creature still on UNSET_MOVE has no telegraphed move for the guard to
+        keep, so it must roll.
+        """
+        if not enemy.performed_first_move and enemy.has_rolled_a_move:
+            return
+        enemy.telegraph_next_move()
+
     def _roll_enemy_intents(self) -> None:
         """CombatManager.StartTurn's player-turn-start pass
         (CombatManager.cs:478-484):
@@ -363,13 +482,20 @@ class CombatState:
         `!_performedFirstMove && _currentState.IsMove -> return`
         (MonsterMoveStateMachine.cs:60-63): until a monster has performed a
         move its telegraphed one is sticky.
+
+        That guard does NOT cover a creature that has never been rolled at
+        all — an enemy-side spawn, which `after_creature_added` leaves on
+        UNSET_MOVE. C# calls `PrepareForNextTurn` on every enemy
+        unconditionally and lets the machine decide, and for an un-rolled
+        spawn `_currentState` is the machine's INITIAL state, so the
+        `IsMove` half of the guard is whatever that state is rather than a
+        telegraphed move. Skipping it here would strand the spawn on
+        UNSET_MOVE for the whole combat.
         """
         for enemy in list(self.enemies):
             if enemy.is_gone and not enemy.retained_after_death:
                 continue
-            if not enemy.performed_first_move:
-                continue
-            enemy.telegraph_next_move()
+            self._prepare_for_next_turn(enemy)
 
     def _execute_enemy_turn(self) -> None:
         self.current_side = "enemy"
@@ -378,7 +504,67 @@ class CombatState:
         finally:
             self.current_side = "player"
 
+    def _side_participants(self) -> list:
+        """`_state.CreaturesOnCurrentSide.ToList()` for the enemy side
+        (CombatManager.cs:444, :1250) — a SNAPSHOT, taken once and reused by
+        every pass of that phase, so a creature removed part-way through still
+        gets the rest of the passes it was captured for."""
+        return [e for e in self.enemies
+                if not (e.is_gone and not e.retained_after_death)]
+
     def _run_enemy_turns(self) -> None:
+        # CombatManager.StartTurn runs THREE complete passes over the side's
+        # captured participants before any of them acts, with one side-scoped
+        # hook between the first and the second and one after the third — not
+        # [clear, start, move, end] per enemy, which is what the sim used to do
+        # (turn_structure gap G5). Every enemy power that looked like a
+        # per-creature turn-start listener is really an implementation of one
+        # of these side hooks: C# has no per-creature turn-start or turn-end
+        # hook at all.
+        #
+        # CombatManager.cs:429 — the enemy side's StartTurn runs
+        # SetPhaseForAllPlayers(PlayerTurnPhase.None) too; PlayerTurnPhase.cs:9
+        # says in as many words that None is "used ... during the enemy's turn".
+        self.player.turn_phase = PlayerTurnPhase.NONE
+        starting = self._side_participants()
+
+        # Pass 1: Creature.BeforeTurnStart (CombatManager.cs:449-455) is the
+        # `power.AmountOnTurnStart = power.Amount` snapshot (Creature.cs:673-679);
+        # the sim does not model AmountOnTurnStart, and none of the three
+        # powers that read it (DrawCardsNextTurn, HelloWorld, SummonNextTurn)
+        # is enemy-side.
+
+        # Hook.BeforeSideTurnStart — ONCE for the side (:458).
+        self.hooks.before_enemy_side_start()
+
+        # Pass 2: Creature.AfterTurnStart -> ClearBlock, every participant
+        # (:492-499).
+        for enemy in starting:
+            preventer: list = []
+            if self.hooks.should_clear_block(enemy, preventer):
+                enemy.block = 0
+            else:
+                self.hooks.after_preventing_block_clear(preventer, enemy)
+
+        # Pass 3: Hook.AfterBlockCleared, every participant (:500-507),
+        # UNCONDITIONALLY — the sim once gated the event on `enemy.block > 0`,
+        # which the game does not.
+        for enemy in starting:
+            self.hooks.on_block_cleared(enemy)
+
+        # Hook.AfterSideTurnStart — ONCE for the side (:522), then its `_late`
+        # pass. Poison, Demon Form, Slow and the Plating decay resolve for
+        # EVERY enemy here, before the first one moves.
+        self.hooks.after_enemy_side_start()
+
+        # CombatManager.cs:598 — CheckWinCondition guards the whole of
+        # ExecuteEnemyTurn, so a side-start hook that killed the last enemy (or
+        # the player) ends the combat before any move.
+        self._check_win_condition()
+        if self.phase == Phase.COMBAT_OVER:
+            return
+
+        # ExecuteEnemyTurn (:1072-1090) — the moves.
         for enemy in list(self.enemies):
             # ExecuteEnemyTurn iterates every creature still IN the combat
             # (_state.ContainsCreature) and Creature.TakeTurn has no IsDead
@@ -386,29 +572,6 @@ class CombatState:
             # segment) keeps taking turns — that is how it reaches REATTACH.
             if enemy.is_gone and not enemy.retained_after_death:
                 continue
-
-            # Clear block at the start of this enemy's turn. Two loops in C#
-            # (CombatManager.cs:492-507): the clear, then AfterBlockCleared
-            # UNCONDITIONALLY — the sim additionally gated the event on
-            # `enemy.block > 0`, which the game does not.
-            preventer: list = []
-            if self.hooks.should_clear_block(enemy, preventer):
-                enemy.block = 0
-            else:
-                self.hooks.after_preventing_block_clear(preventer, enemy)
-            self.hooks.on_block_cleared(enemy)
-
-            # Turn-start events (Poison, DemonForm, etc. can fire here).
-            self.hooks.on_enemy_turn_start(enemy)
-            if enemy.is_dead:
-                if self._all_enemies_dead():
-                    self._end_combat(player_won=True)
-                    return
-                if not enemy.retained_after_death:
-                    continue
-            if self.player.is_dead:
-                self._end_combat(player_won=False)
-                return
 
             # Execute the enemy's move. A stunned creature's "skipped" turn is
             # not really skipped in C#: Creature.StunInternal
@@ -439,11 +602,18 @@ class CombatState:
                 self._end_combat(player_won=True)
                 return
 
-            # Turn-end events (Regen, Ritual, per-enemy effects, etc.).
-            self.hooks.on_enemy_turn_end(enemy)
-
-        # Side-end: fires once after all enemies have acted (debuff ticks, etc.).
+        # EndEnemyTurnInternal (CombatManager.cs:1248-1257): Hook.BeforeTurnEnd,
+        # the players' EndOfTurnCleanup, then Hook.AfterTurnEnd — each ONCE for
+        # the whole side. Regen, Ritual, Hatch, Slumber, Escape Artist, Asleep
+        # and the Battleworn Dummy's time limit are AfterSideTurnEnd
+        # implementations and resolve on the second of the two.
         if self.phase != Phase.COMBAT_OVER:
+            self.hooks.before_enemy_side_end()
+            # CombatManager.cs:1252-1255 — EndOfTurnCleanup runs for every
+            # player BETWEEN the two side hooks, so a single-turn Retain or
+            # cost modifier granted from a BeforeTurnEnd listener is already
+            # gone by AfterTurnEnd. The second of its two sites.
+            self.player.end_of_turn_cleanup()
             self.hooks.on_enemy_side_end()
 
     def _check_win_condition(self) -> None:
@@ -456,15 +626,74 @@ class CombatState:
         """
         if self.phase == Phase.COMBAT_OVER:
             return
-        if self.player.is_dead:
-            self._end_combat(player_won=False)
+        # CombatManager.cs:1048 — the pending loss is tested FIRST, so it wins
+        # a tie in which the player and the last enemy die together.
+        if self._has_pending_loss:
+            self._process_pending_loss()
         elif self._all_enemies_dead():
-            self._end_combat(player_won=True)
+            self._end_combat_internal()
+
+    def lose_combat(self) -> None:
+        """CombatManager.LoseCombat (CombatManager.cs:945-951) — MARK the loss.
+
+        :941-943 says why it is only a mark: "The actual loss processing
+        happens at the next safe point (in CheckWinCondition) to avoid race
+        conditions where effects try to run after IsInProgress is false."
+        Called from CreatureCmd.Kill (CreatureCmd.cs:450-455) once every player
+        is dead.
+        """
+        if self._pending_loss is None:
+            self._pending_loss = True
+
+    @property
+    def _has_pending_loss(self) -> bool:
+        """`_pendingLoss != null`. `player.is_dead` stands in for the deaths
+        that reached the player through the damage pipeline rather than an
+        explicit `lose_combat()`: C# routes every one of them through
+        CreatureCmd.Kill, which calls LoseCombat, so the two are the same
+        condition. `getattr` for the same __init__ window `is_ending` documents."""
+        return getattr(self, "_pending_loss", None) is not None or self.player.is_dead
+
+    def _process_pending_loss(self) -> None:
+        """CombatManager.ProcessPendingLoss (CombatManager.cs:956-965).
+
+        Clears the mark, drops IsInProgress and raises the CombatEnded event.
+        It fires NO HOOK — not Hook.AfterCombatEnd, not Hook.AfterCombatVictory
+        — and there is no revive. The sim used to fire its one combat-end hook
+        on this path with `player_won=False`.
+        """
+        self._pending_loss = None
+        self.phase = Phase.COMBAT_OVER
+        self.player.turn_phase = PlayerTurnPhase.NONE
+        self.result = CombatResult(player_won=False, turns_taken=self.turn)
+
+    def _end_combat_internal(self) -> None:
+        """CombatManager.EndCombatInternal (CombatManager.cs:970-1030) — the
+        VICTORY path, in the game's order: IsInProgress false (:977),
+        SetPhaseForAllPlayers(None) (:978), every player's
+        ReviveBeforeCombatEnd (:986), Hook.AfterCombatEnd (:988), then
+        Hook.AfterCombatVictory (:999)."""
+        self.phase = Phase.COMBAT_OVER
+        self.player.turn_phase = PlayerTurnPhase.NONE
+        self.result = CombatResult(player_won=True, turns_taken=self.turn)
+        # Player.ReviveBeforeCombatEnd (Player.cs:821-827): a dead player is
+        # healed to 1 BEFORE the hooks, because (:816-819) "if the player is
+        # still dead during HookBus.AfterCombatEnd, their relics will not be
+        # subscribed to the HookBus, and relics which rely on AfterCombatEnd to
+        # reset state will not be reset for the next combat."
+        if self.player.is_dead:
+            self.player.hp = 1
+        self.hooks.on_combat_end()
+        self.hooks.on_combat_victory()
 
     def _end_combat(self, player_won: bool) -> None:
-        self.phase = Phase.COMBAT_OVER
-        self.result = CombatResult(player_won=player_won, turns_taken=self.turn)
-        self.hooks.on_combat_end(player_won)
+        """The two CheckWinCondition exits, by outcome. Kept as one entry point
+        because most callers are statements of fact ("this fight is won now"),
+        but the two paths share nothing beyond setting the phase."""
+        if player_won:
+            self._end_combat_internal()
+        else:
+            self._process_pending_loss()
 
     def _process_turn_end_cards(self) -> None:
         """Mirror DoTurnEnd: exhaust ethereal cards, then fire turn-end-in-hand effects."""
@@ -484,9 +713,18 @@ class CombatState:
             self.player.hand.remove(card)
             card.on_turn_end_in_hand(ctx)
             if self.player.is_dead:
-                self._end_combat(player_won=False)
+                # CreatureCmd.Kill -> LoseCombat (CreatureCmd.cs:450-455) MARKS
+                # the loss; EndPlayerTurnPhaseOneInternal's CheckWinCondition
+                # (CombatManager.cs:1208) is the safe point that processes it.
+                self.lose_combat()
                 return
-            if card.is_ethereal and self.hooks.should_ethereal_trigger(card):
+            # CardModel.cs:1690 — the wrapper decides on the RAW keyword.
+            # `Hook.ShouldEtherealTrigger` was already consulted once this turn
+            # end, in DoTurnEnd's partition above (CombatManager.cs:1233), and
+            # only for the cards that had no turn-end effect. Re-consulting it
+            # here would send a vetoed card to the discard pile where the game
+            # exhausts it.
+            if card.is_ethereal:
                 self.player.exhaust_pile.append(card)
                 # CardModel.cs:1692 — the other one.
                 self.hooks.on_card_exhausted(card, caused_by_ethereal=True)
@@ -530,14 +768,16 @@ class CombatState:
                 return False
 
         self.player.energy -= actual_cost
+        # PlayCardAction.cs:94-100 sets ResourceInfo.EnergySpent and
+        # ResourceInfo.EnergyValue to the SAME number on the manual path.
+        card.energy_value = actual_cost
         self.hooks.on_energy_spent(card, actual_cost)
         self.player.hand.pop(hand_index)
         self._resolve_card_play(card, target_idx)
 
-        if self._all_enemies_dead() and self.phase != Phase.COMBAT_OVER:
-            self._end_combat(player_won=True)
-        elif self.player.is_dead and self.phase != Phase.COMBAT_OVER:
-            self._end_combat(player_won=False)
+        # CheckWinCondition (CombatManager.cs:1046-1059) — the loss
+        # arm is tested FIRST, so it wins a simultaneous death.
+        self._check_win_condition()
 
         return True
 
@@ -552,10 +792,9 @@ class CombatState:
         if card in self.player.hand:
             self.player.hand.remove(card)
         self._resolve_card_play(card, target_idx, is_auto_play=True)
-        if self._all_enemies_dead() and self.phase != Phase.COMBAT_OVER:
-            self._end_combat(player_won=True)
-        elif self.player.is_dead and self.phase != Phase.COMBAT_OVER:
-            self._end_combat(player_won=False)
+        # CheckWinCondition (CombatManager.cs:1046-1059) — the loss
+        # arm is tested FIRST, so it wins a simultaneous death.
+        self._check_win_condition()
         return True
 
     def _resolve_card_play(self, card: Card, target_idx: int | None,
@@ -601,62 +840,85 @@ class CombatState:
         # not see the play it is deciding about. The MOVE still happens after
         # the loop, in the finally.
         result_pile = self.hooks.modify_card_play_result_pile(card, "discard")
+        # GetResultPileTypeForCardPlay (CardModel.cs:2070-2082) is evaluated
+        # here, as the hook's `defaultPileType` argument, and it CONSUMES
+        # ExhaustOnNextPlay on the spot (:2078) — before OnPlay runs, not after.
+        exhausts_this_play = card.exhausts or card.exhaust_on_next_play
+        card.exhaust_on_next_play = False
         # CardModel.cs:1904-1965 builds a FRESH CardPlay each iteration
         # (PlayIndex = i, :1919-1928) and fires Hook.BeforeCardPlayed (:1929)
         # AND Hook.AfterCardPlayed (:1959) INSIDE the loop. The sim fired each
         # once per logical play, so a Throwing-Axe-doubled Strike advanced Pen
         # Nib's counter by 1 where the game advances it by 2 — from the first
         # combat of a run, the two engines doubled a different attack.
-        for play_index in range(play_count):
-            card.current_play_index = play_index
-            self.hooks.before_card_played(card, played_target)
-            if is_attack:
-                self.hooks.before_attack(self.player, card)
-            if card.target_type == TargetType.ALL_ENEMIES and not card.handles_own_routing:
-                # Framework routes: call on_play once per living enemy.
-                for idx, e in enumerate(self.enemies):
-                    if e.is_gone:
-                        continue
-                    card.on_play(self._ctx(), idx)
-                    if self._all_enemies_dead() or self.player.is_dead:
-                        break
-            else:
-                # Card handles its own routing (or doesn't need enemy iteration).
-                card.on_play(self._ctx(), target_idx)
-            if is_attack:
-                self.hooks.after_attack(self.player, card)
-            # EnchantmentModel.OnPlay is a DIRECT in-loop call, not a hook
-            # (CardModel.cs:1937-1945) — after the card's own OnPlay and before
-            # Hook.AfterCardPlayed.
-            if card.enchantment is not None:
-                card.enchantment.on_play(card, played_target)
-            # Hook.AfterCardPlayed, per iteration and gated on the combat still
-            # being in progress (CardModel.cs:1957-1959).
-            #
-            # The gate is `IsInProgress`, NOT `IsOverOrEnding`: Hook.
-            # AfterCardPlayed (Hook.cs:278-294) is one of the dispatchers that
-            # deliberately BYPASS IterateCombatHookListeners, and Hook.cs:275-276
-            # says why — "Dispatched directly, not through the
-            # IterateCombatHookListeners guard: it completes resolution of the
-            # card that caused the kill." IsInProgress stays true between the
-            # killing blow and the teardown (it is cleared only from
-            # CheckWinCondition, CombatManager.cs:1046-1059, which runs after the
-            # whole play action), so C# DOES dispatch on the lethal iteration.
-            # `is_over` is the sim's IsInProgress analogue; using
-            # `is_over_or_ending` here suppressed every AfterCardPlayed listener
-            # on the winning card play. Contrast Hook.BeforeCardPlayed
-            # (Hook.cs:263-270), which IS gated and which the sim does not gate.
-            if not self.is_over:
-                self.hooks.on_card_played(card, is_auto_play)
-            if self._all_enemies_dead() or self.player.is_dead:
-                break
+        # CombatManager.BeginCardOrPotionEffect (CardModel.cs:1901) wraps
+        # the whole play-count loop and is released in a `finally`
+        # (:1967-1970), so the hand-empty check below sees a settled hand.
+        with self._card_or_potion_effect():
+            for play_index in range(play_count):
+                card.current_play_index = play_index
+                self.hooks.before_card_played(card, played_target)
+                # CardModel.cs:1930 — `History.CardPlayStarted` sits between
+                # Hook.BeforeCardPlayed (:1929) and `await OnPlay` (:1931), and
+                # it is a DIRECT call, not a hook. Pushing it here is what lets
+                # a card auto-played from inside this card's OnPlay see this
+                # play already counted (Normality, Nostalgia).
+                self.history.card_play_started(card, is_auto_play)
+                if is_attack:
+                    self.hooks.before_attack(self.player, card)
+                if card.target_type == TargetType.ALL_ENEMIES and not card.handles_own_routing:
+                    # Framework routes: call on_play once per living enemy.
+                    for idx, e in enumerate(self.enemies):
+                        if e.is_gone:
+                            continue
+                        card.on_play(self._ctx(), idx)
+                        if self._all_enemies_dead() or self.player.is_dead:
+                            break
+                else:
+                    # Card handles its own routing (or doesn't need enemy iteration).
+                    card.on_play(self._ctx(), target_idx)
+                if is_attack:
+                    self.hooks.after_attack(self.player, card)
+                # EnchantmentModel.OnPlay is a DIRECT in-loop call, not a hook
+                # (CardModel.cs:1937-1945) — after the card's own OnPlay and before
+                # Hook.AfterCardPlayed.
+                if card.enchantment is not None:
+                    card.enchantment.on_play(card, played_target)
+                # Hook.AfterCardPlayed, per iteration and gated on the combat still
+                # being in progress (CardModel.cs:1957-1959).
+                #
+                # The gate is `IsInProgress`, NOT `IsOverOrEnding`: Hook.
+                # AfterCardPlayed (Hook.cs:278-294) is one of the dispatchers that
+                # deliberately BYPASS IterateCombatHookListeners, and Hook.cs:275-276
+                # says why — "Dispatched directly, not through the
+                # IterateCombatHookListeners guard: it completes resolution of the
+                # card that caused the kill." IsInProgress stays true between the
+                # killing blow and the teardown (it is cleared only from
+                # CheckWinCondition, CombatManager.cs:1046-1059, which runs after the
+                # whole play action), so C# DOES dispatch on the lethal iteration.
+                # `is_over` is the sim's IsInProgress analogue; using
+                # `is_over_or_ending` here suppressed every AfterCardPlayed listener
+                # on the winning card play. Contrast Hook.BeforeCardPlayed
+                # (Hook.cs:263-270), which IS gated and which the sim does not gate.
+                if not self.is_over:
+                    self.hooks.on_card_played(card, is_auto_play)
+                # CardModel.cs:1950-1952 and :1960-1963 return early on
+                # `Owner.Creature.IsDead` ALONE — the PLAYER dying. A dead
+                # ENEMY does not end the Replay loop: a Throwing-Axe-doubled
+                # card that kills on iteration 0 still runs iteration 1, which
+                # is how the game's per-play counters (Tuning Fork's run-scoped
+                # SkillsPlayed) reach 2. The sim also broke on
+                # `_all_enemies_dead()`, so it reached 0.
+                if self.player.is_dead:
+                    break
 
         # OnPlay resolved: the card leaves limbo (moves to its result pile), so
         # later reshuffles include it normally again.
         self.player._playing_card = None
 
-        # Exhaust keyword: move the played card from discard to exhaust.
-        if card.exhausts and card in self.player.discard_pile:
+        # Exhaust keyword (or a consumed ExhaustOnNextPlay): move the played
+        # card from discard to exhaust.
+        if exhausts_this_play and card in self.player.discard_pile:
             self.player.discard_pile.remove(card)
             self.player.exhaust_pile.append(card)
             self.hooks.on_card_exhausted(card)
@@ -667,6 +929,52 @@ class CombatState:
         if card in self.player.discard_pile and result_pile == "draw_top":
             self.player.discard_pile.remove(card)
             self.player.draw_pile.append(card)  # end of list = top of pile
+
+        # CardModel.cs:1992 — the FIRST of CheckForEmptyHand's two callers, and
+        # the one the sim never had. It runs after the result-pile move, so a
+        # card that exhausted itself has already left the hand.
+        self._check_for_empty_hand()
+
+    def sort_enemies_by_slot_name(self) -> None:
+        """`CombatState.SortEnemiesBySlotName` (CombatState.cs:495-501) —
+        `_enemies.Sort((a, b) => Slots.IndexOf(a.SlotName) -
+        Slots.IndexOf(b.SlotName))`, a no-op when the encounter is null.
+
+        A creature with no slot (or one not in the row, e.g. the `string.Empty`
+        GetNextSlot hands back for a full row) gets IndexOf == -1 and sorts to the
+        FRONT, exactly as in C#. Python's sort is stable and C#'s List.Sort is
+        not, but every slot index here is distinct, so the comparator is a total
+        order and the two agree.
+        """
+        encounter = self.encounter
+        if encounter is None or not getattr(encounter, "slots", ()):
+            return
+        slots = list(encounter.slots)
+
+        def key(creature) -> int:
+            name = creature.slot_name
+            return slots.index(name) if name in slots else -1
+
+        self.enemies.sort(key=key)
+
+    def _move_to_result_pile_without_playing(self, card: Card) -> None:
+        """`CardModel.MoveToResultPileWithoutPlaying` (CardModel.cs:2089-2107),
+        the destination of every card `CardCmd.AutoPlay` refuses to play.
+
+        It is NOT "append to the discard pile", which is what the sim did: it
+        honours `ExhaustOnNextPlay || Keywords.Contains(Exhaust)` and routes
+        those to `CardCmd.Exhaust` (:2098-2101), firing AfterCardExhausted. That
+        is how Havoc's `forceExhaust` reaches an UNPLAYABLE card — a Burn pulled
+        off the draw pile is exhausted, not discarded. Its own doc comment names
+        the one way it differs from the played path: a Power card here goes to the
+        discard rather than to limbo.
+        """
+        if card.exhaust_on_next_play or card.exhausts:
+            card.exhaust_on_next_play = False
+            self.player.exhaust_pile.append(card)
+            self.hooks.on_card_exhausted(card)
+        else:
+            self.player.discard_pile.append(card)
 
     def auto_play_card(self, card: Card, target_idx: int | None = None) -> None:
         """Play a card for free (mirrors CardCmd.AutoPlay): no energy is spent.
@@ -689,28 +997,45 @@ class CombatState:
                 pile.remove(card)
                 break
         if not card.is_playable or not self.hooks.should_play_card(card, auto_play=True):
-            # MoveToResultPileWithoutPlaying: no on_play, no played hook.
-            self.player.discard_pile.append(card)
+            self._move_to_result_pile_without_playing(card)
             return
         if card.target_type == TargetType.ANY_ENEMY and target_idx is None:
-            living = [i for i, e in enumerate(self.enemies) if not e.is_gone]
-            if not living:
-                self.player.discard_pile.append(card)
+            # CardCmd.cs:77 — `Rng.CombatTargets.NextItem(combatState.
+            # HittableEnemies)`, which is CombatState.HittableEnemies
+            # (CombatState.cs:142) and NOT "every enemy that is not gone": a
+            # creature can be present and un-hittable (Illusion, Reattach), and
+            # the roll must not offer it. The sim read `not e.is_gone` here even
+            # though its own comment already named HittableEnemies.
+            from .cmds import is_hittable
+            hittable = [i for i, e in enumerate(self.enemies)
+                        if is_hittable(self.hooks, e)]
+            if not hittable:
+                # `if (target == null) MoveToResultPileWithoutPlaying`
+                # (CardCmd.cs:80-84) — the card is spent without being played.
+                self._move_to_result_pile_without_playing(card)
                 return
-            # CardCmd.cs:77 — Rng.CombatTargets.NextItem(HittableEnemies).
-            target_idx = self.combat_rng.targets.choice(living)
+            target_idx = self.combat_rng.targets.choice(hittable)
         if card.energy_cost_x:
             # AutoPlay captures X from current energy without spending it.
             card.captured_x = self.hooks.modify_x_value(card, self.player.energy)
-        # BeforeCardPlayed fires for auto-plays too (0 energy spent) — powers
+        # CardCmd.cs:123-128 — `EnergySpent = 0, EnergyValue =
+        # card.EnergyCost.GetAmountToSpend()`. The two ResourceInfo fields DIVERGE
+        # on this path and only on this path, which is the whole point of there
+        # being two: an auto-played 2-cost card spends nothing and still counts as
+        # a 2-cost play. `GetAmountToSpend` is the player's energy for an X-cost
+        # card and `max(0, cost with all modifiers)` otherwise
+        # (CardEnergyCost.cs:134-141).
+        card.energy_value = (
+            self.player.energy if card.energy_cost_x
+            else max(0, self.hooks.modify_card_energy_cost(card, card.energy_cost)))
+        # BeforeCardPlayed fires for auto-plays too (0 energy SPENT) — powers
         # like Free Attack consume their stacks here.
         self.hooks.on_energy_spent(card, 0)
         self._resolve_card_play(card, target_idx, is_auto_play=True)
 
-        if self._all_enemies_dead() and self.phase != Phase.COMBAT_OVER:
-            self._end_combat(player_won=True)
-        elif self.player.is_dead and self.phase != Phase.COMBAT_OVER:
-            self._end_combat(player_won=False)
+        # CheckWinCondition (CombatManager.cs:1046-1059) — the loss
+        # arm is tested FIRST, so it wins a simultaneous death.
+        self._check_win_condition()
 
     def select_cards(
         self,
@@ -790,28 +1115,87 @@ class CombatState:
         # :293 RemoveBeforeUse (above), :297 BeforePotionUsed, :327 OnUse,
         # :338 AfterPotionUsed, :340 CheckForEmptyHand.
         self.hooks.before_potion_used(potion, target)
-        potion.use(ctx, target)
+        # PotionModel.cs:324-332 — OnUse is bracketed by
+        # Begin/EndCardOrPotionEffect exactly as a card play is, and the
+        # release is a `finally`.
+        with self._card_or_potion_effect():
+            potion.use(ctx, target)
         self.hooks.on_potion_used(potion, target)
         self._check_for_empty_hand()
 
-        if self._all_enemies_dead() and self.phase != Phase.COMBAT_OVER:
-            self._end_combat(player_won=True)
-        elif self.player.is_dead and self.phase != Phase.COMBAT_OVER:
-            self._end_combat(player_won=False)
+        # CheckWinCondition (CombatManager.cs:1046-1059) — the loss
+        # arm is tested FIRST, so it wins a simultaneous death.
+        self._check_win_condition()
         return True
 
     def _check_for_empty_hand(self) -> None:
         """CombatManager.CheckForEmptyHand (CombatManager.cs:887-893).
 
-        Two callers: CardModel.cs:1992 and PotionModel.cs:340 — so the game
-        tests the hand after every card play AND every potion use, which is
-        what makes Unceasing Top's draw reachable from all 51 potions. The
-        end-of-turn flush (CombatManager.cs:880-883) explicitly EXCLUDES it.
+        Two callers, and CombatManager.cs:869-883 is unusually explicit about
+        why there are exactly two: "we manually check after a card is played,
+        and after a potion is used, since these are the two ways a player can
+        manually interact with combat state (besides ending turn, which should
+        not trigger an empty hand check)". CardModel.cs:1992 and
+        PotionModel.cs:340. The end-of-turn flush is EXCLUDED on purpose.
+
+        The `!IsExecutingCardOrPotionEffect` clause is the same docstring's
+        worked example: with Unceasing Top and Pommel Strike as the last card
+        in hand, the hand is momentarily empty the instant the card moves to
+        the Play pile, so an unguarded check would draw once there and once
+        again after Pommel Strike's own draw.
         """
         if self.phase == Phase.COMBAT_OVER:
             return
+        if self._card_or_potion_effect_depth > 0:
+            return
         if not self.player.hand:
             self.hooks.on_hand_emptied(self.player)
+
+    def _start_player_turn(self) -> None:
+        """StartTurn's player-side branch (CombatManager.cs:462-587).
+
+        The setup window is opened at :470 (`_inPlayerTurnSetup = true`, right
+        after PlayerTurnPhase.Start) and closed by
+        ReleaseDeferredEndTurnTransitionIfNeeded (:722-735), which :720 says
+        "must be called on every exit path of the player-turn setup ... so a
+        deferred transition is never dropped" — hence the `finally`.
+
+        Inside the window an end-turn is STORED rather than run (:702-714),
+        because a card auto-played during the AutoPrePlay phase can end the
+        turn and the transition must not race the tail of StartTurn. The sim's
+        start_turn is synchronous, so without this an end_turn re-entered from
+        inside it would recurse (turn_structure N1).
+        """
+        self._in_player_turn_setup = True
+        try:
+            self.player.start_turn()
+        finally:
+            self._in_player_turn_setup = False
+            deferred = self._deferred_end_turn_transition
+            self._deferred_end_turn_transition = None
+            if deferred is not None:
+                deferred()
+
+    @property
+    def is_player_ready_to_end_turn(self) -> bool:
+        """CombatManager.IsPlayerReadyToEndTurn — with one player,
+        `AllPlayersReadyToEndTurn()` (CombatManager.cs:695) is satisfied by
+        that player alone, so readiness and the deferral are the same instant.
+        Read by WhisperingEarring.cs:63-66 to stop auto-playing."""
+        return self._deferred_end_turn_transition is not None
+
+    @contextmanager
+    def _card_or_potion_effect(self):
+        """CombatManager.BeginCardOrPotionEffect / EndCardOrPotionEffect
+        (CombatManager.cs:321-338) — a NESTING DEPTH, not a flag, because an
+        effect body can auto-play another card (a Sly card discarded mid-play)
+        and the outer body must still be "executing" when the inner one
+        returns. C# pairs them in a `finally`; so does this."""
+        self._card_or_potion_effect_depth += 1
+        try:
+            yield
+        finally:
+            self._card_or_potion_effect_depth -= 1
 
     def offer_screen_selection(self, cards: list[Card]) -> None:
         """Present a choose-a-card screen (mirrors CardSelectCmd.FromChooseA-
@@ -835,22 +1219,48 @@ class CombatState:
         CardPileCmd.add_to_hand(self.hooks, self.player, card)
 
     def end_turn(self) -> None:
-        """Fire turn-end hooks, discard hand, run enemy turn, begin next player turn."""
+        """SetReadyToEndTurn (CombatManager.cs:686-715) — ready this player and,
+        if that is everyone, run the transition off the player side.
+
+        During the player-turn setup window the transition is DEFERRED rather
+        than run (:702-714); see _start_player_turn.
+        """
+        if self.phase != Phase.PLAYER_TURN:
+            return
+        if self._in_player_turn_setup:
+            self._deferred_end_turn_transition = self._end_turn_internal
+            return
+        self._end_turn_internal()
+
+    def _end_turn_internal(self) -> None:
+        """AfterAllPlayersReadyToEndTurn (CombatManager.cs:1259-1272) and what
+        it drives: both end-turn phases, then the switch to the enemy side."""
         if self.phase != Phase.PLAYER_TURN:
             return
 
         # PlayerTurnPhase.AutoPostPlay (CombatManager.cs:1160-1176): the
         # end-of-turn auto-plays drain in their own phase, entered STRICTLY
-        # before Hook.BeforeTurnEnd.
+        # before Hook.BeforeTurnEnd. :1165 sets AutoPostPlay, :1175 sets End
+        # once the hook's context has completed — so everything from
+        # Hook.BeforeTurnEnd (:1179) onward runs in End.
+        self.player.turn_phase = PlayerTurnPhase.AUTO_POST_PLAY
         self.hooks.after_auto_post_play_phase_entered(self.player)
+        self.player.turn_phase = PlayerTurnPhase.END
         if self.phase == Phase.COMBAT_OVER:
             return
 
         self.hooks.on_player_turn_end(self.player)
+        # CombatManager.cs:1181 — `if (await CheckWinCondition()) return;`.
+        # A RECOMPUTATION, not a cached-flag read: a BeforeTurnEnd listener can
+        # kill the last enemy (or the player) without routing through
+        # _end_combat, and DoTurnEnd must not run afterwards.
+        self._check_win_condition()
         if self.phase == Phase.COMBAT_OVER:
-            # Turn-end effects can end the fight.
             return
         self._process_turn_end_cards()
+        # CombatManager.cs:1207-1208 — the check that closes
+        # EndPlayerTurnPhaseOneInternal, so phase two (the flush) never runs.
+        self._check_win_condition()
         if self.phase == Phase.COMBAT_OVER:
             return
         # FlushPlayerHand (CombatManager.cs:1327-1346) treats ShouldFlush ==
@@ -876,35 +1286,49 @@ class CombatState:
         # and no card played, a full hook trace recorded should_take_extra_turn
         # and nothing else — no on_player_turn_end, no flush, no
         # after_player_turn_end, though the sim has dozens of listeners on them.
+        # CombatManager.cs:1363 — `_playersTakingExtraTurn.Clear()` happens on
+        # EVERY pass through the switch, before the hook is polled, so an
+        # ordinary turn never sees a stale flag.
+        self.players_taking_extra_turn = []
         if self.hooks.should_take_extra_turn(self.player):
+            # :1364-1371 — the player joins the list BEFORE SwitchSides and the
+            # list is still populated when StartTurn and its
+            # Hook.AfterSideTurnStart run, which is what RampartPower reads.
+            self.players_taking_extra_turn.append(self.player)
             self.hooks.on_extra_turn(self.player)
+            # SwitchSides' extra-turn branch (CombatManager.cs:1406-1418) runs
+            # IncrementTurnNumber ONLY: `RoundNumber++` is on the other arm.
             self.turn += 1
             # No _roll_enemy_intents here: CombatManager.cs:478 gates the pass
             # on `!isExtraPlayerTurn`, so an extra player turn faces the same
             # intents (and takes no MonsterAi draw).
-            self.player.start_turn()
+            self._start_player_turn()
             self._check_win_condition()
             return
 
         self._execute_enemy_turn()
 
-        if self.phase != Phase.COMBAT_OVER:
+        # EndEnemyTurn (CombatManager.cs:828-837): EndEnemyTurnInternal, then
+        # CheckWinCondition (:830), and only `if (!IsEnding)` does it switch
+        # sides and start the fresh turn. The sim read the cached phase, so an
+        # AfterTurnEnd listener that killed the last enemy still got a new
+        # player turn handed out.
+        self._check_win_condition()
+        if not self.is_ending and self.phase != Phase.COMBAT_OVER:
+            # The normal round: both counters (CombatManager.cs:1410-1418).
             self.turn += 1
+            self.round_number += 1
             # The enemy-intent pass runs inside StartTurn, before the player's
             # own turn setup draws anything (CombatManager.cs:478-484 precedes
             # SetupPlayerTurn at :510-523).
             self._roll_enemy_intents()
-            self.player.start_turn()
+            self._start_player_turn()
             # CheckWinCondition right after the player's turn setup /
             # auto-pre-play phase (CombatManager.cs:573). A turn-start effect
             # can land the killing blow (Inferno's burst, a Poison tick) or kill
             # the player, and the game ends the fight there rather than handing
             # back a turn with no living enemies.
-            if self.phase != Phase.COMBAT_OVER:
-                if self._all_enemies_dead():
-                    self._end_combat(player_won=True)
-                elif self.player.is_dead:
-                    self._end_combat(player_won=False)
+            self._check_win_condition()
 
     def valid_actions(self) -> list[int]:
         """0 = end turn, 1+ = play card at hand index (action - 1)."""
@@ -930,6 +1354,28 @@ class CombatState:
         return self.phase == Phase.COMBAT_OVER
 
     @property
+    def is_ending(self) -> bool:
+        """CombatManager.IsEnding (CombatManager.cs:180-202).
+
+        `IsInProgress && (a loss is pending || no primary enemy is alive &&
+        nothing vetoes the end)`. The leading `if (!IsInProgress) return false`
+        is why a combat that has ALREADY ended is not "ending": the commands
+        guarded on `IsEnding` rather than `IsOverOrEnding` (PowerCmd.Apply,
+        CardCmd.Transform, CardPileCmd.Add) therefore also let an
+        OUT-OF-COMBAT call through, which is how the deck transformers and the
+        event card-adds keep working.
+
+        `getattr`, for the same reason the combat-over hook gate needs it: a
+        monster's constructor applies its starting powers through PowerCmd
+        while `CombatState.__init__` is still running, before `phase` is
+        assigned. That window is C#'s `IsStarting`, where nothing has died yet
+        and no command should be refused.
+        """
+        if getattr(self, "phase", None) in (None, Phase.COMBAT_OVER):
+            return False
+        return self._has_pending_loss or self._all_enemies_dead()
+
+    @property
     def is_over_or_ending(self) -> bool:
         """CombatManager.IsOverOrEnding (CombatManager.cs:204-220).
 
@@ -950,6 +1396,4 @@ class CombatState:
         has no setup phase in which every enemy is already dead, so there is
         nothing to exempt.
         """
-        return (self.phase == Phase.COMBAT_OVER
-                or self.player.is_dead
-                or self._all_enemies_dead())
+        return getattr(self, "phase", None) == Phase.COMBAT_OVER or self.is_ending

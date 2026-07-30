@@ -40,6 +40,102 @@ _PHASE_SUFFIXES = tuple(sorted((s for s in _PHASES if s), key=len, reverse=True)
 _PHASE_HOOKS_BY_CLASS: dict[type, frozenset[str]] = {}
 
 
+# ── Hook.IterateCombatHookListeners' combat-over gate ────────────────────
+#
+# `Hook.IterateCombatHookListeners` (Hook.cs:53-63) opens with
+#
+#     if (IsOverOrEnding && !IsStarting) yield break;
+#
+# so a dispatch that BEGINS after the combat started ending reaches nobody.
+# It is an iterator, so the test runs once at enumeration start rather than
+# per listener: a dispatch that began while the combat was live still visits
+# every listener even if one of them ends the combat. `_each` is a generator
+# too, so putting the test at the top of it reproduces both halves exactly.
+#
+# It does NOT apply to every hook. Bucketing all 147 public dispatchers by how
+# each enumerates listeners (`py audit/tools/dormancy_probes.py hook-buckets`):
+# 73 go through this guard, 63 call `runState.IterateHookListeners` directly —
+# an iterator that never consults it — 10 bypass it deliberately by walking a
+# creature's own listeners, and `ModifyDamage` delegates its whole walk to the
+# run-side `ModifyDamageInternal`. The ten deliberate bypasses are exactly the
+# kill/death/combat-end sequence that has to keep working while the combat is
+# ending: AfterCardPlayed, AfterDamageGiven, AfterBlockBroken,
+# AfterCreatureAddedToCombat, AfterDiedToDoom, ModifyKeywordsInCombat,
+# ModifyUnblockedDamageTarget, ShouldCreatureBeRemovedFromCombatAfterDeath,
+# ShouldStopCombatFromEnding and ShouldPowerBeRemovedOnDeath.
+#
+# So the gate is a per-hook property, and this map is the sim hook name -> the
+# C# dispatcher it IS, restricted to the guarded bucket. A sim hook absent from
+# the map is ungated, which is the safe direction: it keeps today's behaviour.
+# Absent on purpose, with the reason:
+#   * the run-side and bypass buckets above (on_card_played, on_damage_dealt,
+#     on_block_broken, on_creature_added, on_death, should_die,
+#     should_stop_combat_from_ending, before/on_damage_received,
+#     modify_hp_lost, on_combat_start, on_combat_end, before/on_potion_used,
+#     should_remove_from_combat_after_death, should_power_be_removed_on_death,
+#     the two modify_damage_* chains, and after_card_changed_piles --
+#     Hook.AfterCardChangedPiles walks `runState.IterateHookListeners(
+#     combatState)` (Hook.cs:169), NOT IterateCombatHookListeners, so it is
+#     run-side and takes no IsOverOrEnding yield-break. Note the pairing at the
+#     transform site: AfterCardEnteredCombat one line earlier IS gated
+#     (Hook.cs:225), so the two dispatches CardCmd.cs:445-447 makes back to back
+#     do not share the gate;
+#   * sim-only names with no `public static` in Hook.cs at all
+#     (modify_damage_cap, modify_strength_given, modify_vulnerable_multiplier,
+#     on_attacked, on_card_retained, on_hp_changed, on_power_applied,
+#     on_creature_escaped, on_stunned, on_extra_turn);
+#
+# `IsStarting` needs no counterpart: the sim only ever sets Phase.COMBAT_OVER
+# in `CombatState._end_combat`, so the gate cannot be closed during setup.
+_COMBAT_GATED_HOOKS: dict[str, str] = {
+    "after_attack": "AfterAttack",
+    "after_auto_post_play_phase_entered": "AfterAutoPostPlayPhaseEntered",
+    "after_auto_pre_play_phase_entered": "AfterAutoPrePlayPhaseEntered",
+    "after_enemy_side_start": "AfterSideTurnStart",
+    "after_player_turn_end": "AfterTurnEnd",
+    "after_side_turn_start": "AfterSideTurnStart",
+    "before_attack": "BeforeAttack",
+    "before_card_played": "BeforeCardPlayed",
+    "before_enemy_side_end": "BeforeTurnEnd",
+    "before_enemy_side_start": "BeforeSideTurnStart",
+    "before_side_turn_start": "BeforeSideTurnStart",
+    "modify_block_additive": "ModifyBlock",
+    "modify_block_multiplicative": "ModifyBlock",
+    "modify_card_energy_cost": "ModifyEnergyCostInCombat",
+    "modify_card_play_count": "ModifyCardPlayCount",
+    "modify_card_play_result_pile": "ModifyCardPlayResultPileTypeAndPosition",
+    "modify_energy_gain": "ModifyEnergyGain",
+    "modify_hand_draw": "ModifyHandDraw",
+    "modify_max_energy": "ModifyMaxEnergy",
+    "modify_orb_value": "ModifyOrbValue",
+    "modify_power_amount": "ModifyPowerAmountReceived",
+    "modify_x_value": "ModifyXValue",
+    "on_block_cleared": "AfterBlockCleared",
+    "on_block_gained": "AfterBlockGained",
+    "on_card_discarded": "AfterCardDiscarded",
+    "on_card_drawn": "AfterCardDrawn",
+    "on_card_entered_combat": "AfterCardEnteredCombat",
+    "on_card_exhausted": "AfterCardExhausted",
+    "on_energy_reset": "AfterEnergyReset",
+    "on_energy_spent": "AfterEnergySpent",
+    "on_enemy_side_end": "AfterTurnEnd",
+    "on_hand_emptied": "AfterHandEmptied",
+    "on_player_turn_end": "BeforeTurnEnd",
+    "on_player_turn_start": "BeforeHandDraw",
+    "on_player_turn_started": "AfterPlayerTurnStart",
+    "on_power_amount_changed": "AfterPowerAmountChanged",
+    "on_shuffle": "AfterShuffle",
+    "should_allow_hitting": "ShouldAllowHitting",
+    "should_clear_block": "ShouldClearBlock",
+    "should_draw": "ShouldDraw",
+    "should_ethereal_trigger": "ShouldEtherealTrigger",
+    "should_flush_hand": "ShouldFlush",
+    "should_play_card": "ShouldPlay",
+    "should_reset_energy": "ShouldPlayerResetEnergy",
+    "should_take_extra_turn": "ShouldTakeExtraTurn",
+}
+
+
 def _phase_hooks(cls: type) -> frozenset[str]:
     """The base hook names `cls` declares a phase variant of.
 
@@ -161,6 +257,28 @@ class HookSystem:
         ) if self._listeners else frozenset()
         return self._order
 
+    @property
+    def combat_is_over(self) -> bool:
+        """`CombatManager.IsOverOrEnding` — the predicate
+        `Hook.IterateCombatHookListeners` gates on.
+
+        The sim has one flag where C# has two states (`IsEnding` while the
+        ending sequence runs, `IsOver` after it): `CombatState.phase` is set to
+        `Phase.COMBAT_OVER` in `_end_combat`, which is the moment the ending
+        begins, so it covers both. Outside a combat (a bare HookSystem, or a
+        run-level listener walk) there is no phase and the gate is inert.
+        """
+        combat = self.combat
+        if combat is None:
+            return False
+        from .combat import Phase
+
+        # `getattr`, because CombatState back-references itself here early in
+        # __init__ and only assigns `phase` further down — so combat SETUP
+        # dispatches (encounter build, on_combat_start) find no phase at all.
+        # That is `IsStarting`, the guard's own exemption, for free.
+        return getattr(combat, "phase", None) == Phase.COMBAT_OVER
+
     def _each(self, hook: str):
         """Yield (listener, bound method) for every listener implementing
         `hook`, in `_ordered()` order.
@@ -175,7 +293,15 @@ class HookSystem:
         The passes only run for hooks some current listener actually phases —
         `_phased` is recomputed with the order cache — so the common case stays
         a single walk.
+
+        For a hook in `_COMBAT_GATED_HOOKS` this yields NOTHING once the combat
+        is over — `Hook.IterateCombatHookListeners`' `if (IsOverOrEnding &&
+        !IsStarting) yield break` (Hook.cs:55-58). Both are generators, so the
+        test lands at enumeration start in both: a dispatch that began while the
+        combat was live still reaches every listener even if one of them ends it.
         """
+        if hook in _COMBAT_GATED_HOOKS and self.combat_is_over:
+            return
         # `_phased` is refreshed as a side effect of `_ordered()`, so it has to
         # be current before the branch below reads it.
         self._ordered()
@@ -215,21 +341,42 @@ class HookSystem:
         modifiers: list | None = None,
         props: ValueProp = ValueProp.NONE,
     ) -> int:
-        """Sum of all flat bonuses added before the multiplier (e.g. Pen Nib +1).
+        """Fold every flat damage bonus into the running amount, in order, and
+        return the NEW amount (e.g. Strength +N, Pen Nib +1).
 
-        C# runs this as a chain too (`num += item.ModifyDamageAdditive(...)`),
-        but every sim listener returns a delta that ignores the amount passed
-        to it, so base-plus-sum and the running total are the same number over
-        integers. `modifiers` collects the listeners whose delta was non-zero
-        (`out modifiers`, Hook.cs:2515-2538).
+        A chain, not a parallel sum: `ModifyDamageInternal` (Hook.cs:2515-2526)
+        runs
+
+            num2 = item.ModifyDamageAdditive(target, num, props, dealer, card);
+            num += num2;
+
+        so each listener is handed what the previous ones produced. The sim used
+        to hand every listener the pre-step base and return the SUM of the
+        deltas, which the caller added to the base.
+
+        Over the listeners the game actually ships the two shapes agree, and
+        that is an enumeration rather than an argument: all 13 overrides of
+        ModifyDamageAdditive / ModifyBlockAdditive in the decompiled source
+        (Accuracy, Calcify, Dexterity, Fasten, Leadership, PhantomBlades,
+        Strength, Tainted, Vigor, FakeStrikeDummy, MiniatureCannon,
+        MysticLighter, StrikeDummy) ignore the `amount`/`block` parameter
+        entirely — each one either returns `0m` from a guard or returns a
+        constant (`base.Amount`, or a DynamicVar). So no shipped listener can
+        witness the difference, which is why relic/fake_strike_dummy's ordering
+        note was dormant. It is a chain here anyway, because that is the
+        contract a listener is entitled to and the next ported additive listener
+        should not have to rediscover it.
+
+        `modifiers` mirrors `out modifiers`: every listener whose delta was not
+        zero (`if (num2 != 0m) list.Add(item)`), for
+        `after_modify_damage_amount`.
         """
-        total = 0
         for l, fn in self._each("modify_damage_additive"):
             delta = fn(target, amount, dealer, card, props)
-            total += delta
+            amount += delta
             if modifiers is not None and delta != 0:
                 modifiers.append(l)
-        return total
+        return amount
 
     def modify_damage_multiplicative(
         self,
@@ -296,19 +443,21 @@ class HookSystem:
         modifiers: list | None = None,
         props: ValueProp = ValueProp.NONE,
     ) -> int:
-        """Sum of all flat block bonuses (e.g. Dexterity +N per Defend).
+        """Fold every flat block bonus into the running amount and return the new
+        amount (e.g. Dexterity +N per Defend) — a chain, exactly as `ModifyBlock`
+        does it (`num += item.ModifyBlockAdditive(target, num, ...)`,
+        Hook.cs:1310-1340). See `modify_damage_additive` for why the shape
+        matters and why no shipped listener can witness it.
 
-        `modifiers` mirrors `ModifyBlock`'s `out modifiers` (Hook.cs:1310-1340):
-        every listener whose delta was non-zero, for
-        `after_modify_block_amount`.
+        `modifiers` mirrors `out modifiers`: every listener whose delta was
+        non-zero, for `after_modify_block_amount`.
         """
-        total = 0
         for l, fn in self._each("modify_block_additive"):
             delta = fn(target, amount, card, props)
-            total += delta
+            amount += delta
             if modifiers is not None and delta != 0:
                 modifiers.append(l)
-        return total
+        return amount
 
     def modify_block_multiplicative(
         self,
@@ -330,19 +479,24 @@ class HookSystem:
         return amount
 
     def after_modify_block_amount(self, modifiers: list, target: Creature,
-                                  card: Card | None = None) -> None:
+                                  amount: int, card: Card | None = None) -> None:
         """Notify the listeners that actually changed a block amount (mirrors
-        Hook.AfterModifyingBlockAmount).
+        Hook.AfterModifyingBlockAmount, Hook.cs:649-657).
 
-        C#'s three implementers are all ported — Vambrace.cs:78-90,
-        PaelsLegion.cs:146-158 and FastenPower.cs:36-40 — and each needs to
+        C#'s three implementers are all ported — Vambrace.cs:82-95,
+        PaelsLegion.cs:155-169 and FastenPower.cs:37-41 — and each needs to
         know it was an *active* modifier of this particular gain, which is what
         the `modifiers` list carries and what a plain `on_block_gained` cannot.
+
+        `amount` is C#'s `modifiedBlock`: two of the three listeners open on
+        `if (modifiedAmount <= 0m) return;`, so they need the value, and
+        CreatureCmd.cs:646 hands it to them BEFORE `GainBlockInternal` — the
+        dispatch is not a notification that block landed.
         """
         for l in modifiers:
             fn = getattr(l, "after_modify_block_amount", None)
             if fn is not None:
-                fn(target, card)
+                fn(target, amount, card)
 
     # ── Modifier hooks — HP loss ─────────────────────────────────────────
 
@@ -478,27 +632,79 @@ class HookSystem:
         for l, fn in self._each("on_combat_start"):
             fn()
 
-    def on_combat_end(self, player_won: bool) -> None:
-        """Fires when combat concludes."""
+    def on_combat_end(self) -> None:
+        """`Hook.AfterCombatEnd` (Hook.cs:328-335) — ONE pass, and only on the
+        victory path: `EndCombatInternal` fires it at CombatManager.cs:988,
+        while `ProcessPendingLoss` (:956-965) fires nothing at all. Hence no
+        `player_won` argument: there is no losing dispatch to distinguish."""
         for l, fn in self._each("on_combat_end"):
-            fn(player_won)
+            fn()
+
+    def on_combat_victory(self) -> None:
+        """`Hook.AfterCombatVictory` (Hook.cs:340-352) — TWO complete passes,
+        `AfterCombatVictoryEarly` over every listener then `AfterCombatVictory`
+        over every listener, which the `_early` suffix walk gives for free.
+        Fired at CombatManager.cs:999, strictly after Hook.AfterCombatEnd."""
+        for l, fn in self._each("on_combat_victory"):
+            fn()
 
     # ── Event hooks — player turn lifecycle ──────────────────────────────
 
+    def before_side_turn_start(self, player: PlayerCombatState) -> None:
+        """`Hook.BeforeSideTurnStart` — CombatManager.cs:458.
+
+        The FIRST hook of a side's turn: after each participant's
+        `Creature.BeforeTurnStart` and before everything else the turn does —
+        before the enemies' next-move roll (:478-484), before the block clear
+        (`Creature.AfterTurnStart`, :492-499) and long before `SetupPlayerTurn`.
+        Bag of Marbles, Red Mask, Kunai, Shuriken, Orichalcum and the round-1
+        arm of PlatingPower all live here, and the sim used to run them at one
+        of the two post-energy slots instead.
+
+        The PLAYER side's leg. The enemy side's is `before_enemy_side_start`,
+        which is the same C# hook dispatched for the other side.
+        """
+        for l, fn in self._each("before_side_turn_start"):
+            fn(player)
+
     def on_player_turn_start(self, player: PlayerCombatState) -> None:
-        """Fires at the start of the player's turn, before cards are drawn."""
+        """`Hook.BeforeHandDraw` — inside SetupPlayerTurn (CombatManager.cs:653),
+        after `Hook.AfterEnergyReset` and before `ModifyHandDraw` and the draw.
+
+        The name predates the audit; the slot is BeforeHandDraw's and always
+        was. Toolbox, Jeweled Mask, Blessed Antler and Hello World live here.
+        """
         for l, fn in self._each("on_player_turn_start"):
             fn(player)
 
     def on_player_turn_started(self, player: PlayerCombatState) -> None:
-        """Fires at the start of the player's turn AFTER the hand is drawn.
+        """`Hook.AfterPlayerTurnStart` — CombatManager.cs:675, the LAST line of
+        SetupPlayerTurn, so it runs after that player's hand draw and once per
+        player.
 
-        Maps the game's post-draw turn-start slots — AfterPlayerTurnStart(Late)
-        and the player-side AfterSideTurnStart, which CombatManager fires after
-        SetupPlayerTurn (energy reset → hand draw) completes. Most turn-start
-        relics live here (Akabeko, Bellows, Lantern, ...).
+        This used to double as the player-side `Hook.AfterSideTurnStart`, which
+        is a different hook at a different point (:522, after every player's
+        SetupPlayerTurn) with a different, larger population — 18 of the
+        listeners parked here were really that one. See `after_side_turn_start`.
+        Bellows, Pendulum, Gambling Chip and Choices Paradox are genuinely
+        AfterPlayerTurnStart; Blood Vial and Fake Blood Vial are its LATE pass
+        (`on_player_turn_started_late`).
         """
         for l, fn in self._each("on_player_turn_started"):
+            fn(player)
+
+    def after_side_turn_start(self, player: PlayerCombatState) -> None:
+        """`Hook.AfterSideTurnStart` — CombatManager.cs:522.
+
+        Fired once for the whole side AFTER every `SetupPlayerTurn` has
+        finished, and so after `Hook.AfterPlayerTurnStart`; the orb queue and
+        then `PlayerTurnPhase.AutoPrePlay` (:556-572) follow it. This is where
+        most of the turn-start content actually lives — Akabeko, Lantern,
+        Happy Flower, Crossbow, Sai, Seal of Gold, Demon Form, Poison, Rampart.
+
+        The PLAYER side's leg; the enemy side's is `after_enemy_side_start`.
+        """
+        for l, fn in self._each("after_side_turn_start"):
             fn(player)
 
     def after_auto_pre_play_phase_entered(self, player: PlayerCombatState) -> None:
@@ -544,18 +750,62 @@ class HookSystem:
 
     # ── Event hooks — enemy turn lifecycle ───────────────────────────────
 
-    def on_enemy_turn_start(self, enemy: Creature) -> None:
-        """Fires at the start of the enemy's turn."""
-        for l, fn in self._each("on_enemy_turn_start"):
-            fn(enemy)
+    def before_enemy_side_start(self) -> None:
+        """`Hook.BeforeSideTurnStart` for the ENEMY side — CombatManager.cs:458.
 
-    def on_enemy_turn_end(self, enemy: Creature) -> None:
-        """Fires at the end of each individual enemy's turn."""
-        for l, fn in self._each("on_enemy_turn_end"):
-            fn(enemy)
+        The same hook as `before_side_turn_start`, dispatched for the other
+        side. C# has ONE hook taking `(state, side, participants)` and every
+        implementer opens by testing `side` or `participants.Contains(Owner)`;
+        the sim splits it per side, as it already did for `Hook.AfterTurnEnd`
+        (`after_player_turn_end` / `on_enemy_side_end`). The split is
+        behaviour-preserving because the two sides never start a turn at the
+        same moment, so there is no cross-side order to lose.
+
+        Fires ONCE for the whole side, before any block is cleared and long
+        before any enemy moves. HardenedShellPower's per-turn damage counter
+        (HardenedShellPower.cs:71, which has no participants filter at all)
+        lives here.
+        """
+        for l, fn in self._each("before_enemy_side_start"):
+            fn()
+
+    def after_enemy_side_start(self) -> None:
+        """`Hook.AfterSideTurnStart` for the ENEMY side — CombatManager.cs:522.
+
+        Fires ONCE, after the block-clear and AfterBlockCleared passes have
+        completed for every enemy and before ExecuteEnemyTurn walks them for
+        their moves — so Poison has already ticked on enemy 3 by the time
+        enemy 1 attacks. Poison, Demon Form, Slow and the Plating decay live
+        here; Sandpit's countdown is the `_late` pass
+        (`after_enemy_side_start_late`, SandpitPower.cs:70).
+        """
+        for l, fn in self._each("after_enemy_side_start"):
+            fn()
+
+    def before_enemy_side_end(self) -> None:
+        """`Hook.BeforeTurnEnd` for the ENEMY side — CombatManager.cs:1251, the
+        first line of EndEnemyTurnInternal, once for the whole side after every
+        enemy has moved.
+
+        The player-side counterpart is `on_player_turn_end`. Two ported powers
+        need the sub-phases this dispatcher gets from `_each`: AsleepPower
+        drops its owner's Plating in `_very_early` (AsleepPower.cs:38) and
+        PlatingPower grants its block in `_early` (PlatingPower.cs:61, "We do
+        this in early so that it triggers before end-of-turn damage effects"),
+        so on the last sleeping turn the Plating is gone before it can grant.
+        """
+        for l, fn in self._each("before_enemy_side_end"):
+            fn()
 
     def on_enemy_side_end(self) -> None:
-        """Fires once after ALL living enemies have taken their turns for the round."""
+        """`Hook.AfterTurnEnd` for the ENEMY side — CombatManager.cs:1256, once
+        after ALL enemies have taken their turns for the round.
+
+        `AbstractModel.AfterSideTurnEnd` (Hook.cs:1267-1292) is dispatched from
+        here, so every ported implementation of it belongs on this slot:
+        Regen, Ritual, Hatch, Slumber, Escape Artist, Asleep and the Battleworn
+        Dummy's time limit all used to sit on a per-enemy slot instead.
+        """
         for l, fn in self._each("on_enemy_side_end"):
             fn()
 
@@ -628,6 +878,34 @@ class HookSystem:
         for l, fn in self._each("on_card_entered_combat"):
             fn(card)
 
+    def after_card_changed_piles(self, card: Card, pile: str,
+                                 cloned_by: Any = None) -> None:
+        """Hook.AfterCardChangedPiles (Hook.cs:167-179).
+
+        Two COMPLETE passes, plain then Late, which `_each` gives us because
+        `AfterCardChangedPilesLate` is a declared phase; SoulFysh.cs:91-108 is
+        the game's only Late implementer.
+
+        `pile` is the sim's pile name ("hand", "draw", "discard", "exhaust",
+        "deck", "play"). C# calls the parameter `oldPileType`, but that name is
+        only accurate at the Add site (CardPileCmd.cs:635 passes
+        `oldPile?.Type ?? None`): the transform site passes the pile the
+        replacement was just placed IN (CardCmd.cs:447 `pile2.Type`). No ported
+        listener reads the argument at all — all four read `card.Pile.Type`
+        instead (BingBong.cs:31, BookOfFiveRings.cs:84, DarkstonePeriapt.cs:19,
+        LuckyFysh.cs:27) — so the value is passed through as the game passes it
+        rather than reconciled.
+
+        Dispatched from the combat-pile transform only. The DECK-pile leg lives
+        on the run, where `Relic.after_card_added_to_deck` is this same hook
+        filtered to `pile.Type == PileType.Deck` (the filter every ported
+        listener applies itself); the remaining C# sites — Add, RemoveFromCombat
+        and the manual play — are seam/creature_card_cmds guard G8 and still
+        dispatch nothing.
+        """
+        for l, fn in self._each("after_card_changed_piles"):
+            fn(card, pile, cloned_by)
+
     def on_card_discarded(self, card: Card) -> None:
         """Fires when a card is discarded at end of turn (not when played)."""
         for l, fn in self._each("on_card_discarded"):
@@ -658,6 +936,57 @@ class HookSystem:
         """Fires after the hand has been fully discarded at end of turn."""
         for l, fn in self._each("on_hand_emptied"):
             fn(player)
+
+    def modify_shuffle_order(self, player: PlayerCombatState, cards: list,
+                             is_initial_shuffle: bool) -> None:
+        """`Hook.ModifyShuffleOrder` (Hook.cs:2004-2010) — NOT a notification.
+
+        The listeners are handed the shuffled list itself and mutate it in place,
+        which is how Perfect Fit puts its card on top (`Remove` + `Insert(0)`,
+        PerfectFit.cs:10-16). Two dispatch sites, both AFTER the Fisher-Yates and
+        BEFORE the pile is repopulated: `CardPileCmd.cs:877` (the mid-combat
+        shuffle, `isInitialShuffle: false`) and `CardPile.cs:73`
+        (RandomizeOrderInternal at combat start, `isInitialShuffle: true`).
+
+        The sim used to stand this in with `on_shuffle` = Hook.AfterShuffle, a
+        DIFFERENT hook fired at CardPileCmd.cs:917 after the pile is rebuilt. The
+        substitution worked for a lone enchanted card and broke for two: which of
+        two competing listeners lands its card on top is decided by DISPATCH
+        ORDER, and `_ordered()`'s key is registration index, so a mid-combat copy
+        always won. C# re-derives its listeners per dispatch from the piles
+        (CombatState.cs:449-467, the enchantment added at :462-465), and at
+        CardPileCmd.cs:877 the DISCARD pile still holds all of its cards (only
+        drawPile entries are removed, :878-881) — so the card sitting LATER IN THE
+        DISCARD fires last and ends on top. Hence the per-hook ordering below,
+        which is the one place in the sim where a hook does not use `_each`.
+
+        `cards` is in the sim's own orientation (top at the END), so a listener
+        that wants the top appends where C# inserts at 0.
+        """
+        combat = getattr(self, "combat", None)
+        if combat is not None and getattr(combat, "is_over_or_ending", False):
+            return
+        # `AllPiles` order (PlayerCombatState.cs:70-79): Hand, Draw, Discard,
+        # Exhaust. A listener whose card is in none of them (the card currently
+        # mid-OnPlay, i.e. PileType.Play) sorts last, as it does in C#.
+        position: dict[int, int] = {}
+        for i, card in enumerate(player.all_cards):
+            position[id(card)] = i
+        last = len(position)
+
+        def pile_key(item):
+            i, listener = item
+            card = getattr(listener, "card", None)
+            if card is None:
+                card = listener if hasattr(listener, "id") else None
+            return (position.get(id(card), last), i)
+
+        listeners = [l for _, l in sorted(enumerate(self._listeners),
+                                          key=pile_key)]
+        for listener in listeners:
+            fn = getattr(listener, "modify_shuffle_order", None)
+            if fn is not None:
+                fn(player, cards, is_initial_shuffle)
 
     def on_shuffle(self, player: PlayerCombatState) -> None:
         """Fires when the discard pile is shuffled back into the draw pile."""

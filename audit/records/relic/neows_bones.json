@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "879d6791db6dd9ec5d35355d75e3e784be4c380fb7d0bcd65b0ede93ff8cd339",
+      "sha256": "03b13195368f9b62ffdaef867883b236c1573dd14c05724c40c439ede14a6fbf",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/neow.py",
-      "sha256": "32be19d527d887b8085c5106696635b65271f2974d6c65d1e4ac842ea4862114",
+      "sha256": "df11695f9bff2d43c3408f0fb60403bdd3957015edcc052b424c4e1d242bde6c",
       "side": "sim"
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     },
     {
@@ -79,8 +79,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): the sim's Neow pool lists the three coin-flip PAIRS where C#'s AllPossibleOptions lists the six relics individually, so the shuffled Take(2) draws different relics",
-      "verdict": "gap",
-      "issue": "MECHANISM: NeowsBones.cs:40-42 takes `GetValidRelics(...).ToList()`, calls `PlayerRng.Rewards.Shuffle(list)` and then `.Take(2)`. A Fisher-Yates shuffle's swap INDICES depend only on the RNG, so the output depends entirely on the INPUT ORDER -- the pool order is load-bearing. Neow.AllPossibleOptions (Neow.cs:49-64) is CurseOptions (8, Neow.cs:96-106) + PositiveOptions (14, Neow.cs:66-82) + LavaRock, NeowsTalisman, NutritiousOyster, Pomander, SmallCapsule, StoneHumidifier as six SEPARATE trailing options (Neow.cs:84-94, in that declaration order). events/neow.py:64-72 instead appends the three coin-flip PAIRS -- (lava_rock, small_capsule), (nutritious_oyster, stone_humidifier), (neows_talisman, pomander) -- giving the trailing six in a different order. The first 19 entries match exactly. EXECUTED (py audit/tools/relic_probes_b10.py neows-bones): Rng.Shuffle (Rng.cs:308-320) and the sim's shuffle (rng.py:270-273) are the same top-down Fisher-Yates, so only the order can differ; over 60 string seeds the two orders yield DIFFERENT pairs on 24 of them, e.g. seed B10SEED06 gives ['stone_humidifier','precarious_shears'] in the sim and ['pomander','precarious_shears'] in the game, and seed B10SEED11 gives ['small_capsule','lava_rock'] vs ['neows_talisman','lava_rock']. LIVE: Neow's Bones is one of the eight ported Neow curse options (events/neow.py:45-48), every run visits the Neow node, and the two relics it grants run their own AfterObtained pickup effects -- so a wrong pair changes max HP, gold, the deck and the relic list from floor 0 onward. Not pre-diagnosed by any sweep. Rule 7: Neow.cs, Rng.cs, events/neow.py, rng.py and run.py are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): the pool order matches. Neow.AllPossibleOptions (Neow.cs:53-62) adds the six non-paired relics ONE AT A TIME -- LavaRock, NeowsTalisman, NutritiousOyster, Pomander, SmallCapsule, StoneHumidifier -- and events/neow.py's `neow_relic_pool` now appends exactly that tuple (`_SINGLETON_OPTIONS`) instead of the three coin-flip PAIRS. The pairing is a fact about GenerateInitialOptions' NextBool flips, not about the pool, and it is still used there. EXECUTED: `py audit/tools/relic_probes_b10.py neows-bones` now prints `tails equal: True` and finds 0 divergent seeds where it found 24 of 60. One legacy test moved with it: test_neows_bones asserted `len(ids) == 3`, which held only under the wrong order -- seed 12 now draws Cursed Pearl, whose own AfterObtained pulls a further relic, so the test pins the two PICKS instead of a total.  The text it replaced read: MECHANISM: NeowsBones.cs:40-42 takes `GetValidRelics(...).ToList()`, calls `PlayerRng.Rewards.Shuffle(list)` and then `.Take(2)`. A Fisher-Yates shuffle's swap INDICES depend only on the RNG, so the output depends entirely on the INPUT ORDER -- the pool order is load-bearing. Neow.AllPossibleOptions (Neow.cs:49-64) is CurseOptions (8, Neow.cs:96-106) + PositiveOptions (14, Neow.cs:66-82) + LavaRock, NeowsTalisman, NutritiousOyster, Pomander, SmallCapsule, StoneHumidifier as six SEPARATE trailing options (Neow.cs:84-94, in that declaration order). events/neow.py:64-72 instead appends the three coin-flip PAIRS -- (lava_rock, small_capsule), (nutritious_oyster, stone_humidifier), (neows_talisman, pomander) -- giving the trailing six in a different order. The first 19 entries match exactly. EXECUTED (py audit/tools/relic_probes_b10.py neows-bones): Rng.Shuffle (Rng.cs:308-320) and the sim's shuffle (rng.py:270-273) are the same top-down Fisher-Yates, so only the order can differ; over 60 string seeds the two orders yield DIFFERENT pairs on 24 of them, e.g. seed B10SEED06 gives ['stone_humidifier','precarious_shears'] in the sim and ['pomander','precarious_shears'] in the game, and seed B10SEED11 gives ['small_capsule','lava_rock'] vs ['neows_talisman','lava_rock']. LIVE: Neow's Bones is one of the eight ported Neow curse options (events/neow.py:45-48), every run visits the Neow node, and the two relics it grants run their own AfterObtained pickup effects -- so a wrong pair changes max HP, gold, the deck and the relic list from floor 0 onward. Not pre-diagnosed by any sweep. Rule 7: Neow.cs, Rng.cs, events/neow.py, rng.py and run.py are NOT hashed by this record."
     },
     {
       "what": "G2: `new RewardsSet(Owner).WithCustomRewards(...).WithSkippingDisallowed().Offer()` (NeowsBones.cs:43) is a reward SCREEN; the port grants both relics unconditionally",

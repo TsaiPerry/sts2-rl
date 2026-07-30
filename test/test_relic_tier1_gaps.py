@@ -54,7 +54,9 @@ def _probe_vambrace(cs, r):
     v = r.modify_block_multiplicative(cs.player, 5, card, ValueProp.MOVE)
     # Vambrace.cs:82-113 — AfterModifyingBlockAmount latches the card, the end
     # of that card's play burns BlockGainedThisCombat.
-    r.after_modify_block_amount(cs.player, card)
+    # `amount` is C#'s `modifiedBlock` (CreatureCmd.cs:646); the listener
+    # opens on `if (modifiedAmount <= 0m) return;` (Vambrace.cs:84).
+    r.after_modify_block_amount(cs.player, 10, card)
     r.on_card_played(card)
     return v
 
@@ -74,7 +76,7 @@ def _probe_ruined_helmet(cs, r):
 
 
 def _probe_paels_tears(cs, r):
-    r.on_player_turn_started(cs.player)
+    r.after_side_turn_start(cs.player)
     v = cs.player.energy
     cs.player.energy = 2
     r.on_player_turn_end(cs.player)
@@ -106,7 +108,10 @@ def _probe_paels_legion(cs, r):
 
 
 def _probe_self_forming_clay(cs, r):
-    r.on_player_turn_started(cs.player)
+    # MOVED 2026-07-29 (round 7, relic/self_forming_clay/g2): the payout slot is
+    # AfterBlockCleared (SelfFormingClayPower.cs:19-25), not the last turn-start
+    # slot. The probe is about the COMBAT-BOUNDARY reset, which is unchanged.
+    r.on_block_cleared(cs.player)
     v = cs.player.block
     r.on_damage_received(
         cs.player, 3, cs.enemy, None, DamageProps.MONSTER_MOVE)
@@ -282,7 +287,7 @@ class _AddsAStrike(Relic):
     name = "Adds a Strike"
     rarity = RelicRarity.COMMON
 
-    def modify_card_reward_options(self, run, cards):
+    def modify_card_reward_options(self, run, cards, options=None):
         cards.append(make_card("strike"))
 
 
@@ -311,6 +316,183 @@ def test_driftwood_reroll_flag_is_a_late_rewards_modifier():
     from sts2_rl.relics import Driftwood
     assert hasattr(Driftwood, "modify_combat_rewards_late")
     assert "modify_combat_rewards" not in Driftwood.__dict__
+
+
+def test_driftwood_makes_the_rest_site_card_reward_rerollable_too():
+    """Hook.ModifyRewards's only caller is RewardsSet.GenerateWithoutOffering
+    (RewardsSet.cs:125-147), which EVERY RewardsSet goes through -- including
+    the one RewardsCmd.OfferCustom builds for a rest-site heal
+    (HealRestSiteOption.cs:110-112).  Driftwood.cs:14-25 does not look at the
+    room at all, so it marks that screen's CardReward rerollable exactly like
+    a combat one."""
+    run = fresh_run(16)
+    run.add_relic(make_relic("dream_catcher"))
+    run.add_relic(make_relic("driftwood"))
+    rewards = run.rest_heal_rewards()
+    assert len(rewards.cards) == 3
+    assert rewards.can_reroll
+
+
+def test_room_gated_reward_relics_stay_off_the_rest_site_screen():
+    """...but the room-gated ones must NOT fire there.  A custom RewardsSet
+    never sets Room (RewardsSet.WithCustomRewards, RewardsSet.cs:106-110), so
+    `room == null` short-circuits AmethystAubergine.cs:25-35, BlackStar.cs,
+    LavaRock.cs and WongosMysteryTicket.cs (`!(room is CombatRoom)`)."""
+    run = fresh_run(16)
+    run.add_relic(make_relic("dream_catcher"))
+    run.add_relic(make_relic("amethyst_aubergine"))
+    gold_before = run.gold
+    rewards = run.rest_heal_rewards()
+    assert rewards.gold == 0
+    assert run.gold == gold_before
+
+
+def test_a_ripe_ticket_still_pays_on_the_final_acts_boss():
+    """The sim short-circuited the whole of generate_combat_rewards for the
+    last act's boss; C# skips only the room's OWN rewards (RewardsSet.cs:85-91)
+    and still runs Hook.ModifyRewards on the empty list, so Wongo's Mystery
+    Ticket pays its three relics there."""
+    run = fresh_run(19)
+    run._is_final_act = True   # what start_act(is_final_act=) sets
+    ticket = make_relic("wongos_mystery_ticket")
+    run.add_relic(ticket)
+    for _ in range(5):
+        ticket.after_combat_end(run, RoomType.MONSTER)
+    rewards = generate_combat_rewards(run, RoomType.BOSS)
+    assert len(rewards.relics) == 3
+    assert ticket.is_used_up
+    # ...and the room's own rewards still do not exist there.
+    assert rewards.gold == 0 and rewards.cards == [] and rewards.potion is None
+
+
+def test_the_final_boss_screen_still_pays_no_aubergine_gold():
+    """AmethystAubergine.cs:33-35 is the explicit final-act guard that proves
+    the pass runs at all — and it must keep the gold off that screen."""
+    run = fresh_run(19)
+    run._is_final_act = True   # what start_act(is_final_act=) sets
+    run.add_relic(make_relic("amethyst_aubergine"))
+    gold_before = run.gold
+    rewards = generate_combat_rewards(run, RoomType.BOSS)
+    assert rewards.gold == 0
+    assert run.gold == gold_before
+
+
+def test_lasting_candy_adds_a_power_option_every_other_combat():
+    """LastingCandy.cs:100-136 — the game's only implementer of the EARLY
+    TryModifyCardRewardOptions pass. `IsInTriggeringCombat` is
+    `CombatsSeen > 0 && CombatsSeen % 2 == 0` (LastingCandy.cs:68-78), and
+    AfterCombatEnd increments before the screen is generated
+    (CombatManager.cs:988 precedes CombatRoom.cs:251-253), so combats 2, 4, ...
+    carry a fourth, always-Power option."""
+    from sts2_rl.cards import CardType
+
+    run = fresh_run(31)
+    candy = make_relic("lasting_candy")
+    run.add_relic(candy)
+
+    plain = generate_combat_rewards(run, RoomType.MONSTER)
+    assert len(plain.cards) == 3               # combat 1: nothing added
+
+    candy.after_combat_end(run, RoomType.MONSTER)
+    candy.after_combat_end(run, RoomType.MONSTER)
+    charged = generate_combat_rewards(run, RoomType.MONSTER)
+    assert len(charged.cards) == 4
+    assert charged.cards[-1].card_type is CardType.POWER
+
+
+def test_lasting_candy_stays_off_non_encounter_card_creations():
+    """`creationOptions.Source != CardCreationSource.Encounter` -> false
+    (LastingCandy.cs:106-109): an event's or relic's own card offer is
+    CardCreationSource.Other and gets nothing."""
+    from sts2_rl.rewards import RarityOddsType, create_reward_cards
+
+    run = fresh_run(31)
+    candy = make_relic("lasting_candy")
+    run.add_relic(candy)
+    candy.after_combat_end(run, RoomType.MONSTER)
+    candy.after_combat_end(run, RoomType.MONSTER)
+    cards = create_reward_cards(run, RarityOddsType.REGULAR, mutate_pity=False)
+    assert len(cards) == 3
+
+
+def test_lasting_candys_option_is_visible_to_the_late_pass():
+    """It is added in the FIRST pass, so the egg relics / Silver Crucible see
+    it (Hook.cs:1444-1466 runs the Late pass over the whole list)."""
+    run = fresh_run(31)
+    candy = make_relic("lasting_candy")
+    run.add_relic(candy)
+    run.add_relic(make_relic("frozen_egg"))      # Power cards, upgraded
+    candy.after_combat_end(run, RoomType.MONSTER)
+    candy.after_combat_end(run, RoomType.MONSTER)
+    rewards = generate_combat_rewards(run, RoomType.MONSTER)
+    added = rewards.cards[-1]
+    assert added.upgrade_level == 1
+
+
+def test_prayer_wheel_adds_a_second_monster_card_choice():
+    """PrayerWheel.cs:14-25 — `rewards.Add(new CardReward(ForRoom(player,
+    Monster), 3, player))` on Monster rooms: a SECOND pick-one-of-3, not three
+    more options on the first."""
+    run = fresh_run(21)
+    run.add_relic(make_relic("prayer_wheel"))
+    rewards = generate_combat_rewards(run, RoomType.MONSTER)
+    assert len(rewards.card_rewards) == 2
+    assert [len(g.cards) for g in rewards.card_rewards] == [3, 3]
+
+
+def test_prayer_wheel_stays_off_elite_and_boss_screens():
+    """`room.RoomType != RoomType.Monster` -> false (PrayerWheel.cs:20-23)."""
+    for room in (RoomType.ELITE, RoomType.BOSS):
+        run = fresh_run(21)
+        run.add_relic(make_relic("prayer_wheel"))
+        rewards = generate_combat_rewards(run, room)
+        assert len(rewards.card_rewards) == 1, room
+
+
+def test_prayer_wheels_second_choice_is_taken_separately():
+    """Two CardRewards on one set are two decisions, so a player who takes
+    from both keeps two cards."""
+    from sts2_rl.driver import DecisionKind, RunDriver
+
+    run = fresh_run(21)
+    run.add_relic(make_relic("prayer_wheel"))
+    rewards = generate_combat_rewards(run, RoomType.MONSTER)
+    seen = []
+
+    def scripted(request):
+        if request.kind == DecisionKind.REWARD_CARD:
+            seen.append([c.id for c in request.rewards.cards])
+            return 0                       # take the first option
+        return request.legal_actions()[0]
+
+    deck_before = len(run.deck)
+    RunDriver(run, scripted)._offer_rewards(rewards)
+    assert len(seen) == 2
+    assert len(run.deck) == deck_before + 2
+
+
+def test_prayer_wheels_group_is_populated_after_the_late_pass():
+    """RewardsSet.cs:137-143 populates a hook-ADDED reward only after both
+    ModifyRewards passes, so Driftwood's late flag reaches a group whose cards
+    do not exist yet."""
+    run = fresh_run(21)
+    run.add_relic(make_relic("prayer_wheel"))
+    run.add_relic(make_relic("driftwood"))
+    rewards = generate_combat_rewards(run, RoomType.MONSTER)
+    assert [g.can_reroll for g in rewards.card_rewards] == [True, True]
+    assert all(len(g.cards) == 3 for g in rewards.card_rewards)
+
+
+def test_paels_wing_offers_its_sacrifice_on_the_rest_site_card_reward():
+    """PaelsWing.cs:73-81 is TryModifyCardRewardAlternatives -- per CardReward,
+    with no room gate -- so the rest screen's 3-card choice carries the
+    SACRIFICE alternative too."""
+    run = fresh_run(16)
+    run.add_relic(make_relic("dream_catcher"))
+    wing = make_relic("paels_wing")
+    run.add_relic(wing)
+    rewards = run.rest_heal_rewards()
+    assert rewards.sacrifice_relic is wing
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -405,6 +587,10 @@ def test_lava_lamp_upgrades_a_damage_free_combats_card_reward():
     relic = make_relic("lava_lamp")
     run = fresh_run()
     run.add_relic(relic)
+    # LavaLamp.cs:66-69 gates on `RunState.CurrentRoom is CombatRoom`, so the
+    # relic has to be IN one. This call used to be absent and the upgrade
+    # landed anyway (relic/lava_lamp arm 3).
+    relic.after_room_entered(run, None, RoomType.MONSTER)
     cards = [make_card("strike"), make_card("defend")]
     relic.modify_card_reward_options_late(run, cards)
     assert [c.upgrade_level for c in cards] == [1, 1]
@@ -604,6 +790,52 @@ def test_calling_bell_offers_its_three_relics_separately():
     assert any(c.id == "curse_of_the_bell" for c in run.deck)
 
 
+def test_calling_bell_pulls_one_relic_of_each_rarity_from_the_bag():
+    """CallingBell.GenerateRewards' SHIPPING arm (CallingBell.cs:53-63) builds
+    `new RelicReward(Common/Uncommon/Rare, Owner)`; the fixed
+    Anchor/GremlinHorn/MummifiedHand list at CallingBell.cs:39-52 is the
+    `TestMode.IsOn` branch.  Each Populate is
+    `RelicFactory.PullNextRelicFromFront(Player, rarity)`
+    (RelicReward.cs:92-95), which SPENDS the bag slot."""
+    from sts2_rl.relics import ALL_RELICS, RelicRarity
+
+    run = fresh_run()
+    seen = _skipping_driver(run)
+    bag_before = len(run.relic_grab_bag)
+    run.add_relic("calling_bell")
+    offered = [r.relic for r in seen if r.relic is not None]
+    assert [ALL_RELICS[r.id].rarity for r in offered] == [
+        RelicRarity.COMMON, RelicRarity.UNCOMMON, RelicRarity.RARE,
+    ]
+    # Not the TestMode trio.
+    assert {r.id for r in offered} != {"anchor", "gremlin_horn", "mummified_hand"}
+    # ...and the three pulls came out of the bag even though all were declined.
+    assert len(run.relic_grab_bag) == bag_before - 3
+
+
+def test_calling_bell_populates_all_three_before_offering_any():
+    """RewardsSet.GenerateWithoutOffering populates every reward first and
+    only then offers them (RewardsSet.cs:125-147, 153-159), so a relic taken
+    from the screen cannot change what the later slots pulled."""
+    from sts2_rl.driver import DecisionKind as DK
+
+    run = fresh_run()
+    pulls: list[int] = []
+    original = run.pull_relic_from_front
+
+    def counting_pull(*a, **kw):
+        pulls.append(len(seen))
+        return original(*a, **kw)
+
+    run.pull_relic_from_front = counting_pull
+    seen = _skipping_driver(run)
+    run.add_relic("calling_bell")
+    relic_offers = [r for r in seen if r.kind is DK.REWARD_RELIC]
+    assert len(relic_offers) == 3
+    # All three pulls happened before the first offer was asked for.
+    assert pulls == [0, 0, 0]
+
+
 def test_toy_box_offers_its_four_wax_relics():
     """ToyBox.cs:87-97 pulls four relics and OFFERS them; a declined one never
     runs its own AfterObtained."""
@@ -745,3 +977,195 @@ def test_toolbox_and_choices_paradox_selections_are_not_skippable():
     )
     assert len(seen) == 2
     assert all(p not in SKIPPABLE_PURPOSES for p in seen)
+
+
+
+def test_lava_lamp_does_not_upgrade_outside_a_combat_room():
+    """LavaLamp.cs:66-69 — `if (!(RunState.CurrentRoom is CombatRoom)) return
+    false;`. An event's card reward is generated in an EventRoom, so the relic
+    must not touch it even though no damage was taken."""
+    relic = make_relic("lava_lamp")
+    run = fresh_run()
+    run.add_relic(relic)
+    relic.after_room_entered(run, None, RoomType.EVENT)
+    cards = [make_card("strike"), make_card("defend")]
+    relic.modify_card_reward_options_late(run, cards)
+    assert [c.upgrade_level for c in cards] == [0, 0]
+
+
+def test_fresnel_lens_enchants_reward_options_and_deck_adds_with_nimble():
+    """FresnelLens.cs:23-31 (TryModifyCardRewardOptionsLate) and :40-53
+    (TryModifyCardBeingAddedToDeck) both enchant with Nimble 2. The port
+    implemented neither: its docstring claimed the sim had no enchantments and
+    no deck edits, and both halves of that premise were false."""
+    from sts2_rl.enchantments import NimbleEnchantment
+
+    relic = make_relic("fresnel_lens")
+    run = fresh_run()
+    run.add_relic(relic)
+
+    defend = make_card("defend")
+    assert NimbleEnchantment.can_enchant(defend)     # gains_block
+    relic.modify_card_reward_options_late(run, [defend])
+    assert defend.enchantment is not None
+    assert defend.enchantment.id == "nimble"
+    assert defend.enchantment.amount == 2
+
+    added = run.add_card(make_card("defend"))
+    assert added.enchantment is not None and added.enchantment.id == "nimble"
+
+    # Nimble.CanEnchant requires CardModel.GainsBlock, so a Strike is skipped.
+    strike = make_card("strike")
+    relic.modify_card_reward_options_late(run, [strike])
+    assert strike.enchantment is None
+
+
+# ── CardCreationFlags.IsCardReward (relic/_reward_late_pass) ─────────────
+
+
+def test_dingy_rug_adds_the_colorless_pool_to_a_card_reward():
+    """DingyRug.cs:13-36 — ModifyCardRewardCreationOptions appends the
+    Colorless pool. The relic was a documented stub; the sim had no
+    creation-options hook and no CardCreationFlags at all."""
+    from sts2_rl.cards.pool import COLORLESS_POOL
+
+    run = fresh_run()
+    run.add_relic(make_relic("dingy_rug"))
+    seen = set()
+    for _ in range(40):
+        seen.update(c.id for c in create_reward_cards(
+            run, RarityOddsType.REGULAR, is_card_reward=True))
+    assert seen & set(COLORLESS_POOL)
+
+
+def test_dingy_rug_leaves_a_non_reward_generation_alone():
+    """`if (!options.Flags.HasFlag(CardCreationFlags.IsCardReward)) return
+    options;` (DingyRug.cs:23-26) — a relic or event card generation is not a
+    card reward."""
+    from sts2_rl.cards.pool import COLORLESS_POOL
+
+    run = fresh_run()
+    run.add_relic(make_relic("dingy_rug"))
+    seen = set()
+    for _ in range(40):
+        seen.update(c.id for c in create_reward_cards(
+            run, RarityOddsType.REGULAR))          # is_card_reward defaults False
+    assert not (seen & set(COLORLESS_POOL))
+
+
+def test_silver_crucible_does_not_spend_a_charge_on_a_non_reward():
+    """SilverCrucible.cs:104-107 — the same IsCardReward gate. Without it a
+    Lost Coffer or event generation burned one of the two upgrades."""
+    relic = make_relic("silver_crucible")
+    run = fresh_run()
+    run.add_relic(relic)
+    create_reward_cards(run, RarityOddsType.REGULAR)          # not a reward
+    assert relic.times_used == 0
+    create_reward_cards(run, RarityOddsType.REGULAR, is_card_reward=True)
+    assert relic.times_used == 1
+
+
+def test_silken_tress_does_not_spend_itself_on_a_non_reward():
+    """SilkenTress.cs:53-56 — the same gate on its one-shot."""
+    relic = make_relic("silken_tress")
+    run = fresh_run()
+    run.add_relic(relic)
+    create_reward_cards(run, RarityOddsType.REGULAR)
+    assert relic.is_used is False
+    create_reward_cards(run, RarityOddsType.REGULAR, is_card_reward=True)
+    assert relic.is_used is True
+
+
+# ── relic/_undo_clamp: the pickup effect belongs to the relic ────────────
+
+
+def test_big_mushroom_gains_its_max_hp_on_pickup():
+    """relic/big_mushroom. BigMushroom.cs:24-28 is the relic's own
+    AfterObtained. The port implemented none, justifying it with "RunState has
+    no run-level AfterObtained dispatch" — which is false: RunState.add_relic
+    calls it, and the sibling relic from the same event uses it."""
+    run = fresh_run()
+    before = run.max_hp
+    run.add_relic(make_relic("big_mushroom"))
+    assert run.max_hp == before + 20
+
+
+def test_distinguished_cape_loses_max_hp_before_adding_its_cards():
+    """relic/distinguished_cape/g1. DistinguishedCape.cs:30-41 loses 9 Max HP
+    FIRST and then adds 3 Apparitions. The port attributed the −9 to the Vakuu
+    option, but `ThatDecreasesMaxHp` (EventOption.cs:194-197) is
+    `ThatWillKillPlayerIf` — a red-flash UI flag that applies no HP."""
+    run = fresh_run()
+    before_max, before_deck = run.max_hp, len(run.deck)
+    run.add_relic(make_relic("distinguished_cape"))
+    assert run.max_hp == before_max - 9
+    assert len(run.deck) == before_deck + 3
+    assert sum(1 for c in run.deck if c.id == "apparition") == 3
+
+
+def test_the_vakuu_cape_option_does_not_double_the_max_hp_loss():
+    """The event applied its own −9 on top of nothing, which happened to total
+    the right number; now that the relic carries it, the option must not."""
+    from sts2_rl.events import make_event
+
+    run = fresh_run()
+    before = run.max_hp
+    event = make_event("vakuu", run)
+    option = event._cape_option()
+    option.on_chosen()
+    assert run.max_hp == before - 9        # once, not twice
+
+
+def test_whispering_earring_plays_are_auto_plays():
+    """relic/whispering_earring/g2. WhisperingEarring.cs:78-80 spends the card's
+    resources and then calls `CardCmd.AutoPlay(..., AutoPlayType.Default,
+    skipXCapture: true)`, so the resulting CardPlay carries IsAutoPlay. The
+    port called the MANUAL `play_card`, so every `is_auto_play` listener —
+    Tuning Fork's counter among them — counted these as real plays."""
+    seen = []
+
+    class _Spy(Relic):
+        id = "spy2"
+        name = "Spy2"
+
+        def on_card_played(self, card, is_auto_play=False):
+            seen.append(is_auto_play)
+
+    from sts2_rl.cards import make_card
+
+    relic = make_relic("whispering_earring")
+    cs = CombatState(starting_deck=[make_card("strike") for _ in range(10)],
+                     rng=random.Random(0), relics=[relic, _Spy()])
+    # The relic auto-plays during the AutoPrePlay phase of turn 1, which
+    # CombatState's construction already ran.
+    assert seen and all(seen)          # every one of them auto
+
+
+def test_a_doubled_skill_that_kills_still_runs_its_second_replay():
+    """relic/tuning_fork/g1's residue. CardModel.cs's Replay loop returns early
+    on `Owner.Creature.IsDead` alone (:1950 and :1960) — the PLAYER dying. The
+    sim also broke on `_all_enemies_dead()`, so a Throwing-Axe-doubled Skill
+    that killed on iteration 0 counted ONCE in the game's terms and zero more
+    times in the sim's; Tuning Fork's SkillsPlayed is run-scoped, so the drift
+    never washes out."""
+    plays = []
+
+    class _Counter(Relic):
+        id = "counter"
+        name = "Counter"
+
+        def on_card_played(self, card, is_auto_play=False):
+            plays.append(card.id)
+
+    cs = fresh(relics=[make_relic("throwing_axe"), _Counter()])
+    cs.enemy.hp = 1
+    cs.player.energy = 10
+    defend = make_card("defend")
+    cs.player.hand.append(defend)
+    # Kill with an attack first so the Skill's own play lands in the ending
+    # window, then play the doubled Skill.
+    DamageCmd.deal(cs.hooks, cs.enemy, 50, dealer=cs.player,
+                   props=DamageProps.CARD)
+    plays.clear()
+    cs.play_card(cs.player.hand.index(defend))
+    assert plays == ["defend", "defend"]     # both Replay iterations counted

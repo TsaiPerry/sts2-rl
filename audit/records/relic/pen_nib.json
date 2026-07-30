@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\pen_nib.py",
-    "sha256": "4caec40e7abbd569a8bf3e141c9360011d5fe2fd0e3533911c603dad5240de1a"
+    "sha256": "155157f36c78fc82e57cd38c6285f3d083d4d0e81b09f6ff8975826f6f2ea1e1"
   },
   "extra_sources": [
     {
@@ -26,17 +26,17 @@
     },
     {
       "path": "sts2_rl/cards/thrash.py",
-      "sha256": "034f36bcc83c695672fb15e1a7c0804bdc5a50b30dc083b3ad0c0613d05717ad",
+      "sha256": "0686a828b21882eb0f471570cf00cb514a8c4b01fd30e19d726f9204e2937e30",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
@@ -46,12 +46,12 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
       "path": "sts2_rl/previews.py",
-      "sha256": "610483acf1c40cde7a8d62fd94e9dc4991efe5244494c612527686dc961839d5",
+      "sha256": "7b07d17672f3bb530df0491e0beadd48d94aca5be39087d577aaa6b637bf42de",
       "side": "sim"
     },
     {
@@ -61,7 +61,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     },
     {
@@ -71,7 +71,7 @@
     },
     {
       "path": "test/test_hook_order.py",
-      "sha256": "b8de2a3eefeb49141245e7fede8d92b029cd6fce4e429ce6b0537c8dd80fe707",
+      "sha256": "8e1ef674257f412e91b2386d8f622109db5fc9721e9f9c1e0e66806c7869ff8f",
       "side": "sim"
     }
   ],
@@ -115,8 +115,8 @@
     },
     {
       "what": "G2 (LIVE at the sim's own preview site): the entire `AttackToDouble == null` arm of ModifyDamageMultiplicative (PenNib.cs:120-128) has no counterpart -- the game doubles the PENDING 10th Attack's number for any cardSource that is not in PileType.Play once AttacksPlayed == 9",
-      "verdict": "gap",
-      "issue": "MECHANISM: PenNib.cs:120-128 reads `CardPile? pile = cardSource.Pile; if ((pile == null || pile.Type != PileType.Play) && AttacksPlayed == 9) return 2m;`. A card mid-OnPlay is in PileType.Play (PROMPT.md bug class 7), so this arm can only be taken for a card that is NOT being played -- i.e. a card in hand whose damage the game is PREVIEWING. It is the relic's promise made visible: with nine Attacks played, the tenth shows its doubled face before you commit. pen_nib.py:44 keys solely on `card is self._card_to_double`, which before_card_played sets only during the play, so the sim's preview never doubles. REACHABILITY (LIVE and executed -- py audit/tools/relic_probes_b12.py b12-pennib): the sim HAS the preview path and consumes it as an RL feature, not only as UI -- previews.preview_card_damage (previews.py:149-158) replays the same modifier chain as DamageCmd.deal and full_env.py:510 calls it per (card, enemy) pair to build the observation. Observed with _attacks_played = 9 and a Strike in hand: preview_card_damage = 6 where the game prints 12; the damage actually DEALT is 12 on both sides, so the divergence is confined to the previewed/observed number. Filed as a gap rather than waived under the presentation exclusion for exactly that reason: the sim's consumer of this number is the policy's observation vector, not a sprite. The fix must keep the pile clause or the real play would double twice. NOTE per binding rule 7: previews.py, full_env.py and cmds.py are NOT hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The preview arm is ported. PenNib.cs:120-128's `if (AttackToDouble == null) { CardPile? pile = cardSource.Pile; if ((pile == null || pile.Type != PileType.Play) && AttacksPlayed == 9) return 2m; }` now exists in relics/pen_nib.py, with the pile clause intact and the two preceding C# guards it also lacked (`cardSource == null` at :112 and the dealer test at :116) written out beside it. The sim's PileType.Play analogue is `player._playing_card`, which `_resolve_card_play` sets for the duration of the play -- so the arm can only be taken for a card that is NOT being played, which is what stops the real tenth Attack doubling twice. EXECUTED: with `_attacks_played = 9` and a Strike in hand, `previews.preview_card_damage` now returns 12 where it returned 6 and the game prints 12; at `_attacks_played = 3` it still returns 6; and actually PLAYING the tenth Attack still deals 12, not 24. Filed and fixed as a gap rather than waived under the presentation exclusion because the sim's consumer of this number is the policy's observation vector (full_env builds it per (card, enemy) pair), not a sprite.  Pinned by test/test_relic_live_tail.py.  NOT CLOSED: nothing at this site.  The text it replaced read: MECHANISM: PenNib.cs:120-128 reads `CardPile? pile = cardSource.Pile; if ((pile == null || pile.Type != PileType.Play) && AttacksPlayed == 9) return 2m;`. A card mid-OnPlay is in PileType.Play (PROMPT.md bug class 7), so this arm can only be taken for a card that is NOT being played -- i.e. a card in hand whose damage the game is PREVIEWING. It is the relic's promise made visible: with nine Attacks played, the tenth shows its doubled face before you commit. pen_nib.py:44 keys solely on `card is self._card_to_double`, which before_card_played sets only during the play, so the sim's preview never doubles. REACHABILITY (LIVE and executed -- py audit/tools/relic_probes_b12.py b12-pennib): the sim HAS the preview path and consumes it as an RL feature, not only as UI -- previews.preview_card_damage (previews.py:149-158) replays the same modifier chain as DamageCmd.deal and full_env.py:510 calls it per (card, enemy) pair to build the observation. Observed with _attacks_played = 9 and a Strike in hand: preview_card_damage = 6 where the game prints 12; the damage actually DEALT is 12 on both sides, so the divergence is confined to the previewed/observed number. Filed as a gap rather than waived under the presentation exclusion for exactly that reason: the sim's consumer of this number is the policy's observation vector, not a sprite. The fix must keep the pile clause or the real play would double twice. NOTE per binding rule 7: previews.py, full_env.py and cmds.py are NOT hashed by this record."
     },
     {
       "what": "G3 (DORMANT): C# skips Hook.AfterCardPlayed entirely when the play ended the combat (CardModel.cs:1957 gates on CombatManager.IsInProgress) while combat.py:514 always fires it, so a game-side 10th Attack that lands the killing blow stays MARKED and the sim's does not",

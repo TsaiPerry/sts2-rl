@@ -27,7 +27,10 @@ class NeowsTalisman(Relic):
     has_upon_pickup_effect = True  # RelicModel.HasUponPickupEffect
 
     def after_obtained(self, run) -> None:
+        from ..cmds import CardCmd
         for tag in ("strike", "defend"):
             card = _basic_with_tag(run.deck, tag, last=True)
             if card is not None:
-                card.upgrade()
+                # CardCmd.cs:271-276 -- an already-smithed Basic Strike is
+                # skipped, not pushed to the impossible level 2.
+                CardCmd.upgrade(None, card)

@@ -24,7 +24,14 @@ class PaelsTooth(Relic):
         self.stored_cards: list = []
 
     def after_obtained(self, run) -> None:
-        candidates = run.removable_cards()
+        # PaelsTooth.cs:82 passes `filter: (CardModel c) => c.IsUpgradable`
+        # and CardSelectCmd.FromDeckForRemoval ANDs `IsRemovable` onto it, so
+        # the offered set is the INTERSECTION. `run.removable_cards()` is the
+        # IsRemovable half alone; without the IsUpgradable half a Curse, a
+        # Status or an already-smithed card could be stored, and a stored
+        # non-upgradable card comes back un-upgraded (the guard below), i.e.
+        # the relic silently did nothing for it.
+        candidates = [c for c in run.removable_cards() if c.is_upgradable]
         # PaelsTooth.cs:83 ends the selection in
         # `.OrderBy(c => c.Id.Entry, StringComparer.Ordinal)` and stores in that
         # order — and AfterCombatEnd's PlayerRng.Rewards.NextItem indexes into
@@ -33,7 +40,7 @@ class PaelsTooth(Relic):
         chosen = sorted(run.select_cards("remove", candidates, self.CARDS),
                         key=lambda c: c.id.upper())
         for card in chosen:
-            run.deck.remove(card)
+            run.remove_cards([card])   # CardPileCmd.RemoveFromDeck (:88)
             self.stored_cards.append(card)
 
     def after_combat_end(self, run, room_type) -> None:

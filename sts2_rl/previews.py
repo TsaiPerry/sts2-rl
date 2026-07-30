@@ -61,7 +61,7 @@ def _modified_damage(
     if ench is not None:
         amount += ench.enchant_damage_additive(amount, props)
         amount *= ench.enchant_damage_multiplicative(amount, props)
-    amount = amount + hooks.modify_damage_additive(
+    amount = hooks.modify_damage_additive(
         target, amount, dealer, card, None, props)
     amount = int(hooks.modify_damage_multiplicative(
         target, amount, dealer, card, None, props))
@@ -182,7 +182,7 @@ def preview_card_block(combat: CombatState, card: Card) -> int | None:
     if ench is not None:
         amount += ench.enchant_block_additive(amount, ValueProp.MOVE)
         amount *= ench.enchant_block_multiplicative(amount, ValueProp.MOVE)
-    amount = amount + hooks.modify_block_additive(
+    amount = hooks.modify_block_additive(
         player, amount, card, None, ValueProp.MOVE)
     amount = int(hooks.modify_block_multiplicative(
         player, amount, card, None, ValueProp.MOVE))

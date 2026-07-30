@@ -288,22 +288,34 @@ def cmd_overrides() -> None:
 #   AbstractModel.BeforeSideTurnEnd  <- Hook.BeforeTurnEnd       (CombatManager.cs:1179/1251)
 #   AbstractModel.AfterSideTurnStart <- Hook.AfterSideTurnStart  (CombatManager.cs:522)
 #   AbstractModel.BeforeSideTurnStart<- Hook.BeforeSideTurnStart (CombatManager.cs:458)
-# Sim slots (combat.py): on_player_turn_start 5xx pre-draw,
-# on_player_turn_started post-draw, on_player_turn_end 654 (BeforeTurnEnd),
-# after_player_turn_end 665 (AfterTurnEnd), on_enemy_turn_start 301 and
-# on_enemy_turn_end 341 are PER CREATURE, on_enemy_side_end 345 is once.
+# Sim slots: the sim splits each side hook per SIDE rather than passing
+# `(side, participants)`, so every C# side hook maps to a PAIR of sim slots.
+# Player side (player.py / combat.py): on_player_turn_start (BeforeHandDraw),
+# on_player_turn_started (AfterPlayerTurnStart), before_side_turn_start,
+# after_side_turn_start, on_player_turn_end (BeforeTurnEnd),
+# after_player_turn_end (AfterTurnEnd). Enemy side (combat._run_enemy_turns):
+# before_enemy_side_start, after_enemy_side_start, before_enemy_side_end,
+# on_enemy_side_end -- all four fired ONCE for the whole side since
+# turn_structure G5 was fixed. Phase suffixes (_very_early/_early/_late) are
+# HookSystem._each's and apply to every one of them.
 SIDE_HOOKS = {
     "AfterSideTurnEnd": ("after_player_turn_end", "on_enemy_side_end"),
     "AfterSideTurnEndLate": ("after_player_turn_end", "on_enemy_side_end"),
-    "BeforeSideTurnEnd": ("on_player_turn_end", "on_enemy_side_end"),
-    "BeforeSideTurnEndVeryEarly": ("on_player_turn_end", "on_enemy_side_end"),
-    "AfterSideTurnStart": ("on_player_turn_started", "on_enemy_side_start*"),
-    "BeforeSideTurnStart": ("on_player_turn_start", "on_enemy_side_start*"),
+    "BeforeSideTurnEnd": ("on_player_turn_end", "before_enemy_side_end"),
+    "BeforeSideTurnEndVeryEarly": ("on_player_turn_end",
+                                   "before_enemy_side_end"),
+    "AfterSideTurnStart": ("after_side_turn_start", "after_enemy_side_start"),
+    "BeforeSideTurnStart": ("before_side_turn_start",
+                            "before_enemy_side_start"),
 }
-PER_CREATURE_SLOTS = {"on_enemy_turn_start", "on_enemy_turn_end"}
+# The sim no longer has any per-creature turn slot: C# has no per-creature
+# turn-start or turn-end hook either, which is what turn_structure G5 was.
+PER_CREATURE_SLOTS: set[str] = set()
 SIM_TURN_SLOTS = {
     "on_player_turn_start", "on_player_turn_started", "on_player_turn_end",
-    "after_player_turn_end", "on_enemy_turn_start", "on_enemy_turn_end",
+    "before_side_turn_start", "after_side_turn_start",
+    "after_player_turn_end", "before_enemy_side_start",
+    "after_enemy_side_start", "before_enemy_side_end",
     "on_enemy_side_end", "on_combat_start", "on_energy_reset",
 }
 
@@ -311,13 +323,11 @@ SIM_TURN_SLOTS = {
 def cmd_slots() -> None:
     """Every unit whose C# hook is SIDE-scoped but whose sim slot is not.
 
-    The sim has exactly one enemy-side-scoped slot, `on_enemy_side_end`
-    (combat.py:345, fired once after every enemy has acted).  A power that
-    implements a C# side hook with `on_enemy_turn_start`/`on_enemy_turn_end`
-    (combat.py:301/341, per creature) therefore fires at a different point in
-    the round as soon as the owner shares the enemy side with anything else.
-    There is NO enemy-side-START slot at all, so `AfterSideTurnStart` /
-    `BeforeSideTurnStart` on an enemy-owned power has no exact counterpart.
+    Since turn_structure G5 was fixed both sides have a complete set of
+    side-scoped slots, so PER_CREATURE_SLOTS is empty and this reports nothing
+    unless a new per-creature slot is reintroduced. Kept as the tripwire for
+    that: it is the census that found the fifteen powers sitting on the old
+    per-enemy slots in the first place.
     """
     sims = _sim_classes()
     n_side = n_bad = 0

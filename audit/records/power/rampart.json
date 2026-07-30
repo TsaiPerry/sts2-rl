@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
@@ -51,7 +51,7 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     },
     {
@@ -77,15 +77,15 @@
     },
     "AfterSideTurnStart": {
       "maps_to": "powers.py:2994-3002 on_player_turn_start (player.py:169)",
-      "verdict": "gap",
-      "issue": "SLOT, and the sim already has the right one. AbstractModel.AfterSideTurnStart is dispatched by Hook.AfterSideTurnStart at CombatManager.cs:522, i.e. AFTER the player's hand draw; the sim's on_player_turn_start is fired at player.py:169, BEFORE the draw at player.py:183, and the post-draw slot on_player_turn_started (player.py:186 -- whose own comment says it is \"the game's AfterPlayerTurnStart / player-side AfterSideTurnStart, both of which run after the draw\") is available and unused. Identical shape to the already-recorded demon_form / crimson_mantle / inferno finding (power report section 4 item 6) and to the section-5 slot table. The block here lands on ENEMIES, so the pre/post-draw half of this is dormant on its own -- nothing the player draws can read a Turret Operator's block before it plays -- but see the extra-turn guard below, which makes this unit's rollup LIVE. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The sim has the flag now. `CombatManager.PlayersTakingExtraTurn` is cleared and refilled in SwitchFromPlayerToEnemySide (CombatManager.cs:1360-1373) and is still non-empty when StartTurn runs (:435/:439) and therefore when Hook.AfterSideTurnStart fires (:522) -- which is how content tells an EXTRA player turn from an ordinary one. Shipped as `CombatState.players_taking_extra_turn`, cleared on every pass through the switch (CombatManager.cs:1363) before the hook is polled and appended to on the extra-turn arm, so it is populated across `_start_player_turn` exactly as in C#.  This rollup's remaining half WAS the extra-turn guard, and that is what closed (see this record's G1). The SLOT half was already closed in an earlier round -- the power is on `after_side_turn_start`, fired from PlayerCombatState.start_turn after the hand draw -- and is untouched. NOT CLOSED: nothing at this site; both halves of the rollup are now closed.  The text it replaced read: STILL OPEN, and now only the extra-turn guard. The SLOT is CLOSED: RampartPower.cs:21 declares AfterSideTurnStart and the power is on the new `after_side_turn_start` dispatcher (CombatManager.cs:522), fired from PlayerCombatState.start_turn after the hand draw and after `on_player_turn_started` -- see power/crimson_mantle's entry for the split and test/test_turn_start_split.py for the pins. WHAT REMAINS is this unit's other guard, the extra-turn condition, which is what makes the rollup LIVE and is untouched by the slot fix.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: SLOT, and the sim already has the right one. AbstractModel.AfterSideTurnStart is dispatched by Hook.AfterSideTurnStart at CombatManager.cs:522, i.e. AFTER the player's hand draw; the sim's on_player_turn_start is fired at player.py:169, BEFORE the draw at player.py:183, and the post-draw slot on_player_turn_started (player.py:186 -- whose own comment says it is \"the game's AfterPlayerTurnStart / player-side AfterSideTurnStart, both of which run after the draw\") is available and unused. Identical shape to the already-recorded demon_form / crimson_mantle / inferno finding (power report section 4 item 6) and to the section-5 slot table. The block here lands on ENEMIES, so the pre/post-draw half of this is dormant on its own -- nothing the player draws can read a Turret Operator's block before it plays -- but see the extra-turn guard below, which makes this unit's rollup LIVE. Third-file citations, not hashed here."
     }
   },
   "guards": [
     {
       "what": "RampartPower.cs:23 `CombatManager.Instance.PlayersTakingExtraTurn.Count > 0` -> return",
-      "verdict": "gap",
-      "issue": "LIVE, and absent from the sim entirely. C# refuses to grant the block on a player's EXTRA turn: _playersTakingExtraTurn is filled at CombatManager.cs:1366-1369 during the side switch and read at :435/:439 inside StartTurn, so it is non-empty when Hook.AfterSideTurnStart fires at :522 for that turn. The sim's extra-turn path (combat.py:648-652) calls `self.player.start_turn()` with no such flag, so on_player_turn_start fires normally and this power grants its block again. EXECUTED: a TURRET_OPERATOR_WEAK combat (enemies [LivingShield(rampart), TurretOperator]) with the ported relic Pael's Eye -- the Turret Operator holds 25 block after the turn-1 start (control, correct in both models); zero it, end the turn WITHOUT playing a card so Pael's Eye claims the extra turn (relics/paels_eye.py:36-40 should_take_extra_turn), and the sim leaves the Turret Operator on 25 block where the game leaves it on 0. Rule-6 co-occurrence, stated explicitly: Pael's Eye comes from the ported Act-2 (Hive) Ancient Pael (events/pael.py:53, OPTION_POOL_3) and Living Shield/Turret Operator is a ported Act-3 (Glory) weak encounter (monsters/glory/turret_operator.py:112-114, monsters/glory/__init__.py:60), and relics persist across acts -- so one run can trivially hold both. Reproduce the extra-turn population with `py audit/tools/power_slot_probes.py extra-turns`. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The sim has the flag now. `CombatManager.PlayersTakingExtraTurn` is cleared and refilled in SwitchFromPlayerToEnemySide (CombatManager.cs:1360-1373) and is still non-empty when StartTurn runs (:435/:439) and therefore when Hook.AfterSideTurnStart fires (:522) -- which is how content tells an EXTRA player turn from an ordinary one. Shipped as `CombatState.players_taking_extra_turn`, cleared on every pass through the switch (CombatManager.cs:1363) before the hook is polled and appended to on the extra-turn arm, so it is populated across `_start_player_turn` exactly as in C#.  RampartPower.cs:23's `side != CombatSide.Player || PlayersTakingExtraTurn.Count > 0 -> return` is ported in powers.py. EXECUTED 2026-07-29 on the witness this entry named -- a TURRET_OPERATOR_WEAK combat ([LivingShield(rampart), TurretOperator]) holding the ported Pael's Eye, block zeroed, turn ended with no card played so Pael's Eye claims the extra turn: the Turret Operator now ends on 0 block, and with the guard reverted in place it ends on 25. That is the entry's own recorded number, both ways. Pinned by test/test_extra_turn_guard.py (the grant-on-an-ordinary-turn control, the refusal, the cleared-before-an-ordinary-turn case and a fresh combat). NOT CLOSED: nothing at this site.  The text it replaced read: LIVE, and absent from the sim entirely. C# refuses to grant the block on a player's EXTRA turn: _playersTakingExtraTurn is filled at CombatManager.cs:1366-1369 during the side switch and read at :435/:439 inside StartTurn, so it is non-empty when Hook.AfterSideTurnStart fires at :522 for that turn. The sim's extra-turn path (combat.py:648-652) calls `self.player.start_turn()` with no such flag, so on_player_turn_start fires normally and this power grants its block again. EXECUTED: a TURRET_OPERATOR_WEAK combat (enemies [LivingShield(rampart), TurretOperator]) with the ported relic Pael's Eye -- the Turret Operator holds 25 block after the turn-1 start (control, correct in both models); zero it, end the turn WITHOUT playing a card so Pael's Eye claims the extra turn (relics/paels_eye.py:36-40 should_take_extra_turn), and the sim leaves the Turret Operator on 25 block where the game leaves it on 0. Rule-6 co-occurrence, stated explicitly: Pael's Eye comes from the ported Act-2 (Hive) Ancient Pael (events/pael.py:53, OPTION_POOL_3) and Living Shield/Turret Operator is a ported Act-3 (Glory) weak encounter (monsters/glory/turret_operator.py:112-114, monsters/glory/__init__.py:60), and relics persist across acts -- so one run can trivially hold both. Reproduce the extra-turn population with `py audit/tools/power_slot_probes.py extra-turns`. Third-file citations, not hashed here."
     },
     {
       "what": "RampartPower.cs:23 `side != CombatSide.Player` -> return",

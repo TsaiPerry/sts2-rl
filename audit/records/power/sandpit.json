@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "fc559596ea0f132265170a59a1e5225086340f86caf85cb62759aaf7f8f8dead",
+      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
@@ -62,8 +62,8 @@
     },
     "AfterSideTurnStartLate": {
       "maps_to": "powers.py:2606-2608 on_enemy_turn_start -> Power._tick (powers.py:70-75)",
-      "verdict": "gap",
-      "issue": "SLOT and PHASE. (a) SandpitPower.cs:70-76 is AfterSideTurnStartLate with `side == CombatSide.Enemy` and NO owner/participants filter, dispatched once per enemy side; the sim uses the per-enemy on_enemy_turn_start (combat.py:301) filtered to `enemy is self.owner`. turn_structure gap G5 owns that and carries the identical verdict (rule 3) -- `py audit/tools/power_census.py slots` marks this unit PER-CREATURE:on_enemy_turn_start. (b) the `Late` phase pass does not exist in the sim at all -- hook_dispatch gap G3 / turn_structure G12 -- so this power's decrement is not guaranteed to be last among the side-start listeners. DORMANT for both: executed, `py audit/tools/power_slot_probes.py rosters` shows THE_INSATIABLE_BOSS is a SOLO encounter (n=1, order=['TheInsatiable']), so the per-creature slot and the side slot coincide, and the only other ported enemy-side-start listeners are owner-filtered (PoisonPower, DemonFormPower, HardenedShellPower, SlowPower, AsleepPower). Trigger: an Insatiable encounter with adds. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "CLOSED on both counts. (a) The slot: `after_enemy_side_start_late` is Hook.AfterSideTurnStart for the enemy side (CombatManager.cs:522), dispatched once, and the sim now matches SandpitPower.cs:70-76's shape exactly -- `side == CombatSide.Enemy` with NO owner or participants filter. (b) The `Late` pass is a real listener pass, so the countdown is guaranteed last among the side-start listeners. EXECUTED: test_enemy_side_per_side.py::test_sandpit_decrements_in_the_late_pass, which asserts a plain `after_enemy_side_start` listener still sees the pre-decrement amount.  FIXED 2026-07-28 (round 4). The text it replaced read: SLOT and PHASE. (a) SandpitPower.cs:70-76 is AfterSideTurnStartLate with `side == CombatSide.Enemy` and NO owner/participants filter, dispatched once per enemy side; the sim uses the per-enemy on_enemy_turn_start (combat.py:301) filtered to `enemy is self.owner`. turn_structure gap G5 owns that and carries the identical verdict (rule 3) -- `py audit/tools/power_census.py slots` marks this unit PER-CREATURE:on_enemy_turn_start. (b) the `Late` phase pass does not exist in the sim at all -- hook_dispatch gap G3 / turn_structure G12 -- so this power's decrement is not guaranteed to be last among the side-start listeners. DORMANT for both: executed, `py audit/tools/power_slot_probes.py rosters` shows THE_INSATIABLE_BOSS is a SOLO encounter (n=1, order=['TheInsatiable']), so the per-creature slot and the side slot coincide, and the only other ported enemy-side-start listeners are owner-filtered (PoisonPower, DemonFormPower, HardenedShellPower, SlowPower, AsleepPower). Trigger: an Insatiable encounter with adds. Third-file citations, not hashed here."
     },
     "AfterPowerAmountChanged": {
       "maps_to": "no sim counterpart",

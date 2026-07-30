@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\paels_tooth.py",
-    "sha256": "277f215c4b4b18b2d1d6acf30c10cde6291bcd1700330bc43373f57539200c9a"
+    "sha256": "aa3c903e1c4ac4a8f7a5032b0f80e99ce9f37d3311eef6c6ea8bbebbc3bcc386"
   },
   "extra_sources": [
     {
@@ -21,22 +21,22 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "5555c9f081feb508fbb27de08e295b83fb4d65139becf5883452e25ba81ae7e5",
+      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
       "side": "sim"
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "8baf28896c58e846435a5e208bb9014f7306cf4b1051f582d7b6347cfedc697a",
+      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -62,8 +62,8 @@
     },
     "AfterObtained": {
       "maps_to": "after_obtained(run) (paels_tooth.py:26-30), dispatched by RunState.add_relic (run.py:552)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4 (G2 is now closed). The count matches (CardsVar(5), PaelsTooth.cs:53-57, read via DynamicVars.Cards.IntValue at :80, vs CARDS = 5 at paels_tooth.py:18; no AscensionHelper.GetValueIfAscension in the file); removing the picks from the deck matches (`CardPileCmd.RemoveFromDeck(item)` at PaelsTooth.cs:88 vs `run.deck.remove(card)` at paels_tooth.py:36); and the STORED ORDER now matches too \u2014 paels_tooth.py:33-34 ends the selection in `sorted(..., key=lambda c: c.id.upper())`, which is PaelsTooth.cs:80's `.OrderBy(c => c.Id.Entry, StringComparer.Ordinal)`, and the order is load-bearing because AfterCombatEnd's PlayerRng.Rewards.NextItem indexes into the store. WHAT REMAINS is the CANDIDATE FILTER (G1, LIVE): PaelsTooth.cs:80 passes `filter: (CardModel c) => c.IsUpgradable` and CardSelectCmd.FromDeckForRemoval ANDs `c.IsRemovable` onto it, whereas paels_tooth.py:27 passes `run.removable_cards()`, which is `[c for c in self.deck if not c.eternal]` (run.py:419-421) \u2014 IsRemovable only. Curses, Statuses and already-smithed cards can therefore be offered and stored where C# would never accept them, and a stored non-upgradable card comes back UN-upgraded (paels_tooth.py:49-50 correctly guards `if card.is_upgradable`), so the relic silently does nothing for it. C#'s `item.MutableClone()` (PaelsTooth.cs:86) still has no sim counterpart, which is safe here and is N1.  NARROWED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): the rest of this entry is closed in today's code. The issue it replaced read: Rollup of guards G1 and G2 per binding rule 4. The count matches (CardsVar(5), PaelsTooth.cs:55, read via DynamicVars.Cards.IntValue at :83, vs CARDS = 5 at paels_tooth.py:18; no AscensionHelper.GetValueIfAscension in the file) and removing the picks from the deck matches (`CardPileCmd.RemoveFromDeck(item)` vs `run.deck.remove(card)`). What diverges is the CANDIDATE FILTER (G1, LIVE -- C# requires IsUpgradable, the sim does not) and the STORED ORDER (G2, LIVE for RNG parity -- C# sorts by card id before storing, the sim keeps selection order). C#'s `item.MutableClone()` (line 86) has no sim counterpart, which is safe here and is N1."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): the candidate filter is the intersection. PaelsTooth.cs:82 passes `filter: (CardModel c) => c.IsUpgradable` and CardSelectCmd.FromDeckForRemoval ANDs `IsRemovable` onto it; relics/paels_tooth.py now offers `[c for c in run.removable_cards() if c.is_upgradable]` instead of `run.removable_cards()` alone, so Curses, Statuses and already-smithed cards can no longer be stored -- which mattered because a stored non-upgradable card came back UN-upgraded and the relic silently did nothing for it. Everything else in this rollup was already reconciled (count, deck removal, the Ordinal store order). One legacy test moved with it: test_paels_tooth_stores_cards_in_ordinal_id_order held a Regret to make its ordering point and a Curse is no longer offerable, so it uses Feed. test/test_relics.py::TestPaelsToothCandidateFilter is the new pin. NOT closed by this entry: `item.MutableClone()` (PaelsTooth.cs:86), which is N1 and safe here.  The text it replaced read: Rollup of guard G1 per binding rule 4 (G2 is now closed). The count matches (CardsVar(5), PaelsTooth.cs:53-57, read via DynamicVars.Cards.IntValue at :80, vs CARDS = 5 at paels_tooth.py:18; no AscensionHelper.GetValueIfAscension in the file); removing the picks from the deck matches (`CardPileCmd.RemoveFromDeck(item)` at PaelsTooth.cs:88 vs `run.deck.remove(card)` at paels_tooth.py:36); and the STORED ORDER now matches too \u2014 paels_tooth.py:33-34 ends the selection in `sorted(..., key=lambda c: c.id.upper())`, which is PaelsTooth.cs:80's `.OrderBy(c => c.Id.Entry, StringComparer.Ordinal)`, and the order is load-bearing because AfterCombatEnd's PlayerRng.Rewards.NextItem indexes into the store. WHAT REMAINS is the CANDIDATE FILTER (G1, LIVE): PaelsTooth.cs:80 passes `filter: (CardModel c) => c.IsUpgradable` and CardSelectCmd.FromDeckForRemoval ANDs `c.IsRemovable` onto it, whereas paels_tooth.py:27 passes `run.removable_cards()`, which is `[c for c in self.deck if not c.eternal]` (run.py:419-421) \u2014 IsRemovable only. Curses, Statuses and already-smithed cards can therefore be offered and stored where C# would never accept them, and a stored non-upgradable card comes back UN-upgraded (paels_tooth.py:49-50 correctly guards `if card.is_upgradable`), so the relic silently does nothing for it. C#'s `item.MutableClone()` (PaelsTooth.cs:86) still has no sim counterpart, which is safe here and is N1.  NARROWED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): the rest of this entry is closed in today's code. The issue it replaced read: Rollup of guards G1 and G2 per binding rule 4. The count matches (CardsVar(5), PaelsTooth.cs:55, read via DynamicVars.Cards.IntValue at :83, vs CARDS = 5 at paels_tooth.py:18; no AscensionHelper.GetValueIfAscension in the file) and removing the picks from the deck matches (`CardPileCmd.RemoveFromDeck(item)` vs `run.deck.remove(card)`). What diverges is the CANDIDATE FILTER (G1, LIVE -- C# requires IsUpgradable, the sim does not) and the STORED ORDER (G2, LIVE for RNG parity -- C# sorts by card id before storing, the sim keeps selection order). C#'s `item.MutableClone()` (line 86) has no sim counterpart, which is safe here and is N1."
     },
     "AfterCombatEnd": {
       "maps_to": "after_combat_end(run, room_type) (paels_tooth.py:32-44), dispatched by RunState.finish_combat (run.py:1206-1208)",
@@ -79,8 +79,8 @@
   "guards": [
     {
       "what": "G1 (LIVE): the candidate filter. C# selects from `IsRemovable AND IsUpgradable`; the sim selects from `removable_cards()` alone, so Curses and already-upgraded cards can be stored",
-      "verdict": "gap",
-      "issue": "MECHANISM: PaelsTooth.cs:83 calls `CardSelectCmd.FromDeckForRemoval(..., filter: (CardModel c) => c.IsUpgradable)`, and FromDeckForRemoval itself ANDs `c.IsRemovable` onto the caller's filter (CardSelectCmd.cs:621-625). paels_tooth.py:27 passes `run.removable_cards()` -- IsRemovable only (run.py:360-362, i.e. everything not Eternal) -- so the IsUpgradable half is dropped entirely. Two observables follow: the choice offered to the player is a different set, and a stored non-upgradable card comes back UN-upgraded at combat end (paels_tooth.py:42-43 correctly guards the upgrade), so the relic silently does nothing for that card where C# would never have accepted it. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b11.py tooth-filter`): with a deck of [strike+1, strike, strike, defend, bash, regret], the sim's candidate set is all six and C#'s is four; driving the sim's own after_obtained then stores `[('strike', 1), ('regret', 0), ('strike', 0), ('strike', 0), ('strike', 0)]`. Both sides ported and both halves are ordinary: 35 of 203 ported cards have max_upgrade_level 0 (18 Curse, 14 Status, 3 Quest -- the census in sweep D), Curses are IsRemovable and reach the deck through curse rewards and events, and ANY card smithed at a rest site (run.rest_upgrade, run.py:1112-1119) is at max level and therefore not IsUpgradable. Note the source is deliberately asymmetric here and the sim copied the wrong half: Pael.cs:162-164's OFFER gate counts `c.IsRemovable >= 5` (which paels_tooth.py:20's MIN_REMOVABLE = 5 matches correctly), while the SELECTION filter is IsUpgradable -- so the game can offer the relic and then present fewer than five candidates."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): STALE, not open. The candidate filter is ALREADY the intersection the entry asks for: paels_tooth.py builds `[c for c in run.removable_cards() if c.is_upgradable]`, which is `CardSelectCmd.FromDeckForRemoval`'s `IsRemovable` AND PaelsTooth.cs:83's `filter: c => c.IsUpgradable` (CardSelectCmd.cs:621-625). EXECUTED 2026-07-29 with this entry's own fixture -- a deck of [strike+1, strike, strike, defend, bash, regret]: the candidate set offered to the selector is the FOUR cards C# offers ([strike, strike, defend, bash]); the smithed strike+1 and the Regret curse are both excluded, where the entry recorded all six. The stored list comes back [bash, defend, strike, strike], sorted on the uppercased id as PaelsTooth.cs:83's `.OrderBy(c => c.Id.Entry, StringComparer.Ordinal)` requires. The asymmetry the entry flagged is intact and correct: the OFFER gate is still `MIN_REMOVABLE = 5` counting IsRemovable (Pael.cs:162-164) while the SELECTION filter is IsUpgradable, so the relic can be offered and then present fewer than five candidates. NOT CLOSED: nothing -- this entry carried no residue.  The text it replaced read: MECHANISM: PaelsTooth.cs:83 calls `CardSelectCmd.FromDeckForRemoval(..., filter: (CardModel c) => c.IsUpgradable)`, and FromDeckForRemoval itself ANDs `c.IsRemovable` onto the caller's filter (CardSelectCmd.cs:621-625). paels_tooth.py:27 passes `run.removable_cards()` -- IsRemovable only (run.py:360-362, i.e. everything not Eternal) -- so the IsUpgradable half is dropped entirely. Two observables follow: the choice offered to the player is a different set, and a stored non-upgradable card comes back UN-upgraded at combat end (paels_tooth.py:42-43 correctly guards the upgrade), so the relic silently does nothing for that card where C# would never have accepted it. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b11.py tooth-filter`): with a deck of [strike+1, strike, strike, defend, bash, regret], the sim's candidate set is all six and C#'s is four; driving the sim's own after_obtained then stores `[('strike', 1), ('regret', 0), ('strike', 0), ('strike', 0), ('strike', 0)]`. Both sides ported and both halves are ordinary: 35 of 203 ported cards have max_upgrade_level 0 (18 Curse, 14 Status, 3 Quest -- the census in sweep D), Curses are IsRemovable and reach the deck through curse rewards and events, and ANY card smithed at a rest site (run.rest_upgrade, run.py:1112-1119) is at max level and therefore not IsUpgradable. Note the source is deliberately asymmetric here and the sim copied the wrong half: Pael.cs:162-164's OFFER gate counts `c.IsRemovable >= 5` (which paels_tooth.py:20's MIN_REMOVABLE = 5 matches correctly), while the SELECTION filter is IsUpgradable -- so the game can offer the relic and then present fewer than five candidates."
     },
     {
       "what": "G2 (LIVE for RNG parity): C# sorts the stored cards by id before storing them; the sim keeps selection order, and the store is exactly what the Rewards stream indexes into",
@@ -108,6 +108,6 @@
       "rationale": "run.py:1206-1208 gates the relic hook on `room_type is not None and not self.is_dead`, and both drivers pass the room type on every combat (executed in `py audit/tools/relic_probes_b11.py pantograph-boss`: driver.py:331 and conformance/runner.py:210 both pass `room_type=room_type`). The is_dead half duplicates the C# body's own first guard (:95). Checked because a relic that returns a card 'after each combat you survive' would be silently inert if the driver omitted the argument."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

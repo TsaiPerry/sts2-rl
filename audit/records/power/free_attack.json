@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "e7926caf204ed3fa391500f0236ab3970e7bb1ef292171e51f98888ca564aee5"
+    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
   },
   "extra_sources": [
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "f73350197a2a1114875897dc34e9a12afaa79be4e289598c51403e9b1d4ba9bc",
+      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
       "side": "sim"
     },
     {
@@ -61,14 +61,14 @@
       "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "TryModifyEnergyCostInCombatLate": {
-      "maps_to": "powers.py:1147-1151 FreeAttackPower.modify_card_energy_cost (hooks.py:196-201)",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. THE PHASE HALF IS CLOSED: the sim has the Late pass (hooks.py:36 `_PHASES`, resolved by `_each`) and this power uses it -- `modify_card_energy_cost_late`, powers.py:1221-1227 -- so it is guaranteed to run after Tangled's plain-pass `modify_card_energy_cost`, which is what FreeAttackPower.cs:14's TryModifyEnergyCostInCombatLate means. WHAT REMAINS is this record's own finding: THE PILE GUARD. FreeAttackPower.cs:26-39 zeroes the cost only when `card.Pile?.Type` is Hand or Play; powers.py:1221-1227 zeroes every Attack of the owner's wherever it sits, so a draw- or discard-pile Attack still displays as free to previews.py and the RL observation."
+      "maps_to": "powers.py FreeAttackPower.modify_card_energy_cost_late (hooks.py Late phase)",
+      "verdict": "faithful",
+      "issue": "CLOSED 2026-07-29 (round 10, the Tier 1 residue). THE PILE GUARD IS PORTED: `_in_a_live_pile` consults `PlayerCombatState.pile_type_of` (the port of `CardModel.Pile?.Type`) and zeroes the cost only for Hand or Play, matching FreeAttackPower.cs:26-39's switch. The phase half was already closed. EXECUTED: with the power up, a draw-pile Strike costs 1 and a hand Strike costs 0; the old port returned 0 for both, so a buried Attack read as free to previews.py, the RL observation and every `CardModel.CostsEnergyOrStars`-shaped filter. Pinned by test/test_tier1_residue.py::test_free_attack_pile_guard_keeps_a_draw_pile_attack_costed. WAS: NARROWED 2026-07-27. THE PHASE HALF IS CLOSED: the sim has the Late pass (hooks.py:36 `_PHASES`, resolved by `_each`) and this power uses it -- `modify_card_energy_cost_late`, powers.py:1221-1227 -- so it is guaranteed to run after Tangled's plain-pass `modify_card_energy_cost`, which is what FreeAttackPower.cs:14's TryModifyEnergyCostInCombatLate means. WHAT REMAINS is this record's own finding: THE PILE GUARD. FreeAttackPower.cs:26-39 zeroes the cost only when `card.Pile?.Type` is Hand or Play; powers.py:1221-1227 zeroes every Attack of the owner's wherever it sits, so a draw- or discard-pile Attack still displays as free to previews.py and the RL observation."
     },
     "BeforeCardPlayed": {
-      "maps_to": "powers.py:1153-1156 FreeAttackPower.on_energy_spent (hooks.py:318-324, combat.py:552 for auto-plays)",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27, and the reason it stands has changed. `before_card_played` ITSELF now fires once per replay iteration (combat.py:576, inside the playCount loop) -- hook_dispatch G4 is fixed at the dispatch. But this power is hosted on `on_energy_spent`, which combat.py:497 fires ONCE per logical play, outside `_resolve_card_play` and therefore outside the loop (the auto-play site, combat.py:657, is likewise once). So a Throwing-Axe- or Duplication-doubled Attack still consumes TWO Free Attack stacks in the game (BeforeCardPlayed per iteration, CardModel.cs:1929) and ONE in the sim. The deliberate slot choice recorded here is now the SOLE cause of the count gap rather than a bystander to it, and the missing pile guard (FreeAttackPower.cs:48-59) is unchanged. VERIFIED by reading combat.py:470-506 and :574-600."
+      "maps_to": "powers.py FreeAttackPower.before_card_played (hooks.py:845-855, dispatched inside the play-count loop at combat.py)",
+      "verdict": "faithful",
+      "issue": "CLOSED 2026-07-29 (round 10, the Tier 1 residue). The power now listens on `before_card_played` -- the hook FreeAttackPower.cs:43 actually declares -- instead of `on_energy_spent`. `before_card_played` is dispatched once per CardPlay from inside `_resolve_card_play`'s play-count loop (Hook.BeforeCardPlayed, CardModel.cs:1929), where `on_energy_spent` fires ONCE per logical play outside it. The pile guard (FreeAttackPower.cs:48-59, `card.Pile?.Type is Hand or Play`) is ported too, via the new `PlayerCombatState.pile_type_of` -- the sim had no way to ask which pile holds a card, and PileType.Play is not a fifth list but the `_playing_card` mark on a card parked in the discard. On this hook the guard cannot currently be false (a card being played is always in Play limbo), which is recorded rather than argued: it is load-bearing on the cost hook, not here. EXECUTED: a Hidden-Gem'd Strike (base_replay_count 1, playCount 2) against 3 stacks leaves 1 where the old port left 2. Pinned by test/test_tier1_residue.py::test_free_attack_consumes_one_stack_per_replay_iteration. WAS: NARROWED 2026-07-27, and the reason it stands has changed. `before_card_played` ITSELF now fires once per replay iteration (combat.py:576, inside the playCount loop) -- hook_dispatch G4 is fixed at the dispatch. But this power is hosted on `on_energy_spent`, which combat.py:497 fires ONCE per logical play, outside `_resolve_card_play` and therefore outside the loop (the auto-play site, combat.py:657, is likewise once). So a Throwing-Axe- or Duplication-doubled Attack still consumes TWO Free Attack stacks in the game (BeforeCardPlayed per iteration, CardModel.cs:1929) and ONE in the sim. The deliberate slot choice recorded here is now the SOLE cause of the count gap rather than a bystander to it, and the missing pile guard (FreeAttackPower.cs:48-59) is unchanged. VERIFIED by reading combat.py:470-506 and :574-600."
     }
   },
   "guards": [

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\juzu_bracelet.py",
-    "sha256": "7330824b23fdc0b515f5ef7df612ce0e8de42ff8af9b2fa62fb37a2c47e058fc"
+    "sha256": "72eab4c6843bf4d2b3e280e9b95d9170ff24b463ebedced9053ec7825e89acde"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -42,8 +42,8 @@
     },
     "ModifyUnknownMapPointRoomTypes": {
       "maps_to": "no counterpart; the port implements nothing (juzu_bracelet.py:5-10) and inherits Relic.modify_unknown_map_point_room_types's identity default (relics/base.py:276-278)",
-      "verdict": "gap",
-      "issue": "MECHANISM: JuzuBracelet.cs:17-27 copies the incoming room-type set, removes RoomType.Monster and returns it, so a '?' node can never roll a combat. The port is behaviourless and its docstring justifies itself with 'map-only effect, stub' -- the exact shape PROMPT.md bug class 12 says to distrust, and the claim is FALSE: run.py:1046-1049 dispatches modify_unknown_map_point_room_types over every relic and deck card inside RunState._unknown_allowed_room_types, whose result is passed straight to roll_room_type for UNKNOWN points (run.py:958-974). LIVE, both sides proved by execution (py audit/tools/relic_probes_b07.py juzu-map): with no relic the allowed set is [ELITE, EVENT, MONSTER, SHOP, TREASURE]; WITH juzu_bracelet it is unchanged, MONSTER included; and the SIBLING relic golden_compass -- which implements the same hook (relics/golden_compass.py:39-44) -- correctly narrows the same set to [EVENT], which is what proves the pipeline is whole rather than merely present. The observable is run composition (extra fights, and a different room type for the same '?'-node RNG draw), and it also shifts the UnknownMapPoint stream's consumer because roll_room_type picks from a different candidate set. Confirms .superpowers/sdd/content-relic-sweeps.md Sweep C's 'map-only effect' row, which names juzu_bracelet as the single relic in that premise family and this dispatch site as live. Rule 7: run.py, relics/base.py and relics/golden_compass.py are not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): `JuzuBracelet.modify_unknown_map_point_room_types` returns `set(room_types) - {RoomType.MONSTER}`, JuzuBracelet.cs:17-27's copy-then-Remove. Only Monster: an Elite '?' is still possible, which the source's single `Remove` call makes explicit.  The stub's premise was checked before the code (PROMPT.md bug class 12) and was false, which is the fifth round running that has held. The pipeline was whole, as the sibling golden_compass proved by working through it.  Pinned by test/test_false_premise_stubs.py.  NOT CLOSED: nothing at this site.  The text it replaced read: MECHANISM: JuzuBracelet.cs:17-27 copies the incoming room-type set, removes RoomType.Monster and returns it, so a '?' node can never roll a combat. The port is behaviourless and its docstring justifies itself with 'map-only effect, stub' -- the exact shape PROMPT.md bug class 12 says to distrust, and the claim is FALSE: run.py:1046-1049 dispatches modify_unknown_map_point_room_types over every relic and deck card inside RunState._unknown_allowed_room_types, whose result is passed straight to roll_room_type for UNKNOWN points (run.py:958-974). LIVE, both sides proved by execution (py audit/tools/relic_probes_b07.py juzu-map): with no relic the allowed set is [ELITE, EVENT, MONSTER, SHOP, TREASURE]; WITH juzu_bracelet it is unchanged, MONSTER included; and the SIBLING relic golden_compass -- which implements the same hook (relics/golden_compass.py:39-44) -- correctly narrows the same set to [EVENT], which is what proves the pipeline is whole rather than merely present. The observable is run composition (extra fights, and a different room type for the same '?'-node RNG draw), and it also shifts the UnknownMapPoint stream's consumer because roll_room_type picks from a different candidate set. Confirms .superpowers/sdd/content-relic-sweeps.md Sweep C's 'map-only effect' row, which names juzu_bracelet as the single relic in that premise family and this dispatch site as live. Rule 7: run.py, relics/base.py and relics/golden_compass.py are not hashed by this record."
     }
   },
   "guards": [
@@ -63,6 +63,6 @@
       "rationale": "Executed completeness check: JuzuBracelet.cs declares exactly three overrides (Rarity, IsAllowed, ModifyUnknownMapPointRoomTypes) and no CanonicalVars, ExtraHoverTips, Flash or Status usage at all -- unusually clean for the pool. So unlike the other 34 behaviourless ports in Sweep C, this one drops no presentation legs and nothing else is hiding in it; the record's two gaps are the whole relic."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

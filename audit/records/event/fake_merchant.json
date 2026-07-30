@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\fake_merchant.py",
-    "sha256": "1d4cab807ce57957942d4521f122dd008158f1f2fdc25336530aa2ab03c74f97"
+    "sha256": "b988afdfbe947f93dc619f6a22907d77137bdba4363fc04de23641f5ed6d87d5"
   },
   "extra_sources": [
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "8c41cb03e5a2d36200abfccf13a43b0b7da84780102fcd6b2e6ae57265d7e351",
+      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "97e6d7126cb613cb817815bcfa68110625c07221548dce4b56dc33970eb117cb",
+      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
       "side": "sim"
     }
   ],
@@ -78,8 +78,8 @@
     },
     {
       "what": "MerchantRelicEntry.CalcCost (MerchantRelicEntry.cs:42-45): the price is `(int)Math.Round(Model.MerchantCost * _player.PlayerRng.Shops.NextFloat(0.85f, 1.15f))`, one Shops-stream draw per stocked entry; every fake relic declares `MerchantCost => 50` (e.g. FakeAnchor.cs:15)",
-      "verdict": "gap",
-      "issue": "events/fake_merchant.py:12, 70, 84 charge a flat 50, taken from `FakeMerchant.relicCost = 50` (FakeMerchant.cs:23) -- which, verified by grep, is a DEAD CONSTANT: `grep -rn relicCost src` returns only its own declaration, and the price actually charged comes from CalcCost. Two observables: (1) the price is wrong by up to +/-15% on every purchase, and the affordability lock at events/fake_merchant.py:70 therefore locks the wrong options; (2) six Shops-stream draws are not taken, desyncing the stream for the rest of the run in parity mode. LIVE -- the event is reachable in acts 2-3 with 100 gold. NOTE the pricing mechanism is the merchant subsystem's, which no audit kind owns yet; recorded here because this event is a ported consumer of it."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): The price is CalcCost, not the dead constant. MerchantRelicEntry.CalcCost (MerchantRelicEntry.cs:42-45) is `(int)Math.Round(Model.MerchantCost * _player.PlayerRng.Shops.NextFloat(0.85f, 1.15f))`, ONE Shops-stream draw per stocked entry, and every knock-off declares `MerchantCost => 50` (FakeAnchor.cs:15 and its eight siblings). `FakeMerchant.relicCost = 50` (FakeMerchant.cs:23), which the port charged flat, is a DEAD CONSTANT -- grep finds only its own declaration. events/fake_merchant.py now computes a per-entry jittered price when the inventory is built, using the sim's existing `_next_float(run.shops_rng, 0.85, 1.15)` and `relic.merchant_cost` -- literally the same expression shop.py:362-365 already uses for the real merchant's relic entries, so nothing new was built. Both observables the entry named are closed: the affordability lock is now per-entry against THAT entry's price, and six Shops draws that were never taken now are, so the stream no longer desyncs for the rest of the run in parity mode. EXECUTED: six stocked prices, all within 43..58, not all equal, and buying debits exactly the offered price.  Pinned by test/test_event_live_tail.py.  NOT CLOSED: the merchant pricing subsystem itself, which no audit kind owns yet -- this closes the event's consumption of it, which is what the entry was filed for.  The text it replaced read: events/fake_merchant.py:12, 70, 84 charge a flat 50, taken from `FakeMerchant.relicCost = 50` (FakeMerchant.cs:23) -- which, verified by grep, is a DEAD CONSTANT: `grep -rn relicCost src` returns only its own declaration, and the price actually charged comes from CalcCost. Two observables: (1) the price is wrong by up to +/-15% on every purchase, and the affordability lock at events/fake_merchant.py:70 therefore locks the wrong options; (2) six Shops-stream draws are not taken, desyncing the stream for the rest of the run in parity mode. LIVE -- the event is reachable in acts 2-3 with 100 gold. NOTE the pricing mechanism is the merchant subsystem's, which no audit kind owns yet; recorded here because this event is a ported consumer of it."
     },
     {
       "what": "the stall is surfaced as ordinary event options",
@@ -107,6 +107,6 @@
       "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

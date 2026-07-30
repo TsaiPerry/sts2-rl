@@ -71,6 +71,15 @@ class ClashCard(Card):
         self._damage += 4
 
     def should_play_card(self, card: Card, auto_play: bool = False) -> bool:
+        # Clash.cs overrides `IsPlayable`, which `CardModel.CanPlay` consults
+        # (CardModel.cs:1759-1762) and `CardCmd.AutoPlay` does NOT —
+        # AutoPlay checks only the Unplayable KEYWORD and `Hook.ShouldPlay`
+        # (CardCmd.cs:57-71), and Clash implements neither. So an auto-played
+        # Clash fires whatever else is in hand; the sim routes IsPlayable
+        # through should_play_card, which auto_play_card also consults, and
+        # was discarding the card unplayed.
+        if auto_play:
+            return True
         # IsPlayable gate: only playable while the hand is all Attacks (the
         # card is registered as a hook listener, so this vetoes its own play).
         if card is not self or self.combat is None:
@@ -108,10 +117,11 @@ class DistractionCard(Card):
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cards import CardType as _CT
-        from ..cards.pool import random_pool_cards
+        from ..cards.pool import get_distinct_for_combat_parity
         from ..cmds import CardPileCmd
-        generated = random_pool_cards(
-            ctx.combat._rng, 1, _CT.SKILL, distinct=True,
+        # Distraction.cs:25-27 -- GetDistinctForCombat on CombatCardGeneration.
+        generated = get_distinct_for_combat_parity(
+            ctx.combat.combat_rng.card_gen, 1, _CT.SKILL,
             pool=ctx.combat.card_pool,
         )
         for card in generated:

@@ -18,13 +18,15 @@ class Crossbow(Relic):
     name = "Crossbow"
     rarity = RelicRarity.ANCIENT
 
-    def on_player_turn_started(self, player: PlayerCombatState) -> None:
+    def after_side_turn_start(self, player: PlayerCombatState) -> None:
         from ..cards import CardType
-        from ..cards.pool import random_pool_cards
+        from ..cards.pool import get_distinct_for_combat_parity
         from ..cmds import CardPileCmd
 
-        cards = random_pool_cards(
-            self.combat._rng, 1, card_type=CardType.ATTACK, distinct=True,
+        # Crossbow.cs:31 -- GetDistinctForCombat on Rng.CombatCardGeneration,
+        # whose TakeRandom is UnstableShuffle + Take(1), not `rng.sample`.
+        cards = get_distinct_for_combat_parity(
+            self.combat.combat_rng.card_gen, 1, CardType.ATTACK,
             pool=self.combat.card_pool,
         )
         for card in cards:

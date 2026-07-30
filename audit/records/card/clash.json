@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\trash_heap_cards.py",
-    "sha256": "89ec1d15e3dd0db928e3c3a4a04aa21564c5d9b04dc5008761242025e88db7db"
+    "sha256": "f93265bdcd41fa82dd09ab914501270537ae907e02f97679dd58dd2345183e20"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     }
   ],
@@ -43,8 +43,8 @@
     },
     "IsPlayable": {
       "maps_to": "ClashCard.should_play_card (trash_heap_cards.py:73-78)",
-      "verdict": "gap",
-      "issue": "The PREDICATE is faithful -- `CardPile.GetCards(Owner, PileType.Hand).All(c => c.Type == CardType.Attack)` (Clash.cs:20) == `all(c.card_type == CardType.ATTACK for c in self.combat.player.hand)`, and the sim correctly returns True for every other card so the listener only vetoes itself. THE HOOK IS WRONG. C# `IsPlayable` is consulted in exactly ONE place: `CardModel.CanPlay` (CardModel.cs:1759-1762, `if (!IsPlayable) reason |= UnplayableReason.BlockedByCardLogic`), which is the MANUAL play path. `CardCmd.AutoPlay` does not call CanPlay -- it checks only the Unplayable KEYWORD and `Hook.ShouldPlay` (CardCmd.cs:57-71), and Clash implements neither. So in the game an AUTO-PLAYED Clash fires regardless of what else is in hand. The sim routes the gate through `should_play_card`, which `CombatState.auto_play_card` DOES consult (combat.py:536, with `auto_play=True`), and Clash's implementation ignores that flag -- so the sim moves Clash to the discard pile without playing it. Observable: a mixed hand plus any auto-play source -- the game deals 14, the sim deals 0. LIVE: Clash is a ported Event Attack (Trash Heap) and four ported cards auto-play Attacks from a pile -- card/beat_down (Attacks from the discard pile), card/havoc, card/catastrophe and card/cascade (top of the draw pile) -- plus relics/events that auto-play. The fix shape is `if auto_play: return True`."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): THE HOOK IS RIGHT NOW. `IsPlayable` is consulted in exactly one place -- `CardModel.CanPlay` (CardModel.cs:1759-1762), the MANUAL play path. `CardCmd.AutoPlay` checks only the Unplayable KEYWORD and `Hook.ShouldPlay` (CardCmd.cs:57-71), and Clash implements neither, so an AUTO-PLAYED Clash fires whatever else is in hand. The sim routes IsPlayable through `should_play_card`, which `auto_play_card` also consults, so the fix is the shape the entry named: `if auto_play: return True`, with the two C# call sites cited inline. EXECUTED: a mixed hand plus `auto_play_card` deals 14 where it dealt 0, and a MANUAL play is still refused.  Pinned by test/test_card_residue_gaps.py.  NOT CLOSED: nothing at this site.  The text it replaced read: The PREDICATE is faithful -- `CardPile.GetCards(Owner, PileType.Hand).All(c => c.Type == CardType.Attack)` (Clash.cs:20) == `all(c.card_type == CardType.ATTACK for c in self.combat.player.hand)`, and the sim correctly returns True for every other card so the listener only vetoes itself. THE HOOK IS WRONG. C# `IsPlayable` is consulted in exactly ONE place: `CardModel.CanPlay` (CardModel.cs:1759-1762, `if (!IsPlayable) reason |= UnplayableReason.BlockedByCardLogic`), which is the MANUAL play path. `CardCmd.AutoPlay` does not call CanPlay -- it checks only the Unplayable KEYWORD and `Hook.ShouldPlay` (CardCmd.cs:57-71), and Clash implements neither. So in the game an AUTO-PLAYED Clash fires regardless of what else is in hand. The sim routes the gate through `should_play_card`, which `CombatState.auto_play_card` DOES consult (combat.py:536, with `auto_play=True`), and Clash's implementation ignores that flag -- so the sim moves Clash to the discard pile without playing it. Observable: a mixed hand plus any auto-play source -- the game deals 14, the sim deals 0. LIVE: Clash is a ported Event Attack (Trash Heap) and four ported cards auto-play Attacks from a pile -- card/beat_down (Attacks from the discard pile), card/havoc, card/catastrophe and card/cascade (top of the draw pile) -- plus relics/events that auto-play. The fix shape is `if auto_play: return True`."
     },
     "OnPlay": {
       "maps_to": "ClashCard.on_play (trash_heap_cards.py:80-85)",
@@ -63,6 +63,6 @@
     }
   },
   "guards": [],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

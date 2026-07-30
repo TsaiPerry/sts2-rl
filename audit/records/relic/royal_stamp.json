@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\royal_stamp.py",
-    "sha256": "48118fb1dd6a14259014c2248446962b83c7196e3691f15af859bbfe49ee7df0"
+    "sha256": "5a1a26599c01e81293f596b86f7afdaa98bf0592873aa9f8de422d1dc97badcb"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
@@ -38,13 +38,13 @@
     },
     "CanonicalVars": {
       "maps_to": "no counterpart (the port has no amount to carry)",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. sts2_rl/relics/royal_stamp.py's docstring now names the real blocker: the **Royally Approved enchantment** is not among the 17 sts2_rl/enchantments.py registers, so there is nothing to attach and the `UnstableShuffle(RunState.Rng.Niche)` RoyalStamp.cs:36 spends on the candidate list is still never made. A fix must do both halves at once -- shuffle on the Niche stream AND attach the enchantment -- or it reproduces relic/astrolabe's old off-stream defect."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): the relic is no longer a no-op, and the blocker this entry named is gone. **RoyallyApproved is ported** -- enchantments.py's RoyallyApprovedEnchantment, whose `can_enchant` carries RoyallyApproved.cs's `(uint)(cardType - 1) <= 1u` as {Attack, Skill} and whose `modify_card` is OnEnchant's `AddKeyword(Innate)` + `AddKeyword(Retain)`. relics/royal_stamp.py's `after_obtained` now runs all three of RoyalStamp.cs:32-46's steps: filter the deck by `RoyallyApproved.CanEnchant`, `UnstableShuffle` the candidates on `RunState.Rng.Niche` (:36) -- the draw this entry was filed for -- and enchant the pick with amount 1. test_shared_enchantments.py pins the keyword grant, the {Attack, Skill} restriction and the Niche counter moving on pickup.  The text it replaced read: NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. sts2_rl/relics/royal_stamp.py's docstring now names the real blocker: the **Royally Approved enchantment** is not among the 17 sts2_rl/enchantments.py registers, so there is nothing to attach and the `UnstableShuffle(RunState.Rng.Niche)` RoyalStamp.cs:36 spends on the candidate list is still never made. A fix must do both halves at once -- shuffle on the Niche stream AND attach the enchantment -- or it reproduces relic/astrolabe's old off-stream defect."
     },
     "AfterObtained": {
       "maps_to": "no counterpart -- the class body is a docstring plus four class attributes (royal_stamp.py:1-14)",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. sts2_rl/relics/royal_stamp.py's docstring now names the real blocker: the **Royally Approved enchantment** is not among the 17 sts2_rl/enchantments.py registers, so there is nothing to attach and the `UnstableShuffle(RunState.Rng.Niche)` RoyalStamp.cs:36 spends on the candidate list is still never made. A fix must do both halves at once -- shuffle on the Niche stream AND attach the enchantment -- or it reproduces relic/astrolabe's old off-stream defect."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): the relic is no longer a no-op, and the blocker this entry named is gone. **RoyallyApproved is ported** -- enchantments.py's RoyallyApprovedEnchantment, whose `can_enchant` carries RoyallyApproved.cs's `(uint)(cardType - 1) <= 1u` as {Attack, Skill} and whose `modify_card` is OnEnchant's `AddKeyword(Innate)` + `AddKeyword(Retain)`. relics/royal_stamp.py's `after_obtained` now runs all three of RoyalStamp.cs:32-46's steps: filter the deck by `RoyallyApproved.CanEnchant`, `UnstableShuffle` the candidates on `RunState.Rng.Niche` (:36) -- the draw this entry was filed for -- and enchant the pick with amount 1. test_shared_enchantments.py pins the keyword grant, the {Attack, Skill} restriction and the Niche counter moving on pickup.  The text it replaced read: NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. sts2_rl/relics/royal_stamp.py's docstring now names the real blocker: the **Royally Approved enchantment** is not among the 17 sts2_rl/enchantments.py registers, so there is nothing to attach and the `UnstableShuffle(RunState.Rng.Niche)` RoyalStamp.cs:36 spends on the candidate list is still never made. A fix must do both halves at once -- shuffle on the Niche stream AND attach the enchantment -- or it reproduces relic/astrolabe's old off-stream defect."
     },
     "ExtraHoverTips": {
       "maps_to": "no counterpart",
@@ -60,8 +60,8 @@
     },
     {
       "what": "G2 (DORMANT for RL play, LIVE for RNG parity): `list.UnstableShuffle(base.Owner.RunState.Rng.Niche)` (RoyalStamp.cs:36) is an RNG draw the sim never makes",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. sts2_rl/relics/royal_stamp.py's docstring now names the real blocker: the **Royally Approved enchantment** is not among the 17 sts2_rl/enchantments.py registers, so there is nothing to attach and the `UnstableShuffle(RunState.Rng.Niche)` RoyalStamp.cs:36 spends on the candidate list is still never made. A fix must do both halves at once -- shuffle on the Niche stream AND attach the enchantment -- or it reproduces relic/astrolabe's old off-stream defect."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 6): the relic is no longer a no-op, and the blocker this entry named is gone. **RoyallyApproved is ported** -- enchantments.py's RoyallyApprovedEnchantment, whose `can_enchant` carries RoyallyApproved.cs's `(uint)(cardType - 1) <= 1u` as {Attack, Skill} and whose `modify_card` is OnEnchant's `AddKeyword(Innate)` + `AddKeyword(Retain)`. relics/royal_stamp.py's `after_obtained` now runs all three of RoyalStamp.cs:32-46's steps: filter the deck by `RoyallyApproved.CanEnchant`, `UnstableShuffle` the candidates on `RunState.Rng.Niche` (:36) -- the draw this entry was filed for -- and enchant the pick with amount 1. test_shared_enchantments.py pins the keyword grant, the {Attack, Skill} restriction and the Niche counter moving on pickup.  The text it replaced read: NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. sts2_rl/relics/royal_stamp.py's docstring now names the real blocker: the **Royally Approved enchantment** is not among the 17 sts2_rl/enchantments.py registers, so there is nothing to attach and the `UnstableShuffle(RunState.Rng.Niche)` RoyalStamp.cs:36 spends on the candidate list is still never made. A fix must do both halves at once -- shuffle on the Niche stream AND attach the enchantment -- or it reproduces relic/astrolabe's old off-stream defect."
     },
     {
       "what": "N1: `CanEnchant` filters the candidate list BEFORE the shuffle and the offer (RoyalStamp.cs:35)",

@@ -20,9 +20,15 @@ class SealOfGold(Relic):
     ENERGY = 1
     GOLD = 5
 
-    def on_player_turn_started(self, player: PlayerCombatState) -> None:
+    def after_side_turn_start(self, player: PlayerCombatState) -> None:
         combat = self.combat
-        balance = combat.player_gold - combat.gold_stolen - combat.gold_spent
+        # SealOfGold.cs:27 gates on `Owner.Gold`, and PlayerCmd.GainGold
+        # updates Player.Gold live (PlayerCmd.cs:141-170) — so gold won mid
+        # combat is immediately spendable. `combat.gold_gained` is the sim's
+        # accumulator for exactly that, and ThieveryPower already reads the
+        # balance this way (powers.py).
+        balance = (combat.player_gold + combat.gold_gained
+                   - combat.gold_stolen - combat.gold_spent)
         if balance < self.GOLD:
             return
         from ..cmds import EnergyCmd

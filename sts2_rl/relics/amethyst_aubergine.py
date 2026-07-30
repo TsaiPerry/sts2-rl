@@ -19,11 +19,13 @@ class AmethystAubergine(Relic):
     def modify_combat_rewards(self, run, rewards) -> None:
         from ..rooms import RoomType
 
-        if rewards.room_type not in (
+        # AmethystAubergine.cs:29-32 `room == null` -> false: a custom reward
+        # set (rest-site heal, event, relic) carries no room and gets nothing.
+        if rewards.room not in (
             RoomType.MONSTER, RoomType.ELITE, RoomType.BOSS,
         ):
             return
-        if rewards.room_type == RoomType.BOSS and run.is_final_act:
+        if rewards.room == RoomType.BOSS and run.is_final_act:
             return
         # GoldReward is granted with the screen, like the room's own gold.
         rewards.gold += self.GOLD

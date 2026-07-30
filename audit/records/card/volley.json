@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_attacks.py",
-    "sha256": "2e92a8261cb05edbecdfa9281fd940b1a96d7c5004e064d9d03204123b6be24e"
+    "sha256": "c968f51d1badb64580afa265bb1e71b26b30cb4c0aeaf5f529cd437e445a1ce2"
   },
   "extra_sources": [
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "bb2bd40b8e6f238335476bd5b8cbc2463773cc692acfdc5cf6d9214ac8591a3b",
+      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "bb188f24250cb28e3602288181b4a87ef0e7a9c1e72900c3a255b73848ccd582",
+      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
       "side": "sim"
     },
     {
@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     },
     {
       "path": "test/test_rng_tripwire.py",
-      "sha256": "c34c8bc722ef8c237fc8f09cb3bb0b09e789c97f16fc3cc11619ffabc270a008",
+      "sha256": "2265d317d867d7f296c12774adb73b43d9828aca995f80bb15e1a53deb29451f",
       "side": "sim"
     }
   ],
@@ -58,8 +58,8 @@
     },
     "OnPlay": {
       "maps_to": "VolleyCard.on_play (colorless_attacks.py:504-512)",
-      "verdict": "gap",
-      "issue": "The X-value plumbing, the hit count and the duplicates policy are all faithful: `WithHitCount(ResolveEnergyXValue())` (Volley.cs:24) == `for _ in range(self.captured_x)`, where `captured_x` is set by the play pipeline as `hooks.modify_x_value(card, player.energy)` (combat.py:547-549), the sim's ResolveEnergyXValue; and `TargetingRandomOpponents(CombatState)` defaults `allowDuplicates: true` (AttackCommand.cs:309, 325, 72) so repeats are allowed, which independent per-hit choices reproduce, with the living-target set re-derived per hit on both sides (AttackCommand.cs:544-546). WRONG RNG STREAM: C# rolls `Rng.CombatTargets.NextItem(validTargets)` per hit (AttackCommand.cs:601-602); the sim calls `ctx.combat._rng.choice(living)` (colorless_attacks.py:510) on the unseeded shared `random.Random`, even though `ctx.combat.combat_rng.targets` maps to `combat_targets` (combat_rng.py:22,54). Same mechanism and same verdict as card/rip_and_tear's OnPlay entry (rule 3); LIVE, and this is the 12th of the 21 cards the `shared-rng` probe lists. card/sword_boomerang -- the same multi-hit random-target shape -- shows the correct fix, branching on `crng.is_parity` and using `crng.targets`. REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): Routed to the stream its C# names. AttackCommand.cs:601-602 rolls `Rng.CombatTargets.NextItem(validTargets)` per hit, so the per-hit pick is `combat_rng.targets`. The X plumbing, the hit count, the allow-duplicates policy and the per-hit re-derivation of the living set were all already faithful.  Pinned by test/test_card_residue_gaps.py.  NOT CLOSED: nothing at this site.  The text it replaced read: The X-value plumbing, the hit count and the duplicates policy are all faithful: `WithHitCount(ResolveEnergyXValue())` (Volley.cs:24) == `for _ in range(self.captured_x)`, where `captured_x` is set by the play pipeline as `hooks.modify_x_value(card, player.energy)` (combat.py:547-549), the sim's ResolveEnergyXValue; and `TargetingRandomOpponents(CombatState)` defaults `allowDuplicates: true` (AttackCommand.cs:309, 325, 72) so repeats are allowed, which independent per-hit choices reproduce, with the living-target set re-derived per hit on both sides (AttackCommand.cs:544-546). WRONG RNG STREAM: C# rolls `Rng.CombatTargets.NextItem(validTargets)` per hit (AttackCommand.cs:601-602); the sim calls `ctx.combat._rng.choice(living)` (colorless_attacks.py:510) on the unseeded shared `random.Random`, even though `ctx.combat.combat_rng.targets` maps to `combat_targets` (combat_rng.py:22,54). Same mechanism and same verdict as card/rip_and_tear's OnPlay entry (rule 3); LIVE, and this is the 12th of the 21 cards the `shared-rng` probe lists. card/sword_boomerang -- the same multi-hit random-target shape -- shows the correct fix, branching on `crng.is_parity` and using `crng.targets`. REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
     },
     "OnUpgrade": {
       "maps_to": "VolleyCard._on_upgrade (colorless_attacks.py:501-502)",
@@ -68,6 +68,6 @@
     }
   },
   "guards": [],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

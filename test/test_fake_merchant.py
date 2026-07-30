@@ -5,6 +5,7 @@ docs/superpowers/plans/2026-07-19-shared-events.md."""
 import random
 
 from sts2_rl.cards import make_card
+from sts2_rl.cmds import PowerCmd
 from sts2_rl.combat import CombatState
 from sts2_rl.events import ALL_EVENTS, make_event
 from sts2_rl.monsters import FAKE_MERCHANT_EVENT_ENCOUNTER
@@ -65,12 +66,20 @@ def test_stall_shows_six_of_the_nine_knock_offs():
     assert event.option_keys()[-1] == "LEAVE"
 
 
-def test_buying_costs_50_and_keeps_the_stall_open():
+def test_buying_charges_the_jittered_price_and_keeps_the_stall_open():
+    """MOVED 2026-07-29 (round 7, event/fake_merchant/g3): this asserted a flat
+    50 (`gold == 250` from 300). MerchantRelicEntry.CalcCost
+    (MerchantRelicEntry.cs:42-45) is `Round(MerchantCost *
+    Shops.NextFloat(0.85f, 1.15f))` — one Shops draw per stocked entry — and
+    `FakeMerchant.relicCost = 50` is a dead constant. 50 is still the BASE (every
+    knock-off declares `MerchantCost => 50`), so the price is 43..58."""
     run = hive_run(4)
     event = make_event("fake_merchant", run).begin()
     first = event.option_keys()[0]
+    price = event.price_of(next(r for r in event.stock if r.id == first))
+    assert 43 <= price <= 58
     assert event.choose(first)
-    assert run.gold == 250
+    assert run.gold == 300 - price
     assert [r.id for r in run.relics] == ["burning_blood", first]
     assert not event.finished                   # still shopping
     assert first not in event.option_keys()     # sold out of that one
@@ -84,11 +93,15 @@ def test_knock_offs_cost_fifty_not_their_rarity_price():
 
 
 def test_stall_locks_stock_when_broke():
+    """MOVED 2026-07-29 (round 7, event/fake_merchant/g3): this asserted the two
+    buys landed on exactly `gold == 0` from a flat 2x50. The prices are jittered
+    per entry (MerchantRelicEntry.cs:42-45), so what the test is really about —
+    everything you cannot afford is locked — is asserted directly."""
     run = hive_run(5, gold=100)
     event = make_event("fake_merchant", run).begin()
-    assert event.choose(event.option_keys()[0])      # 100 -> 50
-    assert event.choose(event.option_keys()[0])      # 50 -> 0
-    assert run.gold == 0
+    assert event.choose(event.option_keys()[0])
+    assert event.choose(event.option_keys()[0])
+    assert run.gold < min(event.price_of(r) for r in event.stock)
     assert all(k.endswith("_LOCKED")
                for k in event.option_keys() if k not in ("LEAVE",))
 
@@ -273,6 +286,48 @@ def test_fake_orichalcum_blocks_three_when_bare():
     bare = hp_after_a_turn([])
     shielded = hp_after_a_turn([make_relic("fake_orichalcum")])
     assert shielded - bare == 3            # the real Orichalcum gives 6
+
+
+def test_fake_orichalcum_is_suppressed_by_platings_earlier_grant():
+    """FakeOrichalcum.cs:40-46 spells the phase contract out: the `Block > 0`
+    snapshot is `BeforeSideTurnEndVeryEarly` "because it needs to check the
+    player's block before PlatingPower triggers (otherwise, PlatingPower will
+    prevent this relic's block gain), and PlatingPower in turn needs to run
+    early so it can give you block before you take damage from another
+    end-of-turn effect."
+
+    So the two are ordered, not lucky: Fake Orichalcum snapshots in
+    `_very_early`, Plating grants in `_early` (PlatingPower.cs:61), Fake
+    Orichalcum grants in the plain pass (:60) only if the snapshot saw 0. With
+    Plating on the player the relic still fires -- it decided before Plating
+    moved -- and the player ends the turn with BOTH grants. turn_structure G12.
+    """
+    from sts2_rl.powers import PlatingPower
+
+    def block_at_turn_end(relics, plating):
+        combat = build(deck=[make_card("strike") for _ in range(10)], seed=17,
+                       relics=relics)
+        combat.player.block = 0
+        if plating:
+            PowerCmd.apply(combat.hooks, combat.player, PlatingPower, 5,
+                           applier=combat.player)
+        seen = []
+
+        class Probe:
+            # after_player_turn_end is Hook.AfterTurnEnd, the first slot after
+            # every BeforeTurnEnd phase has run.
+            def after_player_turn_end(self, player):
+                seen.append(player.block)
+
+        combat.hooks.register(Probe())
+        combat.end_turn()
+        return seen[0]
+
+    assert block_at_turn_end([], plating=True) == 5
+    assert block_at_turn_end([make_relic("fake_orichalcum")],
+                             plating=True) == 8
+    assert block_at_turn_end([make_relic("fake_orichalcum")],
+                             plating=False) == 3
 
 
 def test_fake_snecko_eye_confuses_without_extra_draw():

@@ -51,17 +51,17 @@
     },
     {
       "path": "sts2_rl/events/neow.py",
-      "sha256": "32be19d527d887b8085c5106696635b65271f2974d6c65d1e4ac842ea4862114",
+      "sha256": "df11695f9bff2d43c3408f0fb60403bdd3957015edcc052b424c4e1d242bde6c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e960a14410c86d772831429565fb634a5a36a829025bafec71c0a1c28318927d",
+      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "670603b2b78e5d8ffb15b0b5b4b5ab51777d0c00a29505b5ed37b4220d88e3e8",
+      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
       "side": "sim"
     }
   ],
@@ -78,15 +78,16 @@
     },
     "AfterObtained": {
       "maps_to": "after_obtained (scroll_boxes.py:15-52), dispatched by RunState.add_relic (run.py:552); the choose-a-bundle screen maps to run.select_option('bundle', 2) (scroll_boxes.py:50)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and N4 per binding rule 4. The bundle SHAPE is faithful and executed -- 2 bundles, 2 Commons then 1 Uncommon each, all 6 distinct, drawn off PlayerRng.Rewards with NextItem-and-remove, and the Defect-only 1%-Claw arm correctly skipped -- but the port drops both of C#'s Hook.ModifyCardRewardCreationOptions dispatches (G1) and creates only the chosen bundle's cards instead of all six (N4)."
+      "verdict": "deliberate-divergence",
+      "issue": "CLOSED 2026-07-29 (round 10, the Tier 1 residue). G1 IS FIXED and its dormancy argument was FALSE. `Hook.ModifyCardRewardCreationOptions` is not missing from the sim -- `Relic.modify_card_reward_creation_options` (relics/base.py) is a chain-style hook that rewards.py already dispatches, and `dingy_rug` implements it IN FULL (relics/dingy_rug.py), contrary to this guard's 'dingy_rug's port implements no card-reward hook'. What was actually missing was ScrollBoxes' own two dispatches. `after_obtained` now builds one `CardCreationOptions` per rarity and runs the relic chain over each, matching ScrollBoxes.cs:71-77's two separate `Hook.ModifyCardRewardCreationOptions` calls at :73 and :75, with `CardCreationSource.OTHER`, `RarityOddsType.UNIFORM` and flags `NoUpgradeRoll | NoRarityModification` (ForNonCombatWithUniformOdds, CardCreationOptions.cs:160-163, plus ScrollBoxes.cs:71). The rarity test is applied AFTER the chain, not folded into the starting pool, because in C# it is `CardPoolFilter` -- a predicate stored on the options and evaluated inside `GetPossibleCards` (CardCreationOptions.cs:168-172) -- so a listener that edits the pool has its edit filtered rather than ignored. THE DORMANCY IS REAL BUT FOR A DIFFERENT REASON, and it is now an ENUMERATION rather than an argument: of the four C# implementers, two (BigGameHunter, CharacterCards) are run modifiers the sim has no concept of, `prismatic_gem`'s arm unions other characters' pools and the sim has one character, and `dingy_rug` -- the one ported implementer of this hook -- gates on `CardCreationFlags.IsCardReward` (DingyRug.cs:23-26), which this creation does not set. Executed: holding Dingy Rug, no bundle card comes from COLORLESS_POOL; a listener that DOES edit the pool changes all 3 granted cards. Bug class 28 applies -- the dispatch is there now whether or not a listener answers it today. N4 (materialise all six cards vs only the chosen bundle's) is unchanged and stays `deliberate-divergence`, which is what this rollup now reads. Pinned by test/test_tier1_residue.py (3 tests). WAS: Rollup of guards G1 and N4 per binding rule 4. The bundle SHAPE is faithful and executed -- 2 bundles, 2 Commons then 1 Uncommon each, all 6 distinct, drawn off PlayerRng.Rewards with NextItem-and-remove, and the Defect-only 1%-Claw arm correctly skipped -- but the port drops both of C#'s Hook.ModifyCardRewardCreationOptions dispatches (G1) and creates only the chosen bundle's cards instead of all six (N4).",
+      "rationale": "N4, the only non-faithful leg left: C# materialises all six CardModels through RunState.CreateCard BEFORE the choose-a-bundle screen (ScrollBoxes.cs:36-39) and the sim builds only the chosen bundle's cards. Deliberate: the sim's screen is `run.select_option('bundle', 2)` over id lists, and CreateCard takes no RNG draw, so the six-vs-three difference costs nothing on any stream and is invisible to every observable. The three unchosen models are discarded in both engines."
     }
   },
   "guards": [
     {
       "what": "G1 (DORMANT): ScrollBoxes.cs:73 and :75 each run `Hook.ModifyCardRewardCreationOptions(player.RunState, player, options)`; the sim has no such hook anywhere",
-      "verdict": "gap",
-      "issue": "MECHANISM: the hook lets a listener rewrite the CardCreationOptions -- pool, rarity filter, flags -- before the candidate list is materialised, and ScrollBoxes calls it once per rarity (Common at line 73, Uncommon at line 75). `grep -rn ModifyCardRewardCreationOptions sts2_rl/` returns nothing, and the sweep-C survey already lists ModifyCardRewardCreationOptions among the dropped hooks that need a NEW base member rather than a one-relic fix. DORMANT, with the concrete unported things named: the game has four implementers -- DingyRug.cs:13 and PrismaticGem.cs:28 (relics) and BigGameHunter.cs:34 / CharacterCards.cs:44 (run modifiers, which the sim has no concept of). Of the two relics, prismatic_gem is ported but as a max-Energy relic only (its ModifyCardRewardCreationOptions arm is not implemented) and dingy_rug's port implements no card-reward hook, so today nothing in the sim would answer the dispatch even if it existed. Porting DingyRug's or PrismaticGem's option rewrite makes it live -- and note it would also affect the ORDER of Rewards draws, because a rewritten pool changes how many candidates NextItem indexes into. Rule 7: DingyRug.cs, PrismaticGem.cs, BigGameHunter.cs, CharacterCards.cs and .superpowers/sdd/content-relic-sweeps.md are not hashed here."
+      "verdict": "faithful",
+      "issue": "CLOSED 2026-07-29 (round 10) -- see this record's AfterObtained entry. The premise 'the sim has no such hook anywhere' and 'dingy_rug's port implements no card-reward hook' were both false (bug class 12, on the audit's own side): the hook and a full Dingy Rug implementation exist, and only ScrollBoxes' two dispatches were missing. They are wired. MECHANISM: the hook lets a listener rewrite the CardCreationOptions -- pool, rarity filter, flags -- before the candidate list is materialised, and ScrollBoxes calls it once per rarity (Common at line 73, Uncommon at line 75). `grep -rn ModifyCardRewardCreationOptions sts2_rl/` returns nothing, and the sweep-C survey already lists ModifyCardRewardCreationOptions among the dropped hooks that need a NEW base member rather than a one-relic fix. DORMANT, with the concrete unported things named: the game has four implementers -- DingyRug.cs:13 and PrismaticGem.cs:28 (relics) and BigGameHunter.cs:34 / CharacterCards.cs:44 (run modifiers, which the sim has no concept of). Of the two relics, prismatic_gem is ported but as a max-Energy relic only (its ModifyCardRewardCreationOptions arm is not implemented) and dingy_rug's port implements no card-reward hook, so today nothing in the sim would answer the dispatch even if it existed. Porting DingyRug's or PrismaticGem's option rewrite makes it live -- and note it would also affect the ORDER of Rewards draws, because a rewritten pool changes how many candidates NextItem indexes into. Rule 7: DingyRug.cs, PrismaticGem.cs, BigGameHunter.cs, CharacterCards.cs and .superpowers/sdd/content-relic-sweeps.md are not hashed here."
     },
     {
       "what": "N1: the candidate pool -- C# uses `options.GetPossibleCards(player)` (ScrollBoxes.cs:76-77) and the sim uses `pool_card_ids()`, the COMBAT-filtered pool",
@@ -124,6 +125,6 @@
       "rationale": "ScrollBoxes.cs's only field is the `_clawBundleChancePercent` const (line 19); every method is static or stateless. scroll_boxes.py has no __init__. Read both files; sweep-reset's 'hold no state' bucket agrees but is not the basis."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

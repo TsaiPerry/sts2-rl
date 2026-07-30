@@ -29,12 +29,21 @@ class TeaOfDiscourtesy(Relic):
             return
         from ..cards import make_card
 
+        from ..cmds import CardPileCmd
+
         player = self.combat.player
-        # CardPilePosition.Random — CardPileCmd inserts at
-        # RunState.Rng.Shuffle.NextInt(Cards.Count + 1), recomputed per card.
+        # CardPilePosition.Random — CardPileCmd.cs:514 is
+        # `Rng.Shuffle.NextInt(targetPile.Cards.Count + 1)`, an index into a pile
+        # whose TOP is index 0, and the sim stores its draw pile with the top at
+        # the END of the list. `CardPileCmd.add_to_draw` is the sim's port of
+        # exactly this call and already carries the bridge (it inserts at
+        # `count - p`) plus the `_enter_combat` step that registers the new card
+        # as a hook listener. This relic hand-rolled the insert and used the raw
+        # game index as a sim index, so with the stream pinned to NextInt -> 1 the
+        # two Dazed landed near the BOTTOM of the pile where the game puts them at
+        # the top — the player drew them at completely different times. Seven other
+        # ported sites already call the helper, including relics/blessed_antler.py,
+        # which adds Dazed to the draw pile the correct way.
         for _ in range(self.DAZED_COUNT):
-            card = make_card("dazed")
-            player.draw_pile.insert(
-                self.combat.combat_rng.shuffle.randrange(len(player.draw_pile) + 1),
-                card)
+            CardPileCmd.add_to_draw(self.hooks, player, make_card("dazed"))
         self.combats_left -= 1
