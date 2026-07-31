@@ -56,9 +56,9 @@
       "rationale": "Matches NeowsTalisman.cs:14. It feeds Relic.is_tradable (relics/base.py:126-136), which Ancient rarity already excludes, so the flag is belt-and-braces here -- recorded because relic/byrdpip drops the identical declaration. Rule 7: relics/base.py is unhashed here."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (neows_talisman.py:29-32), dispatched by RunState.add_relic (run.py:546-553)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. Card SELECTION is faithful (the last Basic-rarity deck card carrying each of the Strike and Defend tags), but the upgrade itself is `card.upgrade()` -- the sim's unguarded bare increment -- where C# routes through CardCmd.Upgrade, which SKIPS a card that is already at its MaxUpgradeLevel."
+      "maps_to": "after_obtained (neows_talisman.py:29-36), dispatched by RunState.add_relic",
+      "verdict": "faithful",
+      "rationale": "STALE, closed 2026-07-30 (round 11): the rollup's sole guard (G1) is already `faithful` in this same record (closed 2026-07-29 round 7) and re-verified here both by reading the source and by execution. `sts2_rl/relics/neows_talisman.py` today routes both picks through `CardCmd.upgrade(None, card)` (line 36), which is `sts2_rl/cmds.py`'s `CardCmd.upgrade` (line 707) -- guarded by `card.is_upgradable`, matching CardCmd.cs:265-290's `IsUpgradable` skip. EXECUTED 2026-07-30: built a fresh `RunState`, upgraded the deck's last Strike and last Defend to level 1 directly, then ran `NeowsTalisman.after_obtained(run)` -- both cards stayed at `upgrade_level == 1` with `is_upgradable == False` afterward, where the unguarded `card.upgrade()` the rollup describes would have pushed both to the impossible level 2. Card SELECTION (the last Basic-rarity deck card per tag) is unchanged and still faithful. The rollup's stated premise (\"the upgrade itself is `card.upgrade()` -- the sim's unguarded bare increment\") is false against today's code."
     }
   },
   "guards": [
@@ -83,6 +83,6 @@
       "rationale": "The IsEnding return is a mid-combat-teardown guard and this hook is an out-of-combat pickup, so it cannot be reached; UpgradedCards is the game's own save/replay bookkeeping, which the sim's conformance layer READS out of the save (the oracle) rather than writes. Neither can change a game state either codebase can observe. Waived under the presentation/out-of-scope-machinery exclusion rather than on an unreachability claim about ported content. Rule 7: CardCmd.cs is unhashed here."
     }
   ],
-  "verdict": "gap",
-  "audited": "2026-07-26"
+  "verdict": "waiver",
+  "audited": "2026-07-30"
 }

@@ -61,9 +61,9 @@
       "rationale": "Matches Mango.cs:13; also excludes the relic from the trade events via Relic.is_tradable (relics/base.py:132)."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (mango.py:18-19), plus the sim-only undo_after_obtained (mango.py:21-25)",
-      "verdict": "gap",
-      "issue": "The forward direction is faithful (guard N1): run.gain_max_hp(14) is CreatureCmd.GainMaxHp's SetMaxHp-then-Heal pair exactly. The gap is guard G1 -- the sim-only undo, which the conformance runner depends on, gives back the max HP but not the heal."
+      "maps_to": "after_obtained (mango.py:21-24), plus the sim-only undo_after_obtained (mango.py:26-33)",
+      "verdict": "faithful",
+      "rationale": "STALE at round 11: the only guard this rollup names, G1, was already closed 2026-07-27 per this same record's own guards[G1] entry. EXECUTED (this pass): mango.py:31 reads `run.hp = max(1, run.hp - self._healed)` -- an explicit SUBTRACTION of the recorded heal (floored at 1 HP, not clamped to max_hp) -- followed by `run.lose_max_hp(self.MAX_HP)` at :33, which is exactly the fixed shape G1's own text describes ('the undo SUBTRACTS the heal instead of clamping'). The forward direction (guard N1) was already faithful. Both halves of AfterObtained are faithful, so the rollup is too."
     }
   },
   "guards": [
@@ -78,6 +78,6 @@
       "rationale": "14 is the pinned non-ascension value -- no AscensionHelper.GetValueIfAscension call anywhere in Mango.cs -- and `.BaseValue` is the unmodified var, so no hook can change it. run.gain_max_hp (run.py:311-314) is CreatureCmd.GainMaxHp's exact shape: `SetMaxHp(MaxHp + amount)` then `Heal(num)` where num is the max-HP delta actually applied (CreatureCmd.cs:792-798). EXECUTED: 80 -> 94 max, 50 -> 64 current. The MapPointHistoryEntry.MaxHpGained bookkeeping (CreatureCmd.cs:793-797) is replay history, not state."
     }
   ],
-  "verdict": "gap",
-  "audited": "2026-07-26"
+  "verdict": "faithful",
+  "audited": "2026-07-30"
 }

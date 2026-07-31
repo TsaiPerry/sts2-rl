@@ -52,8 +52,8 @@
     },
     "AfterCardPlayed": {
       "maps_to": "on_card_played (diamond_diadem.py:28-29)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G2 per binding rule 4 -- the sim counts one card per logical play where C# counts one per CardPlay, so a replayed card advances the counter by 1 instead of 2 and the relic's 'at most 2 cards' condition is easier to satisfy than it should be."
+      "verdict": "faithful",
+      "rationale": "STALE (round 11 re-settle): this rollup summarised guard G2, which was already closed 2026-07-27 (CombatState._resolve_card_play now brackets `on_card_played` per `play_index` iteration, sts2_rl/combat.py, matching CardModel.cs:1904-1965's per-CardPlay Hook.AfterCardPlayed) -- the hooks-level entry was simply never revisited after the guard flipped. EXECUTED (`.superpowers/sdd/unlabelled/probes/relic-8-diamond-diadem.py`): a Strike with `base_replay_count = 1` (a doubled play) advances a fresh Diamond Diadem's `cards_played_this_turn` from 0 to 2 in one `play_card` call, matching C#. `test/test_relic_tier1_gaps.py::test_relic_state_resets_at_the_combat_boundary[diamond_diadem-...]` (guard G1's own pin) also passes. Every guard beneath this record (G1-G4, N1) is `faithful` or `waiver`; nothing about diamond_diadem/AfterCardPlayed remains open."
     },
     "BeforeSideTurnEnd": {
       "maps_to": "on_player_turn_end (diamond_diadem.py:31-39)",
@@ -93,6 +93,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / RefreshCounter / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

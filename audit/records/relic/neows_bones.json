@@ -72,8 +72,8 @@
     },
     "AfterObtained": {
       "maps_to": "after_obtained (neows_bones.py:17-40), dispatched by RunState.add_relic (run.py:546-553)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The SHAPE is right -- two relics drawn from Neow's own option pool on the per-player Rewards stream, then one generatable curse on the Niche stream -- and the shuffle algorithm, the curse pool and the curse ordering all match. What does not match is the relic pool's ORDER (G1), which changes which two relics come out."
+      "verdict": "deliberate-divergence",
+      "rationale": "STALE rollup, same failure mode as this batch's relic/burning_sticks/AfterCardExhausted and relic/electric_shrymp/AfterObtained: it aggregates G1 and G2 per binding rule 4, but G1 -- the pool-ORDER bug this rollup was written to describe -- was closed 2026-07-29 (round 6): events/neow.py's `neow_relic_pool` now appends the six singleton relics in Neow.cs's own AllPossibleOptions order, and `py audit/tools/relic_probes_b10.py neows-bones` RE-EXECUTED today prints 'tails equal: True' with 0 divergent seeds (was 24/60). What remains under this rollup is only G2 -- the missing reward-SCREEN wrapper around an otherwise-unconditional grant -- which was never a 'gap' in the first place: its own guard entry below is `deliberate-divergence`, on the basis that `WithSkippingDisallowed` (RewardsSet.cs:115) has exactly one caller in the whole source, this relic, so Neow's Bones is the only non-declinable relic offer in the game and the sim's unconditional grant reaches the identical observable (same two relics, same order, no skip possible). With G1 closed and G2 never a live gap, this hook-level entry has no citable divergence left under 'gap'; re-verdicted to match the worst remaining guard rather than left stale.  The text it replaced: \"Rollup of guards G1 and G2 per binding rule 4. The SHAPE is right -- two relics drawn from Neow's own option pool on the per-player Rewards stream, then one generatable curse on the Niche stream -- and the shuffle algorithm, the curse pool and the curse ordering all match. What does not match is the relic pool's ORDER (G1), which changes which two relics come out.\""
     }
   },
   "guards": [
@@ -123,6 +123,6 @@
       "rationale": "Same mapping relic/calling_bell N1 already verdicted faithful (binding rule 3): run.add_card (run.py:341-354) runs modify_card_being_added_to_deck before the append and after_card_added_to_deck after it, which are the two deck-add hooks the sim models, and the append lands at the end of the deck like CardPileCmd's default CardPilePosition.Bottom. Hook.ShouldAddToDeck, which CardPileCmd.Add also consults, is waived as dead code in the C# source itself -- calling_bell G4 established by grep that the whole game contains zero overrides. Rule 7: run.py, relics/calling_bell.py and CardPileCmd.cs are unhashed here."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

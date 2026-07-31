@@ -19,6 +19,18 @@ them ``NOT AUDITED`` while ``audit_status`` reported them audited.
 ``test/test_audit_status.py`` now pins ``CONTENT_KINDS`` against
 ``harness.GAME_MODEL_DIRS`` so that cannot recur.
 
+**The typed ``live`` key was honoured for content records only, for two days.**
+It arrived 2026-07-27 with the monster tier -- a content kind -- and only the
+content branch of ``extract`` was taught to pass it, so all six SEAM records
+went on being labelled by ``_liveness``'s caps-token scan.  Round 11 hit it
+head-on: two batches settled 21 seam entries, wrote ``"live": false``, validated
+their records clean, and ``counts`` did not move.  The records were right and
+the tool was wrong -- the expensive direction, because the tool is what
+everyone downstream reads.  Found by unit work, never by tool review, which is
+now five rounds running.  ``test_audit_status.py::
+TestTypedLivenessIsHonouredEverywhere`` pins every record shape against the
+typed key so a third shape cannot repeat it.
+
 A gap entry may carry an explicit ``"live": true|false`` field.  When it does,
 that field IS the liveness: ``_liveness``'s prose scan is a heuristic written
 for the 386 entries that state nothing, and it does not get to overrule an
@@ -601,6 +613,29 @@ _PRIMARY_OVERRIDE = {
     "creature_card_cmds/step52": "creature_card_cmds/step52",
     # step 67's issue says "Same mechanism and same verdict as step 32".
     "turn_structure/step67": "turn_structure/step32",
+    # --- round 11 (2026-07-30) -----------------------------------------------
+    # Settling the unlabelled entries REWROTE their issue text, and five steps
+    # lost their grouping as a side effect: `_REF` only matches the literal
+    # "gap G2" / "guard G2" shape, and the new prose names the mechanism in the
+    # fully-qualified `record/G2` form instead.  Each merge below quotes the
+    # record text that asserts it, per this table's standing rule that nothing
+    # is grouped on a hunch.  Left as declared overrides rather than widening
+    # `_REF`, because a looser reference regex would re-merge entries nobody
+    # re-read -- an over-merged queue hides a job, and that is the failure
+    # direction this table exists to control.
+    #   "...belongs to mechanism `power_cmd/G2` ... the queue's own blocker entry"
+    "power_cmd/step10": "power_cmd/G2",
+    #   "...same conclusion as `step12` and the same code ..., mechanism `power_cmd/G3`."
+    "power_cmd/step27": "power_cmd/G3",
+    #   "mechanism tagged `damage_pipeline/G2` by the queue, settled on this
+    #    step's own executed merits"
+    "power_cmd/step22": "damage_pipeline/G2",
+    #   "...same conclusion and same underlying absence as `step21` (the sim has
+    #    no `AfterModifyingPowerAmountGiven` counterpart...)"
+    "power_cmd/step31": "damage_pipeline/G2",
+    #   "...same conclusion as `step22` and the same code -- the inline
+    #    Artifact-decrement block and `RuinedHelmet`..."
+    "power_cmd/step32": "damage_pipeline/G2",
 }
 
 # Additional mechanisms an entry is ALSO a site of (does not affect counts;
@@ -833,7 +868,8 @@ def extract():
                     m = _REF.search(body)
                     mech = f"{seam}/{m.group(1)}" if m else key
                 entries.append(
-                    _make_entry(key, "seam", seam, section, eid, what, body, mech)
+                    _make_entry(key, "seam", seam, section, eid, what, body, mech,
+                                e.get("live"))
                 )
 
     for kind in CONTENT_KINDS:

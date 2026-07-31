@@ -46,9 +46,10 @@
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:2050-2051 on_stack -> pass",
+      "maps_to": "powers.py:2404-2405 on_stack -> pass",
       "verdict": "gap",
-      "issue": "PowerStackType.Single with the sim's on_stack overridden to `pass` citing it -- the census's 15-unit wrong-reasoning class (`py audit/tools/power_census.py stack`). Single means \"Amount is hidden and is always 1\" (PowerStackType.cs:10-13) and PowerCmd.ModifyAmount (PowerCmd.cs:236) adds unconditionally with no StackType branch, so C# really reaches Amount 2. Dormant: nothing reads Imbalanced's Amount on either side (the effect is a boolean off-balance flag), and monsters/hive/bowlbugs.py:47 applies it once at construction."
+      "live": false,
+      "issue": "PowerStackType.Single with the sim's on_stack overridden to `pass` citing it -- the census's 15-unit wrong-reasoning class (`py audit/tools/power_census.py stack`). Single means \"Amount is hidden and is always 1\" (PowerStackType.cs:10-13) and PowerCmd.ModifyAmount (PowerCmd.cs:236) adds unconditionally with no StackType branch, so C# really reaches Amount 2. DORMANT, RE-EXECUTED 2026-07-30: read ImbalancedPower.cs (32 lines) end to end -- base.Amount/base.DynamicVars is never referenced; AfterDamageGiven only reads dealer, result.WasFullyBlocked and the BowlbugRock type-switch. Read the current ImbalancedPower class in powers.py (lines 2393-2425) end to end -- self.amount is never referenced in the class body; on_damage_received only reads dealer, target, the DAMAGE amount parameter (not the power's own Amount) and props. So the effect is a pure boolean off-balance/stun trigger on both sides and the C#-reaches-2/sim-holds-1 Amount divergence this entry names is real but unread by either implementation. Applier: monsters/hive/bowlbugs.py:47 applies it once at construction (single application, so even a naive read would only diverge on a double-apply that never happens)."
     },
     "AfterDamageGiven": {
       "maps_to": "powers.py:2053-2071 on_damage_received",

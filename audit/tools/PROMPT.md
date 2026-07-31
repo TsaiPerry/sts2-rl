@@ -53,9 +53,23 @@
 > faithful to. Keep flagging the operational consequence in the entry text (a
 > missing undo breaks the conformance runner's relic swap and its DETECTOR 3 HP
 > assertion) — that is a tooling defect, not a fidelity gap. **Distinct
-> mechanism, still a gap:** an `undo_after_obtained` that EXISTS and *clamps*
-> instead of subtracting violates its own stated contract (`mango` G1,
-> `lees_waffle` N4, `looming_fruit` N3 — and all five implementers do it).
+> mechanism, ~~still a gap~~ **CLOSED 2026-07-27, corrected here 2026-07-30:**
+> this file used to say an `undo_after_obtained` that EXISTS and *clamps*
+> instead of subtracting violates its own contract, and that all five
+> implementers did it (`mango` G1, `lees_waffle` N4, `looming_fruit` N3).
+> **That is false against current code and has been since 2026-07-27.** All
+> three HP relics now subtract the recorded heal explicitly before
+> `lose_max_hp`, each with a comment saying why clamping alone is insufficient
+> (`sts2_rl/relics/mango.py:26-33` and its twins). Verified by reading all
+> three, 2026-07-30.
+>
+> **This entry is left in place, corrected rather than deleted, because of how
+> it was found:** round 11 pasted it verbatim into a batch brief as a
+> calibration fact, and the batch checked it against the source and reported it
+> false. **Prompt guidance rots exactly like record prose, and it rots more
+> quietly, because a prompt is read as instruction rather than as a claim.**
+> Every dated assertion in this file is a hypothesis about a moving codebase.
+> Re-execute before you rely on one, and correct it here when it fails.
 
 > **v5 (2026-07-26, after relic batches 4–8 ran as five concurrent subagents):**
 > bug classes 19–23 added, each from a defect a batch actually found. Two

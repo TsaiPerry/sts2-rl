@@ -57,9 +57,9 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     },
     "AfterCardPlayed": {
-      "maps_to": "on_card_played (tuning_fork.py:29-36), dispatched by HookSystem.on_card_played (hooks.py:385-389) from CombatState._resolve_card_play (combat.py:514)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. Every clause of the relic is faithful -- the Skill test, the >= threshold, the `-= threshold` rather than a zeroing, the 10 and the 7, and (contrary to its own docstring) the per-run counter -- but the sim fires this hook ONCE PER PLAY where C# fires it once per REPLAY ITERATION, so a replayed Skill advances the counter by 1 instead of 2."
+      "maps_to": "on_card_played (tuning_fork.py:29-37), dispatched INSIDE the per-Replay play-count loop by CombatState._resolve_card_play (combat.py:828-830 computes play_count, :858 loops it, :903-904 dispatches gated on `not self.is_over`, :912-913 breaks only on `self.player.is_dead`)",
+      "verdict": "faithful",
+      "rationale": "STALE 2026-07-30: this rollup described guard G1 as an open per-Replay-dispatch gap, but G1 (this record's only guard) was itself closed 'faithful' 2026-07-29 (round 6) and the hooks-level summary was never regenerated to match -- the exact stale-rollup shape this triage round exists to catch. RE-VERIFIED against today's code (line numbers re-read fresh, since the guard's own superseded citations -- combat.py:589-591/610/638-639 -- no longer resolve to this function at all, the file having grown since): every clause the old rollup called faithful still is (the Skill test, the >= threshold, the `-= threshold`, the 10 and the 7, and the per-run counter), AND the dispatch bracket itself is correct -- `_resolve_card_play` fires `on_card_played` inside the play-count loop, gated on `not self.is_over` (combat.py:903-904, matching CardModel.cs:1957-1959's `IsInProgress`, not `IsOverOrEnding`), and the loop breaks only on `self.player.is_dead` (combat.py:912-913, matching CardModel.cs:1950-1963's player-death-only early return) -- so a Throwing-Axe-doubled Skill that kills an enemy on iteration 0 still runs iteration 1. No open guard remains at this hook."
     }
   },
   "guards": [
@@ -109,6 +109,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

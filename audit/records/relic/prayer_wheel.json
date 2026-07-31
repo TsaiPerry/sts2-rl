@@ -27,9 +27,9 @@
       "rationale": "Obtainable: Rare in the transcribed shared grab bag (py audit/tools/relic_probes_b12.py b12-pool reports bag=Rare)."
     },
     "TryModifyRewards": {
-      "maps_to": "no counterpart. `Relic.modify_combat_rewards(run, rewards)` exists (relics/base.py:168-170) and rewards.py:499-500 dispatches it over the run's relics; prayer_wheel.py implements nothing",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. sts2_rl/relics/prayer_wheel.py's docstring now says so: PrayerWheel.cs's `new CardReward(CardCreationOptions.ForRoom(player, RoomType.Monster), 3)` is a SECOND pick-one-of-3 group and rewards.CombatRewards models one `cards` group plus independent `special_cards` singles, so there is no field to hold it and no driver action to offer it. A Monster room still offers ONE card choice where the game offers two."
+      "maps_to": "modify_combat_rewards (prayer_wheel.py:24-31), dispatched by rewards.py",
+      "verdict": "faithful",
+      "rationale": "STALE at round 11: this entry's own guards[G1] was already closed 2026-07-28 by the gap-queue continuation's section-A fix pass, and the prose here was never updated to match. EXECUTED (this pass): prayer_wheel.py:24-31 now appends `CardRewardGroup(room_type=RoomType.MONSTER)` to `rewards.card_rewards` on a Monster room -- CombatRewards now models a LIST of card-reward groups rather than the single `cards` field the stale text describes, so the second pick-one-of-3 the game's `TryModifyRewards` (PrayerWheel.cs:14-26) adds has somewhere to live. The group is appended unpopulated, matching RewardsSet.cs:137-143's populate-after-both-modify-passes order. A Monster room now offers TWO card choices, as in the game."
     }
   },
   "guards": [
@@ -55,6 +55,6 @@
       "rationale": "PrayerWheel.cs overrides exactly Rarity and TryModifyRewards. Checked deliberately against the two whole C# concepts PROMPT.md bug class 16 says to look for on every unit: there is no IsAllowed override (so this relic is NOT part of sweep B's 17-relic IsBeforeAct3TreasureChest cluster, unlike relic/planisphere in the same batch) and no named RNG stream in the file, so neither half of class 16 applies. Recorded because 'the stub drops only one hook' is what makes this a one-relic fix rather than a base-class one."
     }
   ],
-  "verdict": "gap",
-  "audited": "2026-07-26"
+  "verdict": "faithful",
+  "audited": "2026-07-30"
 }

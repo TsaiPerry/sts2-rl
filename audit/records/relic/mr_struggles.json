@@ -82,8 +82,8 @@
     },
     "AfterPlayerTurnStart": {
       "maps_to": "on_player_turn_started (mr_struggles.py:22-31) -- the sim's post-draw turn-start slot, serving both C#'s AfterPlayerTurnStart (audit/records/seam/turn_structure.json step 22) and AfterSideTurnStart (step 23); executed order via `py audit/tools/relic_probes.py turn-order`",
-      "verdict": "gap",
-      "issue": "STILL OPEN at G1 only. G2 is CLOSED -- see this unit's g2 entry and relic/mercury_hourglass's g1: the two-pass turn-start collapse is split. WHAT REMAINS is G1: the port omits the win check its identically shaped sibling relic/mercury_hourglass performs.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: Rollup of guards G1 and G2 per binding rule 4. The slot, the scaling amount, the props, the dealer and the target set all match (N1-N3), but the port omits the win check its identically shaped sibling relic/mercury_hourglass performs (G1), and shares the two-pass turn-start collapse (G2)."
+      "verdict": "faithful",
+      "rationale": "STALE (round 11): the entry text itself says 'STILL OPEN at G1 only' but G1 was ALSO closed 2026-07-27 (its own guard entry's verdict is `faithful`) -- the narrowing note was written when G2 closed and never re-checked against G1's own already-closed state. Both guards read faithful today. RE-EXECUTED: `.superpowers/sdd/unlabelled/probes/relic-7-mr-struggles-g1.py` -- a Fuzzy Wurm Weak encounter with Mr. Struggles and the enemy set to 1 HP: end_turn() into turn 2's on_player_turn_started (2 unpowered damage) leaves `phase=Phase.COMBAT_OVER`, `enemy.is_dead=True`, `combat.is_over=True` -- CombatState._check_win_condition (combat.py:413-426) recomputes the win condition after every turn-start setup (combat.py:230, 841-847), so the relic no longer needs its own hand-rolled check, matching G1's closure text. G2 (the AfterPlayerTurnStart/AfterSideTurnStart split) is independently confirmed live: `grep -n 'def after_side_turn_start\\|def on_player_turn_started' sts2_rl/hooks.py` shows the two are now separate dispatchers (hooks.py:680, 696), and mr_struggles.py:22 declares `on_player_turn_started` alone. With both guards faithful and N1-N3 already faithful, the whole rollup flips; only N4 (a presentation waiver) remains, which does not block the flip. The issue it replaced read: STILL OPEN at G1 only. G2 is CLOSED -- see this unit's g2 entry and relic/mercury_hourglass's g1: the two-pass turn-start collapse is split. WHAT REMAINS is G1: the port omits the win check its identically shaped sibling relic/mercury_hourglass performs.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: Rollup of guards G1 and G2 per binding rule 4. The slot, the scaling amount, the props, the dealer and the target set all match (N1-N3), but the port omits the win check its identically shaped sibling relic/mercury_hourglass performs (G1), and shares the two-pass turn-start collapse (G2)."
     }
   },
   "guards": [
@@ -118,6 +118,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShouldFlashOnPlayer / ShowCounter / DisplayAmount / CanonicalVars' display side / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

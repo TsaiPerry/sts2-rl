@@ -51,9 +51,9 @@
       "issue": "Closed 2026-07-29 (round 7): BOTH halves of the mechanism landed together, because the deferral is what the guard is for. (a) RupturePower.cs:47's `CombatState.CurrentSide == Owner.Side` is ported: Rupture pays out only for damage the owner takes DURING ITS OWN TURN, i.e. self-inflicted HP loss. Without it a self-harm payoff card was a free Strength engine that grew whenever the player was hit on the ENEMY's turn. (b) RupturePower.cs:31-43's `playedCards` deferral is ported: `before_card_played` opens an accumulator for a card the owner starts playing on its own turn, `on_damage_received` ACCUMULATES into it instead of applying, and `on_card_played` applies the total once the card has fully resolved -- so a card that damages its own player several times does not have its later hits boosted by the Strength its earlier hits earned. Damage taken with no card in flight still applies immediately, which is the null-entry arm.  NOT CLOSED: nothing at this site.  The text it replaced read: LIVE, and the bigger half. C# requires `base.CombatState.CurrentSide == base.Owner.Side` (RupturePower.cs:47): Rupture only pays out for damage the owner takes DURING ITS OWN TURN, i.e. self-inflicted HP loss. powers.py:287 tests only `target is self.owner and amount > 0`, so the sim's Rupture also pays out for every enemy attack that gets through on the ENEMY's turn -- turning a self-harm payoff card into a free Strength engine that grows whenever the player is hit. The guard is not even hard to reach: the sim already exposes `combat.current_side` and InfernoPower uses it for exactly this purpose two hundred lines away (powers.py:757-759). Additionally the accumulate-then-apply-once deferral is absent (see the BeforeCardPlayed entry), so even the in-scope self-damage case grants Strength mid-card. Third-file citations, not hashed here."
     },
     "AfterCardPlayed": {
-      "maps_to": "no sim counterpart",
-      "verdict": "gap",
-      "issue": "The payout half of the deferral described on the BeforeCardPlayed entry: RupturePower.cs:60-66 removes the card's accumulator and applies the summed Strength once. Absent from the sim. Carried separately because the harness requires a verdict per override and because a fix needs all three hooks together."
+      "maps_to": "powers.py:412-420 RupturePower.on_card_played",
+      "verdict": "faithful",
+      "rationale": "STALE 2026-07-30 (round 11), CLOSED -- this entry's own text was never updated after the round-7 fix its sibling BeforeCardPlayed/AfterDamageReceived entries already record as landed, so it still read 'Absent from the sim' against code that has carried the fix since 2026-07-29. RE-READ against today's powers.py rather than trusted from the inherited prose: `on_card_played` (powers.py:412-420) IS the payout half -- `if card is not self._pending_card: return; self._pending_card = None; pending, self._pending_amount = self._pending_amount, 0; if pending: StrengthCmd.apply(...)` -- exactly mirroring RupturePower.cs:60-66's 'remove the card's accumulator and apply the summed Strength once'. Same mechanism as this power's BeforeCardPlayed and AfterDamageReceived entries (rule 3), all three closed together as one landed fix. Verdict corrected from `gap` to `faithful` to match the code, not merely re-cited."
     }
   },
   "guards": [
@@ -69,8 +69,8 @@
     },
     {
       "what": "RupturePower.cs:47 `CurrentSide == Owner.Side`",
-      "verdict": "gap",
-      "issue": "Absent -- the core of the AfterDamageReceived gap. Carried as its own guard because it is a one-line omission that survives any fix to the deferral, and because it is the single divergence in this unit with the largest effect on play."
+      "verdict": "faithful",
+      "rationale": "STALE 2026-07-30 (round 11), CLOSED -- like this record's AfterCardPlayed hook entry, this guard's text was never updated after the round-7 fix. RE-READ against today's powers.py: `on_damage_received` (powers.py:390-410) tests `if combat is not None and combat.current_side != self.owner.side: return` (powers.py:404-405) BEFORE accumulating or applying Strength -- the guard is present, not absent. Same mechanism as this record's AfterDamageReceived hook entry (rule 3), already recorded closed there. Verdict corrected from `gap` to `faithful` to match the code."
     },
     {
       "what": "RupturePower.cs:49 `cardSource == null || !playedCards.ContainsKey(cardSource)` -> immediate apply",
@@ -83,6 +83,6 @@
       "rationale": "Both sides hang this on AfterDamageReceived, which C# skips for a victim the hit killed (CreatureCmd.cs:392) and the sim gates on `not target.is_dead` (cmds.py:121). So a lethal self-damage grants Rupture Strength on neither side."
     }
   ],
-  "verdict": "gap",
-  "audited": "2026-07-26"
+  "verdict": "faithful",
+  "audited": "2026-07-30"
 }

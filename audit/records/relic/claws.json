@@ -43,7 +43,8 @@
     "AfterObtained": {
       "maps_to": "after_obtained (claws.py:22-37)",
       "verdict": "gap",
-      "issue": "Rollup of guards G1, G2 and G5 per binding rule 4. The per-card transform is faithful in every detail that matters -- one upgrade level carried, enchantment carried when CanEnchant allows, deck-end placement, no RNG consumed -- but the candidate list wrongly includes Quest cards (G1), the batch is applied in selection order instead of deck order (G2), and the skippable 0-to-6 screen is modelled as always taking the maximum (G5)."
+      "live": false,
+      "issue": "RE-REGENERATED 2026-07-30 (the prior rollup of guards G1, G2 and G5 was stale: G1 was closed 'faithful' 2026-07-29 (round 7) and G5 is `deliberate-divergence`, not a gap -- neither is open any more). WHAT REMAINS is guard G2 alone, and it is still open: RE-VERIFIED against today's claws.py -- `after_obtained` still loops `for original in run.select_cards(...): ... run.transform_card(original, into=maul)`, removing and appending ONE card at a time in SELECTION order, where CardCmd.Transform (CardCmd.cs:353-360, 405) removes every original first and then appends the replacements sorted into ascending DECK-INDEX order. DORMANT per G2's own reachability argument (needs two picked cards that differ in upgrade level or enchantment to be observable) -- unchanged by anything ported since."
     }
   },
   "guards": [

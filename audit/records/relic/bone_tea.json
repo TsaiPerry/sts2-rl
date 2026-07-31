@@ -57,8 +57,8 @@
     },
     "AfterSideTurnStart": {
       "maps_to": "on_player_turn_started (bone_tea.py:31-36)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The slot, the guards and the charge accounting are all right -- post-draw (turn_structure step 23, executed via the turn-order probe), `IsUsedUp` / `participants` / `TurnNumber > 1` all reproduced (bone_tea.py:32), and CombatsLeft-- matches -- but the upgrade call itself is unguarded."
+      "verdict": "faithful",
+      "rationale": "STALE (round 11): the rollup's cited guard G1 was closed 2026-07-29 (round 7) and never re-checked against this hooks-level summary. RE-EXECUTED today: `py -m pytest test/test_procure_and_upgrade_verbs.py -k test_bone_tea_leaves_the_statuses_in_hand_alone -v` passes -- a [strike, dazed, burn] hand upgrades to [1, 0, 0] via `CardCmd.upgrade(self.hooks, card)` (bone_tea.py:40), which skips any card whose `IsUpgradable` is false (CardCmd.cs:265-290; CardModel.cs:785-789), matching BoneTea.cs:53-56. The slot (post-draw, turn_structure step 23), the guards (`IsUsedUp` / `participants` / `TurnNumber > 1`) and the charge accounting (CombatsLeft--) were already faithful. With G1 closed, every guard under this relic (G1, N1, N2, N3) is now faithful or waiver, so the hooks-level rollup that summarized them is stale and flips with them. The issue it replaced read: Rollup of guard G1 per binding rule 4. The slot, the guards and the charge accounting are all right -- post-draw (turn_structure step 23, executed via the turn-order probe), `IsUsedUp` / `participants` / `TurnNumber > 1` all reproduced (bone_tea.py:32), and CombatsLeft-- matches -- but the upgrade call itself is unguarded."
     }
   },
   "guards": [
@@ -83,6 +83,6 @@
       "rationale": "RelicModel.Flash() / base.Status / ShowCounter / DisplayAmount / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

@@ -47,9 +47,9 @@
       "rationale": "Matches SeaGlass.cs:66. Correct even though the port's effect is a no-op: the flag also drives Relic.is_tradable (relics/base.py:132), so a stubbed effect must not silently make the relic tradable. Rule 7: relics/base.py is not hashed here."
     },
     "AfterObtained": {
-      "maps_to": "no counterpart -- sea_glass.py is a behaviourless port (sweep C's 'out-of-combat pickup effect, stub' family)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and N1 per binding rule 4. SeaGlass.cs:74-93 does two separable things: it offers 15 cards from ANOTHER character's pool (waived, N1 -- genuine other-character scope) and it burns 15 CardFactory.CreateForReward draws on the player's Rewards stream doing so (G1, a gap that is not about other characters at all)."
+      "maps_to": "after_obtained (sea_glass.py:31-38)",
+      "verdict": "faithful",
+      "rationale": "STALE (round 11 re-settle): this rollup summarised guards G1 (RNG-stream burn) and N1 (the other-character card pool). G1 was closed 2026-07-29 round 6 and the guard entry itself already reads `faithful` -- the hooks-level entry was simply never revisited. EXECUTED (source read, sts2_rl/relics/sea_glass.py:31-38): `after_obtained` burns `self.CARDS` (15) `run.player_rng.rewards.next_int(2)` draws in a parity run and is a documented no-op only in legacy RL play (no Rewards stream to desync). N1 remains a `waiver`, not a gap -- the CARDS themselves are genuinely out of scope (the shared contract names 'other characters' explicitly, and Orobas.cs:190/204 guarantees the assigned CharacterId is never the player's own), so a single-character sim has nothing to draw from; the RNG-stream half that IS in scope is the half G1 already fixed. Same convention as this record's own N4 (undo_after_obtained, vacuous here) and the sibling pattern in relic/fiddle's ShouldDraw entry (a hook reaching `faithful` over a residual out-of-scope waiver). Nothing gap-classified remains under this hook."
     }
   },
   "guards": [
@@ -79,6 +79,6 @@
       "rationale": "Vacuous at this site and recorded to say so explicitly: the stub mutates no run state, so there is nothing for an undo to reverse and the conformance-runner consequence the other units in this batch carry does not arise here. Per PROMPT.md v6 binding item 3, the ABSENCE of undo_after_obtained is faithful at every site: the helper has no C# counterpart -- nothing in the game un-picks a relic -- so a sim lacking it is not diverging from the source, which is the only question this audit asks. Flagged for its operational consequence only, which is a tooling defect and not a fidelity gap. Rule 7: relics/base.py:143-150 and conformance/runner.py are not hashed here."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

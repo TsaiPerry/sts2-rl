@@ -63,8 +63,8 @@
     },
     "AfterShuffle": {
       "maps_to": "on_shuffle (the_abacus.py:22-25)",
-      "verdict": "gap",
-      "issue": "Rollup of guard N4 per binding rule 4. The effect, the owner guard and the constant all match and the trigger set is executed-confirmed identical (N3); the one divergence is that C# refuses to dispatch AfterShuffle once the combat is over or ending (CardPileCmd.cs:866-869, :897-900, :915-918 -- three separate guards) and the sim's on_shuffle has no such gate."
+      "verdict": "faithful",
+      "rationale": "STALE at round 11: the only guard this rollup named, N4 (the missing over-or-ending gate), is closed in today's code. EXECUTED (this pass): both call sites that dispatch `on_shuffle` -- `reshuffle_discard_into_draw` (player.py:341-373) and `shuffle_draw_and_discard` (player.py:375-396) -- now open with `if _is_over_or_ending(self._hooks): return` (player.py:344, :385), which cmds.py:30-40 documents as `CombatManager.Instance.IsOverOrEnding` for a command, matching CardPileCmd.Shuffle's own early return (CardPileCmd.cs:866-869). Both paths bail out before reaching the reshuffle and before `self._hooks.on_shuffle(self)` at :373/:396, so a shuffle triggered after the combat is decided can no longer grant the Abacus's block. The effect, the owner guard (N1), the constant (N2) and the trigger set (N3) were already faithful."
     }
   },
   "guards": [
@@ -85,8 +85,8 @@
     },
     {
       "what": "N4: C# skips the AfterShuffle dispatch entirely when the combat is over or ending; the sim's on_shuffle has no is_over gate",
-      "verdict": "gap",
-      "issue": "MECHANISM: CardPileCmd.Shuffle returns immediately on `CombatManager.Instance.IsOverOrEnding` (CardPileCmd.cs:866-869), bails out mid-way through its card-add loop on the same condition (:897-900), and wraps the hook itself in `if (!CombatManager.Instance.IsOverOrEnding)` (:915-918), so a shuffle triggered by a dying effect grants no Abacus block. PlayerCombatState.reshuffle_discard_into_draw fires hooks.on_shuffle(self) unconditionally (player.py:218) and the_abacus.py:22-25 adds no gate of its own -- contrast relics/unceasing_top.py:23, which does check `not self.combat.is_over`, so the sim has the idiom. REACHABILITY (DORMANT): reaching it needs a reshuffle after the combat is decided. The sim reshuffles only from PlayerCombatState._draw (player.py:285) and combat.py:493-494 breaks the play loop once the combat is decided, so no ported effect draws after the last enemy dies. Porting any on-death or combat-end effect that draws (or an explicit Shuffle at combat end) makes it live; the observable is block on a player who has already won, which matters for the conformance runner's player-state assertions rather than for combat outcomes. Filed as a gap rather than a waiver because 'no ported effect reaches it' is today's content, not the divergence's shape (binding rule 1). Rule 7: player.py, combat.py, relics/unceasing_top.py and CardPileCmd.cs are not hashed here."
+      "verdict": "faithful",
+      "rationale": "CLOSED (found while settling this record's hooks.AfterShuffle entry, round 11): both dispatch sites now open with the over-or-ending gate. `reshuffle_discard_into_draw` (player.py:341-373) and `shuffle_draw_and_discard` (player.py:375-396) each start `if _is_over_or_ending(self._hooks): return` (player.py:344, :385) BEFORE the reshuffle logic and before `self._hooks.on_shuffle(self)`, where `is_over_or_ending` (cmds.py:30-40) is documented as the command-side mirror of `CombatManager.Instance.IsOverOrEnding` -- matching CardPileCmd.Shuffle's own early return (CardPileCmd.cs:866-869). A shuffle triggered after the combat is decided can no longer reach `on_shuffle` at all, so the Abacus's block grant is gated exactly as the game gates it. WAS: PlayerCombatState.reshuffle_discard_into_draw fired hooks.on_shuffle(self) unconditionally and the_abacus.py added no gate of its own, so a reshuffle after the last enemy died still granted 6 Block; the previous DORMANT reachability finding (no ported effect draws after the win) no longer needs to hold because the divergence itself is gone."
     },
     {
       "what": "N5: Flash() (TheAbacus.cs:25), CanonicalVars (:17) and the Block ExtraHoverTips (:19)",
@@ -94,6 +94,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
-  "audited": "2026-07-26"
+  "verdict": "waiver",
+  "audited": "2026-07-30"
 }

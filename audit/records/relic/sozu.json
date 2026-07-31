@@ -62,9 +62,9 @@
       "rationale": "Sozu.cs:11 is RelicRarity.Ancient. Executed (b15-pool): absent from the grab bag, granted by the ported Darv shrine (events/darv.py)."
     },
     "ShouldProcurePotion": {
-      "maps_to": "should_procure_potion (sozu.py:26-27), consulted by RunState.add_potion (run.py:480-481)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and N1 per binding rule 4. The predicate itself is right and the out-of-combat gate works; the divergence is that C# funnels EVERY procurement through one gated command and the sim has a second, ungated in-combat path."
+      "maps_to": "should_procure_potion (sozu.py:26-27), consulted by RunState.add_potion (run.py:480-481) AND by potions.try_to_procure (potions.py:1406-1424), the shared combat-side gated entry point",
+      "verdict": "faithful",
+      "rationale": "STALE at round 11: the only 'gap' guard this rollup named, G1 (the sim's second, ungated in-combat procure path), was already closed 2026-07-29 (round 7) per this record's own guards[G1] entry (N1 was always a waiver, not a gap). EXECUTED (this pass): all four ported combat-side potion sources now route through the one gated helper -- relics/delicate_frond.py:41 and relics/petrified_toad.py:28 both call `try_to_procure`, as do cards/colorless_skills.py:56 (Alchemize) and potions.py:1295 (Entropic Brew); `try_to_procure` (potions.py:1406-1424) runs the `should_procure_potion` pass before adding, mirroring PotionCmd.TryToProcure's `Hook.ShouldProcurePotion` gate (PotionCmd.cs:31-39). `PlayerCombatState.add_potion` remains an internal primitive with no gate of its own, but nothing combat-side calls it directly anymore -- that mirrors AddPotionInternal, which C# also calls only from inside TryToProcure. The prose describing a second ungated path was never updated when G1 closed."
     },
     "ModifyMaxEnergy": {
       "maps_to": "modify_max_energy (sozu.py:23-24), dispatched by HookSystem.modify_max_energy (hooks.py:203-208) from PlayerCombatState.start_turn (player.py:163)",
@@ -94,6 +94,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview / LocString text are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
-  "audited": "2026-07-26"
+  "verdict": "waiver",
+  "audited": "2026-07-30"
 }

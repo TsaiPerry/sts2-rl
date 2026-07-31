@@ -66,9 +66,9 @@
       "verdict": "faithful"
     },
     "TryModifyRewardsLate": {
-      "maps_to": "modify_combat_rewards (driftwood.py:17-19), dispatched by rewards.generate_combat_rewards (rewards.py:499-500). relics/base.py:168-170 maps THREE C# hooks -- Hook.ModifyRewards, TryModifyRewards and TryModifyRewardsLate -- onto this one sim method, which is where guard G2 lives (PROMPT.md class 15).",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. The phase half (G2) is CLOSED: `modify_combat_rewards_late` is its own base member (sts2_rl/relics/base.py:236-239), rewards.generate_combat_rewards runs a complete plain pass and then a complete Late pass (sts2_rl/rewards.py:526-529 = Hook.cs:1981-1999), and sts2_rl/relics/driftwood.py:17-19 is a Late implementer. WHAT REMAINS is guard G1: Hook.ModifyRewards is called from RewardsSet.GenerateWithoutOffering (RewardsSet.cs:136), which EVERY RewardsSet goes through, so in the game Driftwood marks a CardReward on any screen rerollable; the sim still dispatches modify_combat_rewards / _late only from generate_combat_rewards, while RunState.rest_heal_rewards (sts2_rl/run.py:1255-1268) dispatches modify_rest_site_heal_rewards ALONE. A rest-site card reward therefore still comes back can_reroll=False."
+      "maps_to": "modify_combat_rewards_late (driftwood.py:17-19), dispatched by rewards.apply_reward_modifiers (rewards.py:646-670), which BOTH rewards.generate_combat_rewards AND RunState.rest_heal_rewards now call.",
+      "verdict": "faithful",
+      "rationale": "STALE 2026-07-30 (round 11): this entry's remaining clause (guard G1, the rest-site dispatch site) is already closed and this hooks-level text was simply not updated to match. RunState.rest_heal_rewards (sts2_rl/run.py:1398-1420) now calls `apply_reward_modifiers(self, rewards)` at :1417-1419 -- the same helper generate_combat_rewards calls -- mirroring RewardsSet.GenerateWithoutOffering (RewardsSet.cs:136), which every RewardsSet goes through including the custom one HealRestSiteOption.cs:112 builds. This record's own G1 guard already carries this exact closure, dated 2026-07-28. EXECUTED 2026-07-30 (.superpowers/sdd/unlabelled/probes/relic-1-driftwood.py, re-running the dream-driftwood witness against today's code): relics=['dream_catcher'] -> rest cards can_reroll=False; relics=['dream_catcher','driftwood'] -> can_reroll=True; the combat screen with driftwood alone also comes back can_reroll=True. So the rest-site screen and the combat screen now agree, closing the divergence this hooks entry described. Rule 7: rewards.py and run.py are not hashed by this record."
     }
   },
   "guards": [
@@ -94,6 +94,6 @@
       "rationale": "The owner clause is the multiplayer per-player filter the shared contract puts out of scope. The bool return only feeds Hook.ModifyRewards' modifier list for the AfterModifyingRewards companion (RewardsSet.cs:142), which Driftwood does not implement, so the sim's void hook loses nothing. The room parameter is unused by this relic; the sim passes the run instead, and the room type is already on CombatRewards.room_type. The non-sealed class invites a knock-off subclass (the Fake Merchant pattern behind relic/fake_anchor and relic/fake_venerable_tea_set), and a grep for ': Driftwood' across the game source returns ZERO subclasses -- so there is no Fake Driftwood to have missed."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

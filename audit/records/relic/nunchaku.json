@@ -56,9 +56,9 @@
       "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. DisplayAmount (Nunchaku.cs:25-35) is `AttacksPlayed % 10`, i.e. the same counter the sim keeps, rendered."
     },
     "AfterCardPlayed": {
-      "maps_to": "on_card_played (nunchaku.py:27-33), dispatched at combat.py:514",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. Trigger, counter, modulus, energy amount and the counter's per-RUN lifetime all match; what does not is how many times the hook fires for a REPLAYED attack."
+      "maps_to": "on_card_played (nunchaku.py:27-34), dispatched at combat.py:904",
+      "verdict": "faithful",
+      "rationale": "STALE at round 11: the only guard this rollup names, G1 (how many times the hook fires for a replayed attack), was already closed 2026-07-27 per this record's own guards[G1] entry. EXECUTED (this pass): combat.py:857-904 now brackets Hook.BeforeCardPlayed and Hook.AfterCardPlayed INSIDE the `for play_index in range(play_count)` loop (`self.hooks.on_card_played(card, is_auto_play)` at :904, gated on `not self.is_over` matching CardModel.cs:1957-1959's IsInProgress gate), so a Throwing-Axe-doubled Attack fires the hook once per iteration on both sides -- the trigger, the counter, the modulus and the per-RUN counter lifetime (guard N1, also already faithful) all match. Guard N4 (the missing AfterModifyingEnergyGain companion on the energy grant this hook triggers) remains its own separately-settled dormant gap and is unaffected by this rollup."
     }
   },
   "guards": [

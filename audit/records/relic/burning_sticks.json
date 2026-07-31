@@ -62,8 +62,8 @@
     },
     "AfterCardExhausted": {
       "maps_to": "on_card_exhausted (burning_sticks.py:24-33)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and G3 per binding rule 4, UPDATED 2026-07-28. The trigger logic matches (first Skill exhausted, clone to hand). G1 is now CLOSED -- `Relic.reset_for_combat` puts `_used_this_combat` back on every new CombatState, so the relic no longer works in the first combat of a run only. G3 is NARROWED but still open: create_clone rebuilds the card from its class (`type(card)()`, cards/base.py:74) and so drops the local keywords and per-instance energy-cost state that CardModel.DeepCloneFields copies, even though it now carries the upgrade level, the enchantment and the affliction. See G3 for the executed witness."
+      "verdict": "faithful",
+      "rationale": "STALE rollup, closed by round 7's create_clone fix (2026-07-29), which post-dates this rollup's own 2026-07-28 UPDATE. Both guards this rollup aggregated are now faithful in the guards list below: G1 (the per-combat reset) and G3 (the clone is now a memberwise copy, `clone.__dict__.update(card.__dict__)`, cards/base.py:90-91, carrying keywords, energy-cost/local-modifiers, dynamic vars and base_replay_count -- see guard G3 for the full citation). EXECUTED at this relic's own call site (not just create_clone generically): `py .superpowers/sdd/unlabelled/probes/relic-2-burning-sticks.py` builds a CombatState with a live BurningSticks instance, exhausts a Defend that has `set_cost_this_combat(0)` and `base_replay_count=2`, and the cloned card added to hand carries both -- `energy_cost=0` and `base_replay_count=2` -- where the old class-rebuild copy would have reset to the card's printed defaults. WAS: 'gap' rollup text asserting G3 was still narrowed-but-open, written a day before G3's own guard entry closed it; the rollup was never re-synced."
     },
     "AfterCombatEnd": {
       "maps_to": "reset_for_combat (sts2_rl/relics/burning_sticks.py:24-28)",
@@ -108,6 +108,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

@@ -56,9 +56,9 @@
       "rationale": "The snapshot now has its own complete pass. C#'s Hook.BeforeTurnEnd runs BeforeSideTurnEndVeryEarly over every listener before the plain BeforeSideTurnEnd pass, which is why FakeOrichalcum.cs:46-58 can latch ShouldTrigger from a Block value no plain-phase listener has touched (its own doc comment, FakeOrichalcum.cs:40-45, says that is the point). The sim's port is now split the same way: the `Block > 0` snapshot lives in on_player_turn_end_very_early (relics/fake_orichalcum.py:32-37) and the grant in the plain on_player_turn_end (:39-46), and HookSystem.on_player_turn_end (hooks.py:498-501) runs them as separate complete passes through _each's _PHASES walk (hooks.py:36, 153-180). Executed confirmation: audit/tools/relic_probes_b05.py orichalcum-order now prints 8 Block for BOTH registration orders against Cloak Clasp's plain-phase 1-per-card grant (relics/cloak_clasp.py:19-24), matching the game.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: Rollup of guard G1 per binding rule 4. FakeOrichalcum.cs:46-58 exists ONLY to take the snapshot: it checks `participants.Contains(Owner.Creature)` then `Block > 0` and sets ShouldTrigger, and the source carries a doc comment (FakeOrichalcum.cs:40-45) explaining that the VeryEarly phase is required so the check happens before PlatingPower can grant block. The sim has no phase concept, so the check moved into the plain slot and became order-dependent."
     },
     "BeforeSideTurnEnd": {
-      "maps_to": "on_player_turn_end (fake_orichalcum.py:25-30)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The effect itself is right: FakeOrichalcum.cs:60-68 grants BlockVar(3m, ValueProp.Unpowered) (line 23) once, clearing the latch first, and fake_orichalcum.py:29-30 grants 3 at the same ValueProp.UNPOWERED. No AscensionHelper branch in the file (the real Orichalcum's 6 is the joke). What is wrong is WHEN the `no Block` test is evaluated."
+      "maps_to": "on_player_turn_end (fake_orichalcum.py:39-46)",
+      "verdict": "faithful",
+      "rationale": "STALE at round 11: the only guard this rollup names, G1 (the collapsed VeryEarly/plain-phase snapshot), was already closed and reconciled 2026-07-28 per this same record's own hooks.BeforeSideTurnEndVeryEarly and guards[G1] entries. EXECUTED (this pass): fake_orichalcum.py:32-37's `on_player_turn_end_very_early` takes the `player.block == 0` snapshot into `self._should_trigger` and fake_orichalcum.py:39-46's `on_player_turn_end` only reads that latch and grants BLOCK=3 at ValueProp.UNPOWERED, clearing the flag first -- matching FakeOrichalcum.cs:46-58 (the VeryEarly snapshot) and :60-68 (the plain grant) exactly, including the clear-before-grant order. HookSystem.on_player_turn_end (hooks.py:498-501) dispatches the two as separate complete passes, so the 'WHEN the no-Block test is evaluated' problem this entry's prose describes does not exist in today's code -- it described the pre-fix collapsed-hook shape."
     },
     "BeforeSideTurnStart": {
       "maps_to": "no counterpart",
@@ -88,6 +88,6 @@
       "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / VfxCmd / CardCmd.Preview are presentation only -- the relic bar's glow, counter and hover text, the damage/heal numbers and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. AssertMutable is the source's own save/model-immutability assertion, not a gameplay rule."
     }
   ],
-  "verdict": "gap",
-  "audited": "2026-07-26"
+  "verdict": "waiver",
+  "audited": "2026-07-30"
 }

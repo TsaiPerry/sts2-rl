@@ -66,9 +66,9 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     },
     "AfterCardPlayed": {
-      "maps_to": "on_card_played (iron_club.py:26-31), dispatched once per logical card play by CombatState._resolve_card_play (combat.py:514)",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. The per-Replay half (G2) is CLOSED: CombatState._resolve_card_play fires on_card_played inside the play-count loop (sts2_rl/combat.py:574, 597-600), so a replayed card advances the counter once per iteration as CardModel.cs:1904-1961 does. WHAT REMAINS is guard G1, the THRESHOLD: IronClub.cs:38 declares `new CardsVar(4)` and :87-93 draws when `CardsPlayed % Cards.IntValue == 0`, while sts2_rl/relics/iron_club.py still pins `CARDS = 6` and its docstring still says 'every 6th card'. No AscensionHelper branch anywhere in IronClub.cs, so 4 is the whole non-ascension value."
+      "maps_to": "on_card_played (iron_club.py:31-37), dispatched inside the per-Replay play-count loop by CombatState._resolve_card_play (combat.py:574, 597-600)",
+      "verdict": "faithful",
+      "rationale": "STALE 2026-07-30: this rollup was written 2026-07-27 naming guard G1 (the threshold) as 'WHAT REMAINS', but G1 was itself closed 'faithful' on 2026-07-29 (round 7) -- one round after this hooks-level entry was written and never regenerated, the exact stale-rollup shape this triage round exists to catch. RE-VERIFIED against today's code: sts2_rl/relics/iron_club.py:25 pins `CARDS = 4` with the citation `IronClub.cs:38 -- CanonicalVars => ... new CardsVar(4)`, matching the source exactly (no AscensionHelper.GetValueIfAscension in the file, so 4 is the pinned non-ascension value). Guard G2 (the per-Replay dispatch bracket) was separately closed 2026-07-27 and both guards in this record now read `verdict: faithful`. No open guard remains at this hook."
     }
   },
   "guards": [
@@ -108,6 +108,6 @@
       "rationale": "Recorded as a deliberate NON-finding, because the sibling relic audited in batch 2 does the opposite: relic/brilliant_scarf's guard G1 is LIVE precisely because BrilliantScarf.cs:84-87 DOES skip auto-plays and the port counts them. Iron Club's source has no such clause, so the sim's unconditional increment is correct here and the two relics must not be 'made consistent' with each other. Executed contrast: `grep -n IsAutoPlay` over the two C# files hits BrilliantScarf.cs and not IronClub.cs. Rule 7: audit/records/relic/brilliant_scarf.json and BrilliantScarf.cs are not hashed by this record."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

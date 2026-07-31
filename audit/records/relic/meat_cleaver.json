@@ -33,7 +33,8 @@
     "TryModifyRestSiteOptions": {
       "maps_to": "modify_rest_site_options (meat_cleaver.py:19-30), dispatched from RunState.rest_site_options (run.py:1069-1073) after the deck cards' contributions",
       "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The option is added with the right id and the right numbers (guards N2, N3), but the sim OMITS it when it would be disabled instead of adding a disabled one (G1) and its effect cannot be CANCELLED (G2)."
+      "live": false,
+      "issue": "RE-EXECUTED 2026-07-30 (round 11). Guard G1 is NOT part of the gap -- it is `deliberate-divergence` (the sim omits a disabled option rather than adding one greyed out; same reachable action set, since the sim has no rest-site UI to show the grey row). WHAT REMAINS is guard G2 alone, still DORMANT and unchanged in today's code: `inspect.getsource(RunState.select_cards)` (`.superpowers/sdd/unlabelled/probes/relic-5-checks.py meat-cleaver-cancel`) still has no decline/cancel return path -- it always returns exactly `count` cards, or `[]` only when there are no candidates at all -- so `run.select_cards` cannot express `CookRestSiteOption`'s `Cancelable = true` early-out (CookRestSiteOption.cs:45-54), and neither can any other selector the sim has today. Confirms G2's own reachability claim rather than inheriting it: `grep -in cancel sts2_rl/run.py` finds nothing. Disposition unchanged."
     }
   },
   "guards": [

@@ -71,9 +71,9 @@
       "verdict": "faithful"
     },
     "AfterCardPlayed": {
-      "maps_to": "on_card_played (mummified_hand.py:22-29), dispatched by CombatState._resolve_card_play at combat.py:514",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1, G2 and G3 per binding rule 4. The trigger matches (a Power play, MummifiedHand.cs:26-29) and the RNG stream matches (Rng.CombatCardSelection, MummifiedHand.cs:30, vs combat_rng.card_selection, mummified_hand.py:29), but the CANDIDATE SET does not: C# runs a four-tier fallback over two different cost predicates (MummifiedHand.cs:31-45) and the sim keeps a single `c.energy_cost > 0` filter with no fallback at all."
+      "maps_to": "on_card_played (mummified_hand.py:22-33)",
+      "verdict": "faithful",
+      "rationale": "STALE (round 11 re-settle): this rollup summarised guards G1, G2 and G3, all three of which are `faithful`/closed (G1+G2 together 2026-07-29 round 7, G3 2026-07-27) -- the hooks-level entry was simply never revisited after the last of them closed. EXECUTED (source read, sts2_rl/relics/mummified_hand.py:22-33): `on_card_played` now builds `base_costing` from `costs_energy_before_modifiers()` (the CostModifiers.None tier) and tries four tiers -- `[base_costing filtered by costs_energy(hooks)], [hand filtered by costs_energy(hooks)], base_costing, hand` -- in order, taking the first non-empty one, matching MummifiedHand.cs:31-45's four `Rng.CombatCardSelection.NextItem` tiers over the two cost predicates (local vs `includeGlobalModifiers: true`). EXECUTED (`py -m pytest test/test_relic_live_tail.py -k mummified -q`): 5 passed, covering G1 (global-modifier cost read), G2 (the empty-tier-1 RNG-draw fallback) and G3 (per-CardPlay hook bracket, shared with combat.py's `play_index` loop). Nothing gap-classified remains under this hook."
     }
   },
   "guards": [
@@ -113,6 +113,6 @@
       "rationale": "Checked against the non-ascension-branch requirement: there is nothing to check. The relic's whole effect is `cardModel?.SetToFreeThisTurn()` (MummifiedHand.cs:46), mirrored by `set_free_this_turn()` (mummified_hand.py:29 -> cards/base.py:260-263, which sets the flag the energy_cost property consults first). Rule 7: cards/base.py is unhashed here."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

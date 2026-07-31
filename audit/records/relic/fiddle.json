@@ -111,9 +111,9 @@
       "verdict": "faithful"
     },
     "ModifyHandDrawLate": {
-      "maps_to": "modify_hand_draw (fiddle.py:23-24), dispatched by HookSystem.modify_hand_draw (hooks.py:217-222) from PlayerCombatState.start_turn (player.py:171)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G2 and N1 per binding rule 4. The arithmetic matches -- Fiddle.cs:21 returns `count + Cards.IntValue` and CanonicalVars pins CardsVar(2) (Fiddle.cs:13), the sim's CARDS = 2 (fiddle.py:21) -- but the hook is ModifyHandDraw**Late**, i.e. the SECOND of Hook.ModifyHandDraw's two complete listener passes (Hook.cs:1683-1708: every ModifyHandDraw first, then every ModifyHandDrawLate), and the sim has one flat pass (G2). The owner guard is dropped (N1, waived)."
+      "maps_to": "modify_hand_draw_late (fiddle.py:22-27), dispatched by HookSystem._each('modify_hand_draw') phase-suffix walk (hooks.py:282-323) from PlayerCombatState._setup_player_turn (player.py:260)",
+      "verdict": "faithful",
+      "rationale": "STALE (round 11 re-settle): this rollup summarised guards G2 and N1. G2 (the missing Late pass) was FIXED 2026-07-28 and the guard entry itself was already flipped to `faithful` then -- this hooks-level entry was simply never revisited afterward. EXECUTED (source read): `sts2_rl/relics/fiddle.py` now defines `modify_hand_draw_late`, not `modify_hand_draw`, and `HookSystem._each` (hooks.py:282-323) walks `_PHASES = (_very_early, _early, '', _late)` per dispatch, re-enumerating the full listener list each pass -- so a listener that only defines the `_late` variant (Fiddle) is visible solely in the last pass, after every plain-pass modifier (Mind Rot) has already run, matching Hook.cs's two-complete-pass ModifyHandDraw/ModifyHandDrawLate split. N1 (the `player != base.Owner` foreign-player bail) remains a `waiver`, not a gap -- multiplayer-only and structurally satisfied in the sim's single-player construction, same basis as this record's sibling `ShouldDraw` hook entry which reaches `faithful` over an identical residual N1. Nothing gap-classified remains under this hook."
     },
     "ShouldDraw": {
       "maps_to": "should_draw (fiddle.py:26-29), dispatched by HookSystem.should_draw (hooks.py:631-642) from PlayerCombatState._draw (player.py:276-282)",
@@ -158,6 +158,6 @@
       "rationale": "This record hashes only relic/fiddle's own two files (the game_source / sim_source pair above). Every other file it cites by line is listed here so the staleness blind spot is visible, per binding rule 7 and the UNHASHED reminder that `py audit/tools/citation_check.py audit/records/relic` prints: src/Core/Hooks/Hook.cs, src/Core/Models/Powers/MindRotPower.cs, sts2_rl/cards/knowledge_curses.py, sts2_rl/combat.py, sts2_rl/events/vakuu.py, sts2_rl/hooks.py, sts2_rl/player.py, sts2_rl/powers.py, sts2_rl/relics/bag_of_preparation.py, sts2_rl/relics/big_mushroom.py, sts2_rl/relics/booming_conch.py, sts2_rl/relics/centennial_puzzle.py, sts2_rl/relics/demon_tongue.py, sts2_rl/relics/gremlin_horn.py, sts2_rl/relics/paels_blood.py, sts2_rl/relics/pendulum.py, sts2_rl/relics/pocketwatch.py, sts2_rl/relics/pollinous_core.py, sts2_rl/relics/snecko_eye.py, sts2_rl/relics/unceasing_top.py. The individually load-bearing ones are also named inline in the guard or hook entry that leans on them."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

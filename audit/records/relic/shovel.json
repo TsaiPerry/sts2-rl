@@ -64,7 +64,8 @@
     "TryModifyRestSiteOptions": {
       "maps_to": "modify_rest_site_options (shovel.py:17-22), dispatched by RunState over cards then relics (run.py:1070-1072)",
       "verdict": "gap",
-      "issue": "Rollup of guard G2 per binding rule 4. The DIG option's effect matches -- RelicCmd.Obtain(RelicFactory.PullNextRelicFromFront(Owner)) (DigRestSiteOption.cs:29) maps to run.obtain_relic_from_grab_bag() (shovel.py:21), and the default overload's Rewards-stream rarity roll is what pull_relic_from_front already uses -- but the sim ADDS an availability precondition C# does not have (G2)."
+      "live": false,
+      "issue": "Rollup of guard G2 per binding rule 4. The DIG option's effect matches -- RelicCmd.Obtain(RelicFactory.PullNextRelicFromFront(Owner)) (DigRestSiteOption.cs:29) maps to run.obtain_relic_from_grab_bag() (shovel.py:21), and the default overload's Rewards-stream rarity roll is what pull_relic_from_front already uses -- but the sim ADDS an availability precondition C# does not have (G2). DORMANT, RE-EXECUTED today (`py audit/tools/relic_probes_b14.py shovel`): 'bag has 122 relics -> options=[\\'DIG\\']' and 'bag EMPTY -> options=[]  <-- C# still offers DIG and grants RelicFactory.FallbackRelic' -- reproduces the divergence, and confirms the starting bag size that must be exhausted to reach it: 122 relics, against a run that offers on the order of 15-20 relic acquisitions total across three acts (chests, events, shops, elites, rest-site digs among them) -- roughly an order of magnitude short of emptying even one rarity deque, let alone the whole bag. No ported content can drain the bag anywhere near that far in a single run. Goes live alongside any relic sink content that empties a rarity deque, or a run-length change that raises total acquisitions into that range."
     }
   },
   "guards": [

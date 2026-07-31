@@ -100,8 +100,8 @@
     },
     {
       "what": "N1 (PROMPT.md bug class 24): the port's comment claims 'The source resets on AfterRoomEntered (once per combat); the sim resets per turn' (velvet_choker.py:39-41) -- the source ALSO resets per turn",
-      "verdict": "gap",
-      "issue": "VelvetChoker.cs:92-101 is a BeforeSideTurnStart override that zeroes `_cardsPlayedThisTurn` on every player turn start, so the comment's premise -- that the per-turn reset is a sim invention -- is false, and it invites a future reader to 'fix' a correct port back to a per-combat counter, which would break the relic's own rule. The CODE is right (see the ShouldPlay and BeforeSideTurnStart entries); only the comment is wrong. Filed as a gap entry rather than a note because it is the exact class-24 shape PROMPT.md warns costs a whole audit, and because a wrong comment on a correct port is the case nothing downstream re-checks; it adds no observable of its own. Discovered by reading the C# in full rather than trusting the port's citation -- the docstring names AfterRoomEntered and AfterCombatEnd accurately and simply omits the third override."
+      "verdict": "faithful",
+      "rationale": "RE-SETTLED round 11: no behavioral divergence exists here to be live, dormant, or stale about -- re-read against the C# source (`c:\\Users\\Perry\\Desktop\\Slay the Spire 2\\src\\Core\\Models\\Relics\\VelvetChoker.cs:92-101`) confirms `BeforeSideTurnStart` zeroes `_cardsPlayedThisTurn` on every player turn start, guarded by `participants.Contains(base.Owner.Creature)`, exactly what `sts2_rl/relics/velvet_choker.py`'s `before_side_turn_start` does. The CODE is faithful (see this record's ShouldPlay and BeforeSideTurnStart hook entries, both independently faithful) and was never in question -- filing this as a `gap` mischaracterized a documentation defect as a behavioral one, which is not one of this contract's three outcomes. PRESERVED IN FULL, because the underlying finding is real and costs nothing to keep on record: the port's own comment (velvet_choker.py:39-41, unchanged today -- this wave writes no engine code, so the one-line fix is left for the next code-editing pass) claims the per-turn reset is a SIM invention where the C# only resets per-combat; that premise is false (VelvetChoker.cs has THREE resets -- AfterRoomEntered:74-83, AfterCombatEnd:85-90, AND BeforeSideTurnStart:92-101 -- and the comment simply omits the third one it is itself implementing). A future reader who trusts the comment over the code could 'fix' a correct port back to a per-combat-only counter and break the relic's own 6-cards-PER-TURN rule. Filed here as a documentation-accuracy note attached to a `faithful` verdict, not as an open behavioral gap: PROMPT.md bug class 24 (comment vs. body) is about auditor risk, not player-observable divergence, and this entry has none."
     },
     {
       "what": "N2: CardsVar(6) read as `Cards.IntValue` in ShouldPreventCardPlay (VelvetChoker.cs:44) and EnergyVar(1) read as `Energy.BaseValue` in ModifyMaxEnergy (:52)",
@@ -119,6 +119,6 @@
       "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart, so its absence is not a divergence from the source. No operational consequence -- the relic's pickup mutates nothing outside run.relics."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

@@ -37,9 +37,10 @@
       "rationale": "StoneHumidifier.cs:14 is RelicRarity.Ancient. EXECUTED (b15-pool): absent from the grab bag, granted by the ported Neow event (events/neow.py)."
     },
     "AfterRestSiteHeal": {
-      "maps_to": "after_rest_site_heal (stone_humidifier.py:15-16), dispatched by RunState.rest_heal (run.py:1089-1095)",
+      "maps_to": "after_rest_site_heal (stone_humidifier.py:15-16), dispatched by RunState.rest_heal (run.py:1390-1396)",
       "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The effect and its amount are exactly right; the dispatch is missing one of the hook's two C# call sites."
+      "live": false,
+      "issue": "DORMANT, settled by execution 2026-07-30 (round 11). Rollup of guard G1 per binding rule 4, which this record already labels dormant and unchanged. RE-VERIFIED: `grep -n mend sts2_rl/run.py sts2_rl/rest_site.py` finds no Mend rest-site option anywhere in the sim -- the only hit is an unrelated comment about Pillow at run.py:379 -- and RunState.rest_heal (run.py:1390-1396) remains the port of HealRestSiteOption.cs:109 only. MendRestSiteOption.cs:135 (the C#'s second AfterRestSiteHeal call site) is a multiplayer heal-a-TARGET-player action with no sim counterpart at all, so no ported room offers a Mend option to reach it. The effect and its amount (+5 Max HP) are exactly right on the one dispatch site the sim has."
     },
     "ModifyExtraRestSiteHealText": {
       "maps_to": "no counterpart",

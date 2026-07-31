@@ -67,14 +67,14 @@
       "rationale": "VenerableTeaSet.cs:17. Confirmed in the transcribed grab bag as Common (py audit/tools/relic_probes_b17.py pool -> bag=Common), so the relic is obtainable from any Common pull."
     },
     "GainEnergyInNextCombat": {
-      "maps_to": "self._pending, a plain bool set only from the constructor parameter `rested` (venerable_tea_set.py:23-25)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The C# property is a [SavedProperty] whose change-guarded setter flips base.Status (VenerableTeaSet.cs:23-39); the persistence it needs -- survive the rest site, the map walk and the next combat's setup -- is provided in the sim by the relic instance living on RunState.relics, so the STORAGE is fine. What is missing is any writer."
+      "maps_to": "self._pending, written by after_room_entered (venerable_tea_set.py:29-38) and consumed by on_energy_reset (venerable_tea_set.py:40-44)",
+      "verdict": "faithful",
+      "rationale": "STALE (round 11 re-settle): this rollup summarised guard G1, which was closed 2026-07-29 round 7 -- the guard entry itself already reads `faithful` and this hooks-level entry was simply never revisited. EXECUTED (source read, sts2_rl/relics/venerable_tea_set.py): `after_room_entered` now sets `self._pending = True` on `room_type == RoomType.REST_SITE`, giving the [SavedProperty]'s persistence (which was always fine -- the relic instance lives on RunState.relics for the whole run) a real writer. EXECUTED (`py -m pytest test/test_false_premise_stubs.py -k venerable -q`): 4 passed. Nothing gap-classified remains under this hook."
     },
     "AfterRoomEntered": {
-      "maps_to": "NO COUNTERPART -- the port defines no after_room_entered at all (executed: `'after_room_entered' in VenerableTeaSet.__dict__` is False)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4, and the whole of this record's finding. VenerableTeaSet.cs:41-49 latches GainEnergyInNextCombat = true whenever a RestSiteRoom is entered. Note what the C# latch is actually keyed on: room ENTRY, not the Rest action -- RestSiteRoom.EnterInternal fires Hook.AfterRoomEntered before any option is offered (RestSiteRoom.cs:25-39), so in the game merely walking into a campfire and smithing (or leaving) arms the relic. The sim's constructor parameter is named `rested` and its docstring says 'a combat that follows a Rest', which is a second, smaller divergence in the same place: even if something DID pass the argument, the correct predicate is 'entered a rest site', not 'took the heal'. Rule 7: RestSiteRoom.cs is NOT hashed by this record."
+      "maps_to": "after_room_entered (venerable_tea_set.py:29-38), dispatched by Relic.after_room_entered's base declaration (relics/base.py:304) from RunState's room-entry loop (run.py:1275)",
+      "verdict": "faithful",
+      "rationale": "STALE (round 11 re-settle), and the whole of this record's finding. This rollup summarised guard G1, closed 2026-07-29 round 7 -- the guard entry itself already reads `faithful` and this hooks-level entry was simply never revisited. EXECUTED (source read): `after_room_entered(self, run, point, room_type)` now checks `room_type == RoomType.REST_SITE` at the room-ENTRY dispatch itself (relics/base.py:304 -> run.py:1275, called for every relic on entering every room), matching VenerableTeaSet.cs:41-49's `AfterRoomEntered`/`room is RestSiteRoom` latch -- keyed on room entry, not on whether the player actually rested, so merely walking into (and leaving) a campfire arms the relic on both sides now. The SECOND, smaller divergence this entry named (the constructor parameter's docstring conflating 'rested' with 'entered a rest site') is also resolved by construction: the constructor argument is now dead weight kept only so a test can pre-arm the relic, and the real trigger is the room-type check, not the argument. Same mechanism and same closure as this record's own `GainEnergyInNextCombat` hook entry -- one fix closed both halves at once, because the writer IS the room-entry latch. EXECUTED (`py -m pytest test/test_false_premise_stubs.py -k venerable -q`): 4 passed. Rule 7: RestSiteRoom.cs is NOT hashed by this record."
     },
     "AfterEnergyReset": {
       "maps_to": "on_energy_reset (venerable_tea_set.py:27-32)",
@@ -109,6 +109,6 @@
       "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart (nothing in the game un-picks a relic), so a port lacking it is not diverging from the source, which is the only question this audit asks. No operational consequence here either -- this relic's pickup mutates nothing outside run.relics, so a conformance-runner swap needs no unwind. Rule 7: sts2_rl/relics/base.py:143-150 is not hashed here."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

@@ -64,7 +64,8 @@
     "TryModifyEnergyCostInCombat": {
       "maps_to": "modify_card_energy_cost (spiked_gauntlets.py:26-31), dispatched by HookSystem.modify_card_energy_cost (hooks.py:196-201) from combat.py:408 / :701 and previews.py:181",
       "verdict": "gap",
-      "issue": "Rollup of guards G1, G2 and G3 per binding rule 4. The arithmetic is right -- a Power card costs 1 more -- but the sim has no phase structure and no per-creature listener grouping, and this relic is the named ported witness for BOTH of audit/records/seam/hook_dispatch.json's gaps G2 and G3."
+      "live": false,
+      "issue": "RE-REGENERATED 2026-07-30 (the prior rollup of guards G1, G2 and G3 was stale: G1 was RECONCILED to `faithful` 2026-07-28 -- the listener-order fix that closed it landed and the record's per-guard entry was updated, but this hooks-level summary was not). WHAT REMAINS is G2 and G3, both still open and both still DORMANT AT THIS SITE (unchanged by anything ported since): G2 is the missing Early/Late phase split (this relic implements only the PLAIN pass; the divergence needs Brilliant Scarf's Late pass co-occurring, which is unexecuted here per the guard's own text) and G3 is the collapsed owner-guard/X-cost-bail/extra-clamp trio (needs a ported X-cost Power card, and none of the three ported X-cost cards -- cascade, volley, whirlwind -- is a Power). The arithmetic itself is right -- a Power card costs 1 more."
     }
   },
   "guards": [

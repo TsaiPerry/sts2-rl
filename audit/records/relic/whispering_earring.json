@@ -87,9 +87,9 @@
       "rationale": "WhisperingEarring.cs:29-36 returns `amount + Energy.BaseValue` = amount + 1 (EnergyVar(1), :27, no AscensionHelper branch in the file); whispering_earring.py:25 is `amount + self.ENERGY` with ENERGY = 1. The dropped `player != base.Owner` clause is structurally satisfied (one player). Rule 7: hooks.py and player.py are NOT hashed by this record."
     },
     "AfterAutoPrePlayPhaseEnteredLate": {
-      "maps_to": "on_player_turn_started (whispering_earring.py:27-43)",
-      "verdict": "gap",
-      "issue": "STILL OPEN at (b) and (c). Clause (a) is CLOSED and its text was already stale: the relic implements `after_auto_pre_play_phase_entered_late`, so it is on the AutoPrePlay phase's LATE pass (HookSystem._each's `_late` suffix walk), not on `on_player_turn_started`. This round completed the ordering it depended on -- Crossbow, genuinely Hook.AfterSideTurnStart, moved onto the new `after_side_turn_start` dispatcher, which fires strictly before the AutoPrePlay phase. WHAT REMAINS: (b) the plays go through CombatState.play_card, the MANUAL path, where C# uses CardCmd.AutoPlay with AutoPlayType.Default; and (c) no card selector is installed where C# pushes VakuuCardSelector.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: Rollup of guards G1, G2 and G3 per binding rule 4. The loop's SHAPE is right -- up to 13 iterations, break on combat over / turn change / nothing playable, take the first playable card in hand, spend its energy, play it. Three things are wrong. (a) The hook is the LAST of three full passes in Hook.AfterAutoPrePlayPhaseEntered (Hook.cs:928-955), entered strictly after turn_structure steps 22-24; the sim fires it from on_player_turn_started, sharing one registration-ordered pass with every step-22/23 listener (G1). (b) The plays go through CombatState.play_card, the MANUAL path, where C# uses CardCmd.AutoPlay with AutoPlayType.Default, so nothing downstream sees them as auto-plays (G2). (c) No card selector is installed where C# pushes VakuuCardSelector, so any selection screen a played card opens resolves RANDOMLY instead of deterministically (G3). Rule 7: Hook.cs, CombatManager.cs and audit/records/seam/turn_structure.json are NOT hashed by this record."
+      "maps_to": "after_auto_pre_play_phase_entered_late (whispering_earring.py:27-64) + _auto_play_loop (whispering_earring.py:66-87)",
+      "verdict": "faithful",
+      "rationale": "STALE 2026-07-30 (round 11): clauses (b) and (c), which this hooks-level entry said were 'STILL OPEN', are both closed in this record's own G2 and G3 guards -- G2 closed round 6 (2026-07-29), G3 closed round 7 (2026-07-29) -- and this text was never updated to match. RE-READ whispering_earring.py in full: `_auto_play_loop` (whispering_earring.py:66-87) pays the modified energy cost explicitly (including X-cost capture) and calls `combat.auto_play_card(card)` -- the AUTO path, not `combat.play_card` -- closing (b); and `after_auto_pre_play_phase_entered_late` installs a deterministic `lambda purpose, candidates, count: list(candidates)[:count]` as `combat.card_selector` for the duration of the loop, restoring the previous selector in a `finally` -- closing (c), the VakuuCardSelector row-major-take shape. Clause (a) (the phase/pass ordering) was already closed when this text was drafted. All three of G1/G2/G3 are faithful today; nothing remains open at this site."
     },
     "GetTarget": {
       "maps_to": "CombatState.play_card's target_idx=None default (whispering_earring.py:43 -> combat.py:381-389, 455-462)",
@@ -144,6 +144,6 @@
       "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart, so its absence is not a divergence from the source. No operational consequence -- the relic's effect is entirely per-combat."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

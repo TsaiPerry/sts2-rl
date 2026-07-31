@@ -58,8 +58,8 @@
     },
     "BeforeSideTurnEnd": {
       "maps_to": "on_player_turn_end (screaming_flagon.py:23-32), dispatched by CombatState.end_turn (combat.py:654) before _process_turn_end_cards and before the hand flush",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The effect arithmetic is faithful (empty-hand gate, 20 Unpowered damage to every hittable enemy) but the sim's turn-end pipeline diverges twice at this hook: C#'s Hook.BeforeTurnEnd is THREE complete passes and the sim is one walk (G1 = seam guard G12), and the sim asks ShouldTakeExtraTurn before the pass instead of after it, so Pael's Eye deletes the Flagon's whole trigger (G2 = seam guard G3 / PROMPT.md class 26). Rule 7: turn_structure.json, combat.py and hooks.py are not hashed here."
+      "verdict": "faithful",
+      "rationale": "STALE (round 11): the rollup summarized guards G1 and G2, both closed (G1 2026-07-27, the four-phase listener walk; G2 RECONCILED 2026-07-28, ShouldTakeExtraTurn now evaluated last), but the summary was never regenerated. RE-EXECUTED today: `py -m pytest test/test_relics.py -k screaming_flagon -v` (both pass) plus `py audit/tools/relic_probes_b14.py flagon`, whose live output now reads `['screaming_flagon']: enemy=[180]` and `['paels_eye', 'screaming_flagon']: enemy=[180]` -- both cases deal the full 20 damage, i.e. Pael's Eye no longer deletes the Flagon's trigger (the probe script's own stale in-line comment still narrates the pre-fix bug; the printed NUMBERS are what settle it, and they agree with each other and with C#). Also re-confirmed via `py -m pytest test/test_hook_order.py -k \"extra_turn_still_runs_the_turn_end_pipeline\" -v`, G2's own generic witness (ShouldTakeExtraTurn now evaluated after BeforeTurnEnd/DoTurnEnd/the flush, not before). With G1 and G2 both closed and N1-N4 already faithful, the whole rollup flips; only N5 (a presentation waiver) remains. The issue it replaced read: Rollup of guards G1 and G2 per binding rule 4. The effect arithmetic is faithful (empty-hand gate, 20 Unpowered damage to every hittable enemy) but the sim's turn-end pipeline diverges twice at this hook: C#'s Hook.BeforeTurnEnd is THREE complete passes and the sim is one walk (G1 = seam guard G12), and the sim asks ShouldTakeExtraTurn before the pass instead of after it, so Pael's Eye deletes the Flagon's whole trigger (G2 = seam guard G3 / PROMPT.md class 26). Rule 7: turn_structure.json, combat.py and hooks.py are not hashed here."
     }
   },
   "guards": [
@@ -99,6 +99,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Title / Cmd.Wait / CardCmd.PreviewCardPileAdd / CardPreviewStyle / ForceMaxColumnsUntilEmpty are presentation only -- the relic bar's glow, counter, sfx and hover text, the localized name, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. The PlayerChoiceContext parameter is a multiplayer choice-synchronisation handle, noted in the mapping per the shared contract's scope section rather than filed as a divergence."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

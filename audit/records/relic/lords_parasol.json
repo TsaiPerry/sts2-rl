@@ -31,9 +31,9 @@
       "verdict": "faithful"
     },
     "AfterRoomEntered": {
-      "maps_to": "after_shop_entered (lords_parasol.py:17-24) -- the sim splits RelicModel.AfterRoomEntered's merchant branch into its own hook, dispatched at run.py:1022-1028 once MerchantInventory.create has stocked the shop; Relic.after_shop_entered's docstring (relics/base.py:197-200) names Lord's Parasol as the reason it exists",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. LordsParasol.cs:20-28 filters AfterRoomEntered to a MerchantRoom and hands the inventory to PurchaseEverything, which buys the character cards, the colorless cards, the relics, the potions AND -- at lines 102-107, after the four loops -- the CARD REMOVAL service. The port skips the last one deliberately and says so in a docstring that is false."
+      "maps_to": "after_shop_entered (lords_parasol.py:27-41) -- the sim splits RelicModel.AfterRoomEntered's merchant branch into its own hook, dispatched at run.py once MerchantInventory.create has stocked the shop; Relic.after_shop_entered's docstring names Lord's Parasol as the reason it exists",
+      "verdict": "faithful",
+      "rationale": "STALE, closed 2026-07-30 (round 11): the rollup's sole guard (G1) is already `faithful` in this same record (closed 2026-07-29 round 7) and re-verified here both by reading the source and by execution. `sts2_rl/relics/lords_parasol.py` today HOLDS BACK the `MerchantCardRemovalEntry` (lines 30-36, `continue`s past it in the loop) and purchases it LAST with `ignore_cost=True` (lines 39-41) -- matching LordsParasol.cs:102-107's position (outside the four item loops, non-cancelable). The port's docstring no longer claims the removal is skipped; it now states the opposite and explains why the old claim was false. EXECUTED 2026-07-30: built a fresh `RunState`, gave it `lords_parasol`, set gold to 99, created a stocked `MerchantInventory`, and called `after_shop_entered` directly -- deck went from 10 to 16 cards (character/colorless purchases minus the removal), `run.card_shop_removals_used` went from 0 to 1 (confirming the removal fired, not merely that the entry was skipped), and gold stayed at 99 (ignore_cost held for every purchase including the removal). The rollup's stated premise (\"the port skips the last one deliberately\") is false against today's code."
     }
   },
   "guards": [
@@ -78,6 +78,6 @@
       "rationale": "C# reaches the inventory through `merchantRoom.GetLocalInventory()`, so the stock must already exist when AfterRoomEntered runs; the sim makes that ordering explicit by building MerchantInventory.create(self) first and then dispatching a dedicated hook (run.py:1022-1028, whose own comment says the merchant branch 'needs the stocked inventory (Lord's Parasol buys everything), so the sim fires a dedicated hook'). The generic Relic.after_room_entered is also dispatched for the shop room, earlier (run.py:981-983) -- before the stock exists -- which is the slot relic/silver_crucible uses for its treasure counting. Splitting one C# hook into two sim hooks with a well-defined order is a modelling choice with the same observable, so faithful rather than deliberate-divergence: any relic needing the pre-stock moment has after_room_entered and any relic needing the post-stock moment has after_shop_entered, and C#'s single hook sees the post-stock state. Rule 7: run.py and relics/silver_crucible.py are not hashed by this record."
     }
   ],
-  "verdict": "gap",
-  "audited": "2026-07-26"
+  "verdict": "waiver",
+  "audited": "2026-07-30"
 }

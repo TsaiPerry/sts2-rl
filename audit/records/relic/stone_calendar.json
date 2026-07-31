@@ -79,7 +79,8 @@
     "BeforeSideTurnEnd": {
       "maps_to": "on_player_turn_end (stone_calendar.py:23-32), dispatched by HookSystem.on_player_turn_end from CombatState.end_turn",
       "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The trigger turn, the damage number, the target set and the props all match and are executed; the divergences are the flattened sub-phase ordering (G1) and the living_enemies-vs-HittableEnemies set (G2)."
+      "live": false,
+      "issue": "LABELLED (round 11): G1 is CLOSED (2026-07-27, the four-phase listener walk is real -- re-confirmed today via `py -m pytest test/test_hook_order.py -k \"orichalcum_snapshots_block_before_other_turn_end_listeners or extra_turn_still_runs_the_turn_end_pipeline\" -v`, both pass, the same generic phase-separation witness this relic's own G1 entry cites). WHAT REMAINS is G2 alone, DORMANT: `combatState.HittableEnemies` vs the sim's `living_enemies()` -- dormant here (unlike the identical substitution at relic/bag_of_marbles) because this is a DAMAGE call site and `DamageCmd.deal` applies the missing `should_allow_hitting` predicate itself before any hook fires (cmds.py:48-49), so an alive-but-unhittable enemy still takes 0 damage and the HP outcome is identical; only a same-call VFX/history residual would differ, and no ported `should_allow_hitting` implementer can be true for a non-reviving target. Porting a relic-damage path that bypasses DamageCmd, or a should_allow_hitting implementer that must also suppress the call-site side effects, makes it live. The issue it replaced read: Rollup of guards G1 and G2 per binding rule 4. The trigger turn, the damage number, the target set and the props all match and are executed; the divergences are the flattened sub-phase ordering (G1) and the living_enemies-vs-HittableEnemies set (G2)."
     },
     "AfterCombatEnd": {
       "maps_to": "no counterpart",

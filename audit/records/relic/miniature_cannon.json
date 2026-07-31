@@ -76,9 +76,10 @@
       "verdict": "faithful"
     },
     "ModifyDamageAdditive": {
-      "maps_to": "modify_damage_additive (miniature_cannon.py:22-33), summed by HookSystem.modify_damage_additive (hooks.py:52-63) and consumed at three sites -- cmds.py:57 (the real pipeline), previews.py:56 (intent display) and cards/thrash.py:46 (Thrash's absorb)",
+      "maps_to": "modify_damage_additive (miniature_cannon.py:23-37), consumed via is_powered_attack-gated call sites in cmds.py, previews.py and cards/thrash.py",
       "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. Three of C#'s four early returns are reproduced exactly (N1-N3, all executed); the fourth is an AND that the port narrows to one of its two disjuncts."
+      "live": false,
+      "issue": "Rollup of guard G1 per binding rule 4. Three of C#'s four early returns are reproduced exactly (N1-N3, all executed); the fourth is an AND that the port narrows to one of its two disjuncts. DORMANT, RE-VERIFIED 2026-07-30 (`.superpowers/sdd/unlabelled/probes/relic-6-checks.py::probe_miniature_cannon_census`): the census of ported `DamageCmd.deal` call sites that pass `card=` without `dealer=` (the shape needed to demonstrate the dropped `cardSource.Owner == base.Owner` disjunct) has GROWN from the 4 the guard's own text names to 8 -- enchantments.py's self-damage plus cards/bad_luck.py, cards/beckon.py, cards/bloodletting.py, cards/blood_wall.py, cards/hemokinesis.py, cards/offering.py, cards/regret.py -- but the conclusion is unchanged: every one of the 8 is a self-damage drawback tagged `DamageProps.CARD_HP_LOSS` or `UNBLOCKABLE|UNPOWERED|MOVE`, both of which carry `ValueProp.UNPOWERED` (valueprops.py:38), so `is_powered_attack` (guard N1's own gate) is false for all of them and none reaches this hook's body at all."
     }
   },
   "guards": [

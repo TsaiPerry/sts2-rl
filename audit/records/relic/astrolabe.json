@@ -50,9 +50,9 @@
       "verdict": "faithful"
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (astrolabe.py:19-23)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The selection and the transform are faithful -- 3 cards (CardsVar(3), Astrolabe.cs:18 vs astrolabe.py:17), chosen from the deck's transformable cards, each replaced and then upgraded, on the Niche stream -- but the upgrade is applied unconditionally where C# skips non-upgradable cards."
+      "maps_to": "after_obtained (astrolabe.py:19-32)",
+      "verdict": "faithful",
+      "rationale": "STALE at round 11: the rollup's only cited guard, G1, was closed 2026-07-29 (round 7). EXECUTED (this pass): astrolabe.py:27-32 now routes each transformed card through `CardCmd.upgrade(None, run.transform_card(card, pick_rng=niche))` (cmds.py:707), whose body (cmds.py:707-...) reproduces CardCmd.Upgrade's per-card `IsUpgradable` skip (`CurrentUpgradeLevel < MaxUpgradeLevel`), so a transformed Curse (MaxUpgradeLevel 0) is left un-upgraded exactly as C# leaves it. The hook-level rollup text describing an unconditional upgrade was never updated when G1 (the only guard it rolled up) closed; the code it describes no longer exists."
     }
   },
   "guards": [
@@ -77,6 +77,6 @@
       "rationale": "Both sides no-op on an empty candidate list -- the sim's for loop over an empty selection does nothing. Not reachable with a real deck; no verdict rests on that."
     }
   ],
-  "verdict": "gap",
-  "audited": "2026-07-26"
+  "verdict": "faithful",
+  "audited": "2026-07-30"
 }

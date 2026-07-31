@@ -72,8 +72,8 @@
     },
     "AfterObtained": {
       "maps_to": "after_obtained (electric_shrymp.py:16-21)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The relic's OWN halves are all faithful -- the candidate filter (N1, executed: zero disagreements over 203 ported cards), the count of 1, and the enchantment identity -- but the Imbued enchantment the relic grants behaves differently in the sim, and Electric Shrymp is the only ported grantor of Imbued, so the relic's observable effect diverges in every run that takes it."
+      "verdict": "faithful",
+      "rationale": "STALE rollup. Its sole cited guard, G1, was closed 2026-07-29 (round 6, Task 0's ledger-vs-code reconciliation pass) but this hook-level rollup text was never re-synced afterward -- same failure mode as relic/burning_sticks/AfterCardExhausted in this same batch. G1's own guard entry (below) is faithful: sts2_rl/enchantments.py's after_auto_pre_play_phase_entered now matches Imbued.cs:20-26 unconditionally (no pile-membership gate), the phase is dispatched (player.py:219-221), and the turn-1 bottom-of-draw-pile sink is ported (player.py:194-207). RE-EXECUTED today (py audit/tools/relic_probes_b05.py shrymp-imbued): '200 seeds: Imbued card auto-played on turn 1 in 200 (100%), still in the opening hand in 0' -- still 200/200, matching C#. The relic's own halves (candidate filter N1, count of 1, enchantment identity) were already faithful. NOT rolled into this verdict: guard N3 (a separate, still-open gap, DORMANT, about the out-of-combat card-selector RNG-stream fallback) is its own line item in this record's guards list and continues to hold the record's overall verdict at gap -- this hook-level entry describes only what it names, G1."
     }
   },
   "guards": [

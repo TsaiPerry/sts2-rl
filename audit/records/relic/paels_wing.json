@@ -97,8 +97,8 @@
     },
     "TryModifyCardRewardAlternatives": {
       "maps_to": "modify_combat_rewards (paels_wing.py:22-24), which sets rewards.sacrifice_relic (rewards.py:397); the driver surfaces the option (driver.py:142) and calls back into on_sacrifice (driver.py:365)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The alternative's payload is right -- the SACRIFICE key (PaelsWing.cs:79 vs rewards.py:393-397's documented \"SACRIFICE\" semantics) and PostAlternateCardRewardAction.EndSelectionAndCompleteReward, i.e. the cards are forgone and the reward completes, which is what driver.py:365 does -- and `base.Owner != player` (line 75) is structurally satisfied by the single-player run. What diverges is WHICH card rewards see it: C# adds the alternative to EVERY CardReward and the sim only to a CombatRewards. See G1."
+      "verdict": "faithful",
+      "rationale": "STALE (round 11): the rollup summarized guard G1 alone, and G1 was closed 2026-07-28 (the alternative now reaches every CardReward, including the rest-site screen Dream Catcher adds) but the summary was never regenerated. RE-EXECUTED today: `py -m pytest test/test_relic_tier1_gaps.py -k test_paels_wing_offers_its_sacrifice_on_the_rest_site_card_reward -v` passes -- `apply_reward_modifiers` now runs on every reward set (not just `generate_combat_rewards`), so a Dream Catcher rest-site choice correctly carries `sacrifice_relic` set. N1-N4 were already faithful/waiver, so with G1 closed the whole rollup flips. The issue it replaced read: Rollup of guard G1 per binding rule 4. The alternative's payload is right -- the SACRIFICE key (PaelsWing.cs:79 vs rewards.py:393-397's documented \"SACRIFICE\" semantics) and PostAlternateCardRewardAction.EndSelectionAndCompleteReward, i.e. the cards are forgone and the reward completes, which is what driver.py:365 does -- and `base.Owner != player` (line 75) is structurally satisfied by the single-player run. What diverges is WHICH card rewards see it: C# adds the alternative to EVERY CardReward and the sim only to a CombatRewards. See G1."
     },
     "OnSacrifice": {
       "maps_to": "on_sacrifice(run) (paels_wing.py:26-31)",
@@ -133,6 +133,6 @@
       "rationale": "Executed grep over the batch's fifteen C# relic files finds no IsAllowed override, so sweep B's 17-relic pool-eligibility cluster excludes this unit. Obtainability confirmed (`py audit/tools/relic_probes_b11.py pool`): Ancient, offered by the ported Pael shrine as OptionPool2's guaranteed member (Pael.cs:37-49; events/pael.py's `pool2 = [\"paels_wing\"]`)."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

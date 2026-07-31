@@ -81,9 +81,9 @@
       "issue": "NARROWED 2026-07-27. The floor half (G2) is CLOSED: LastingCandy.cs's tail `return RelicModel.IsBeforeAct3TreasureChest(runState)` is now ported at sts2_rl/relics/lasting_candy.py:16-23 and enforced before every pull by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769). WHAT REMAINS is guard G3, the FIRST clause: `runState.Players.Any(p => p.Character is Ironclad && p.UnlockState.NumberOfRuns == 0)` (LastingCandy.cs:82-96) vetoes the relic on a profile's very first Ironclad run, and the sim still has no profile/unlock model at all -- the docstring at sts2_rl/relics/lasting_candy.py:17-22 says so and grepping `UnlockState|NumberOfRuns` over sts2_rl/ still returns nothing but 'fully unlocked' comments. DORMANT: the conformance seeds all come from a veteran profile, where the clause evaluates false and the sim's behaviour coincides."
     },
     "TryModifyCardRewardOptions": {
-      "maps_to": "no counterpart; lasting_candy.py is a behaviourless stub (3 class attributes, no methods)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and G4 per binding rule 4. LastingCandy.cs:100-136 adds a Power card to every OTHER combat's card reward; the port does nothing."
+      "maps_to": "modify_card_reward_options (lasting_candy.py:34-66), dispatched by rewards.create_reward_cards's plain pass (rewards.py:299-301)",
+      "verdict": "faithful",
+      "rationale": "STALE 2026-07-30 (round 11): this hooks-level entry still described the pre-fix stub ('the port does nothing'), but this record's own G1 guard already recorded the fix as CLOSED on 2026-07-28 and lasting_candy.py is no longer a stub -- it implements after_combat_end (the CombatsSeen counter), is_in_triggering_combat and modify_card_reward_options in full, clause for clause against LastingCandy.cs:68-136. EXECUTED 2026-07-30 (.superpowers/sdd/unlabelled/probes/relic-1-lasting-candy.py, re-deriving the b08-candy witness against today's code, since that probe file is frozen at its pre-fix authoring time): without the relic, combat 2's reward is ['battle_trance','twin_strike','expect_a_fight'] (3 cards); with lasting_candy in run.relics and after_combat_end fired twice (combats_seen=2, the triggering parity), combat 2's reward is ['battle_trance','twin_strike','expect_a_fight','stampede'] -- a 4th, POWER-typed option, matching LastingCandy.cs:100-136. Combat 1 (non-triggering) is identical with and without the relic on both runs. Rule 7: rewards.py is not hashed by this record."
     },
     "AfterCombatEnd": {
       "maps_to": "no counterpart",

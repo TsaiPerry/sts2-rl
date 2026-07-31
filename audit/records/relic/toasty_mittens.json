@@ -47,9 +47,9 @@
       "rationale": "ToastyMittens.cs:18. Granted by the ported Tezcatara shrine (events/tezcatara.py:17 OPTION_POOL_2). Executed: `py audit/tools/relic_probes_b16.py pool` -- Ancient rarity is not in the grab bag, the shrine is the only path."
     },
     "BeforeHandDraw": {
-      "maps_to": "on_player_turn_start (toasty_mittens.py:21-39)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. HALF THE RELIC IS MISSING: ToastyMittens.cs:28-51 exhausts a draw-pile card AND applies 1 Strength every turn; the port implements only the exhaust. The slot, the reshuffle, the turn-1 non-Innate pick and the top-of-pile orientation are all correct (N1-N4)."
+      "maps_to": "on_player_turn_start (toasty_mittens.py:23-52)",
+      "verdict": "faithful",
+      "rationale": "STALE as `gap`, re-executed and flipped 2026-07-30 (round 11). The rollup's only guard, G1 (the missing +1 Strength), is closed: `sts2_rl/relics/toasty_mittens.py:31-33,52` defines `_grant()` (`PowerCmd.apply(self.hooks, player, StrengthPower, self.STRENGTH, applier=player)`) and calls it UNCONDITIONALLY -- both on the early-return path when the draw pile is empty (line 40-41) and after the exhaust (line 52) -- matching `ToastyMittens.cs:50`'s Strength grant sitting OUTSIDE the `if (cardModel != null)` exhaust guard. EXECUTED: `py -m pytest test/test_relic_residue_gaps.py -k toasty_mittens` passes both `test_toasty_mittens_grants_strength_even_with_nothing_to_exhaust` and `test_toasty_mittens_grants_strength_alongside_the_exhaust`, and `test/test_ancients.py::test_toasty_mittens_exhausts_top_of_draw` still passes for the exhaust half. The slot, the reshuffle, the turn-1 non-Innate pick and the top-of-pile orientation (N1-N4) were already correct; the relic is no longer missing half its effect."
     }
   },
   "guards": [
@@ -94,6 +94,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

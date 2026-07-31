@@ -46,9 +46,9 @@
       "rationale": "C#'s BeforeSideTurnStart is audit/records/seam/turn_structure.json step 9 (before the block clear); the sim's on_player_turn_start is executed-confirmed to sit at step ~19, after the block clear and the energy reset (py audit/tools/relic_probes.py turn-order). Only the counter RESET happens here (OrnamentalFan.cs:96, plus a presentation status write at :97) and no card can be played between the two points -- the play phase opens at step 28 -- so AttacksPlayedThisTurn is 0 at every moment either codebase can observe it. Same mechanism and same verdict as relic/brilliant_scarf's and relic/beating_remnant's BeforeSideTurnStart (binding rule 3). C#'s `participants.Contains(base.Owner.Creature)` (OrnamentalFan.cs:92) is the multiplayer extra-turn guard, structurally satisfied by a player-scoped sim hook. Rule 7: relics/brilliant_scarf.py, relics/beating_remnant.py and the turn_structure record are unhashed here."
     },
     "AfterCardPlayed": {
-      "maps_to": "on_card_played (ornamental_fan.py:32-38), dispatched at combat.py:514",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The Attack filter, the counter, the modulus and the 4 unpowered Block all match; what does not is how many times the hook fires for a REPLAYED Attack."
+      "maps_to": "on_card_played (ornamental_fan.py:32-38), dispatched once per Replay iteration by CombatState._resolve_card_play (combat.py:574-602)",
+      "verdict": "faithful",
+      "rationale": "STALE as `gap`, re-executed and flipped 2026-07-30 (round 11). The rollup's only guard, G1 (how many times the hook fires for a replayed Attack), was closed 2026-07-28 as part of the Tier 1 reconciliation and is re-confirmed against today's code: `sts2_rl/combat.py:574-602`'s `for play_index in range(play_count)` fires `hooks.on_card_played` once per iteration, matching `CardModel.cs:1904-1965`'s per-iteration `Hook.AfterCardPlayed`. EXECUTED: `py -m pytest test/test_relics.py -k test_ornamental_fan_three_attacks` passes. The Attack filter, the counter, the modulus and the 4 Unpowered Block (N2) all already matched; the only open question was the replay count, and it is closed."
     },
     "AfterCombatEnd": {
       "maps_to": "no counterpart",
@@ -83,6 +83,6 @@
       "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. The owner test is multiplayer plumbing, structurally satisfied by a one-player sim; `TaskHelper.RunSafely(DoActivateVisuals())` is deliberately not awaited (OrnamentalFan.cs:109), so the glow cannot delay the Block."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

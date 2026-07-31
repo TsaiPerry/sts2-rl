@@ -57,8 +57,8 @@
     },
     "BeforeSideTurnEnd": {
       "maps_to": "on_player_turn_end (cloak_clasp.py:19-24)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The arithmetic, the empty-hand guard and the Unpowered prop all match, and the slot is correctly ahead of the hand flush -- but the sim has no sub-phase ordering inside its turn-end walk (G1) and no AutoPostPlay phase before it (G2), so the hand this relic counts can differ from the hand the game counts."
+      "verdict": "faithful",
+      "rationale": "STALE (round 11): this rollup summarized guards G1 and G2, both of which are already closed -- G1 2026-07-27 (the four-phase listener walk is real, sts2_rl/hooks.py:36-38, 153-180) and G2 2026-07-28 (the AutoPostPlay step runs strictly before BeforeTurnEnd, sts2_rl/combat.py:789/793) -- and the summary was never regenerated. RE-EXECUTED today: `py -m pytest test/test_hook_order.py -k \"orichalcum_snapshots_block_before_other_turn_end_listeners or extra_turn_still_runs_the_turn_end_pipeline or end_of_turn_auto_plays_run_before_turn_end_hooks\" -v` -- all 3 pass. test_orichalcum_snapshots_block_before_other_turn_end_listeners is G1's own named witness ([cloak_clasp, orichalcum] now gives hand+6 regardless of registration order); test_end_of_turn_auto_plays_run_before_turn_end_hooks is G2's ([cloak_clasp] with a Stampede auto-play now always counts the post-auto-play hand, per-phase not per-registration-order). Every other guard on this relic (N1-N6) was already faithful/waiver, so with G1 and G2 closed the whole rollup flips. The issue it replaced read: Rollup of guards G1 and G2 per binding rule 4. The arithmetic, the empty-hand guard and the Unpowered prop all match, and the slot is correctly ahead of the hand flush -- but the sim has no sub-phase ordering inside its turn-end walk (G1) and no AutoPostPlay phase before it (G2), so the hand this relic counts can differ from the hand the game counts."
     }
   },
   "guards": [
@@ -103,6 +103,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

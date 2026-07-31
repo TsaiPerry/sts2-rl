@@ -28,7 +28,8 @@
     "AfterCardChangedPiles": {
       "maps_to": "after_card_added_to_deck (bing_bong.py:31-39)",
       "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The core is right -- the deck-pile filter, the anti-recursion skip set, and the bottom-of-deck placement all match -- but C#'s `clonedBy == null` clause has no sim counterpart."
+      "live": false,
+      "issue": "Rollup of guard G1 per binding rule 4. The core is right -- the deck-pile filter, the anti-recursion skip set, and the bottom-of-deck placement all match -- but C#'s `clonedBy == null` clause has no sim counterpart. DORMANT, RE-VERIFIED 2026-07-30 against today's code (`.superpowers/sdd/unlabelled/probes/relic-6-bingbong.py`): Dolly's Mirror is now ported (relics/dollys_mirror.py) and was this guard's own named candidate for 'a second ported model that adds a deck card', but porting it does NOT wake this gap -- DollysMirror.cs:22 calls `CardPileCmd.Add(card, PileType.Deck)` with no clonedBy argument, exactly matching `run.add_card`'s own signature, so C# and the sim both give Dolly's clone `clonedBy == null` and Bing Bong re-clones it on BOTH sides identically (EXECUTED: one `run.add_card` call shaped like `DollysMirror.AfterObtained` takes a 3-card deck to 5 -- the +2 both codebases produce -- so this is not a divergence). A `git grep clonedBy` over the whole decompiled game finds exactly one non-BingBong caller that passes a real value: `src/Core/Models/Modifiers/Hoarder.cs:26`, a Modifier -- not one of the 7 audited content kinds, and `sts2_rl` has no Modifier system at all (no `class Modifier`, zero hits for `Hoarder`). That is the concrete unported thing that would make this live."
     }
   },
   "guards": [

@@ -57,9 +57,9 @@
       "rationale": "Matches PhialHolster.cs:18. Recorded because the sibling batch-12 relic relic/preserved_fog does NOT declare it -- correctly, because its C# does not override the property either."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (phial_holster.py:17-20), dispatched by RunState.add_relic (run.py:552)",
-      "verdict": "gap",
-      "issue": "Rollup of guards G1 and N1 per binding rule 4. Both halves of PhialHolster.cs:26-34 are present in shape -- one extra slot then two random potions -- but the potion generation ignores the RNG stream the source names and rolls a flat pool instead of the rarity-weighted one (G1), and the slot half is the potion-capacity mechanism the contract defers (N1)."
+      "maps_to": "after_obtained (phial_holster.py:17-31), dispatched by RunState.add_relic (run.py:552)",
+      "verdict": "faithful",
+      "rationale": "STALE 2026-07-30 (round 11): both components this hooks-level entry named are already closed in this record's own guards. G1 (the RNG stream): CLOSED 2026-07-29 -- phial_holster.py now branches on `run.rng_set is not None` and calls `potion_pools.generate_random_potions(run.rng_set.combat_potion_generation, ...)`, the rarity-weighted line-for-line port, matching the sibling relic/alchemical_coffer. N1 (the potion-capacity slot): re-verdicted FAITHFUL by the 2026-07-26 relic fix pass -- potions are in scope for this audit and `run.add_potion_slots` correctly implements PhialHolster.cs:28's GainMaxPotionCount. This hooks entry's text ('the contract defers' potion capacity) was simply never updated after that scope ruling. EXECUTED 2026-07-30 (`py audit/tools/relic_probes_b12.py b12-phial`, re-run against today's code): `phial_holster: max_potions=4 potions=['RadiantTincture','SwiftPotion']`; `CombatPotionGeneration stream draws: 0 -> 4 (C#: 4 -- two per potion)`, matching the sibling `alchemical_coffer`'s 0 -> 8 for its 4 potions. Rule 7: potion_pools.py, run.py and relics/alchemical_coffer.py are not hashed by this record (see this record's own G1/N1 guards, which do)."
     }
   },
   "guards": [
@@ -89,6 +89,6 @@
       "rationale": "The loop structure matches -- one procure per generated potion, each failing silently if the belt is full -- and RunState.add_potion (run.py:474-486) is the run-side twin that DOES run the Hook.ShouldProcurePotion gate TryToProcure requires, so Sozu correctly refuses these two. That is the opposite of the combat-side path, where the gate is missing: see relic/petrified_toad guard G1 for the site where the same C# verb loses it. ToMutable() is model-instance bookkeeping with no sim analogue (the sim constructs a fresh Potion object per pick). Note that TryToProcure also fires Hook.AfterPotionProcured, which the run-side add_potion does not dispatch either -- that dispatch is verdicted a LIVE gap at its own site in audit/records/relic/belt_buckle.json and is not re-derived here (binding rule 3); out of combat there is no Dexterity to strip, so the omission has no observable here. NOTE per binding rule 7: run.py, petrified_toad.json and belt_buckle.json are not hashed here."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

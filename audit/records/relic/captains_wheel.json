@@ -37,8 +37,8 @@
     },
     "AfterBlockCleared": {
       "maps_to": "on_block_cleared (captains_wheel.py:19-22)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The arithmetic, the turn index, the target test and the ValueProp all match; what diverges is that the sim only FIRES the hook when a block clear actually happened, so a turn-3 block-clear preventer silences the relic."
+      "verdict": "faithful",
+      "rationale": "STALE, closed 2026-07-30 (round 11): the rollup's sole guard (G1) is already `faithful` in this same record (reconciled 2026-07-28) and re-verified here by reading `sts2_rl/player.py:187-223` directly. `PlayerCombatState.start_turn` calls `self._hooks.on_block_cleared(self)` at line 223, OUTSIDE and AFTER the `if not self._first_turn: ... if self._hooks.should_clear_block(...): ... else: ...` block (lines 210-216) -- unconditional, matching CombatManager.cs:492-507's two separate loops (AfterTurnStart/ClearBlock, then a bare `foreach` of `Hook.AfterBlockCleared`). So the event now fires for a creature with no block, one whose clear was vetoed, and a turn-1 player -- exactly as C# does -- and Captain's Wheel's own `on_block_cleared` (captains_wheel.py:19-22, `target is self.player and self.turn == 3`) sees it every time. The rollup's stated premise (\"the sim only FIRES the hook when a block clear actually happened\") is false against today's code."
     }
   },
   "guards": [
@@ -73,6 +73,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
-  "audited": "2026-07-26"
+  "verdict": "waiver",
+  "audited": "2026-07-30"
 }

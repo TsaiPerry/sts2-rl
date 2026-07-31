@@ -80,7 +80,8 @@
     {
       "what": "TerritorialPower.cs:23 `participants.Contains(base.Owner)`",
       "verdict": "gap",
-      "issue": "Same substitution as HighVoltagePower's: the sim tests `not self.owner.is_dead` (powers.py:1273) where C# tests side participation, which a retained corpse still satisfies. Identical mechanism, identical verdict (rule 3), identical dormancy -- Byrdonis is never retained after death."
+      "issue": "Same substitution as HighVoltagePower's: the sim tests `not self.owner.is_dead` (powers.py:1273) where C# tests side participation, which a retained corpse still satisfies. Identical mechanism, identical verdict (rule 3), identical dormancy -- Byrdonis is never retained after death. DORMANT, re-confirmed 2026-07-29 (round 11): EXECUTED -- `grep -rn TerritorialPower --include=*.py sts2_rl/` (excluding powers.py) finds exactly one call, `monsters/overgrowth/byrdonis.py:28` (`PowerCmd.apply(hooks, self, TerritorialPower, 1)`, a self-apply inside `Byrdonis.__init__`), so Byrdonis is the only owner Territorial ever has. `monsters/overgrowth/byrdonis.py` grants Byrdonis no other power anywhere in its class (only TerritorialPower, and its two moves SWOOP/PECK grant nothing) -- no Illusion, Reattach, Adaptable, Infested, Steam Eruption, Stock or Surprise, the powers this same guard's sibling analysis (see power/nemesis's identical-shaped guard) names as the ones that keep a corpse in the side-participant list after death. So a dead Byrdonis is removed from combat like any ordinary creature and never revisits `on_enemy_side_end` again either way; the sim's `is_dead` substitution and C#'s participation test agree on every reachable case. Trigger: a future Territorial holder (or a Byrdonis with an added retain-after-death power) that stays combat-resident post-death.",
+      "live": false
     },
     {
       "what": "TerritorialPower.cs:19 ExtraHoverTips",

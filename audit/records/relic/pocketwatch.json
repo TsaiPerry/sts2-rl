@@ -67,9 +67,9 @@
       "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. The unconditional increment is correct here: unlike relic/brilliant_scarf, Pocketwatch has no IsAutoPlay clause."
     },
     "ModifyHandDraw": {
-      "maps_to": "modify_hand_draw (pocketwatch.py:37-42), dispatched by HookSystem.modify_hand_draw (hooks.py:217-222) from PlayerCombatState.start_turn (player.py:171)",
-      "verdict": "gap",
-      "issue": "Rollup of guard G1. The arithmetic and all three clauses are faithful -- `player != Owner` (multiplayer), `TurnNumber == 1`, and `_cardsPlayedLastTurn > CardThreshold` -> no bonus, else `count + Cards` (Pocketwatch.cs:50-65) map onto pocketwatch.py:38-42 with THRESHOLD = 3 and DRAW = 3; note the C# test is a strict `>` against the threshold and the sim's is `<=` for the bonus, which is the same partition, so playing exactly 3 cards DOES earn the bonus on both sides. The gap it inherits is the under-counted input from G1."
+      "maps_to": "modify_hand_draw (pocketwatch.py:38-43), dispatched by HookSystem.modify_hand_draw from PlayerCombatState.start_turn",
+      "verdict": "faithful",
+      "rationale": "STALE, closed 2026-07-30 (round 11): the rollup's sole guard (G1, the AfterCardPlayed/on_card_played per-Replay-iteration under-count) is already `faithful` in this same record (reconciled 2026-07-28) and re-verified here both by reading the source and by execution. `sts2_rl/combat.py`'s `_resolve_card_play` fires `self.hooks.on_card_played(card, is_auto_play)` (around line 904) INSIDE the `for play_index in range(play_count)` loop, gated on `not self.is_over` -- matching CardModel.cs:1904-1959's per-iteration `Hook.AfterCardPlayed` gated on `IsInProgress`. EXECUTED 2026-07-30: a `CombatState` with `[pocketwatch, throwing_axe]`, hand of 3 Strikes and full energy, playing all 3 through `play_card` -- Throwing Axe replays the first -- left `pocketwatch._played_this_turn == 4` (3 logical plays + 1 replay iteration), the count the game would also reach, where the old flat-loop bug would have stopped at 3. `modify_hand_draw` (pocketwatch.py:38-43) itself was already faithful (the arithmetic, the turn-1 guard and the `<=`-vs-`>` partition all match, as the rollup's own prior text noted); the rollup's stated premise (\"the gap it inherits is the under-counted input from G1\") is false against today's code because G1's input is no longer under-counted."
     },
     "AfterModifyingHandDraw": {
       "maps_to": "no counterpart -- the sim has no after_modifying_hand_draw hook (`grep 'def after_modifying_hand_draw' sts2_rl/hooks.py` returns nothing)",
@@ -119,6 +119,6 @@
       "rationale": "Relic.turn is combat.turn (relics/base.py:291-292) and a fresh CombatState starts at 1, so the turn-1 suppression matches -- and it has to, because turn 1 has no 'last turn' to count. Recorded because it is the guard that makes N2's stale field harmless, so the two entries are load-bearing for each other: if the turn test were ever relaxed (or if an extra-turn mechanism made combat.turn and TurnNumber diverge), N2's verdict would have to be re-derived. NOTE per binding rule 7: relics/base.py and combat.py are not hashed here."
     }
   ],
-  "verdict": "gap",
-  "audited": "2026-07-26"
+  "verdict": "deliberate-divergence",
+  "audited": "2026-07-30"
 }

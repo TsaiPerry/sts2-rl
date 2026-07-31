@@ -375,6 +375,60 @@ class TestQueueGeneratorCoversEveryKind:
         )
 
 
+class TestTypedLivenessIsHonouredEverywhere:
+    """The typed ``"live"`` key must outrank the prose scan in EVERY record
+    shape, not just the one it was added for.
+
+    It did not. ``live`` arrived on 2026-07-27 with the monster tier -- a
+    *content* kind -- and only the content branch of ``gap_queue.extract`` was
+    taught to pass it. The six *seam* records went on being labelled by
+    ``_liveness``'s caps-token scan, so a seam entry that said ``"live": false``
+    in typed data was still reported ``unlabelled``.
+
+    Round 11 found it the way this project always finds tooling defects: by unit
+    work, never by tool review. Two batches settled 21 seam entries, wrote the
+    key, validated their records clean -- and ``counts`` refused to move. The
+    records were right and the tool was wrong, which is the failure direction
+    that costs the most, because the tool is what everyone downstream reads.
+    """
+
+    def _seam_gap_entries_with_typed_live(self):
+        import json
+
+        from audit.tools import gap_queue
+
+        out = {}
+        for seam in gap_queue.SEAMS:
+            path = gap_queue.RECORDS / "seam" / f"{seam}.json"
+            rec = json.loads(path.read_text(encoding="utf-8"))
+            for section in ("steps", "guards"):
+                for i, e in enumerate(rec.get(section, [])):
+                    if e.get("verdict") != "gap" or "live" not in e:
+                        continue
+                    eid = gap_queue._entry_id(section, e["what"], i)
+                    out[f"{seam}/{eid}"] = e["live"]
+        return out
+
+    def test_a_seam_records_typed_live_key_reaches_the_queue(self):
+        from audit.tools import gap_queue
+
+        typed = self._seam_gap_entries_with_typed_live()
+        assert typed, (
+            "no seam gap entry carries a typed 'live' key, so this test proves "
+            "nothing -- it is asserting over an empty set"
+        )
+        reported = {e["id"]: e["liveness"] for e in gap_queue.extract()}
+        wrong = {
+            eid: (want, reported.get(eid))
+            for eid, want in typed.items()
+            if reported.get(eid) != ("live" if want else "dormant")
+        }
+        assert wrong == {}, (
+            "these seam entries state their liveness in typed data and the "
+            f"queue reports something else (id: expected, got): {wrong}"
+        )
+
+
 class TestPinsResolveToAMechanism:
     """A strict xfail pin that anchors no mechanism is invisible non-coverage.
 

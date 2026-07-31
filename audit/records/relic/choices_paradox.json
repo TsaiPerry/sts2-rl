@@ -72,8 +72,8 @@
     },
     "AfterPlayerTurnStart": {
       "maps_to": "on_player_turn_started (choices_paradox.py:23-37)",
-      "verdict": "gap",
-      "issue": "STILL OPEN at G1 only. G2 is CLOSED -- see this unit's g2 entry: AfterPlayerTurnStart and AfterSideTurnStart are two sim dispatchers again, so ChoicesParadox's guaranteed position ahead of every AfterSideTurnStart listener is structural. WHAT REMAINS is G1: the five cards are rolled on the wrong RNG stream with the wrong draw algorithm.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: Rollup of guards G1 and G2 per binding rule 4. The effect is right -- 5 distinct pool cards on turn 1, each given Retain, one chosen into hand -- but they are rolled on the wrong RNG stream with the wrong draw algorithm (G1), and the sim maps AfterPlayerTurnStart and AfterSideTurnStart onto one method, losing C#'s guarantee that this relic resolves before every AfterSideTurnStart listener (G2)."
+      "verdict": "faithful",
+      "rationale": "STALE as `gap`, re-executed and flipped 2026-07-30 (round 11). Both of this rollup's guards are closed in TODAY's code, not just narrated as closed: G1 (RNG stream/draw algorithm) -- `sts2_rl/relics/choices_paradox.py:32-38` branches on `self.combat.combat_rng.is_parity` into `get_distinct_for_combat_parity(crng.card_gen, 5, pool=...)`, and `sts2_rl/cards/pool.py:222-244`'s implementation is exactly `ids = pool_card_ids(...); rng.shuffle(ids); return [make_card(i) for i in ids[:count]]` over the named `card_gen` accessor (`sts2_rl/combat_rng.py`'s `CombatRng.card_gen` property) -- the UnstableShuffle-take-first port `ChoicesParadox.cs:34`'s `CardFactory.GetDistinctForCombat` needs; legacy (non-parity) mode deliberately keeps `random_pool_cards` on the shared RNG for training runs, which is not a parity requirement. G2 (hook collapse) -- `test/test_turn_start_split.py::test_after_player_turn_start_precedes_after_side_turn_start` passes today and pins `on_player_turn_started` firing strictly before `after_side_turn_start`, which are two separate dispatchers again (`sts2_rl/player.py`), so ChoicesParadox's guaranteed position ahead of every AfterSideTurnStart listener is structural, not registration-order luck. EXECUTED 2026-07-30: `py -m pytest test/test_relic_tier1_gaps.py -k choices_paradox` and `test/test_ancients.py::test_choices_paradox_turn_one_pick` both pass against this code. The `gap` label this entry carried was never regenerated after G1's own guard entry (below) was independently closed 2026-07-27 -- the classic stale-rollup shape: the hooks-level text argued from an old narrowing pass rather than from the guards it summarises, both of which are `faithful` today."
     }
   },
   "guards": [
@@ -123,6 +123,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }
