@@ -387,20 +387,21 @@ def test_room_full_of_cheese_offer_runs_the_reward_hooks():
 
 def test_the_future_of_potions_offer_runs_the_reward_hooks():
     """TheFutureOfPotions.cs:127 is the same CreateForReward call; its
-    AfterGenerated upgrades every offered card on top."""
-    offered = {}
+    AfterGenerated upgrades every offered card on top.
 
-    def selector(purpose, candidates, count):
-        offered.setdefault(purpose, [
-            (c.id, c.upgrade_level) for c in candidates])
-        return list(candidates)[:count]
-
-    run = parity_run(card_selector=selector)
+    R2 (round 13): the offer now rides `pending_rewards` (the mid-event
+    OfferCustom channel brain_leech.py / trial.py use) instead of
+    `run.select_cards`, so the offered cards are read off
+    `event.pending_rewards.cards` rather than a `card_selector` callback —
+    matching how `test_brain_leech_rip_costs_5_and_offers_colorless`
+    (test_shared_events.py) inspects a mid-event reward without a driver."""
+    run = parity_run()
     _stock_potions(run)
     run.rng.draws = 0
     event = make_event("the_future_of_potions", run)
     event.begin()
     assert event.choose("POTION_0")
-    cards = offered["card_reward"]
-    assert cards and all(level >= 1 for _, level in cards)
+    assert event.pending_rewards is not None
+    cards = event.pending_rewards.cards
+    assert cards and all(c.upgrade_level >= 1 for c in cards)
     assert run.rng.draws == 0

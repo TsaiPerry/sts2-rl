@@ -133,8 +133,30 @@ class Card(ABC):
     rarity: CardRarity
     # Last in its owner's slice of the dispatch walk: C# walks the cards of
     # AllPiles after powers, relics, potions and orbs
-    # (CombatState.IterateHookListeners, CombatState.cs:449-467).
+    # (CombatState.IterateHookListeners, CombatState.cs:449-467). Only a
+    # fallback slot hint now — `HookSystem._ordered` derives a card's position
+    # from the pile that holds it, and reads this only for a card the walk
+    # cannot reach (one sitting in no pile at all).
     hook_category = CAT_CARD
+    # `CardModel.HasBeenRemovedFromState` (CardModel.cs:948) — the FIRST leg of
+    # `CombatState.Contains`' CardModel arm (CombatState.cs:593). Set by
+    # `CardModel.RemoveFromState` (:1604-1608) and cleared by `AfterCloned`
+    # (:1228), i.e. once per fresh per-combat clone.
+    #
+    # Set in the sim wherever the corresponding C# command exists inside this
+    # module's reach: `CombatState._resolve_card_play` for a played Power card
+    # (its result pile is `PileType.None`, which CardModel.cs:1979-1982
+    # resolves to `CardPileCmd.RemoveFromCombat`, whose tail is
+    # CardPileCmd.cs:189) and `CardCmd.transform_to_random` for a transform's
+    # original (CardCmd.cs:506). Cleared by `reset_combat_state`, which is the
+    # sim's stand-in for the per-combat clone (the sim reuses one `Card` object
+    # for a whole run).
+    #
+    # STILL UNSET on one C# site: `CardPileCmd.Remove`'s deck removal
+    # (CardPileCmd.cs:79), whose sim counterpart is `RunState.remove_cards`
+    # (`run.py`, outside this lane's footprint). A card removed from the deck
+    # is never registered in a later combat, so nothing observes the gap today.
+    has_been_removed_from_state: bool = False
     target_type: TargetType = TargetType.ANY_ENEMY
     is_playable: bool = True
     is_ethereal: bool = False
@@ -239,6 +261,24 @@ class Card(ABC):
         # hook methods reach combat state (Stomp, Drum of Battle, Howl).
         self.combat = None
         self._init_vars()
+
+    def hook_contains(self) -> bool:
+        """`CombatState.Contains`' CardModel arm (CombatState.cs:593):
+        `!cardModel.HasBeenRemovedFromState && cardModel.Owner.IsActiveForHooks`.
+
+        Consulted per item as the dispatch enumeration REACHES this card
+        (:482-488), not once when the list is built — so a card another
+        listener removed from state earlier in the SAME dispatch is skipped.
+        A card with no combat (a run-deck card, a preview clone) has no owner
+        to ask and passes, which is the zero-listener default anyway.
+        """
+        if self.has_been_removed_from_state:
+            return False
+        combat = self.combat
+        if combat is None:
+            return True
+        player = getattr(combat, "player", None)
+        return player is None or player.is_active_for_hooks
 
     def _init_vars(self) -> None:
         pass
@@ -440,6 +480,11 @@ class Card(ABC):
         self._cost_this_combat = None
         self.captured_x = 0
         self.base_replay_count = 0
+        # `CardModel.AfterCloned` clears HasBeenRemovedFromState (CardModel.cs:
+        # 1228) because the game builds a fresh clone per combat; this method
+        # is where the sim's reused Card object stands in for that clone.
+        # Without it a Power card played once would never listen again.
+        self.has_been_removed_from_state = False
         # CardModel.CurrentPlayIndex — which iteration of the play-count loop
         # is resolving (CardModel.cs:1906). 0 for an ordinary single play.
         self.current_play_index = 0

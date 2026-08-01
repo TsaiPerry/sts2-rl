@@ -31,8 +31,12 @@ class CombatCardDb:
 
     def ordered_piles(self, combat) -> list[list]:
         p = combat.player
-        # AllPiles order; the sim has no separate PlayPile (see Task 8).
-        return [p.hand, p.draw_pile, p.discard_pile, p.exhaust_pile]
+        # `PlayerCombatState.AllPiles` (PlayerCombatState.cs:70-80): Hand,
+        # Draw, Discard, Exhaust, PLAY — five piles, Play last. The fifth one
+        # is what keeps a card mid-OnPlay resolvable in this db (round 13 R5;
+        # before it, a resolving card was parked in the discard pile and the
+        # walk found it there by accident).
+        return [p.hand, p.draw_pile, p.discard_pile, p.exhaust_pile, p.play_pile]
 
     def start_order(self, combat) -> list:
         """The cards in the game's StartCombat id order, reconstructed from the

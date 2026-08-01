@@ -32,6 +32,10 @@ Deliberate deviations (repo conventions):
   - non-ascension values only (no Scarcity/Poverty scaling);
   - Hook.ModifyRewards / reward-modifying relics (Prayer Wheel-likes) are
     dispatched duck-typed over the run's relics, like run.py's map pipeline.
+  - the dispatch itself (`apply_reward_modifiers`) runs at each construction
+    site AND, idempotently (`CombatRewards.generated`), as an offer-time
+    backstop in driver._offer_rewards / RunState.offer_rewards — see that
+    function's docstring for why both call it.
 """
 from __future__ import annotations
 
@@ -101,6 +105,19 @@ class CardCreationFlags(IntFlag):
     exactly where C# sets it — `CardReward.cs:114-115` and `:134`, i.e. a card
     REWARD screen and nothing else. `NO_CARD_POOL_MODIFICATIONS` and
     `NO_MODIFY_HOOKS` are the two the generators pass.
+
+    Where a flag comes from (R2, round 13): a construction site's flags are
+    the OR of its `CardCreationOptions` factory's own (`ForNonCombatWith*` all
+    set `NO_UPGRADE_ROLL` — CardCreationOptions.cs:139/152/162) and whatever
+    it adds with `.WithFlags(...)`, which is itself an OR
+    (CardCreationOptions.cs:212-216). `create_reward_cards`' `extra_flags`
+    carries that set through, and `CardRewardGroup.flags` declares it per
+    screen. THREE of these are live in the sim today:
+    `IS_CARD_REWARD` (the four relics above), `NO_MODIFY_HOOKS`
+    (CardFactory.cs:104) and `NO_UPGRADE_ROLL` (CardFactory.cs:98-102, which
+    skips the upgrade roll AND its Rewards draw). `NO_CARD_POOL_MODIFICATIONS`
+    is read by `dingy_rug.py:31` and is what keeps a Colorless pool off a
+    screen whose caller specified the pool. The rest have no ported reader.
     """
 
     NO_RARITY_MODIFICATION = 1
@@ -301,6 +318,7 @@ def create_reward_cards(
     modify_hooks: bool = True,
     pool: list[str] | None = None,
     is_card_reward: bool = False,
+    extra_flags: CardCreationFlags = CardCreationFlags(0),
 ) -> list[Card]:
     """CardFactory.CreateForReward: `count` distinct pool cards, each from a
     rarity roll (escalated with wrapping when the pool lacks the rolled
@@ -313,6 +331,29 @@ def create_reward_cards(
     (CardCreationFlags.NoModifyHooks).
     `pool` overrides the character pool (CardCreationOptions' explicit pool
     list — Lead Paperweight passes the Colorless pool).
+
+    `extra_flags` (R2, round 13) is the rest of the caller's
+    `CardCreationFlags` — everything its `CardCreationOptions` factory and its
+    `.WithFlags(...)` chain set, OR-ed onto the two this function derives from
+    `is_card_reward` / `modify_hooks`. Two of them change what happens here,
+    exactly as they do in C#:
+
+    - `NO_UPGRADE_ROLL` skips `RollForUpgrade` **and the Rewards draw it
+      takes**: `CardFactory.cs:98-102` guards the whole call, and the
+      `rng.NextFloat()` lives inside `RollForUpgrade` (CardFactory.cs:290), so
+      such a creation spends `count` draws, not `2 * count`. Every
+      `ForNonCombatWith*` factory sets this flag
+      (CardCreationOptions.cs:139/152/162), i.e. every event/relic creation
+      that is not `ForRoom`.
+    - `NO_MODIFY_HOOKS` is the flag spelling of `modify_hooks=False`
+      (`CardFactory.cs:104` is the single gate on the reward-options passes),
+      so passing either has the same effect.
+
+    The others are inert here and exist for the LISTENERS to read off
+    `CardCreationOptions.flags`: `NO_CARD_POOL_MODIFICATIONS` is what makes
+    Dingy Rug (DingyRug.cs:19-22), Prismatic Gem, Character Cards and Big Game
+    Hunter leave a caller-specified pool alone, and `NO_RARITY_MODIFICATION` /
+    `NO_CARD_MODEL_MODIFICATIONS` have no ported reader yet.
     """
     # CardFactory.CreateForReward draws on the per-player Rewards stream in the
     # SP2 parity path (rng_set present); the legacy RL path stays on run.rng.
@@ -332,15 +373,28 @@ def create_reward_cards(
     # Colorless pool (DingyRug.cs:13-36), Prismatic Gem the other characters'.
     # C# dispatches it once per card, always from the same starting options,
     # so a single pass before the loop yields the same pool.
+    flags = ((CardCreationFlags.IS_CARD_REWARD if is_card_reward
+              else CardCreationFlags(0))
+             | (CardCreationFlags(0) if modify_hooks
+                else CardCreationFlags.NO_MODIFY_HOOKS)
+             | extra_flags)
+    # `!options.Flags.HasFlag(NoModifyHooks)` (CardFactory.cs:104) is the one
+    # gate C# puts on the reward-options passes, so the boolean parameter and
+    # the flag are the same switch seen from two sides — a caller that spells
+    # it as a flag must get the same behaviour as one that passes the bool.
+    if flags & CardCreationFlags.NO_MODIFY_HOOKS:
+        modify_hooks = False
+    # `if (!options.Flags.HasFlag(CardCreationFlags.NoUpgradeRoll))
+    #      RollForUpgrade(player, cardModel, 0m, rng);` (CardFactory.cs:98-102).
+    # The draw itself (`rng.NextFloat()`, CardFactory.cs:290) is INSIDE the
+    # guarded call, so suppressing the roll also gives the draw back.
+    roll_for_upgrade = not (flags & CardCreationFlags.NO_UPGRADE_ROLL)
     creation = CardCreationOptions(
         pool=tuple(pool),
         source=(CardCreationSource.ENCOUNTER if mutate_pity
                 else CardCreationSource.OTHER),
         odds_type=odds_type,
-        flags=((CardCreationFlags.IS_CARD_REWARD if is_card_reward
-                else CardCreationFlags(0))
-               | (CardCreationFlags(0) if modify_hooks
-                  else CardCreationFlags.NO_MODIFY_HOOKS)),
+        flags=flags,
     )
     if modify_hooks:
         for relic in list(run.relics):
@@ -380,13 +434,15 @@ def create_reward_cards(
         chosen_ids.append(card.id)
         # RollForUpgrade: the draw happens for every reward card; only
         # upgradable non-rares get the act-scaled chance (rares stay at 0).
-        upgrade_roll = _uniform(rng)
-        if card.is_upgradable:
-            odds = 0.0
-            if card.rarity != CardRarity.RARE:
-                odds = run.act_index * UPGRADED_CARD_ODD_SCALING
-            if upgrade_roll <= odds:
-                card.upgrade()
+        # Skipped WHOLESALE — draw included — under NoUpgradeRoll, see above.
+        if roll_for_upgrade:
+            upgrade_roll = _uniform(rng)
+            if card.is_upgradable:
+                odds = 0.0
+                if card.rarity != CardRarity.RARE:
+                    odds = run.act_index * UPGRADED_CARD_ODD_SCALING
+                if upgrade_roll <= odds:
+                    card.upgrade()
         cards.append(card)
     if modify_hooks:
         options = creation
@@ -518,6 +574,23 @@ class CardRewardGroup:
     # `room_type` then only labels the screen for the obs.
     pool: "tuple[str, ...] | None" = None
     odds_type: "RarityOddsType | None" = None
+    # The rest of this screen's `CardCreationFlags` — everything its
+    # construction site's `CardCreationOptions` factory and `.WithFlags(...)`
+    # chain set, on top of the `IsCardReward` every `CardReward` constructor
+    # ORs on unconditionally (CardReward.cs:114-115).
+    #
+    # `CardCreationOptions.ForRoom` (the post-combat screens) sets NONE, which
+    # is why the default is empty. Every `ForNonCombatWith*` factory sets
+    # `NO_UPGRADE_ROLL` (CardCreationOptions.cs:139/152/162) and its caller
+    # adds its own on top — The Future of Potions' screen is
+    # `ForNonCombatWithUniformOdds(...).WithFlags(NoRarityModification |
+    # NoCardPoolModifications)` (TheFutureOfPotions.cs:127), so its group
+    # declares all three. Without this field a group could not express the
+    # flags at all (create_reward_cards built its options internally), which
+    # is how a NoCardPoolModifications screen ended up admitting Dingy Rug's
+    # Colorless pool — see test_the_future_of_potions_offer_is_not_widened_
+    # by_dingy_rug.
+    flags: CardCreationFlags = CardCreationFlags(0)
 
     def _odds(self) -> "RarityOddsType":
         return (self.odds_type if self.odds_type is not None
@@ -535,6 +608,7 @@ class CardRewardGroup:
             mutate_pity=self.pool is None,
             pool=list(self.pool) if self.pool is not None else None,
             is_card_reward=True,          # CardReward.cs:114-115
+            extra_flags=self.flags,
         )
 
     def reroll(self, run) -> None:
@@ -585,6 +659,17 @@ class CombatRewards:
     # Each is an independent take-or-skip offer, separate from the pity-rolled
     # `potion` slot.
     special_potions: "list[Potion]" = field(default_factory=list)
+    # `RewardsSet._isGenerated` (RewardsSet.cs:41, guard :127-130, set :146):
+    # whether `apply_reward_modifiers` has already run on this set. Makes the
+    # dispatch idempotent per instance, mirroring how `GenerateWithoutOffering`
+    # no-ops on a set that already went through it — which is what lets
+    # `Offer()` call it again unconditionally at RewardsSet.cs:159. R10
+    # (2026-08-01): construction sites still call `apply_reward_modifiers`
+    # explicitly (the RNG-order-preserving choice — see the function's own
+    # docstring), and `driver._offer_rewards` / `RunState.offer_rewards` now
+    # call it too, as a backstop; this flag is what makes calling it from both
+    # places safe instead of double-firing every hook.
+    generated: bool = False
 
     # ── The first CardReward, as flat attributes ─────────────────────────
     # Every screen the sim generates on its own has exactly one card group,
@@ -649,14 +734,49 @@ def apply_reward_modifiers(run: "RunState", rewards: CombatRewards) -> None:
     TryModifyRewardsLate, so Driftwood's reroll flag lands on a reward list
     that already holds everything the plain pass added.
 
-    Its ONE caller is `RewardsSet.GenerateWithoutOffering` (RewardsSet.cs:136),
-    which every RewardsSet goes through — the combat screen, but equally the
-    custom sets RewardsCmd.OfferCustom builds for a rest-site heal
-    (HealRestSiteOption.cs:112), an event or a relic. So this belongs at every
-    screen-generation site, not just the combat one; what keeps the room-gated
-    relics off a custom screen is `rewards.room` being None there, exactly as
-    `RewardsSet.Room` is null.
+    C#'s ONE choke point is `RewardsSet.GenerateWithoutOffering`
+    (RewardsSet.cs:125-147), but it is reached from TWO different entry
+    points, not one:
+
+    - Room-end sets dispatch at GENERATE time: `RewardsCmd.GenerateForRoomEnd`
+      (RewardsCmd.cs:55-60) builds the set and calls
+      `GenerateWithoutOffering()` itself, before the caller ever offers it
+      (`CombatRoom.cs:267`, `TreasureRoom.cs:82`).
+    - Every OfferCustom set dispatches at OFFER time, for the first and only
+      time: `RewardsCmd.OfferCustom` (RewardsCmd.cs:47-50) is
+      `new RewardsSet(player).WithCustomRewards(rewards).Offer()` — there is
+      no `GenerateWithoutOffering` call beforehand, so `Offer()`'s own call
+      to it at RewardsSet.cs:159 is the FIRST dispatch, not a repeat. This is
+      the majority case: every rest-site heal (HealRestSiteOption.cs:112), 13
+      events (14 call sites; e.g. BrainLeech.cs:58, Trial.cs:185) and 8
+      relics (e.g. GlassEye.cs:32) go through `OfferCustom`.
+
+    `GenerateWithoutOffering` is guarded idempotent by `_isGenerated`
+    (RewardsSet.cs:127-130, set :146) precisely so it is safe to call from
+    BOTH entry points — for a room-end set the call at `Offer()`:159 really is
+    a no-op repeat, but for an OfferCustom set it is the only call that ever
+    fires. The guard exists for the two-entry-point shape, not because one
+    entry point "always generates before offering" (it doesn't, for most
+    callers).
+
+    The sim mirrors both entry points (R10, 2026-08-01): `rewards.generated`
+    is the `_isGenerated` mirror — a set this function has already processed
+    returns immediately — so this call still sits at each construction site
+    (rewards.py:751,814; run.py:1456; glass_eye.py:78; brain_leech.py:89;
+    trial.py:118), preserving their exact RNG draw order, mirroring the
+    generate-time entry point, AND `driver._offer_rewards` /
+    `RunState.offer_rewards` call it again as an idempotent backstop,
+    mirroring the offer-time entry point — so a FUTURE site that forgets the
+    explicit call still gets dispatched exactly once, at offer time, instead
+    of silently skipping every reward-modifying relic (the trap round 12
+    recorded and fixed per-site: GAP-QUEUE.md's event/3C section).
+
+    What keeps the room-gated relics off a custom screen is `rewards.room`
+    being None there, exactly as `RewardsSet.Room` is null for
+    `WithCustomRewards`.
     """
+    if rewards.generated:
+        return
     for relic in list(run.relics):
         relic.modify_combat_rewards(run, rewards)
     for relic in list(run.relics):
@@ -668,6 +788,9 @@ def apply_reward_modifiers(run: "RunState", rewards: CombatRewards) -> None:
     for group in rewards.card_rewards:
         if not group.populated:
             group.populate(run)
+    # `_isGenerated = true` (RewardsSet.cs:146) — set LAST, after the passes
+    # and the populate sweep, matching the source's own ordering.
+    rewards.generated = True
 
 
 def generate_combat_rewards(

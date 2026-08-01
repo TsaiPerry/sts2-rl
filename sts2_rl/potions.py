@@ -38,6 +38,9 @@ class Potion:
     # After its owner's relics in the dispatch walk
     # (CombatState.IterateHookListeners, CombatState.cs:436-443).
     hook_category = CAT_POTION
+    # `PotionModel.HasBeenRemovedFromState` (PotionModel.cs:202), set by
+    # Discard (:221-224) and RemoveBeforeUse (:229-233).
+    has_been_removed_from_state: bool = False
     # PotionModel.Rarity — drives the shop price (MerchantPotionEntry.GetCost:
     # Rare 100, Uncommon 75, else 50). Every implemented reward-pool potion is
     # Common in the source; kept as an attr so rarer potions price correctly.
@@ -62,6 +65,17 @@ class Potion:
     # hook listener — the same pattern as Card.combat. Only hook-listening
     # potions (Fairy in a Bottle) need it; `use` gets its ctx passed in.
     combat = None
+
+    def hook_contains(self) -> bool:
+        """`CombatState.Contains`' PotionModel arm (CombatState.cs:595):
+        `!HasBeenRemovedFromState && Owner.IsActiveForHooks`."""
+        if self.has_been_removed_from_state:
+            return False
+        combat = self.combat
+        if combat is None:
+            return True
+        player = getattr(combat, "player", None)
+        return player is None or player.is_active_for_hooks
 
     @property
     def automatic(self) -> bool:
@@ -261,12 +275,14 @@ class GamblersBrew(Potion):
         )
         if not chosen:
             return
-        for card in chosen:
-            player.hand.remove(card)
-            ctx.hooks.on_card_discarded(card)
-            player.discard_pile.append(card)
-        from .cmds import DrawCmd
-        DrawCmd.draw(player, len(chosen))
+        # GamblersBrew.cs:27 is literally `CardCmd.DiscardAndDraw(picked,
+        # picked.Count)`. This loop used to be open-coded here, and it fired
+        # `AfterCardDiscarded` BEFORE the append where C# appends first
+        # (CardCmd.cs:192-194) — the opposite of the way `relics/
+        # gambling_chip.py` open-coded the same command. It also had no Sly
+        # tail. creature_card_cmds/step50 + step51.
+        from .cmds import CardCmd
+        CardCmd.discard_and_draw(ctx.hooks, player, chosen, len(chosen))
 
 
 @register_potion
@@ -1032,22 +1048,16 @@ class DistilledChaos(Potion):
     CARDS = 3
 
     def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
-        player = ctx.player
-        cards = []
-        for _ in range(self.CARDS):
-            if not player.draw_pile:
-                if not player.discard_pile:
-                    break
-                player.reshuffle_discard_into_draw()
-                # AfterShuffle hooks can drain the pile again; the source
-                # null-checks each pull and stops.
-                if not player.draw_pile:
-                    break
-            cards.append(player.draw_pile.pop())
-        for card in cards:
-            if ctx.combat.is_over or player.is_dead:
-                break
-            ctx.combat.auto_play_card(card)
+        # One statement in the source, like Cascade's and Havoc's: the whole
+        # OnUse is `CardPileCmd.AutoPlayFromDrawPile(...)`. The inline
+        # reimplementation this replaces parked its phase-1 picks in NO pile
+        # (C# parks them in `PileType.Play`, CardPileCmd.cs:954) and broke on
+        # `combat.is_over` where C# breaks only on the owner's death (:958).
+        # Round 13, R5 — creature_card_cmds/step99's last residue.
+        from .cmds import CardPileCmd
+        CardPileCmd.auto_play_from_draw_pile(
+            ctx.hooks, ctx.player, self.CARDS, position="top",
+            force_exhaust=False)
 
 
 @register_potion

@@ -794,19 +794,27 @@ class TestCumulativeCounters:
         # cardSource that is NOT in PileType.Play once AttacksPlayed == 9 — the
         # preview of the pending tenth Attack — so calling the hook with a
         # pile-less card, as this test used to, is a state the game answers 2 for
-        # too. `player._playing_card` is the sim's PileType.Play analogue, set for
-        # the duration of the play by _resolve_card_play.
+        # too.
+        #
+        # RE-STAGED 2026-08-01 (round 13, R5): the card is put in the real
+        # `play_pile`, because that is what a real play now does.
+        # AMENDED in R5's fix pass (R5-review RV-9): the first re-staging set
+        # `_playing_card` as well, which made the pin pass under EITHER
+        # predicate and so blind to whether the owed one-liner had landed.
+        # `pen_nib.py` now reads `card not in player.play_pile`, verbatim
+        # PenNib.cs:120-128 (`pile == null || pile.Type != PileType.Play`), and
+        # `_playing_card` is deliberately NOT set here so the pin can tell.
         relic = PenNib()
         cs = fresh(relics=[relic])
         cards = [make_card("strike") for _ in range(10)]
 
         def mult(card, props=powered):
-            cs.player._playing_card = card
+            cs.player.play_pile.append(card)
             try:
                 return relic.modify_damage_multiplicative(
                     cs.enemy, 6, cs.player, card, props)
             finally:
-                cs.player._playing_card = None
+                cs.player.play_pile.remove(card)
 
         for c in cards[:9]:
             relic.before_card_played(c)

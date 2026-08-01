@@ -22,14 +22,26 @@ if TYPE_CHECKING:
 
 
 # Where each listener kind falls in one creature's walk, mirroring
-# CombatState.IterateHookListeners (CombatState.cs:413-467). Listener classes
-# declare their slot as a `hook_category` class attribute; the sim has no orbs,
-# and CombatHistory is a sim-only listener that sits ahead of the walk.
+# CombatState.IterateHookListeners (CombatState.cs:413-467): per creature,
+# Powers (:416) -> MonsterModel (:417-421) or, for a player, Relics (:428-435)
+# -> PotionSlots (:436-443) -> Orbs (:448) -> the cards of AllPiles (:449-467).
+# CombatHistory is a sim-only listener (note N3) that sits ahead of the walk.
+#
+# These are no longer the DISPATCH rule -- `_ordered()` derives the walk from
+# the live combat state, which is what CombatState.IterateHookListeners does.
+# They survive as the slot hint for a listener the derivation cannot reach
+# (an orphaned power instance, a card in no pile, a synthetic test listener):
+# `_merge_extras` seats such a listener at the end of its (creature, category)
+# group instead of dropping it. The numbering has GAPS from the pre-round-13
+# values because the monster and orb slots were missing from it entirely; only
+# the relative order is ever read.
 CAT_HISTORY = -1
 CAT_POWER = 0
-CAT_RELIC = 1
-CAT_POTION = 2
-CAT_CARD = 3
+CAT_MONSTER = 1
+CAT_RELIC = 2
+CAT_POTION = 3
+CAT_ORB = 4                   # reserved: the sim has no orbs (note N7)
+CAT_CARD = 5
 _CAT_CARD = CAT_CARD          # default for a listener that declares nothing
 
 # The complete listener passes Hook.cs runs, in order. "" is the plain hook.
@@ -195,14 +207,29 @@ class HookSystem:
         # Back-reference to the owning CombatState; set by CombatState.__init__.
         # Lets powers reach combat-level state (e.g. Infested spawning Wrigglers).
         self.combat: Any = None
-        # Derived-order cache; see _ordered(). `_epoch` counts membership
-        # changes, so the key changes whenever the list or the enemy order does.
+        # `_epoch` counts membership changes (register/unregister). It is the
+        # invalidation signal for the PRESENCE cache only -- the dispatch ORDER
+        # is re-derived per dispatch now, because a pile move changes the order
+        # without changing membership and there is no pile-mutation choke point
+        # to hang a dirty flag on (67 direct pile-list mutation sites across 15
+        # files). See _ordered().
         self._epoch = 0
-        self._order_key: Any = None
-        self._order: list[Any] = []
         # Base hook names for which some current listener declares a phase
-        # variant; see _each().
+        # variant; see _each(). Maintained INCREMENTALLY by register/unregister:
+        # recomputing this union per order rebuild was the dominant cost of a
+        # naive rebuild-per-dispatch (round 13 measurement).
         self._phased: frozenset[str] = frozenset()
+        # How many registered listeners ride on a card rather than sitting in a
+        # pile themselves (afflictions and enchantments; `hook_is_card_rider`).
+        # Zero lets `_derive` splice the four piles in with list.extend instead
+        # of walking card by card -- a ~9x difference on the derivation, and
+        # the common case (no enchanted, no afflicted card in the combat).
+        self._riders = 0
+        # How many registered listeners declare no derivable `hook_category`
+        # at all (synthetic listeners in tests, anything a future caller
+        # registers by hand). Non-zero forces `_ordered` down the merge path,
+        # which seats them by category instead of dropping them.
+        self._undeclared = 0
         # Per-hook "does any live listener implement this" cache, keyed by
         # hook name to (epoch, bool); see _has_listener_for(). A dormant hook
         # (creature_card_cmds/G8's after_card_changed_piles/
@@ -223,6 +250,11 @@ class HookSystem:
         self._listeners.append(listener)
         self._live.add(id(listener))
         self._epoch += 1
+        self._phased |= _phase_hooks(type(listener))
+        if getattr(listener, "hook_is_card_rider", False):
+            self._riders += 1
+        if getattr(listener, "hook_category", None) is None:
+            self._undeclared += 1
 
     def unregister(self, listener: Any) -> None:
         self._listeners.remove(listener)
@@ -231,54 +263,263 @@ class HookSystem:
         if not any(l is listener for l in self._listeners):
             self._live.discard(id(listener))
         self._epoch += 1
+        # `_phased` is a union, so removing one member cannot be done
+        # incrementally -- recompute. unregister() is orders of magnitude
+        # rarer than dispatch (a power expiring, a potion leaving the belt),
+        # and `_phase_hooks` is memoised per class, so this is a union of
+        # ~35 interned frozensets rather than a dir() scan.
+        self._phased = frozenset().union(
+            *(_phase_hooks(type(l)) for l in self._listeners)
+        ) if self._listeners else frozenset()
+        if getattr(listener, "hook_is_card_rider", False):
+            self._riders -= 1
+        if getattr(listener, "hook_category", None) is None:
+            self._undeclared -= 1
 
     # ── Dispatch order and phases ────────────────────────────────────────
 
     def _ordered(self) -> list[Any]:
-        """The listener list in the game's dispatch order.
+        """The listener list in the game's dispatch order, DERIVED from the
+        live combat state on every call.
 
-        `CombatState.IterateHookListeners` (CombatState.cs:410-493) builds no
-        list: it re-derives the listeners per dispatch from the creatures
-        themselves, allies before enemies, and within a player walks Powers
-        (416) -> Relics (428-435) -> PotionSlots (436-443) -> Orbs (448) ->
-        the cards of AllPiles (449-467). `self._listeners` is registration
-        order, which is close to the mirror image of that — relics are appended
-        at combat setup and a power joins only when applied, so relics always
-        ran first where the game runs powers first.
+        `CombatState.IterateHookListeners` (CombatState.cs:410-493) keeps no
+        registry: it builds a fresh list per dispatch out of the creatures
+        themselves — allies then enemies as one index space (:413-415) and,
+        per creature, `creature.Powers` (:416) then either the MonsterModel
+        (:417-421) or, for a player that passes `IsActiveForHooks` (:424-427),
+        Relics skipping IsMelted (:428-435), PotionSlots in SLOT order skipping
+        nulls (:436-443), Orbs (:448) and finally every card of `AllPiles` =
+        Hand, Draw, Discard, Exhaust, Play (PlayerCombatState.cs:70-80), each
+        card followed by its Affliction and then its Enchantment (:449-467) —
+        each pile enumerated TOP-FIRST, which for the draw pile is the reverse
+        of the sim's own storage order (see `_derive`).
+        So the order is a function of CURRENT pile membership and slot
+        occupancy, not of registration history: a card that changes pile
+        changes its dispatch position (gap G1), and a potion procured into
+        slot 0 dispatches ahead of one sitting in slot 1 that arrived earlier
+        (the slot half of gap G2).
 
-        This sorts registration order into the derived one. The sort is stable,
-        so listeners tied on (creature, category) keep the order they
-        registered in — which is what keeps an enchantment immediately after
-        its own card. `CombatHistory` is a sim-only listener with no C#
-        counterpart (note N3) and stays first, ahead of the creature walk, so
-        an entry exists by the time anything reacts to it.
+        The sim's `_listeners` stays the MEMBERSHIP authority (it is what
+        `register`/`unregister` maintain and what the presence cache keys on);
+        this method supplies the ORDER. Everything the derivation reaches is
+        emitted in the game's slot; anything registered that it cannot reach —
+        an orphaned power instance the sim's `powers` dict no longer indexes
+        (power_cmd/G5), a card sitting in no pile, a synthetic listener a test
+        registered by hand — is seated at the end of its (creature, category)
+        group by `_merge_extras` rather than dropped, since dropping would
+        silently retire a listener the sim dispatches to today.
 
-        Re-deriving per dispatch would be the literal port; instead the result
-        is cached and invalidated whenever the listener list or the enemy order
-        changes, which are the only two inputs.
+        `CombatHistory` is a sim-only listener with no C# counterpart (note
+        N3) and stays first, ahead of the creature walk, so an entry exists by
+        the time anything reacts to it.
+
+        There is no order cache: a pile move changes the order without
+        changing membership, and the sim has no pile-mutation choke point to
+        invalidate on. The cost is paid only behind `_each`'s presence gate.
         """
+        order = self._derive()
+        if self._undeclared or len(order) != len(self._listeners):
+            return self._merge_extras()
+        return order
+
+    def _derive(self, groups: list | None = None,
+                excluded: set | None = None) -> list[Any]:
+        """One `CombatState.IterateHookListeners` list build (CombatState.cs:
+        412-481), minus the lazy `Contains` filter — `_each` applies that per
+        item, which is where C# applies it too (:482-488).
+
+        `groups`, when given, collects `((rank, category), end_index)` for
+        every slot of the walk in walk order, so `_merge_extras` knows where a
+        listener the walk could not reach belongs.
+
+        `excluded`, when given, collects the `id()` of every listener the walk
+        REFUSED on purpose — a melted relic (:431) and everything past an
+        inactive player's powers (:424-427). `_merge_extras` must not put those
+        back: "the walk did not reach it" and "the walk decided against it" are
+        different facts and only the first one is a sim-side shortfall.
+        """
+        combat = self.combat
+        if combat is None:
+            # A bare HookSystem (run-level walks, previews, unit tests): there
+            # is no combat to derive from, so registration order is all there is.
+            return list(self._listeners)
+        out: list[Any] = []
+        add = out.append
+        extend = out.extend
+        mark = None if groups is None else groups.append
+
+        # Sim-only prefix (note N3), ahead of the creature walk.
+        history = getattr(combat, "history", None)
+        if history is not None:
+            add(history)
+        if mark is not None:
+            mark(((0, CAT_HISTORY), len(out)))
+
+        player = getattr(combat, "player", None)
+        enemies = getattr(combat, "enemies", None) or ()
+        # CombatState.cs:413-415 — `_allies` then `_enemies` as one index
+        # space. The sim has exactly one ally, the player.
+        creatures = [player] if player is not None else []
+        creatures.extend(enemies)
+        for rank, creature in enumerate(creatures):
+            # :416 `list.AddRange(creature.Powers)` — BEFORE the player-active
+            # check at :424, so a dead player's powers are still added to the
+            # list and are dropped (if at all) only by the lazy PowerModel arm
+            # of Contains (:599).
+            extend(creature.powers.values())
+            if mark is not None:
+                mark(((rank, CAT_POWER), len(out)))
+            if creature is not player:
+                # :417-421 `creature.Player == null -> list.Add(creature.Monster)`.
+                # The sim's Monster IS its own MonsterModel (gap G5).
+                add(creature)
+                if mark is not None:
+                    mark(((rank, CAT_MONSTER), len(out)))
+                continue
+            if mark is not None:
+                mark(((rank, CAT_MONSTER), len(out)))   # empty for a player
+            # :424-427 — an inactive player contributes nothing past its powers.
+            if player.is_active_for_hooks:
+                # :428-435 relics, skipping IsMelted (:431). The sim removes a
+                # melted relic from the run outright (see `Relic.is_tradable`),
+                # so `combat.relics` does not hold one today and this loop is
+                # a straight copy; the flag is declared on Relic so the skip is
+                # expressible and so a wax port has it to set.
+                for relic in getattr(combat, "relics", ()):
+                    if relic.is_melted:
+                        if excluded is not None:
+                            excluded.add(id(relic))
+                        continue
+                    add(relic)
+                if mark is not None:
+                    mark(((rank, CAT_RELIC), len(out)))
+                # :436-443 — PotionSlots in SLOT order, skipping null slots.
+                for potion in player.potions:
+                    if potion is not None:
+                        add(potion)
+                if mark is not None:
+                    mark(((rank, CAT_POTION), len(out)))
+                # :448 OrbQueue.Orbs — the sim has no orbs (note N7).
+                if mark is not None:
+                    mark(((rank, CAT_ORB), len(out)))
+                # :449-467 — AllPiles, and per card the card, its Affliction,
+                # then its Enchantment. All five piles are real lists now
+                # (`PlayerCombatState.play_pile`, round 13 R5), so the Play leg
+                # is one more `extend` and there is no marker to consult.
+                #
+                # The DRAW pile is walked REVERSED. `CardPile` is top-first —
+                # `MoveToTopInternal` is `_cards.Insert(0, card)`
+                # (CardPile.cs:160-167), `MoveToBottomInternal` is `_cards.Add`
+                # (:142-149), `AddInternal`'s default `index = -1` appends
+                # (:83-96), `CardPileCmd`'s default position is
+                # `CardPilePosition.Bottom` (CardPileCmd.cs:259) and a draw
+                # takes `drawPile.Cards.FirstOrDefault()` (:843) — so
+                # `CombatState.cs:452-455` enumerates the draw pile top -> bottom.
+                # The sim stores its draw pile the other way up (`player.py`'s
+                # `draw_pile.pop()  # end of list = top of pile`, and
+                # `CardPileCmd.add_to_draw` converting a game index `p` to sim
+                # index `count - p`), so only this pile needs the flip. Hand,
+                # discard and exhaust are append-at-end in BOTH engines, so
+                # their list order already is C#'s enumeration order.
+                if self._riders == 0:
+                    # No affliction or enchantment is registered, so the five
+                    # piles splice straight in.
+                    extend(player.hand)
+                    extend(reversed(player.draw_pile))
+                    extend(player.discard_pile)
+                    extend(player.exhaust_pile)
+                    extend(player.play_pile)
+                else:
+                    for pile in (player.hand, reversed(player.draw_pile),
+                                 player.discard_pile, player.exhaust_pile,
+                                 player.play_pile):
+                        for card in pile:
+                            add(card)
+                            affliction = card.affliction
+                            if affliction is not None:
+                                add(affliction)
+                            enchantment = card.enchantment
+                            if enchantment is not None:
+                                add(enchantment)
+            else:
+                if mark is not None:
+                    mark(((rank, CAT_RELIC), len(out)))
+                    mark(((rank, CAT_POTION), len(out)))
+                    mark(((rank, CAT_ORB), len(out)))
+                if excluded is not None:
+                    # Everything :424-427 skips, named so `_merge_extras` does
+                    # not undo the skip.
+                    for relic in getattr(combat, "relics", ()):
+                        excluded.add(id(relic))
+                    for potion in player.potions:
+                        if potion is not None:
+                            excluded.add(id(potion))
+                    for pile in (player.hand, player.draw_pile,
+                                 player.discard_pile, player.exhaust_pile,
+                                 player.play_pile):
+                        for card in pile:
+                            excluded.add(id(card))
+                            if card.affliction is not None:
+                                excluded.add(id(card.affliction))
+                            if card.enchantment is not None:
+                                excluded.add(id(card.enchantment))
+            if mark is not None:
+                mark(((rank, CAT_CARD), len(out)))
+        return out
+
+    def _merge_extras(self) -> list[Any]:
+        """`_derive`'s walk plus every registered listener it could not reach,
+        each seated at the end of its (creature, category) group.
+
+        C# has no such case — a model that is in no list is not a listener at
+        all — but the sim's registry can outlive the structure the walk reads:
+        a second application of an Instanced power leaves the replaced
+        instance registered while the `powers` dict indexes only the new one
+        (power_cmd/G5, where C#'s `Creature.Powers` is a LIST that holds
+        both), a card can sit in no pile, and tests register bare objects.
+        Dropping those would retire listeners the sim dispatches to today, so
+        they are merged in instead. Cost is irrelevant: `_ordered` only comes
+        here when the fast walk did not account for every registered listener.
+        """
+        groups: list = []
+        excluded: set = set()
+        order = self._derive(groups, excluded)
+        seen = {id(l) for l in order}
+        extras = [l for l in self._listeners
+                  if id(l) not in seen and id(l) not in excluded]
+        if not extras:
+            return order
+
         enemies = getattr(self.combat, "enemies", None) or ()
-        key = (self._epoch, tuple(id(e) for e in enemies))
-        if key == self._order_key:
-            return self._order
+        rank_of = {id(e): i + 1 for i, e in enumerate(enemies)}
+        ends = dict(groups)
+        insertions: dict[int, list] = {}
+        for listener in extras:
+            rank = rank_of.get(id(listener))
+            if rank is None:
+                owner = getattr(listener, "owner", None)
+                rank = rank_of.get(id(owner), 0) if owner is not None else 0
+            slot = (rank, getattr(listener, "hook_category", _CAT_CARD))
+            at = ends.get(slot)
+            if at is None:
+                # A category no group of this walk declares (a synthetic
+                # listener's `hook_category = 99`, or an enemy-owned card):
+                # the last group that sorts at or before it, else the tail.
+                at = len(order)
+                for group_slot, end in groups:
+                    if group_slot <= slot:
+                        at = end
+            insertions.setdefault(at, []).append(listener)
 
-        # Ally side first (the sim has exactly one ally, the player), then the
-        # enemies in combat-list order.
-        rank = {id(e): i + 1 for i, e in enumerate(enemies)}
-
-        def sort_key(item):
-            i, l = item
-            owner = getattr(l, "owner", None)
-            return (rank.get(id(owner), 0) if owner is not None else 0,
-                    getattr(l, "hook_category", _CAT_CARD), i)
-
-        self._order = [l for _, l in
-                       sorted(enumerate(self._listeners), key=sort_key)]
-        self._order_key = key
-        self._phased = frozenset().union(
-            *(_phase_hooks(type(l)) for l in self._listeners)
-        ) if self._listeners else frozenset()
-        return self._order
+        merged: list[Any] = []
+        for i, listener in enumerate(order):
+            pending = insertions.pop(i, None)
+            if pending is not None:
+                merged.extend(pending)
+            merged.append(listener)
+        for i in sorted(insertions):
+            merged.extend(insertions[i])
+        return merged
 
     @property
     def combat_is_over(self) -> bool:
@@ -330,9 +571,13 @@ class HookSystem:
         Cached by `(hook, self._epoch)`: `register()`/`unregister()` are the
         ONLY two places anywhere in the codebase that add or remove a
         listener or change its liveness (grepped — no other file touches
-        `_listeners`/`_live` directly), and both already bump `_epoch`, so
-        the cache is exactly as fresh as `_ordered()`'s own order cache,
-        which uses the same signal. A listener's set of implemented hooks is
+        `_listeners`/`_live` directly), and both already bump `_epoch`.
+
+        This cache keys on listener-SET membership ONLY, which is why moving a
+        card from one pile to another does not thrash it: a pile move changes
+        the dispatch ORDER (`_ordered` re-derives it every call) but not the
+        set, so the answer to "does anybody implement this hook" is unchanged
+        and no rebuild is needed. A listener's set of implemented hooks is
         a property of its CLASS — ordinary Python methods, not per-instance
         dynamic attributes — matching the assumption `_phase_hooks` already
         makes (memoized per `type(l)`, never re-scanned for a still-registered
@@ -373,8 +618,8 @@ class HookSystem:
         instead of) `<hook>`.
 
         The passes only run for hooks some current listener actually phases —
-        `_phased` is recomputed with the order cache — so the common case stays
-        a single walk.
+        `_phased` is maintained by register/unregister — so the common case
+        stays a single walk.
 
         For a hook in `_COMBAT_GATED_HOOKS` this yields NOTHING once the combat
         is over — `Hook.IterateCombatHookListeners`' `if (IsOverOrEnding &&
@@ -385,17 +630,40 @@ class HookSystem:
         Also yields NOTHING, cheaply, when no CURRENTLY LIVE listener
         implements `hook` at all (`_has_listener_for`) — the fast path a
         dormant hook (creature_card_cmds/G8) needs on a hot dispatch site
-        like the per-card draw. Same generator-laziness note applies: this
-        check runs at first `next()`, not at `_each()`-call time, exactly
-        like the combat-over check above it.
+        like the per-card draw. This gate sits ABOVE the `_ordered()`
+        derivation on purpose: on the round-13 end_turn benchmark (25 combats ×
+        10 end_turns, 30-card deck) 2,100 of 13,275 `_each` calls got past it,
+        so 84% never build a list at all. The figure is workload-dependent —
+        it is quoted because it was measured, not as a constant.
+        Same generator-laziness note applies: it runs at first `next()`, not at
+        `_each()`-call time, exactly like the combat-over check above it.
+
+        THE PER-ITEM FILTER (CombatState.cs:482-488, arms at :549-599). C#
+        yields an item only `if (Contains(item))`, evaluated as the enumeration
+        REACHES it, so a listener that an earlier listener in the same dispatch
+        invalidated is skipped. Two legs:
+
+          * registration — `id(l) in self._live`, the sim's stand-in for a
+            model having left the structure the walk reads;
+          * state — `l.hook_contains()`, the per-type arms: a card, relic,
+            potion, affliction or enchantment needs
+            `!HasBeenRemovedFromState && Owner.IsActiveForHooks` (:589-597),
+            a monster needs `Creature.CombatState != null` (:585). The
+            PowerModel arm (:599) checks only owner state and never that the
+            power is still attached, which is why a power removed mid-dispatch
+            is still called (the recorded `on_enemy_side_end -> IntangiblePower`
+            hit is FAITHFUL, not a bug).
+
+        Both legs run AFTER the `getattr` miss test rather than before it. That
+        is observationally identical — C# calls the virtual no-op on a listener
+        that "does not implement" the hook, so filtering it in or out is
+        unobservable — and it keeps the checks off the ~90% of the inner loop
+        that is a miss.
         """
         if hook in _COMBAT_GATED_HOOKS and self.combat_is_over:
             return
         if not self._has_listener_for(hook):
             return
-        # `_phased` is refreshed as a side effect of `_ordered()`, so it has to
-        # be current before the branch below reads it.
-        self._ordered()
         live = self._live
         if hook in self._phased:
             for suffix in _PHASES:
@@ -407,18 +675,22 @@ class HookSystem:
                 # a later one. Binding it once meant the plain pass could not
                 # see what the VeryEarly pass had added.
                 for l in self._ordered():
-                    if id(l) not in live:
-                        continue
                     fn = getattr(l, name, None)
-                    if fn is not None:
-                        yield l, fn
+                    if fn is None or id(l) not in live:
+                        continue
+                    contains = getattr(l, "hook_contains", None)
+                    if contains is not None and not contains():
+                        continue
+                    yield l, fn
             return
         for l in self._ordered():
-            if id(l) not in live:
-                continue
             fn = getattr(l, hook, None)
-            if fn is not None:
-                yield l, fn
+            if fn is None or id(l) not in live:
+                continue
+            contains = getattr(l, "hook_contains", None)
+            if contains is not None and not contains():
+                continue
+            yield l, fn
 
     # ── Modifier hooks — damage ──────────────────────────────────────────
     # Pipeline: base + additive → × multiplicative → cap → block → modify_hp_lost → apply
@@ -851,12 +1123,29 @@ class HookSystem:
         return max(1, count)
 
     def modify_card_play_result_pile(self, card: Card, pile: str) -> str:
-        """Chain-modify where a played card ends up once its play resolves
-        (mirrors ModifyCardPlayResultPileTypeAndPosition). pile is "discard"
-        by default; a listener may return "draw_top" to put the card on top
-        of the draw pile instead (Nostalgia). Consulted only for cards that
-        would land in the discard pile (exhausted cards and Powers never
-        reach it)."""
+        """`Hook.ModifyCardPlayResultPileTypeAndPosition` — chain-modify where
+        a played card ends up once its play resolves.
+
+        Consulted ONCE per play, for EVERY card, at CardModel.cs:1890, with
+        `GetResultPileTypeForCardPlay()` (:2070-2082) evaluated as its
+        `defaultPileType` argument. So the seed is the card's real destination,
+        not a blanket "discard": `"none"` for a Power or a dupe (:2072-2074),
+        `"exhaust"` for `ExhaustOnNextPlay` or the Exhaust keyword (:2076-2080,
+        which also CONSUMES `ExhaustOnNextPlay` at :2078), else `"discard"`.
+        An earlier version of this docstring said the hook was "consulted only
+        for cards that would land in the discard pile (exhausted cards and
+        Powers never reach it)" — that was true of the sim's old call, which
+        passed the literal "discard" for everything, and it is what forced
+        ReboundPower to re-derive the Exhaust seed by hand. It is now false in
+        both halves.
+
+        Listeners see all three seeds and may return any of them:
+        `ReboundPower` (ReboundPower.cs:19-30) abstains unless the incoming
+        pile is Discard and otherwise returns `"draw_top"` — the sim's
+        spelling of `(PileType.Draw, CardPilePosition.Top)`; `CorruptionPower`
+        (CorruptionPower.cs:27-38) returns `"exhaust"` for any Skill,
+        unconditionally, with no abstention of any kind.
+        """
         for l, fn in self._each("modify_card_play_result_pile"):
             pile = fn(card, pile)
         return pile
@@ -1091,7 +1380,8 @@ class HookSystem:
 
     # ── Event hooks — card lifecycle ─────────────────────────────────────
 
-    def before_card_auto_played(self, card: Card, target: Creature | None = None) -> None:
+    def before_card_auto_played(self, card: Card, target: Creature | None = None,
+                                auto_play_type: str = "default") -> None:
         """`Hook.BeforeCardAutoPlayed` (CardCmd.cs:122, Hook.cs:155-162) --
         fires in `CardCmd.AutoPlay`, right before `card.OnPlayWrapper` (:130)
         -- i.e. strictly before the ordinary `BeforeCardPlayed` that wrapper
@@ -1099,13 +1389,17 @@ class HookSystem:
         `on_energy_spent(card, 0)` first (combat.py, `auto_play_card`); this
         lands between that and `before_card_played`.
 
-        C#'s signature also carries an `AutoPlayType` (Default/SlyDiscard);
-        the sim omits it because the only implementer that reads it,
-        `SkillSilent1Achievement.cs`, is an achievement (not gameplay
-        content) and is not ported -- creature_card_cmds/step46, dormant.
+        `auto_play_type` is C#'s `AutoPlayType` argument, carried as of round
+        13 (R5) now that a second value is reachable: `CardCmd.DiscardAndDraw`
+        auto-plays each collected Sly card with `AutoPlayType.SlyDiscard`
+        (CardCmd.cs:203) where every other caller takes the `Default`. It is
+        still DORMANT on content -- the only C# implementer that reads it,
+        `SkillSilent1Achievement.cs`, is an achievement and is unported
+        (creature_card_cmds/step46) -- but the argument exists so the Sly
+        machinery is not silently lossy.
         """
         for l, fn in self._each("before_card_auto_played"):
-            fn(card, target)
+            fn(card, target, auto_play_type)
 
     def before_card_played(self, card: Card, target: Creature | None = None) -> None:
         """Fires before a card's on_play() resolves (mirrors BeforeCardPlayed).
@@ -1186,10 +1480,20 @@ class HookSystem:
         applies itself) — untouched by this round's wiring, which is entirely
         combat-side.
 
-        One C# site remains unwired, outside this round's footprint: the
-        manual play (CardPileCmd.cs:683 — the sim's `combat.py` never models
-        the Play pile as a discrete move to dispatch from; a card goes
-        straight to its result pile). seam/creature_card_cmds guard G8.
+        The manual play (CardPileCmd.cs:683) was the last of the four
+        enumerated C# sites and is wired as of round 13 (R5), now that the
+        Play pile is a real list: `CombatState._add_to_play_pile` dispatches it
+        with the pile the card left (Hand for a manual play, None for a
+        pile-less auto-play) and a literal null `cloned_by`, AFTER the move —
+        `AddDuringManualCardPlay` moves at :669-670 and dispatches at :683.
+        The play's EXIT dispatches it again from `pile="play"`
+        (`_move_to_result_pile_after_play`, C#'s :1988 -> CardPileCmd.cs:635).
+        seam/creature_card_cmds guard G8.
+
+        NOT every sim entry to `CardPileCmd.Add` dispatches it: `ExhaustCmd.
+        exhaust` (C#'s `CardCmd.Exhaust` -> `Add(card, PileType.Exhaust)`,
+        CardCmd.cs:242) does not, uniformly at all ~30 of its call sites. That
+        is a residue of the Add site, not of the manual-play site.
         """
         for l, fn in self._each("after_card_changed_piles"):
             fn(card, pile, cloned_by)
@@ -1280,13 +1584,29 @@ class HookSystem:
         DIFFERENT hook fired at CardPileCmd.cs:917 after the pile is rebuilt. The
         substitution worked for a lone enchanted card and broke for two: which of
         two competing listeners lands its card on top is decided by DISPATCH
-        ORDER, and `_ordered()`'s key is registration index, so a mid-combat copy
-        always won. C# re-derives its listeners per dispatch from the piles
+        ORDER, and `_ordered()`'s key WAS registration index, so a mid-combat
+        copy always won. C# re-derives its listeners per dispatch from the piles
         (CombatState.cs:449-467, the enchantment added at :462-465), and at
         CardPileCmd.cs:877 the DISCARD pile still holds all of its cards (only
         drawPile entries are removed, :878-881) — so the card sitting LATER IN THE
-        DISCARD fires last and ends on top. Hence the per-hook ordering below,
-        which is the one place in the sim where a hook does not use `_each`.
+        DISCARD fires last and ends on top.
+
+        This method open-coded that pile derivation for itself, because
+        `_ordered()` could not express it. As of round 13 `_ordered()` IS the
+        per-dispatch pile derivation, so the hand-rolled sort is gone; what is
+        left is a plain `_ordered()` walk, which additionally puts powers,
+        relics and potions in their real slots where the hand-rolled key sorted
+        every non-card listener to the tail. The sim's only two implementers
+        are enchantments (`enchantments.py`), so today's outcome is unchanged.
+
+        It still does NOT go through `_each`, for one reason: the C# dispatcher
+        (Hook.cs:2006) walks `IterateCombatHookListeners`, whose gate is
+        `CombatManager.IsOverOrEnding`, and `_each`'s gate
+        (`HookSystem.combat_is_over`) is the narrower `phase == COMBAT_OVER`.
+        Routing this hook through `_each` would WEAKEN a gate that is already
+        exact here, so the explicit `is_over_or_ending` test stays. (That
+        narrowness is a general `combat_is_over` question, not this hook's —
+        recorded in the round-13 report.)
 
         `cards` is in the sim's own orientation (top at the END), so a listener
         that wants the top appends where C# inserts at 0.
@@ -1294,27 +1614,15 @@ class HookSystem:
         combat = getattr(self, "combat", None)
         if combat is not None and getattr(combat, "is_over_or_ending", False):
             return
-        # `AllPiles` order (PlayerCombatState.cs:70-79): Hand, Draw, Discard,
-        # Exhaust. A listener whose card is in none of them (the card currently
-        # mid-OnPlay, i.e. PileType.Play) sorts last, as it does in C#.
-        position: dict[int, int] = {}
-        for i, card in enumerate(player.all_cards):
-            position[id(card)] = i
-        last = len(position)
-
-        def pile_key(item):
-            i, listener = item
-            card = getattr(listener, "card", None)
-            if card is None:
-                card = listener if hasattr(listener, "id") else None
-            return (position.get(id(card), last), i)
-
-        listeners = [l for _, l in sorted(enumerate(self._listeners),
-                                          key=pile_key)]
-        for listener in listeners:
+        live = self._live
+        for listener in self._ordered():
             fn = getattr(listener, "modify_shuffle_order", None)
-            if fn is not None:
-                fn(player, cards, is_initial_shuffle)
+            if fn is None or id(listener) not in live:
+                continue
+            contains = getattr(listener, "hook_contains", None)
+            if contains is not None and not contains():
+                continue
+            fn(player, cards, is_initial_shuffle)
 
     def on_shuffle(self, player: PlayerCombatState) -> None:
         """Fires when the discard pile is shuffled back into the draw pile."""

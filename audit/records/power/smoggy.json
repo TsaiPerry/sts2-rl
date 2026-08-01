@@ -56,8 +56,8 @@
     },
     "AfterCardEnteredCombat": {
       "maps_to": "powers.py:1752-1758 SmoggyPower.on_card_entered_combat",
-      "verdict": "gap",
-      "issue": "Same pile-limbo shape as power/ringing's matching entry: the sim walks `getattr(self.owner, 'all_cards', ())`, and PlayerCombatState.all_cards (player.py:100-103) is hand + draw + discard + exhaust with NO Play pile, where C#'s PlayerCombatState.AllCards includes Play (PlayerCombatState.cs:70-80). Sharper here than for Ringing, because Smoggy's AfterCardPlayed sweep (powers.py:1748-1750) runs while the triggering Skill is itself mid-resolution: in C# that Skill is in the Play pile and IS afflicted with Smog, in the sim it is in neither all_cards nor the discard pile yet and is skipped -- so it can be replayed by an effect that returns it to hand, where the game would block it. PROMPT.md bug class 7. Reachable with any ported return-to-hand effect plus Living Fog. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "The structural gap is FIXED (all_cards now includes the Play pile, so a mid-play card is visible to the sweep exactly as C#'s AllCards has it). **BUT THIS ENTRY'S EVIDENCE NEVER HELD, and the record was wrong about the SIM, not merely stale:** on the tree it was written against, a non-Power card mid-play WAS already in all_cards (the old code parked it in the discard pile), so the described exposure was FALSE for every ordinary card. It was TRUE only for a POWER card mid-play, which HEAD put in no pile at all. The entry is also filed under AfterCardEnteredCombat while describing AfterCardPlayed. WHAT REASONING THIS REPLACES: the exposure claim itself, not just its currency.  The text it replaced read: Same pile-limbo shape as power/ringing's matching entry: the sim walks `getattr(self.owner, 'all_cards', ())`, and PlayerCombatState.all_cards (player.py:100-103) is hand + draw + discard + exhaust with NO Play pile, where C#'s PlayerCombatState.AllCards includes Play (PlayerCombatState.cs:70-80). Sharper here than for Ringing, because Smoggy's AfterCardPlayed sweep (powers.py:1748-1750) runs while the triggering Skill is itself mid-resolution: in C# that Skill is in the Play pile and IS afflicted with Smog, in the sim it is in neither all_cards nor the discard pile yet and is skipped -- so it can be replayed by an effect that returns it to hand, where the game would block it. PROMPT.md bug class 7. Reachable with any ported return-to-hand effect plus Living Fog. Third-file citations, not hashed here."
     },
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:1768-1776 on_player_turn_end clears Smog and resets the flag",
@@ -91,6 +91,6 @@
       "rationale": "powers.py:1760-1762 `not isinstance(card.affliction, SmogAffliction)`. Identical -- and note it does NOT consult the played-this-turn flag, because the Smog affliction only exists once a Skill has been played. Contrast Ringing, whose ShouldPlay must consult the turn state."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

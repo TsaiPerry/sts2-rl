@@ -531,14 +531,34 @@ def test_outmaneuver_energy_next_turn():
         assert combat.player.energy == combat.player.ENERGY_PER_TURN + 2
 
 
-def test_rebound_puts_card_on_top_of_draw():
+def test_rebound_does_not_redirect_its_own_play():
+    """Round-13 correction: this used to assert the opposite (Rebound
+    redirecting the card that applied it), which was never true in C#.
+    ReboundPower.ModifyCardPlayResultPileTypeAndPosition is decided at
+    CardModel.cs:1890, strictly BEFORE OnPlay (:1931) — the same statement
+    that calls `PowerCmd.Apply<ReboundPower>` (Rebound.cs:31). The power is
+    not yet a listener when its own card's destination is decided, so the
+    Rebound card itself lands in the discard pile like any other Attack."""
     combat = build_combat(["rebound", "strike", "strike", "strike", "strike"])
     reb = combat.player.hand.index(next(c for c in combat.player.hand if c.id == "rebound"))
     card = combat.player.hand[reb]
     combat.play_card(reb)
-    # Rebound redirects its own play from discard to the top of the draw pile.
-    assert combat.player.draw_pile and combat.player.draw_pile[-1] is card
-    assert card not in combat.player.discard_pile
+    assert card in combat.player.discard_pile
+    assert card not in combat.player.draw_pile
+    assert combat.player.powers["rebound"].amount == 1
+
+
+def test_rebound_puts_the_next_play_on_top_of_draw():
+    combat = build_combat(["rebound", "strike", "strike", "strike", "strike"])
+    reb = combat.player.hand.index(next(c for c in combat.player.hand if c.id == "rebound"))
+    combat.play_card(reb)
+    strike_idx = combat.player.hand.index(next(c for c in combat.player.hand if c.id == "strike"))
+    strike = combat.player.hand[strike_idx]
+    combat.player.energy = 10
+    combat.play_card(strike_idx)
+    assert combat.player.draw_pile and combat.player.draw_pile[-1] is strike
+    assert strike not in combat.player.discard_pile
+    assert "rebound" not in combat.player.powers
 
 
 def test_stack_block_equals_discard_count():

@@ -68,6 +68,32 @@ class Power:
     # PowerInstanceType above. Consulted by PowerCmd.apply (power_cmd/G5).
     instance_type = PowerInstanceType.NONE
 
+    def hook_contains(self) -> bool:
+        """`CombatState.Contains`' PowerModel arm (CombatState.cs:599):
+
+            powerModel.Owner.CombatState != null
+                && (powerModel.Owner.Player?.IsActiveForHooks ?? true)
+
+        Note what it does NOT test: that the power is still attached to its
+        owner. A power an earlier listener removed during the SAME dispatch is
+        still called -- which is why the recorded `on_enemy_side_end ->
+        IntangiblePower` probe hit was faithful rather than a bug.
+
+        `Owner.CombatState != null` is `not owner.combat_removal_committed`
+        for a monster -- the removal EVENT set at CreatureCmd.cs:529/:601, NOT
+        the eager `is_removed_from_combat` prediction, which goes true at the
+        HP write. The difference is load-bearing: C# nulls the back-pointer at
+        :523-531 and strips the powers at :533-537, both AFTER Hook.AfterDeath
+        (:519), so a power IS a listener for its own owner's death.
+        For the PLAYER the leg is always true inside a combat (players are NOT
+        removed on death -- Player.cs:107-110 says that is the whole reason
+        IsActiveForHooks exists), so the player leg is the flag alone.
+        """
+        owner = self.owner
+        if getattr(owner, "side", None) == "player":
+            return owner.is_active_for_hooks
+        return not getattr(owner, "combat_removal_committed", False)
+
     @classmethod
     def type_for_amount(cls, amount: int) -> PowerType:
         """PowerModel.GetTypeForAmount (PowerModel.cs:460-471).
@@ -353,18 +379,48 @@ class FeelNoPainPower(Power):
 
 
 class DarkEmbracePower(Power):
-    """Draw 1 card whenever a card is exhausted. Owner must be the player."""
+    """Draw `Amount` cards whenever a card is exhausted (DarkEmbracePower.cs
+    :37-49 — `CardPileCmd.Draw(base.Amount, ...)`, not a hard-coded 1).
+
+    An exhaust caused by the Ethereal keyword does not draw immediately: it
+    increments an internal counter instead, and `AfterSideTurnEnd`
+    (DarkEmbracePower.cs:52-60) draws `Amount * etherealCount` there, AFTER
+    the hand flush, so those cards are not swept away by it (the source
+    comment at :18-23 states this is deliberate — the STS1 equivalent queues
+    the draws; here it has to be a manual deferral). Owner must be the
+    player."""
 
     id = "dark_embrace"
     name = "Dark Embrace"
     power_type = PowerType.BUFF
 
+    def __init__(
+        self,
+        owner: Creature,
+        amount: int,
+        hooks: HookSystem,
+        applier: Creature | None = None,
+    ) -> None:
+        super().__init__(owner, amount, hooks, applier)
+        self._ethereal_count = 0
+
     def on_card_exhausted(self, card: Card,
                           caused_by_ethereal: bool = False) -> None:
         from .player import PlayerCombatState
-        if isinstance(self.owner, PlayerCombatState):
-            from .cmds import DrawCmd
-            DrawCmd.draw(self.owner, 1)
+        if not isinstance(self.owner, PlayerCombatState):
+            return
+        if caused_by_ethereal:
+            self._ethereal_count += 1
+            return
+        from .cmds import DrawCmd
+        DrawCmd.draw(self.owner, self.amount)
+
+    def after_player_turn_end(self, player: Creature) -> None:
+        if player is not self.owner or self._ethereal_count == 0:
+            return
+        from .cmds import DrawCmd
+        DrawCmd.draw(self.owner, self.amount * self._ethereal_count)
+        self._ethereal_count = 0
 
 
 class EnragePower(Power):
@@ -855,18 +911,32 @@ class CorruptionPower(Power):
             return 0
         return cost
 
-    def on_card_played(self, card: Card,
-                       is_auto_play: bool = False) -> None:
-        # ModifyCardPlayResultPileTypeAndPosition: played Skills go to the
-        # exhaust pile instead of the discard pile.
+    def modify_card_play_result_pile(self, card: Card, pile: str) -> str:
+        """CorruptionPower.cs:27-38 — the whole method:
+
+            if (card.Owner.Creature != base.Owner)   return (pileType, position);
+            if (card.Type != CardType.Skill)         return (pileType, position);
+            return (PileType.Exhaust, position);
+
+        Note what is NOT there: any pile-membership test, and any
+        `pileType != Discard` guard. Corruption OVERRIDES whatever the chain
+        handed it, so a Skill that Nostalgia or Rebound already sent to the
+        draw top still exhausts if Corruption runs later in the walk. The
+        owner test is a single-player tautology in the sim.
+
+        This used to be an `on_card_played` (Hook.AfterCardPlayed) handler
+        that moved the card out of the discard pile BY HAND, once per play
+        iteration, and fired `AfterCardExhausted` from inside the play loop.
+        Two things were wrong with that and only one of them was visible: the
+        timing (C# exhausts at the play's EXIT, CardModel.cs:1985, through
+        `CardCmd.Exhaust`), and the guard — `card in player.discard_pile` is
+        FALSE for every card once a resolving card lives in `play_pile`, so
+        Corruption would have stopped working entirely. Round 13, R5.
+        """
         from .cards import CardType
         if card.card_type != CardType.SKILL:
-            return
-        player = self.owner
-        if card in player.discard_pile:
-            player.discard_pile.remove(card)
-            player.exhaust_pile.append(card)
-            self.hooks.on_card_exhausted(card)
+            return pile
+        return "exhaust"
 
 
 class CrimsonMantlePower(Power):
@@ -3352,23 +3422,71 @@ class ReboundPower(Power):
     discard pile; removed at the end of the owner's turn (Rebound; mirrors
     ReboundPower.ModifyCardPlayResultPileTypeAndPosition + AfterSideTurnEnd).
 
-    Rebound applies this during its own resolution, so — matching the game's
-    ordering — the Rebound card itself is the first play redirected."""
+    The destination is decided from `modify_card_play_result_pile`
+    (ReboundPower.cs:19-30), the same chain hook NostalgiaPower uses,
+    dispatched at combat.py's `_resolve_card_play` BEFORE the play loop —
+    matching CardModel.cs:1890, which runs before OnPlay (:1931). Because of
+    that timing, Rebound does NOT redirect the very card that applied it:
+    the Rebound card's own OnPlay is what calls `PowerCmd.Apply<ReboundPower>`
+    (Rebound.cs:31), which happens strictly after this card's own pile
+    decision was already made — the power is not yet a listener when its own
+    play is decided. (An earlier version of this docstring claimed the
+    opposite; that was never true in C# and was corrected while fixing this
+    hook.)
+
+    C#'s dedicated `AfterModifyingCardPlayResultPileOrPosition` after-hook
+    (ReboundPower.cs:32-39 -> PowerCmd.Decrement) fires only for listeners
+    whose OWN call changed the pile (Hook.cs:1391-1405); the sim has no such
+    notification-list machinery (seam/power_cmd G4), so the tick is folded
+    into this call, gated on the SAME condition that call would need —
+    `pile == "discard"`, i.e. this listener is about to change the value.
+    That reproduces the per-listener "did I change it" coupling without the
+    extra machinery, and it reproduces C#'s ORDER-DEPENDENT stack alongside
+    C#'s ORDER-INDEPENDENT pile: with Corruption applied first the chain
+    hands Rebound `"exhaust"`, it abstains and keeps its stack; with Rebound
+    applied first it redirects, is credited, ticks — and Corruption then
+    overrides the pile to Exhaust anyway. Same final pile, different stack,
+    exactly as Hook.cs:1401-1404 dictates.
+
+    Rebound abstains — no redirect, no stack spent — on an Exhaust-keyword
+    card or a consumed ExhaustOnNextPlay, and it does so through C#'s ONE
+    guard, not a second test: `GetResultPileTypeForCardPlay`
+    (CardModel.cs:2070-2082) is evaluated as the `defaultPileType` argument
+    of `Hook.ModifyCardPlayResultPileTypeAndPosition` at :1890, so those
+    plays arrive here already seeded `"exhaust"` and `pile != "discard"`
+    catches them. Until round 13 (R5) `_resolve_card_play` passed the
+    literal "discard" for every card, which forced an explicit
+    `card.exhausts or card.exhaust_on_next_play` re-test here; that
+    workaround is deleted, and so is the older `card not in
+    player.discard_pile` Play-limbo test, which the real `play_pile` made
+    false for every card at hook time."""
 
     id = "rebound"
     name = "Rebound"
     power_type = PowerType.BUFF
 
-    def on_card_played(self, card: Card,
-                       is_auto_play: bool = False) -> None:
-        player = self.owner
-        # ModifyCardPlayResultPileTypeAndPosition only redirects Discard → Draw
-        # top (power cards leave combat, exhausted cards are already gone).
-        if card not in getattr(player, "discard_pile", ()):
-            return
-        player.discard_pile.remove(card)
-        player.draw_pile.append(card)  # list end = top of draw pile
+    def modify_card_play_result_pile(self, card: Card, pile: str) -> str:
+        # ReboundPower.cs:19-29, in full: the owner test (a single-player
+        # tautology here) and `if (pileType != PileType.Discard) return
+        # (pileType, position);`. Nothing else — no pile-membership test.
+        #
+        # TWO workarounds died with round 13's real Play pile (R5):
+        #
+        #  * `card not in player.discard_pile` was a Play-limbo artefact and is
+        #    now FALSE for every card at hook time, which would have silently
+        #    retired this power;
+        #  * the explicit `card.exhausts or card.exhaust_on_next_play` re-test
+        #    existed only because `_resolve_card_play` used to pass the literal
+        #    "discard" for every card. It now passes
+        #    `GetResultPileTypeForCardPlay`'s real answer (CardModel.cs:2070-
+        #    2082 -> :1890's `defaultPileType` argument), so an exhausting play
+        #    arrives here as "exhaust" and the one guard C# has covers it —
+        #    no redirect, no stack spent, which is the abstention
+        #    ReboundPower.cs:25-28 describes.
+        if pile != "discard":
+            return pile
         self._tick()
+        return "draw_top"
 
     def after_player_turn_end(self, player: Creature) -> None:
         if player is self.owner:
@@ -4258,9 +4376,14 @@ class EntropyPower(Power):
 class RetainHandPower(Power):
     """The owner's hand is not discarded at the end of the turn for N turns
     (Equilibrium / Salvo; mirrors RetainHandPower.ShouldFlush). The stack
-    ticks once per round — the game decrements at the player side's end,
-    after the flush decision; the sim's equivalent post-flush slot is the
-    enemy side's end."""
+    ticks once per round — RetainHandPower.cs:28-34's AfterSideTurnEnd is
+    the PLAYER side's Hook.AfterTurnEnd (CombatManager.cs:1307), fired from
+    `after_player_turn_end`, AFTER the flush decision and the flush itself.
+    NOT `on_enemy_side_end`: that slot is skipped entirely by an extra
+    player turn (`should_take_extra_turn` returns before
+    `_execute_enemy_turn` ever runs), where `after_player_turn_end` fires on
+    every end_turn, extra or not — matching the game, which decrements once
+    per player-side end regardless of whether the enemy side runs after it."""
 
     id = "retain_hand"
     name = "Retain Hand"
@@ -4269,8 +4392,9 @@ class RetainHandPower(Power):
     def should_flush_hand(self) -> bool:
         return False
 
-    def on_enemy_side_end(self) -> None:
-        self._tick()
+    def after_player_turn_end(self, player: Creature) -> None:
+        if player is self.owner:
+            self._tick()
 
 
 class FastenPower(Power):

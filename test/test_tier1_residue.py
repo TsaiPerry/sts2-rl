@@ -210,16 +210,23 @@ def test_free_attack_pile_guard_keeps_a_draw_pile_attack_costed():
     assert cs.hooks.modify_card_energy_cost(in_hand, in_hand.energy_cost) == 0
 
 
-def test_pile_type_of_reports_play_limbo_not_discard():
-    """`_playing_card` is the sim's PileType.Play, and the card is physically
-    in the discard list at the same time — membership order matters."""
+def test_pile_type_of_reports_play_for_a_card_mid_play():
+    """`CardModel.Pile?.Type` answers Play for a card being played.
+
+    RE-STAGED 2026-08-01 (round 13, R5). The old form asserted that the
+    ORDER of the membership tests mattered, because the sim put a resolving
+    card in `discard_pile` AND marked it `_playing_card`, so a card really was
+    in two piles at once. `play_pile` is a real list now
+    (creature_card_cmds N9/step82) and no card is ever in two piles, which is
+    the property this pin now states."""
     cs = _fa_combat(stacks=1)
     card = cs.player.hand[0]
     cs.player.hand.remove(card)
-    cs.player.discard_pile.append(card)
-    cs.player._playing_card = card
+    cs.player.play_pile.append(card)
     assert cs.player.pile_type_of(card) == "play"
-    cs.player._playing_card = None
+    assert card not in cs.player.discard_pile
+    cs.player.play_pile.remove(card)
+    cs.player.discard_pile.append(card)
     assert cs.player.pile_type_of(card) == "discard"
 
 

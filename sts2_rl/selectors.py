@@ -48,7 +48,44 @@ _X_COST_RANK = 99
 
 
 def _cost(card: Card) -> int:
-    return _X_COST_RANK if card.energy_cost_x else card.energy_cost
+    """Sort rank for a card's energy cost. -1 is a sentinel, not a price.
+
+    `Card.energy_cost` reads an unplayable card's canonical -1 back verbatim
+    (cards/base.py's `if self._energy_cost < 0: return self._energy_cost`,
+    mirroring `CardEnergyCost.GetWithModifiers`'s `if (_base < 0) return
+    num;` short-circuit at CardEnergyCost.cs:100-103 -- Wound.cs is
+    `base(-1, CardType.Status, ...)`). That -1 is a flag meaning "cannot be
+    played", immune to every cost modifier; reading it as a NUMBER made an
+    unplayable card rank cheaper than a genuinely free 0-cost card. Clamped
+    to 0 so it TIES instead (round 12 gave unplayable cards -1; round 13 R11
+    item 3, clamp kept shared across all three consumers in the fix pass).
+
+    THREE consumers read this (round 13 R11 fix pass re-enumerated them; the
+    round-13 first pass named only the first two):
+
+    * `"upgrade"` (:121, negated) -- INERT. Its leading sort key is
+      `not is_upgradable`, and none of the 29 unplayable cards is upgradable
+      (pinned: test_selectors.py::test_no_unplayable_card_is_upgradable), so
+      `_cost` only ever decides between two upgradable cards, whose costs
+      are all >= 0. An all-unplayable screen is a total tie under both the
+      old and the new body, so the offered-order tiebreak decides either way.
+    * `"to_draw_top"` (:125) -- the LIVE delta this clamp exists for. Both
+      call sites read a real pile that holds junk (Thinking Ahead reads the
+      hand, colorless_skills.py:845; Headbutt reads the discard pile,
+      headbutt.py:43).
+    * `"choose_a_card"` / `"choose_a_card_optional"` (:146) -- a real but
+      currently UNREACHABLE delta. `_is_junk` is STATUS|CURSE only, so the
+      three QUEST unplayables (Lantern Key, Byrdonis Egg, Spoils Map) sort
+      past the junk key and reach `_cost`; post-clamp they tie a free
+      playable instead of out-ranking it. Every live call site generates its
+      candidates from a pool (Toolbox and the generator potions from
+      COLORLESS_POOL / `combat.card_pool`, Choice's Paradox from
+      `combat.card_pool`) and no unplayable card is in any pool, so nothing
+      can offer one today. Both facts are pinned in test_selectors.py
+      (`test_choose_a_card_clamp_reaches_the_quest_unplayables_too`,
+      `test_choose_a_card_screens_cannot_offer_an_unplayable_card_today`).
+    """
+    return _X_COST_RANK if card.energy_cost_x else max(0, card.energy_cost)
 
 
 def _is_junk(card: Card) -> bool:

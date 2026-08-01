@@ -45,6 +45,7 @@ from .rewards import (
     CombatRewards,
     PotionRewardOdds,
     RewardExtra,
+    apply_reward_modifiers,
     generate_combat_rewards,
 )
 
@@ -264,6 +265,12 @@ class RunState:
         # generate_combat_rewards drains it. First entry type: Thieving Hopper's
         # returned card.
         self.pending_reward_extras: list["RewardExtra"] = []
+        # R10: `TreasureRoom.DoExtraRewardsIfNeeded`'s otherwise-empty,
+        # Room=Treasure reward set (TreasureRoom.cs:75-97) — stashed by
+        # enter_point's TREASURE branch only when a hook actually added
+        # something to it, and drained by the driver's TREASURE room
+        # resolution. None the rest of the time (the common case today).
+        self.pending_treasure_extra_rewards: "CombatRewards | None" = None
         # ── Run / act sequencing (populated by start_run) ────────────────
         # The full act list, rolled once at run start (ActModel.GetRandomList);
         # empty until start_run is called (single-act tests use start_act).
@@ -450,6 +457,12 @@ class RunState:
         time, each firing `Hook.BeforeCardRemoved` BEFORE it is unlinked."""
         for card in cards:
             self.before_card_removed(card)
+            # CardPileCmd.cs:79 — the third C# site that sets
+            # CardModel.HasBeenRemovedFromState (CardModel.cs:948), completing
+            # the flag the Card arm of CombatState.Contains reads
+            # (CombatState.cs:593). Dormant: a card removed from the deck is
+            # never registered as a listener in a later combat.
+            card.has_been_removed_from_state = True
             self.deck.remove(card)
 
     def before_card_removed(self, card: Card) -> None:
@@ -490,6 +503,7 @@ class RunState:
         purpose: str,
         candidates: list[Card],
         count: int = 1,
+        min_select: int | None = None,
     ) -> list[Card]:
         """Out-of-combat card selection (mirrors CardSelectCmd.FromDeck*).
 
@@ -497,6 +511,39 @@ class RunState:
         "enchant") so a selector policy can distinguish contexts. Delegates to
         self.card_selector when installed; otherwise picks uniformly at
         random with the run RNG.
+
+        `min_select` is CardSelectorPrefs.MinSelect (CardSelectorPrefs.cs:25),
+        ported up from the in-combat twin (CombatState.select_cards,
+        combat.py) which already models it. Defaults to `None`, preserving
+        today's behaviour for every existing caller: `count` is both the
+        maximum AND (via the fallback below) the exact number returned.
+
+        Deliberately NOT threaded into the `self.card_selector(purpose,
+        candidates, count)` call: that 3-argument shape is a public contract
+        dozens of hand-rolled test callables and `RunDriver._card_selector`
+        already implement, and changing its arity would break every one of
+        them. Whether an installed selector may decline (return fewer than
+        `count`) is expressed the same way the in-combat side and the sim's
+        two prior instances of this exact mechanism (relic/gambling_chip G3,
+        relics/claws.py's "transform_optional") already express it: a
+        purpose string registered in `driver.SKIPPABLE_PURPOSES`, not a
+        value threaded through the call. Kifuda uses "enchant_optional" for
+        this reason (relics/kifuda.py) — see that file and
+        driver.SKIPPABLE_PURPOSES for the citation.
+
+        `min_select` DOES change the SELECTORLESS fallback below (no
+        `card_selector` installed at all — a bare RunState, e.g. a unit test
+        or a headless smoke run): C# has no such path (CardSelectCmd always
+        shows a UI screen, consults an installed `Selector`, or waits on the
+        network — never silently completes on its own), so like combat.py's
+        equivalent fallback this is a sim-only headless completion, not a
+        game behaviour to match byte-for-byte. It mirrors combat.py's shape:
+        a uniform random count in [min_select, count] rather than always
+        `count`, so "confirm fewer" stays possible even with no policy
+        attached (derived from `CardSelectCmd.cs:576`'s shortcut and the
+        `Selector.GetSelectedCards(list, MinSelect, MaxSelect)` call at
+        `:582` — the closest C# analogue to "let something else decide how
+        many, within the range").
         """
         if count <= 0 or not candidates:
             return []
@@ -504,6 +551,11 @@ class RunState:
         if self.card_selector is not None:
             chosen = list(self.card_selector(purpose, list(candidates), count))[:count]
             return [c for c in chosen if c in candidates]
+        floor = count if min_select is None else min(min_select, len(candidates))
+        if floor < count:
+            count = self.rng.randint(floor, count)
+        if count <= 0:
+            return []
         return self.rng.sample(candidates, count)
 
     def select_option(self, purpose: str, count: int) -> int:
@@ -531,7 +583,18 @@ class RunState:
         about Driftwood's reroll and Pael's Wing's sacrifice. With no offerer
         attached (bare RunState, unit tests) it falls back to the same
         pick-one-per-group loop through `select_cards`.
+
+        Offer-time backstop (R10): dispatches `apply_reward_modifiers` before
+        doing anything else, mirroring `Offer()`'s own repeat call to
+        `GenerateWithoutOffering` (RewardsSet.cs:159). Every real caller
+        already dispatched at its construction site, so this is normally a
+        harmless repeat (`CombatRewards.generated` guards it) — but it is what
+        makes the selectorless fallback loop below safe for a set nobody
+        generated yet, and it covers `self.rewards_offerer` being unset
+        (bare RunState) the same way `driver._offer_rewards` covers the
+        installed-driver case.
         """
+        apply_reward_modifiers(self, rewards)
         offerer = getattr(self, "rewards_offerer", None)
         if offerer is not None:
             offerer(rewards)
@@ -1318,6 +1381,27 @@ class RunState:
                 self.gain_gold(treasure_gold)
                 resolution.gold = treasure_gold
             resolution.gold += self._complete_map_point_quests(point)
+            # `TreasureRoom.DoExtraRewardsIfNeeded` (TreasureRoom.cs:75-97),
+            # called UNCONDITIONALLY after `DoNormalRewards` — even when
+            # Hook.ShouldGenerateTreasure suppressed the chest above.
+            # `RewardsCmd.GenerateForRoomEnd` -> `WithRewardsFromRoom(this)`
+            # -> `GenerateWithoutOffering` fires `Hook.ModifyRewards`
+            # (RewardsSet.cs:136) over an EMPTY base reward list
+            # (`GenerateRewardsFor` returns [] for a TreasureRoom,
+            # RewardsSet.cs:213-219 — it only throws for a room that is
+            # neither CombatRoom nor TreasureRoom) with `Room` set to this
+            # TreasureRoom — a dispatch the chest's own direct gold+relic
+            # grant above never goes through. No ported relic is
+            # Room==Treasure-sensitive today (every TryModifyRewards[Late]
+            # implementer is gated to Monster/Elite/Boss, or only touches
+            # EXISTING card_rewards groups, which stay empty here), so this
+            # stays a no-op in practice — stashed for the driver to offer
+            # only when a future one actually adds something.
+            treasure_rewards = CombatRewards(
+                room_type=RoomType.MONSTER, room=RoomType.TREASURE)
+            apply_reward_modifiers(self, treasure_rewards)
+            if not treasure_rewards.is_empty:
+                self.pending_treasure_extra_rewards = treasure_rewards
         elif room_type == RoomType.SHOP:
             from .shop import MerchantInventory
 
@@ -1414,8 +1498,6 @@ class RunState:
         # reroll reaches a rest-site card choice. `rewards.room` stays None
         # here, which is what keeps the room-gated relics out (a custom set
         # never sets RewardsSet.Room).
-        from .rewards import apply_reward_modifiers
-
         apply_reward_modifiers(self, rewards)
         return rewards
 

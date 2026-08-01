@@ -99,8 +99,12 @@ class TestBeforeCardAutoPlayed:
             def on_energy_spent(self, card, amount):
                 order.append("on_energy_spent")
 
-            def before_card_auto_played(self, card, target=None):
-                order.append("before_card_auto_played")
+            def before_card_auto_played(self, card, target=None,
+                                        auto_play_type="default"):
+                # `auto_play_type` is C#'s AutoPlayType (CardCmd.cs:122),
+                # carried by the dispatcher as of round 13 R5 so the Sly tail
+                # can pass SlyDiscard (:203).
+                order.append(f"before_card_auto_played:{auto_play_type}")
 
             def before_card_played(self, card, target=None):
                 order.append("before_card_played")
@@ -111,7 +115,8 @@ class TestBeforeCardAutoPlayed:
         cs.player.hand.append(card)
         cs.auto_play_card(card)
         assert order == [
-            "on_energy_spent", "before_card_auto_played", "before_card_played",
+            "on_energy_spent", "before_card_auto_played:default",
+            "before_card_played",
         ]
 
 

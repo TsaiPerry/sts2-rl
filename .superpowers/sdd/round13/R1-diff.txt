@@ -1,0 +1,1946 @@
+﻿diff --git a/sts2_rl/afflictions.py b/sts2_rl/afflictions.py
+index 1cc0d19..8fa8b56 100644
+--- a/sts2_rl/afflictions.py
++++ b/sts2_rl/afflictions.py
+@@ -10,6 +10,8 @@ from __future__ import annotations
+ 
+ from typing import TYPE_CHECKING
+ 
++from .hooks import CAT_CARD
++
+ if TYPE_CHECKING:
+     from .cards import Card
+ 
+@@ -28,10 +30,41 @@ class Affliction:
+     #: Only Galvanized and Tainted override it True in the game source.
+     is_stackable: bool = False
+ 
++    # `CombatState.IterateHookListeners` adds `cardModel.Affliction` to the
++    # listener list immediately after its card and before that card's
++    # Enchantment (CombatState.cs:458-461), and `AfflictionModel.cs:146`
++    # declares `ShouldReceiveCombatHooks => true`. So an affliction shares its
++    # card's slot; `HookSystem._ordered` emits it from the pile walk, and this
++    # is the fallback hint for one whose card is in no pile.
++    #
++    # DORMANT on today's content, both ends: none of the seven sim Affliction
++    # subclasses below defines any HookSystem hook, and of the ten C# files
++    # under src/Core/Models/Afflictions exactly one overrides an AbstractModel
++    # hook (Hexed.cs, AfterCardEnteredCombat) and Hexed is a data-only stub
++    # here. The machinery exists so that porting Hexed is a content change and
++    # not an engine change (hook_dispatch/G6).
++    hook_category = CAT_CARD
++    # Rides on a card rather than sitting in a pile itself; see Enchantment.
++    hook_is_card_rider = True
++
+     def __init__(self, amount: int) -> None:
+         self.amount = amount
+         self.card: Card | None = None
+ 
++    def hook_contains(self) -> bool:
++        """`CombatState.Contains`' AfflictionModel arm (CombatState.cs:591):
++        `HasCard && !Card.HasBeenRemovedFromState && Card.Owner.IsActiveForHooks`.
++
++        `HasCard` is `_card != null` (AfflictionModel.cs:90). C# guarantees it
++        goes false the moment the affliction is cleared —
++        `CardModel.ClearAfflictionInternal` (CardModel.cs:1532-1540) calls
++        `AfflictionModel.ClearInternal` (:249-254), which nulls `_card`, before
++        nulling the card's own `Affliction`. `CardCmd.clear_affliction` mirrors
++        both halves for exactly this reason.
++        """
++        card = self.card
++        return card is not None and card.hook_contains()
++
+     def __repr__(self) -> str:
+         return f"{self.name}({self.amount})"
+ 
+diff --git a/sts2_rl/cards/base.py b/sts2_rl/cards/base.py
+index 1b5a6a0..01d0405 100644
+--- a/sts2_rl/cards/base.py
++++ b/sts2_rl/cards/base.py
+@@ -133,8 +133,15 @@ class Card(ABC):
+     rarity: CardRarity
+     # Last in its owner's slice of the dispatch walk: C# walks the cards of
+     # AllPiles after powers, relics, potions and orbs
+-    # (CombatState.IterateHookListeners, CombatState.cs:449-467).
++    # (CombatState.IterateHookListeners, CombatState.cs:449-467). Only a
++    # fallback slot hint now — `HookSystem._ordered` derives a card's position
++    # from the pile that holds it, and reads this only for a card the walk
++    # cannot reach (one sitting in no pile at all).
+     hook_category = CAT_CARD
++    # `CardModel.HasBeenRemovedFromState` (CardModel.cs:948), set by
++    # `RemoveFromState` (:1605-1608) and cleared on clone (:1228). The owner
++    # leg of `CombatState.Contains`' CardModel arm (CombatState.cs:593).
++    has_been_removed_from_state: bool = False
+     target_type: TargetType = TargetType.ANY_ENEMY
+     is_playable: bool = True
+     is_ethereal: bool = False
+@@ -240,6 +247,24 @@ class Card(ABC):
+         self.combat = None
+         self._init_vars()
+ 
++    def hook_contains(self) -> bool:
++        """`CombatState.Contains`' CardModel arm (CombatState.cs:593):
++        `!cardModel.HasBeenRemovedFromState && cardModel.Owner.IsActiveForHooks`.
++
++        Consulted per item as the dispatch enumeration REACHES this card
++        (:482-488), not once when the list is built — so a card another
++        listener removed from state earlier in the SAME dispatch is skipped.
++        A card with no combat (a run-deck card, a preview clone) has no owner
++        to ask and passes, which is the zero-listener default anyway.
++        """
++        if self.has_been_removed_from_state:
++            return False
++        combat = self.combat
++        if combat is None:
++            return True
++        player = getattr(combat, "player", None)
++        return player is None or player.is_active_for_hooks
++
+     def _init_vars(self) -> None:
+         pass
+ 
+diff --git a/sts2_rl/cmds.py b/sts2_rl/cmds.py
+index 41e09ab..c1ec513 100644
+--- a/sts2_rl/cmds.py
++++ b/sts2_rl/cmds.py
+@@ -161,6 +161,26 @@ def _resolve_death(hooks: HookSystem, target: Creature) -> None:
+         )
+         hooks.on_death(target, False)
+         _strip_powers_after_death(hooks, target)
++        # CreatureCmd.cs:546-553 — the player-only tail of the real-death arm,
++        # after Hook.AfterDeath (:519) and after the power strip (:533-537):
++        # `player.DeactivateHooks()` (Player.cs:857-860). From here the
++        # player's relics, potions, orbs and cards stop being listeners, both
++        # structurally (CombatState.cs:424-427) and through the owner leg of
++        # every `Contains` arm (:589-597). C# also drops the player's POWERS
++        # here — they are added to the list at :416, before the structural
++        # skip, but the PowerModel arm of Contains (:599) tests
++        # `Owner.Player?.IsActiveForHooks ?? true` and this owner IS a player.
++        # The sim cannot honour that leg from inside this footprint (`Power`
++        # has no `hook_contains`; the exact one-line diff is in the round-13
++        # R1 report), and it is moot in practice: the strip above has already
++        # removed every power that does not override
++        # `should_power_be_removed_after_owner_death`.
++        #
++        # Only reached when the death is real: the prevented arm below leaves
++        # the flag alone, which is the whole reason the flag exists rather
++        # than reading `is_dead`.
++        if getattr(target, "side", None) == "player":
++            target.is_active_for_hooks = False
+     else:
+         # CreatureCmd.cs:565-570. The creature stays at 0 HP: `AfterDeath`
+         # fires with wasRemovalPrevented=True, then the preventer is notified
+@@ -501,9 +521,23 @@ class CreatureCmd:
+         if (combat is not None and getattr(combat, "is_over", False)
+                 and target.side != "player"):
+             return 0
++        was_dead = target.is_dead
+         healed = min(amount, target.max_hp - target.hp)
+         if healed > 0:
+             target.hp += healed
++        # `Creature.HealInternal` (Creature.cs:477-485): a heal that takes a
++        # DEAD creature back above zero calls `Player?.ActivateHooks()`
++        # (Player.cs:868-871), putting the player's relics, potions and cards
++        # back in the listener walk. Without this the revive
++        # `ReviveBeforeCombatEnd` performs (Player.cs:821-827) would be
++        # pointless -- its whole documented purpose (:816-819) is that "if the
++        # player is still dead during HookBus.AfterCombatEnd, their relics will
++        # not be subscribed to the HookBus, and relics which rely on
++        # AfterCombatEnd to reset state will not be reset for the next combat".
++        # `_resolve_death` is what cleared the flag; this is its one reversal.
++        if was_dead and not target.is_dead and getattr(
++                target, "side", None) == "player":
++            target.is_active_for_hooks = True
+         # CreatureCmd.cs:751-754 -- Hook.AfterCurrentHpChanged fires whenever
+         # the REQUESTED amount is positive, carrying that RAW amount -- NOT
+         # the clamped `healed` -- and fires even when healed is 0 (already at
+@@ -1204,6 +1238,16 @@ class CardCmd:
+         if card.affliction is None:
+             new_affliction.card = card
+             card.affliction = new_affliction
++            # `CombatState.IterateHookListeners` adds `cardModel.Affliction`
++            # to the listener list right after its card (CombatState.cs:
++            # 458-461) and `AfflictionModel.cs:146` declares
++            # `ShouldReceiveCombatHooks => true`, so an affliction is a hook
++            # listener for as long as it is attached (hook_dispatch/G6). The
++            # walk in `HookSystem._ordered` finds it through the card, so this
++            # only has to put it in the membership set; the position comes
++            # from the card's pile.
++            if hooks is not None:
++                hooks.register(new_affliction)
+             return new_affliction
+         if isinstance(card.affliction, affliction_cls):
+             card.affliction.amount += amount
+@@ -1212,8 +1256,31 @@ class CardCmd:
+ 
+     @staticmethod
+     def clear_affliction(card: Card) -> None:
+-        """Remove a card's affliction if it has one (mirrors ClearAffliction)."""
++        """Remove a card's affliction if it has one.
++
++        `CardModel.ClearAfflictionInternal` (CardModel.cs:1532-1540) does TWO
++        things, and the sim only did the second: it calls
++        `AfflictionModel.ClearInternal` (:249-254), which nulls the
++        affliction's own `_card` back-reference, and THEN nulls the card's
++        `Affliction`. The sim left a cleared affliction still pointing at the
++        card it no longer afflicts, which `AfflictionModel.HasCard`
++        (AfflictionModel.cs:90) — the first leg of `CombatState.Contains`'
++        affliction arm (CombatState.cs:591) — reads. With the affliction now a
++        real listener (hook_dispatch/G6) that stale back-reference would be a
++        cleared affliction that still passed `Contains`, so both halves are
++        mirrored here, plus the unregistration the sim's registry needs.
++        """
++        affliction = card.affliction
++        if affliction is None:
++            return
++        affliction.card = None
+         card.affliction = None
++        hooks = getattr(card.combat, "hooks", None)
++        if hooks is not None:
++            try:
++                hooks.unregister(affliction)
++            except ValueError:
++                pass
+ 
+     @staticmethod
+     def transform_to_random(
+@@ -1351,6 +1418,14 @@ class CardPileCmd:
+         """
+         card.combat = hooks.combat
+         hooks.register(card)
++        if card.affliction is not None and card.affliction not in hooks._listeners:
++            # CombatState.cs:458-461 — the card's Affliction joins the walk
++            # right after it. A card can arrive already afflicted: `create_clone`
++            # (cards/base.py) rebuilds the source's affliction on the copy
++            # (CardModel.cs:1204-1215's `AfflictInternal`) without going through
++            # `CardCmd.afflict`, which is where the registration otherwise
++            # happens. hook_dispatch/G6.
++            hooks.register(card.affliction)
+         if card.enchantment is not None:
+             card.enchantment.combat = hooks.combat
+             if card.enchantment not in hooks._listeners:
+diff --git a/sts2_rl/combat.py b/sts2_rl/combat.py
+index 5ce76cf..64b2ab0 100644
+--- a/sts2_rl/combat.py
++++ b/sts2_rl/combat.py
+@@ -198,6 +198,15 @@ class CombatState:
+             card.reset_combat_state()
+             card.combat = self
+             self.hooks.register(card)
++            # An affliction listens alongside its card too — C# adds it to the
++            # walk between the card and the card's enchantment
++            # (CombatState.cs:458-461), and AfflictionModel.cs:146 declares
++            # ShouldReceiveCombatHooks. A deck card can arrive already
++            # afflicted: `CardCmd.afflict` is the same command in and out of
++            # combat and deliberately allows the out-of-combat case (see its
++            # asymmetric IsEnding guard). hook_dispatch/G6.
++            if card.affliction is not None:
++                self.hooks.register(card.affliction)
+             # Enchantments listen alongside their card (the game clones the
+             # canonical enchantment into each combat with a fresh status).
+             if card.enchantment is not None:
+@@ -758,6 +767,16 @@ class CombatState:
+         # reset state will not be reset for the next combat."
+         if self.player.is_dead:
+             self.player.hp = 1
++            # The revive is `CreatureCmd.Heal(Creature, 1)` (Player.cs:823-826),
++            # and `Creature.HealInternal` (Creature.cs:477-485) calls
++            # `Player?.ActivateHooks()` when the heal takes a dead creature back
++            # above zero. That is the entire POINT of doing the revive here
++            # rather than after the hooks — Player.cs:816-819 spells it out: a
++            # still-dead player's relics "will not be subscribed to the HookBus,
++            # and relics which rely on AfterCombatEnd to reset state will not be
++            # reset for the next combat". Chosen Cheese and every future
++            # AfterCombatEnd relic reads through this flag now.
++            self.player.is_active_for_hooks = True
+         self.hooks.on_combat_end()
+         self.hooks.on_combat_victory()
+ 
+@@ -999,6 +1018,33 @@ class CombatState:
+         # later reshuffles include it normally again.
+         self.player._playing_card = None
+ 
++        # A played Power card's result pile is `PileType.None`
++        # (`GetResultPileTypeForCardPlay`, CardModel.cs:2070-2075), which
++        # CardModel.cs:1979-1982 resolves to `CardPileCmd.RemoveFromCombat` —
++        # the card leaves every combat pile, so it drops out of
++        # `AllPiles` and stops being a hook listener (CombatState.cs:449-467).
++        # The sim never returned it to a pile either, but left it registered
++        # for the rest of the combat, so it kept receiving hooks the game
++        # stopped sending it. DORMANT on today's content — no Power card
++        # implements a hook (the six hook-implementing card classes are
++        # Attack/Skill/Curse) — but it is also what keeps `_ordered()` on its
++        # fast path after the first Power card of a combat is played.
++        if card.card_type == CardType.POWER:
++            try:
++                self.hooks.unregister(card)
++            except ValueError:
++                pass
++            if card.enchantment is not None:
++                try:
++                    self.hooks.unregister(card.enchantment)
++                except ValueError:
++                    pass
++            if card.affliction is not None:
++                try:
++                    self.hooks.unregister(card.affliction)
++                except ValueError:
++                    pass
++
+         # Exhaust keyword (or a consumed ExhaustOnNextPlay): move the played
+         # card from discard to exhaust.
+         if exhausts_this_play and card in self.player.discard_pile:
+diff --git a/sts2_rl/enchantments.py b/sts2_rl/enchantments.py
+index a5a3b1e..664110d 100644
+--- a/sts2_rl/enchantments.py
++++ b/sts2_rl/enchantments.py
+@@ -41,9 +41,26 @@ class Enchantment:
+ 
+     id: str
+     name: str
+-    # The game reaches an enchantment through the card that owns it, so it
+-    # shares the card slot; registration order keeps it right after its card.
++    # The game reaches an enchantment through the card that owns it
++    # (CombatState.cs:462-465 adds it immediately after the card), so it shares
++    # the card slot. `HookSystem._ordered` emits it right after its own card as
++    # part of the pile walk; this is only the fallback slot hint for an
++    # enchantment whose card is in no pile.
+     hook_category = CAT_CARD
++    # Rides on a card rather than sitting in a pile itself: `HookSystem` counts
++    # these so it can splice the four piles in wholesale when there are none.
++    hook_is_card_rider = True
++
++    def hook_contains(self) -> bool:
++        """`CombatState.Contains`' EnchantmentModel arm (CombatState.cs:589):
++        `HasCard && !Card.HasBeenRemovedFromState && Card.Owner.IsActiveForHooks`.
++
++        `HasCard` is `_card != null` (EnchantmentModel.cs:154) — an enchantment
++        detached from its card is not a listener even while it is still
++        registered.
++        """
++        card = self.card
++        return card is not None and card.hook_contains()
+ 
+     # Hook.ModifyDamage / Hook.ModifyBlock apply the SOURCE CARD's enchantment
+     # to the running amount before either listener loop (Hook.cs:1487-1499,
+diff --git a/sts2_rl/hooks.py b/sts2_rl/hooks.py
+index 4dad58c..c14cdd7 100644
+--- a/sts2_rl/hooks.py
++++ b/sts2_rl/hooks.py
+@@ -22,14 +22,26 @@ if TYPE_CHECKING:
+ 
+ 
+ # Where each listener kind falls in one creature's walk, mirroring
+-# CombatState.IterateHookListeners (CombatState.cs:413-467). Listener classes
+-# declare their slot as a `hook_category` class attribute; the sim has no orbs,
+-# and CombatHistory is a sim-only listener that sits ahead of the walk.
++# CombatState.IterateHookListeners (CombatState.cs:413-467): per creature,
++# Powers (:416) -> MonsterModel (:417-421) or, for a player, Relics (:428-435)
++# -> PotionSlots (:436-443) -> Orbs (:448) -> the cards of AllPiles (:449-467).
++# CombatHistory is a sim-only listener (note N3) that sits ahead of the walk.
++#
++# These are no longer the DISPATCH rule -- `_ordered()` derives the walk from
++# the live combat state, which is what CombatState.IterateHookListeners does.
++# They survive as the slot hint for a listener the derivation cannot reach
++# (an orphaned power instance, a card in no pile, a synthetic test listener):
++# `_merge_extras` seats such a listener at the end of its (creature, category)
++# group instead of dropping it. The numbering has GAPS from the pre-round-13
++# values because the monster and orb slots were missing from it entirely; only
++# the relative order is ever read.
+ CAT_HISTORY = -1
+ CAT_POWER = 0
+-CAT_RELIC = 1
+-CAT_POTION = 2
+-CAT_CARD = 3
++CAT_MONSTER = 1
++CAT_RELIC = 2
++CAT_POTION = 3
++CAT_ORB = 4                   # reserved: the sim has no orbs (note N7)
++CAT_CARD = 5
+ _CAT_CARD = CAT_CARD          # default for a listener that declares nothing
+ 
+ # The complete listener passes Hook.cs runs, in order. "" is the plain hook.
+@@ -195,14 +207,29 @@ class HookSystem:
+         # Back-reference to the owning CombatState; set by CombatState.__init__.
+         # Lets powers reach combat-level state (e.g. Infested spawning Wrigglers).
+         self.combat: Any = None
+-        # Derived-order cache; see _ordered(). `_epoch` counts membership
+-        # changes, so the key changes whenever the list or the enemy order does.
++        # `_epoch` counts membership changes (register/unregister). It is the
++        # invalidation signal for the PRESENCE cache only -- the dispatch ORDER
++        # is re-derived per dispatch now, because a pile move changes the order
++        # without changing membership and there is no pile-mutation choke point
++        # to hang a dirty flag on (67 direct pile-list mutation sites across 15
++        # files). See _ordered().
+         self._epoch = 0
+-        self._order_key: Any = None
+-        self._order: list[Any] = []
+         # Base hook names for which some current listener declares a phase
+-        # variant; see _each().
++        # variant; see _each(). Maintained INCREMENTALLY by register/unregister:
++        # recomputing this union per order rebuild was the dominant cost of a
++        # naive rebuild-per-dispatch (round 13 measurement).
+         self._phased: frozenset[str] = frozenset()
++        # How many registered listeners ride on a card rather than sitting in a
++        # pile themselves (afflictions and enchantments; `hook_is_card_rider`).
++        # Zero lets `_derive` splice the four piles in with list.extend instead
++        # of walking card by card -- a ~9x difference on the derivation, and
++        # the common case (no enchanted, no afflicted card in the combat).
++        self._riders = 0
++        # How many registered listeners declare no derivable `hook_category`
++        # at all (synthetic listeners in tests, anything a future caller
++        # registers by hand). Non-zero forces `_ordered` down the merge path,
++        # which seats them by category instead of dropping them.
++        self._undeclared = 0
+         # Per-hook "does any live listener implement this" cache, keyed by
+         # hook name to (epoch, bool); see _has_listener_for(). A dormant hook
+         # (creature_card_cmds/G8's after_card_changed_piles/
+@@ -223,6 +250,11 @@ class HookSystem:
+         self._listeners.append(listener)
+         self._live.add(id(listener))
+         self._epoch += 1
++        self._phased |= _phase_hooks(type(listener))
++        if getattr(listener, "hook_is_card_rider", False):
++            self._riders += 1
++        if getattr(listener, "hook_category", None) is None:
++            self._undeclared += 1
+ 
+     def unregister(self, listener: Any) -> None:
+         self._listeners.remove(listener)
+@@ -231,54 +263,254 @@ class HookSystem:
+         if not any(l is listener for l in self._listeners):
+             self._live.discard(id(listener))
+         self._epoch += 1
++        # `_phased` is a union, so removing one member cannot be done
++        # incrementally -- recompute. unregister() is orders of magnitude
++        # rarer than dispatch (a power expiring, a potion leaving the belt),
++        # and `_phase_hooks` is memoised per class, so this is a union of
++        # ~35 interned frozensets rather than a dir() scan.
++        self._phased = frozenset().union(
++            *(_phase_hooks(type(l)) for l in self._listeners)
++        ) if self._listeners else frozenset()
++        if getattr(listener, "hook_is_card_rider", False):
++            self._riders -= 1
++        if getattr(listener, "hook_category", None) is None:
++            self._undeclared -= 1
+ 
+     # ── Dispatch order and phases ────────────────────────────────────────
+ 
+     def _ordered(self) -> list[Any]:
+-        """The listener list in the game's dispatch order.
+-
+-        `CombatState.IterateHookListeners` (CombatState.cs:410-493) builds no
+-        list: it re-derives the listeners per dispatch from the creatures
+-        themselves, allies before enemies, and within a player walks Powers
+-        (416) -> Relics (428-435) -> PotionSlots (436-443) -> Orbs (448) ->
+-        the cards of AllPiles (449-467). `self._listeners` is registration
+-        order, which is close to the mirror image of that — relics are appended
+-        at combat setup and a power joins only when applied, so relics always
+-        ran first where the game runs powers first.
+-
+-        This sorts registration order into the derived one. The sort is stable,
+-        so listeners tied on (creature, category) keep the order they
+-        registered in — which is what keeps an enchantment immediately after
+-        its own card. `CombatHistory` is a sim-only listener with no C#
+-        counterpart (note N3) and stays first, ahead of the creature walk, so
+-        an entry exists by the time anything reacts to it.
+-
+-        Re-deriving per dispatch would be the literal port; instead the result
+-        is cached and invalidated whenever the listener list or the enemy order
+-        changes, which are the only two inputs.
++        """The listener list in the game's dispatch order, DERIVED from the
++        live combat state on every call.
++
++        `CombatState.IterateHookListeners` (CombatState.cs:410-493) keeps no
++        registry: it builds a fresh list per dispatch out of the creatures
++        themselves — allies then enemies as one index space (:413-415) and,
++        per creature, `creature.Powers` (:416) then either the MonsterModel
++        (:417-421) or, for a player that passes `IsActiveForHooks` (:424-427),
++        Relics skipping IsMelted (:428-435), PotionSlots in SLOT order skipping
++        nulls (:436-443), Orbs (:448) and finally every card of `AllPiles` =
++        Hand, Draw, Discard, Exhaust, Play (PlayerCombatState.cs:70-80), each
++        card followed by its Affliction and then its Enchantment (:449-467).
++        So the order is a function of CURRENT pile membership and slot
++        occupancy, not of registration history: a card that changes pile
++        changes its dispatch position (gap G1), and a potion procured into
++        slot 0 dispatches ahead of one sitting in slot 1 that arrived earlier
++        (the slot half of gap G2).
++
++        The sim's `_listeners` stays the MEMBERSHIP authority (it is what
++        `register`/`unregister` maintain and what the presence cache keys on);
++        this method supplies the ORDER. Everything the derivation reaches is
++        emitted in the game's slot; anything registered that it cannot reach —
++        an orphaned power instance the sim's `powers` dict no longer indexes
++        (power_cmd/G5), a card sitting in no pile, a synthetic listener a test
++        registered by hand — is seated at the end of its (creature, category)
++        group by `_merge_extras` rather than dropped, since dropping would
++        silently retire a listener the sim dispatches to today.
++
++        `CombatHistory` is a sim-only listener with no C# counterpart (note
++        N3) and stays first, ahead of the creature walk, so an entry exists by
++        the time anything reacts to it.
++
++        There is no order cache: a pile move changes the order without
++        changing membership, and the sim has no pile-mutation choke point to
++        invalidate on. The cost is paid only behind `_each`'s presence gate.
+         """
++        order = self._derive()
++        if self._undeclared or len(order) != len(self._listeners):
++            return self._merge_extras()
++        return order
++
++    def _derive(self, groups: list | None = None,
++                excluded: set | None = None) -> list[Any]:
++        """One `CombatState.IterateHookListeners` list build (CombatState.cs:
++        412-481), minus the lazy `Contains` filter — `_each` applies that per
++        item, which is where C# applies it too (:482-488).
++
++        `groups`, when given, collects `((rank, category), end_index)` for
++        every slot of the walk in walk order, so `_merge_extras` knows where a
++        listener the walk could not reach belongs.
++
++        `excluded`, when given, collects the `id()` of every listener the walk
++        REFUSED on purpose — a melted relic (:431) and everything past an
++        inactive player's powers (:424-427). `_merge_extras` must not put those
++        back: "the walk did not reach it" and "the walk decided against it" are
++        different facts and only the first one is a sim-side shortfall.
++        """
++        combat = self.combat
++        if combat is None:
++            # A bare HookSystem (run-level walks, previews, unit tests): there
++            # is no combat to derive from, so registration order is all there is.
++            return list(self._listeners)
++        out: list[Any] = []
++        add = out.append
++        extend = out.extend
++        mark = None if groups is None else groups.append
++
++        # Sim-only prefix (note N3), ahead of the creature walk.
++        history = getattr(combat, "history", None)
++        if history is not None:
++            add(history)
++        if mark is not None:
++            mark(((0, CAT_HISTORY), len(out)))
++
++        player = getattr(combat, "player", None)
++        enemies = getattr(combat, "enemies", None) or ()
++        # CombatState.cs:413-415 — `_allies` then `_enemies` as one index
++        # space. The sim has exactly one ally, the player.
++        creatures = [player] if player is not None else []
++        creatures.extend(enemies)
++        for rank, creature in enumerate(creatures):
++            # :416 `list.AddRange(creature.Powers)` — BEFORE the player-active
++            # check at :424, so a dead player's powers are still added to the
++            # list and are dropped (if at all) only by the lazy PowerModel arm
++            # of Contains (:599).
++            extend(creature.powers.values())
++            if mark is not None:
++                mark(((rank, CAT_POWER), len(out)))
++            if creature is not player:
++                # :417-421 `creature.Player == null -> list.Add(creature.Monster)`.
++                # The sim's Monster IS its own MonsterModel (gap G5).
++                add(creature)
++                if mark is not None:
++                    mark(((rank, CAT_MONSTER), len(out)))
++                continue
++            if mark is not None:
++                mark(((rank, CAT_MONSTER), len(out)))   # empty for a player
++            # :424-427 — an inactive player contributes nothing past its powers.
++            if player.is_active_for_hooks:
++                # :428-435 relics, skipping IsMelted (:431). The sim removes a
++                # melted relic from the run outright (see `Relic.is_tradable`),
++                # so `combat.relics` does not hold one today and this loop is
++                # a straight copy; the flag is declared on Relic so the skip is
++                # expressible and so a wax port has it to set.
++                for relic in getattr(combat, "relics", ()):
++                    if relic.is_melted:
++                        if excluded is not None:
++                            excluded.add(id(relic))
++                        continue
++                    add(relic)
++                if mark is not None:
++                    mark(((rank, CAT_RELIC), len(out)))
++                # :436-443 — PotionSlots in SLOT order, skipping null slots.
++                for potion in player.potions:
++                    if potion is not None:
++                        add(potion)
++                if mark is not None:
++                    mark(((rank, CAT_POTION), len(out)))
++                # :448 OrbQueue.Orbs — the sim has no orbs (note N7).
++                if mark is not None:
++                    mark(((rank, CAT_ORB), len(out)))
++                # :449-467 — AllPiles, and per card the card, its Affliction,
++                # then its Enchantment. The sim has no fifth pile list: a card
++                # mid-OnPlay is parked in the discard and flagged
++                # `_playing_card`, so the Play leg is derived from that flag.
++                playing = player._playing_card
++                if self._riders == 0 and playing is None:
++                    # No affliction or enchantment is registered and nothing is
++                    # in Play limbo, so the four piles splice straight in.
++                    extend(player.hand)
++                    extend(player.draw_pile)
++                    extend(player.discard_pile)
++                    extend(player.exhaust_pile)
++                else:
++                    for pile in (player.hand, player.draw_pile,
++                                 player.discard_pile, player.exhaust_pile):
++                        for card in pile:
++                            if card is playing:
++                                continue      # it is in PileType.Play, below
++                            add(card)
++                            affliction = card.affliction
++                            if affliction is not None:
++                                add(affliction)
++                            enchantment = card.enchantment
++                            if enchantment is not None:
++                                add(enchantment)
++                    if playing is not None:
++                        add(playing)
++                        affliction = playing.affliction
++                        if affliction is not None:
++                            add(affliction)
++                        enchantment = playing.enchantment
++                        if enchantment is not None:
++                            add(enchantment)
++            else:
++                if mark is not None:
++                    mark(((rank, CAT_RELIC), len(out)))
++                    mark(((rank, CAT_POTION), len(out)))
++                    mark(((rank, CAT_ORB), len(out)))
++                if excluded is not None:
++                    # Everything :424-427 skips, named so `_merge_extras` does
++                    # not undo the skip.
++                    for relic in getattr(combat, "relics", ()):
++                        excluded.add(id(relic))
++                    for potion in player.potions:
++                        if potion is not None:
++                            excluded.add(id(potion))
++                    for pile in (player.hand, player.draw_pile,
++                                 player.discard_pile, player.exhaust_pile):
++                        for card in pile:
++                            excluded.add(id(card))
++                            if card.affliction is not None:
++                                excluded.add(id(card.affliction))
++                            if card.enchantment is not None:
++                                excluded.add(id(card.enchantment))
++            if mark is not None:
++                mark(((rank, CAT_CARD), len(out)))
++        return out
++
++    def _merge_extras(self) -> list[Any]:
++        """`_derive`'s walk plus every registered listener it could not reach,
++        each seated at the end of its (creature, category) group.
++
++        C# has no such case — a model that is in no list is not a listener at
++        all — but the sim's registry can outlive the structure the walk reads:
++        a second application of an Instanced power leaves the replaced
++        instance registered while the `powers` dict indexes only the new one
++        (power_cmd/G5, where C#'s `Creature.Powers` is a LIST that holds
++        both), a card can sit in no pile, and tests register bare objects.
++        Dropping those would retire listeners the sim dispatches to today, so
++        they are merged in instead. Cost is irrelevant: `_ordered` only comes
++        here when the fast walk did not account for every registered listener.
++        """
++        groups: list = []
++        excluded: set = set()
++        order = self._derive(groups, excluded)
++        seen = {id(l) for l in order}
++        extras = [l for l in self._listeners
++                  if id(l) not in seen and id(l) not in excluded]
++        if not extras:
++            return order
++
+         enemies = getattr(self.combat, "enemies", None) or ()
+-        key = (self._epoch, tuple(id(e) for e in enemies))
+-        if key == self._order_key:
+-            return self._order
+-
+-        # Ally side first (the sim has exactly one ally, the player), then the
+-        # enemies in combat-list order.
+-        rank = {id(e): i + 1 for i, e in enumerate(enemies)}
+-
+-        def sort_key(item):
+-            i, l = item
+-            owner = getattr(l, "owner", None)
+-            return (rank.get(id(owner), 0) if owner is not None else 0,
+-                    getattr(l, "hook_category", _CAT_CARD), i)
+-
+-        self._order = [l for _, l in
+-                       sorted(enumerate(self._listeners), key=sort_key)]
+-        self._order_key = key
+-        self._phased = frozenset().union(
+-            *(_phase_hooks(type(l)) for l in self._listeners)
+-        ) if self._listeners else frozenset()
+-        return self._order
++        rank_of = {id(e): i + 1 for i, e in enumerate(enemies)}
++        ends = dict(groups)
++        insertions: dict[int, list] = {}
++        for listener in extras:
++            rank = rank_of.get(id(listener))
++            if rank is None:
++                owner = getattr(listener, "owner", None)
++                rank = rank_of.get(id(owner), 0) if owner is not None else 0
++            slot = (rank, getattr(listener, "hook_category", _CAT_CARD))
++            at = ends.get(slot)
++            if at is None:
++                # A category no group of this walk declares (a synthetic
++                # listener's `hook_category = 99`, or an enemy-owned card):
++                # the last group that sorts at or before it, else the tail.
++                at = len(order)
++                for group_slot, end in groups:
++                    if group_slot <= slot:
++                        at = end
++            insertions.setdefault(at, []).append(listener)
++
++        merged: list[Any] = []
++        for i, listener in enumerate(order):
++            pending = insertions.pop(i, None)
++            if pending is not None:
++                merged.extend(pending)
++            merged.append(listener)
++        for i in sorted(insertions):
++            merged.extend(insertions[i])
++        return merged
+ 
+     @property
+     def combat_is_over(self) -> bool:
+@@ -330,9 +562,13 @@ class HookSystem:
+         Cached by `(hook, self._epoch)`: `register()`/`unregister()` are the
+         ONLY two places anywhere in the codebase that add or remove a
+         listener or change its liveness (grepped — no other file touches
+-        `_listeners`/`_live` directly), and both already bump `_epoch`, so
+-        the cache is exactly as fresh as `_ordered()`'s own order cache,
+-        which uses the same signal. A listener's set of implemented hooks is
++        `_listeners`/`_live` directly), and both already bump `_epoch`.
++
++        This cache keys on listener-SET membership ONLY, which is why moving a
++        card from one pile to another does not thrash it: a pile move changes
++        the dispatch ORDER (`_ordered` re-derives it every call) but not the
++        set, so the answer to "does anybody implement this hook" is unchanged
++        and no rebuild is needed. A listener's set of implemented hooks is
+         a property of its CLASS — ordinary Python methods, not per-instance
+         dynamic attributes — matching the assumption `_phase_hooks` already
+         makes (memoized per `type(l)`, never re-scanned for a still-registered
+@@ -373,8 +609,8 @@ class HookSystem:
+         instead of) `<hook>`.
+ 
+         The passes only run for hooks some current listener actually phases —
+-        `_phased` is recomputed with the order cache — so the common case stays
+-        a single walk.
++        `_phased` is maintained by register/unregister — so the common case
++        stays a single walk.
+ 
+         For a hook in `_COMBAT_GATED_HOOKS` this yields NOTHING once the combat
+         is over — `Hook.IterateCombatHookListeners`' `if (IsOverOrEnding &&
+@@ -385,17 +621,37 @@ class HookSystem:
+         Also yields NOTHING, cheaply, when no CURRENTLY LIVE listener
+         implements `hook` at all (`_has_listener_for`) — the fast path a
+         dormant hook (creature_card_cmds/G8) needs on a hot dispatch site
+-        like the per-card draw. Same generator-laziness note applies: this
+-        check runs at first `next()`, not at `_each()`-call time, exactly
+-        like the combat-over check above it.
++        like the per-card draw. This gate sits ABOVE the `_ordered()`
++        derivation on purpose: 92% of `_each` calls never build a list at all.
++        Same generator-laziness note applies: it runs at first `next()`, not at
++        `_each()`-call time, exactly like the combat-over check above it.
++
++        THE PER-ITEM FILTER (CombatState.cs:482-488, arms at :549-599). C#
++        yields an item only `if (Contains(item))`, evaluated as the enumeration
++        REACHES it, so a listener that an earlier listener in the same dispatch
++        invalidated is skipped. Two legs:
++
++          * registration — `id(l) in self._live`, the sim's stand-in for a
++            model having left the structure the walk reads;
++          * state — `l.hook_contains()`, the per-type arms: a card, relic,
++            potion, affliction or enchantment needs
++            `!HasBeenRemovedFromState && Owner.IsActiveForHooks` (:589-597),
++            a monster needs `Creature.CombatState != null` (:585). The
++            PowerModel arm (:599) checks only owner state and never that the
++            power is still attached, which is why a power removed mid-dispatch
++            is still called (the recorded `on_enemy_side_end -> IntangiblePower`
++            hit is FAITHFUL, not a bug).
++
++        Both legs run AFTER the `getattr` miss test rather than before it. That
++        is observationally identical — C# calls the virtual no-op on a listener
++        that "does not implement" the hook, so filtering it in or out is
++        unobservable — and it keeps the checks off the ~90% of the inner loop
++        that is a miss.
+         """
+         if hook in _COMBAT_GATED_HOOKS and self.combat_is_over:
+             return
+         if not self._has_listener_for(hook):
+             return
+-        # `_phased` is refreshed as a side effect of `_ordered()`, so it has to
+-        # be current before the branch below reads it.
+-        self._ordered()
+         live = self._live
+         if hook in self._phased:
+             for suffix in _PHASES:
+@@ -407,18 +663,22 @@ class HookSystem:
+                 # a later one. Binding it once meant the plain pass could not
+                 # see what the VeryEarly pass had added.
+                 for l in self._ordered():
+-                    if id(l) not in live:
+-                        continue
+                     fn = getattr(l, name, None)
+-                    if fn is not None:
+-                        yield l, fn
++                    if fn is None or id(l) not in live:
++                        continue
++                    contains = getattr(l, "hook_contains", None)
++                    if contains is not None and not contains():
++                        continue
++                    yield l, fn
+             return
+         for l in self._ordered():
+-            if id(l) not in live:
+-                continue
+             fn = getattr(l, hook, None)
+-            if fn is not None:
+-                yield l, fn
++            if fn is None or id(l) not in live:
++                continue
++            contains = getattr(l, "hook_contains", None)
++            if contains is not None and not contains():
++                continue
++            yield l, fn
+ 
+     # ── Modifier hooks — damage ──────────────────────────────────────────
+     # Pipeline: base + additive → × multiplicative → cap → block → modify_hp_lost → apply
+@@ -1280,13 +1540,29 @@ class HookSystem:
+         DIFFERENT hook fired at CardPileCmd.cs:917 after the pile is rebuilt. The
+         substitution worked for a lone enchanted card and broke for two: which of
+         two competing listeners lands its card on top is decided by DISPATCH
+-        ORDER, and `_ordered()`'s key is registration index, so a mid-combat copy
+-        always won. C# re-derives its listeners per dispatch from the piles
++        ORDER, and `_ordered()`'s key WAS registration index, so a mid-combat
++        copy always won. C# re-derives its listeners per dispatch from the piles
+         (CombatState.cs:449-467, the enchantment added at :462-465), and at
+         CardPileCmd.cs:877 the DISCARD pile still holds all of its cards (only
+         drawPile entries are removed, :878-881) — so the card sitting LATER IN THE
+-        DISCARD fires last and ends on top. Hence the per-hook ordering below,
+-        which is the one place in the sim where a hook does not use `_each`.
++        DISCARD fires last and ends on top.
++
++        This method open-coded that pile derivation for itself, because
++        `_ordered()` could not express it. As of round 13 `_ordered()` IS the
++        per-dispatch pile derivation, so the hand-rolled sort is gone; what is
++        left is a plain `_ordered()` walk, which additionally puts powers,
++        relics and potions in their real slots where the hand-rolled key sorted
++        every non-card listener to the tail. The sim's only two implementers
++        are enchantments (`enchantments.py`), so today's outcome is unchanged.
++
++        It still does NOT go through `_each`, for one reason: the C# dispatcher
++        (Hook.cs:2006) walks `IterateCombatHookListeners`, whose gate is
++        `CombatManager.IsOverOrEnding`, and `_each`'s gate
++        (`HookSystem.combat_is_over`) is the narrower `phase == COMBAT_OVER`.
++        Routing this hook through `_each` would WEAKEN a gate that is already
++        exact here, so the explicit `is_over_or_ending` test stays. (That
++        narrowness is a general `combat_is_over` question, not this hook's —
++        recorded in the round-13 report.)
+ 
+         `cards` is in the sim's own orientation (top at the END), so a listener
+         that wants the top appends where C# inserts at 0.
+@@ -1294,27 +1570,15 @@ class HookSystem:
+         combat = getattr(self, "combat", None)
+         if combat is not None and getattr(combat, "is_over_or_ending", False):
+             return
+-        # `AllPiles` order (PlayerCombatState.cs:70-79): Hand, Draw, Discard,
+-        # Exhaust. A listener whose card is in none of them (the card currently
+-        # mid-OnPlay, i.e. PileType.Play) sorts last, as it does in C#.
+-        position: dict[int, int] = {}
+-        for i, card in enumerate(player.all_cards):
+-            position[id(card)] = i
+-        last = len(position)
+-
+-        def pile_key(item):
+-            i, listener = item
+-            card = getattr(listener, "card", None)
+-            if card is None:
+-                card = listener if hasattr(listener, "id") else None
+-            return (position.get(id(card), last), i)
+-
+-        listeners = [l for _, l in sorted(enumerate(self._listeners),
+-                                          key=pile_key)]
+-        for listener in listeners:
++        live = self._live
++        for listener in self._ordered():
+             fn = getattr(listener, "modify_shuffle_order", None)
+-            if fn is not None:
+-                fn(player, cards, is_initial_shuffle)
++            if fn is None or id(listener) not in live:
++                continue
++            contains = getattr(listener, "hook_contains", None)
++            if contains is not None and not contains():
++                continue
++            fn(player, cards, is_initial_shuffle)
+ 
+     def on_shuffle(self, player: PlayerCombatState) -> None:
+         """Fires when the discard pile is shuffled back into the draw pile."""
+diff --git a/sts2_rl/monsters/base.py b/sts2_rl/monsters/base.py
+index dd8e9cf..33b24f9 100644
+--- a/sts2_rl/monsters/base.py
++++ b/sts2_rl/monsters/base.py
+@@ -6,6 +6,7 @@ from enum import Enum
+ from typing import TYPE_CHECKING
+ 
+ from ..creatures import Creature
++from ..hooks import CAT_MONSTER
+ 
+ if TYPE_CHECKING:
+     from ..combat import CombatCtx
+@@ -95,6 +96,31 @@ class Monster(Creature):
+     min_hp: int = 0
+     max_hp: int = 0
+ 
++    # `CombatState.IterateHookListeners` adds `creature.Monster` to the listener
++    # list for every creature with no Player, immediately after that creature's
++    # Powers (CombatState.cs:417-421), and `MonsterModel.cs:51` declares
++    # `ShouldReceiveCombatHooks => true`. The sim's Monster IS its own
++    # MonsterModel, so the Monster object is the listener and `__init__`
++    # registers it (hook_dispatch/G5). Twelve C# monster models override an
++    # AbstractModel hook; before this the sim had no listener category to hang
++    # one on and the two ported cases (Aeonglass, Queen) each carried a
++    # private stand-in listener registered in the Powers+1 slot.
++    hook_category = CAT_MONSTER
++
++    def hook_contains(self) -> bool:
++        """`CombatState.Contains`' MonsterModel arm (CombatState.cs:585):
++        `monsterModel.Creature.CombatState != null` — the ONLY leg; a monster
++        listener is not tested against HasBeenRemovedFromState or an owner
++        flag. `Creature.is_removed_from_combat` is the sim's stand-in for the
++        nulled back-pointer (the sim never physically drops a creature from
++        `combat.enemies`; see `Creature.is_removed_from_combat`).
++
++        Note what this does NOT exclude: a creature that is DEAD but retained
++        in the combat (a death-vetoed corpse, a withered Decimillipede segment)
++        still passes, exactly as in C#.
++        """
++        return not self.is_removed_from_combat
++
+     def adjust_hp_after_added(self, teammates: "list[Monster]") -> None:
+         """MonsterModel.AfterAddedToRoom's HP fix-up, applied AFTER the parity
+         Niche roll has set this creature's max HP (CombatState.CreateCreature
+@@ -141,6 +167,20 @@ class Monster(Creature):
+         # replacement while Poison is still resolving in AfterSideTurnStart,
+         # before the move loop's own snapshot is taken).
+         self.spawned_this_turn = True
++        # The MonsterModel joins the hook walk (CombatState.cs:420). Registered
++        # at construction because that is where the sim's Monster becomes real:
++        # both creature-addition paths (the encounter's `create_monsters` and
++        # `CreatureCmd.add`) build the object and put it in `combat.enemies` in
++        # the same step, so there is no window in which a constructed monster is
++        # not in the combat. `_ordered()` places it from `combat.enemies`, so
++        # registration ORDER here is immaterial — only membership is.
++        #
++        # `hooks` is None for a monster built outside any combat (the
++        # state-machine construction tests do exactly that); such a creature is
++        # in no `CombatState.Enemies` either, so C# has no listener for it and
++        # there is nothing here to register it with.
++        if hooks is not None:
++            hooks.register(self)
+ 
+     @property
+     def has_rolled_a_move(self) -> bool:
+diff --git a/sts2_rl/monsters/glory/aeonglass.py b/sts2_rl/monsters/glory/aeonglass.py
+index d614f0b..893d794 100644
+--- a/sts2_rl/monsters/glory/aeonglass.py
++++ b/sts2_rl/monsters/glory/aeonglass.py
+@@ -3,7 +3,6 @@ from __future__ import annotations
+ import random
+ from typing import TYPE_CHECKING
+ 
+-from ...hooks import CAT_POWER
+ from ..base import Encounter, Intent, MoveType
+ from ..state_machine import MachineMonster, MonsterMoveStateMachine, MoveState
+ 
+@@ -22,33 +21,6 @@ _WITHERING_PRESENCE = 6
+ _ARTIFACT = 3
+ 
+ 
+-class _AeonglassWitherListener:
+-    """Stand-in for Aeonglass.AfterCardGeneratedForCombat (Aeonglass.cs:
+-    150-166). Same slot problem as Queen's `_AmalgamDeathListener`
+-    (hook_dispatch G5, no MonsterModel listener category): registers in the
+-    Powers+1 dispatch slot on Aeonglass's behalf.
+-
+-    For EVERY card generated for combat, from ANY source, that is a Wither,
+-    fake-upgrade it `WitherUpgradeCount` times (`MatchWitherToUpgradeCount`,
+-    Aeonglass.cs:160-166) -- registered once for the boss's whole combat
+-    lifetime, so it catches both the boss's own Increasing Intensity Wither
+-    (`_intensity` below) and WitheringPresencePower's punish Wither
+-    (powers.py) without either site open-coding the upgrade itself."""
+-
+-    hook_category = CAT_POWER + 1
+-
+-    def __init__(self, aeonglass: "Aeonglass") -> None:
+-        self.aeonglass = aeonglass
+-        self.owner = aeonglass  # dispatch-order slot: the Aeonglass's own creature
+-
+-    def on_card_generated_for_combat(self, card: "Card", creator=None) -> None:
+-        from ...cards import WitherCard
+-        if not isinstance(card, WitherCard):
+-            return
+-        for _ in range(self.aeonglass.wither_upgrade_count):
+-            card.fake_upgrade()
+-
+-
+ class Aeonglass(MachineMonster):
+     """Ebb (26 + 33 block) → Eye Lasers (11×2) → Increasing Intensity (add a
+     Wither and fake-upgrade every existing Wither, then gain escalating
+@@ -68,7 +40,28 @@ class Aeonglass(MachineMonster):
+         from ...powers import ArtifactPower, WitheringPresencePower
+         PowerCmd.apply(hooks, self, WitheringPresencePower, _WITHERING_PRESENCE)
+         PowerCmd.apply(hooks, self, ArtifactPower, _ARTIFACT)
+-        hooks.register(_AeonglassWitherListener(self))
++
++    def on_card_generated_for_combat(self, card: "Card", creator=None) -> None:
++        """`Aeonglass.AfterCardGeneratedForCombat` (Aeonglass.cs:150-166).
++
++        For EVERY card generated for combat, from ANY source, that is a Wither,
++        fake-upgrade it `WitherUpgradeCount` times
++        (`MatchWitherToUpgradeCount`, Aeonglass.cs:160-166). It listens for the
++        boss's whole combat lifetime, so it catches both the boss's own
++        Increasing Intensity Wither (`_intensity` below) and
++        WitheringPresencePower's punish Wither (powers.py) without either site
++        open-coding the upgrade itself.
++
++        This lived on a private `_AeonglassWitherListener` registered in a
++        hand-made Powers+1 slot until hook_dispatch/G5 gave the sim a real
++        MonsterModel listener category; the method is unchanged, it is just on
++        the monster the C# override is on.
++        """
++        from ...cards import WitherCard
++        if not isinstance(card, WitherCard):
++            return
++        for _ in range(self.wither_upgrade_count):
++            card.fake_upgrade()
+ 
+     def build_machine(self) -> MonsterMoveStateMachine:
+         ebb = MoveState(
+@@ -110,11 +103,11 @@ class Aeonglass(MachineMonster):
+         self.wither_upgrade_count += 1
+         for _ in range(_WITHER_AMOUNT):
+             wither = WitherCard()
+-            # Fake-upgraded by `_AeonglassWitherListener.
+-            # on_card_generated_for_combat` (registered in __init__), fired
+-            # from `add_to_discard`'s new AfterCardGeneratedForCombat
+-            # dispatch -- not open-coded here (Aeonglass.cs:150-166 routes
+-            # through the same hook for a Wither from ANY source).
++            # Fake-upgraded by this monster's own
++            # `on_card_generated_for_combat`, fired from `add_to_discard`'s
++            # AfterCardGeneratedForCombat dispatch -- not open-coded here
++            # (Aeonglass.cs:150-166 routes through the same hook for a Wither
++            # from ANY source).
+             CardPileCmd.add_to_discard(ctx.hooks, ctx.player, wither)
+         PowerCmd.apply(
+             ctx.hooks, self, StrengthPower,
+diff --git a/sts2_rl/monsters/glory/queen.py b/sts2_rl/monsters/glory/queen.py
+index 3122ef0..9d6bf2e 100644
+--- a/sts2_rl/monsters/glory/queen.py
++++ b/sts2_rl/monsters/glory/queen.py
+@@ -3,7 +3,6 @@ from __future__ import annotations
+ import random
+ from typing import TYPE_CHECKING
+ 
+-from ...hooks import CAT_POWER
+ from ..base import Encounter, Intent, Monster, MoveType
+ from ..state_machine import (
+     ConditionalBranchState,
+@@ -87,26 +86,6 @@ class TorchHeadAmalgam(MachineMonster):
+         self._execute_attack(ctx, _BEAM_DMG, _BEAM_HITS)
+ 
+ 
+-class _AmalgamDeathListener:
+-    """Stand-in for Queen.AfterDeath (Queen.cs:221-234).
+-
+-    CombatState.IterateHookListeners (CombatState.cs:413-420) adds a monster's
+-    MonsterModel to the listener walk right after that creature's Powers, but
+-    the sim has no MonsterModel listener category at all (hook_dispatch G5), so
+-    the Queen registers this listener in that slot instead."""
+-
+-    hook_category = CAT_POWER + 1
+-
+-    def __init__(self, queen: Queen) -> None:
+-        self.queen = queen
+-        self.owner = queen  # dispatch-order slot: the Queen's own creature
+-
+-    def on_death(self, creature: Creature,
+-                 was_removal_prevented: bool = False) -> None:
+-        if isinstance(creature, TorchHeadAmalgam) and not self.queen.is_dead:
+-            self.queen.on_amalgam_died()
+-
+-
+ class Queen(MachineMonster):
+     """Puppet Strings (Chains of Binding 3) → You Are Mine (Frail/Weak/
+     Vulnerable 99) → while the Torch Head Amalgam lives, Burn Bright For Me
+@@ -120,9 +99,16 @@ class Queen(MachineMonster):
+     min_hp = 400
+     max_hp = 400
+ 
+-    def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
+-        super().__init__(hooks, rng or random.Random())
+-        hooks.register(_AmalgamDeathListener(self))
++    def on_death(self, creature: Creature,
++                 was_removal_prevented: bool = False) -> None:
++        """`Queen.AfterDeath` (Queen.cs:221-234).
++
++        Lived on a private `_AmalgamDeathListener` registered in a hand-made
++        Powers+1 slot until hook_dispatch/G5 gave the sim a real MonsterModel
++        listener category (CombatState.cs:417-421); the body is unchanged.
++        """
++        if isinstance(creature, TorchHeadAmalgam) and not self.is_dead:
++            self.on_amalgam_died()
+ 
+     def on_amalgam_died(self) -> None:
+         """Queen.cs:226-232 — HasAmalgamDied/Amalgam are derived state in the
+diff --git a/sts2_rl/player.py b/sts2_rl/player.py
+index eeac0eb..266cf03 100644
+--- a/sts2_rl/player.py
++++ b/sts2_rl/player.py
+@@ -75,6 +75,23 @@ class PlayerCombatState(Creature):
+     ) -> None:
+         super().__init__(max_hp)
+         self.side = "player"
++        # `Player.IsActiveForHooks` (Player.cs:112). "Almost equivalent to
++        # Creature.IsAlive, except for a brief period between the player's HP
++        # reaching zero and DieInternal" (Player.cs:103-111) — it is what lets
++        # death-prevention hooks run before the player counts as dead, and it
++        # exists on Player rather than Creature because a dead player STAYS in
++        # the combat where a dead monster is removed from it.
++        #
++        # `CombatState.IterateHookListeners` reads it twice: structurally at
++        # :424-427, where a false value skips that player's relics, potions,
++        # orbs and cards (but not the powers already added at :416), and lazily
++        # in `Contains` (:589-597) as the owner leg of every card/relic/potion/
++        # affliction/enchantment arm. Initialised true (`= Creature.IsAlive`,
++        # Player.cs:272/:438) and cleared by `DeactivateHooks` (:857-860) from
++        # CreatureCmd.cs:553 — after AfterDeath, i.e. only once the death is
++        # real and unprevented. `ActivateHooks` (:868-871) is multiplayer
++        # revival, which single-player never reaches.
++        self.is_active_for_hooks = True
+         self.energy = 0
+         self.hand: list[Card] = []
+         self.draw_pile: list[Card] = deck.copy()
+diff --git a/sts2_rl/relics/base.py b/sts2_rl/relics/base.py
+index 71f749b..6236f85 100644
+--- a/sts2_rl/relics/base.py
++++ b/sts2_rl/relics/base.py
+@@ -109,8 +109,21 @@ class Relic:
+     name: str
+     rarity: RelicRarity
+     # After its owner's powers in the dispatch walk
+-    # (CombatState.IterateHookListeners, CombatState.cs:428-435).
++    # (CombatState.IterateHookListeners, CombatState.cs:428-435). Only the
++    # fallback slot hint now — `HookSystem._ordered` derives relic position
++    # from `combat.relics`, which IS `player.Relics`.
+     hook_category = CAT_RELIC
++    # `RelicModel.IsMelted` (RelicModel.cs:271), the one skip inside the relic
++    # leg of the walk (CombatState.cs:431). The sim removes a melted relic from
++    # the run entirely rather than leaving it in `Relics` flagged (see
++    # `is_tradable` below), so `combat.relics` never holds one and this is
++    # False for every relic that exists; declared so the skip is expressible
++    # and so a future wax port has the flag to set.
++    is_melted: bool = False
++    # `RelicModel.HasBeenRemovedFromState` (RelicModel.cs:420), set by
++    # `RemoveInternal` (:531-534). The first leg of `CombatState.Contains`'
++    # RelicModel arm (CombatState.cs:597).
++    has_been_removed_from_state: bool = False
+     # RelicModel.IsAllowedInShops — a handful of relics (Amethyst Aubergine,
+     # Bowler Hat, Lucky Fysh, Old Coin, The Courier) opt out of shop stock.
+     is_allowed_in_shops: bool = True
+@@ -198,6 +211,23 @@ class Relic:
+         `on_player_turn_end`, which is where Diamond Diadem's counter would
+         otherwise have been cleared."""
+ 
++    def hook_contains(self) -> bool:
++        """`CombatState.Contains`' RelicModel arm (CombatState.cs:597):
++        `!relicModel.HasBeenRemovedFromState && relicModel.Owner.IsActiveForHooks`.
++
++        Evaluated per item as the enumeration reaches this relic (:482-488), so
++        a relic an earlier listener in the same dispatch removed is skipped.
++        A relic with no combat (a run-level duck-typed call, relics/base.py's
++        run-hook surface) has no owner to ask and passes.
++        """
++        if self.has_been_removed_from_state:
++            return False
++        combat = self.combat
++        if combat is None:
++            return True
++        player = getattr(combat, "player", None)
++        return player is None or player.is_active_for_hooks
++
+     def attach(self, combat: CombatState) -> None:
+         self.combat = combat
+         self.reset_for_combat()
+diff --git a/test/test_hook_order.py b/test/test_hook_order.py
+index eb39fdd..650e901 100644
+--- a/test/test_hook_order.py
++++ b/test/test_hook_order.py
+@@ -919,20 +919,24 @@ def listener_categories(hooks):
+ 
+     Every HookSystem dispatcher walks `self._each(...)`, which walks
+     `_ordered()` (hooks.py), so that list IS the sim's cross-listener ordering
+-    rule made visible. Categories mirror the five kinds C#'s
+-    CombatState.IterateHookListeners walks, plus the sim-only CombatHistory
++    rule made visible. Categories mirror the kinds C#'s
++    CombatState.IterateHookListeners walks -- powers, the MonsterModel,
++    relics, potions, orbs (none in the sim), and per card the card, its
++    affliction and its enchantment -- plus the sim-only CombatHistory
+     (hook_dispatch note N3).
+     """
++    from sts2_rl.afflictions import Affliction
+     from sts2_rl.cards.base import Card
+     from sts2_rl.enchantments import Enchantment
+     from sts2_rl.history import CombatHistory
++    from sts2_rl.monsters.base import Monster
+     from sts2_rl.potions import Potion
+     from sts2_rl.powers import Power
+     from sts2_rl.relics.base import Relic
+ 
+     kinds = [(CombatHistory, "history"), (Enchantment, "enchantment"),
+-             (Card, "card"), (Relic, "relic"), (Potion, "potion"),
+-             (Power, "power")]
++             (Affliction, "affliction"), (Card, "card"), (Relic, "relic"),
++             (Potion, "potion"), (Power, "power"), (Monster, "monster")]
+     out = []
+     for listener in hooks._ordered():
+         out.append(next((name for cls, name in kinds
+@@ -943,12 +947,20 @@ def listener_categories(hooks):
+ 
+ class TestHookDispatchOrder:
+     """hook_dispatch audit (audit/seams/hook_dispatch.md,
+-    audit/records/seam/hook_dispatch.json): pins the cross-listener ordering rule the
+-    sim actually implements plus the seam's four pinnable gaps.
+-
+-    The sim's rule is "registration order over one flat list"; the game's is a
+-    structural per-creature walk (CombatState.cs:413-467). The two are close to
+-    reversed, which is what gap G2 records.
++    audit/records/seam/hook_dispatch.json): pins the cross-listener ordering
++    rule the sim implements plus the seam's pinnable gaps.
++
++    THE RULE, as of round 13 (this docstring used to say "the sim's rule is
++    registration order over one flat list", which was the pre-round-8 state,
++    and then "a sort of registration order into the derived walk", which was
++    the round-8-to-12 state): the sim now DERIVES the walk per dispatch from
++    the live combat state, which is what `CombatState.IterateHookListeners`
++    (CombatState.cs:410-493) does. Order is a function of current pile
++    membership, potion-slot occupancy, relic order, `creature.powers` and the
++    enemy list -- not of registration history. `_listeners` remains the
++    MEMBERSHIP set (what `register`/`unregister` maintain and what the
++    presence cache keys on) and no longer decides position, except as a
++    tie-break for a listener the derivation cannot reach.
+     """
+ 
+     @staticmethod
+@@ -970,18 +982,17 @@ class TestHookDispatchOrder:
+         return seen
+ 
+     def test_dispatch_order_is_the_games_derived_per_creature_walk(self):
+-        """Spec steps 41-44 and gap G2, now closed.
++        """Spec steps 41-44 and gaps G2/G5, now closed.
+ 
+         `CombatState.IterateHookListeners` (CombatState.cs:410-493) builds no
+-        list: it re-derives the listeners per dispatch from the creatures
+-        themselves, allies before enemies, and within a player walks Powers
+-        (416) -> Relics (428-435) -> PotionSlots (436-443) -> Orbs (448) ->
+-        the cards of AllPiles (449-467). `HookSystem._ordered` sorts the
+-        registration-order `_listeners` into exactly that, with registration
+-        order as the tie-break inside one (creature, category) pair -- which is
+-        what keeps an enchantment immediately after its own card. The sim-only
+-        CombatHistory (note N3) has no C# counterpart and stays ahead of the
+-        walk, so an entry exists when anything reacts to it.
++        registry: it re-derives the listeners per dispatch from the creatures
++        themselves, allies before enemies (:413-415), and per creature walks
++        Powers (:416) then either the MonsterModel (:417-421) or, for a
++        player, Relics (:428-435) -> PotionSlots (:436-443) -> Orbs (:448) ->
++        the cards of AllPiles (:449-467). `HookSystem._ordered` builds exactly
++        that list from the live combat state. The sim-only CombatHistory
++        (note N3) has no C# counterpart and stays ahead of the walk, so an
++        entry exists when anything reacts to it.
+ 
+         Both halves are asserted: the derived composition, and that a real
+         dispatch visits exactly that sequence -- the second is what makes this
+@@ -1000,15 +1011,15 @@ class TestHookDispatchOrder:
+         PowerCmd.apply(cs.hooks, cs.enemy, VulnerablePower, 2,
+                        applier=cs.player)
+ 
+-        # Registration order is unchanged -- it is the tie-break input, not the
+-        # dispatch rule.
++        # Registration order is NOT the dispatch rule; the history still
++        # happens to register first because the combat builds it first.
+         assert [type(l).__name__ for l in cs.hooks._listeners][:1] == \
+             ["CombatHistory"]
+ 
+         # The player's whole walk (powers, relics, potions, cards), then the
+-        # enemy's.
++        # enemy's -- its powers and then the MonsterModel itself (gap G5).
+         expected = (["history", "power", "relic", "relic", "potion"]
+-                    + ["card"] * 9 + ["power"])
++                    + ["card"] * 9 + ["power", "monster"])
+         assert listener_categories(cs.hooks) == expected
+ 
+         # ...and a dispatch really does visit them in that order.
+@@ -1016,12 +1027,12 @@ class TestHookDispatchOrder:
+         cs.hooks.on_combat_start()
+         assert visited == cs.hooks._ordered()
+ 
+-        # The enemy's Vulnerable is last: enemies come after allies, and it is
+-        # the only listener that enemy owns.
++        # The enemy walks last -- its own Vulnerable, then the MonsterModel.
+         from sts2_rl.powers import Power
+-        last = cs.hooks._ordered()[-1]
+-        assert isinstance(last, Power)
+-        assert last.owner is cs.enemy
++        order = cs.hooks._ordered()
++        assert order[-1] is cs.enemy                     # CombatState.cs:420
++        assert isinstance(order[-2], Power)
++        assert order[-2].owner is cs.enemy               # CombatState.cs:416
+ 
+     def test_powers_modify_energy_cost_before_relics_do(self):
+         from sts2_rl.powers import CuriousPower
+diff --git a/test/test_round13_listener_derivation.py b/test/test_round13_listener_derivation.py
+new file mode 100644
+index 0000000..2569c2d
+--- /dev/null
++++ b/test/test_round13_listener_derivation.py
+@@ -0,0 +1,565 @@
++"""Round 13, R1: `CombatState.IterateHookListeners` as a per-dispatch DERIVED
++walk with a lazy per-item `Contains` filter.
++
++Everything here pins `CombatState.cs:410-493` and its `Contains` arms
++(`:549-599`) against `sts2_rl/hooks.py`'s `_ordered`/`_derive`/`_each`. Four
++gap clusters from `audit/records/seam/hook_dispatch.json`:
++
++  G1  (steps 9, 44) card listener order is per-pile and re-derived, where the
++      sim froze `player.all_cards` at combat start;
++  G2  (step 6, SLOT half) potions walk `PotionSlots` in slot order, where the
++      sim used the order they registered in;
++  G5  (step 3) `MonsterModel` is a listener in its own slot, right after that
++      creature's powers;
++  G6  (guard G6) `AfflictionModel` is a listener immediately after its card
++      and before that card's enchantment;
++  G7  (steps 4, 11, 12, 16, 45) the per-item re-check: `Contains` is evaluated
++      as the enumeration REACHES each item, so state a listener changes mid
++      dispatch is honoured for the listeners after it.
++"""
++from __future__ import annotations
++
++import random
++
++from sts2_rl import CombatState
++from sts2_rl.afflictions import Affliction
++from sts2_rl.cards import make_card
++from sts2_rl.cmds import CardCmd, PowerCmd
++from sts2_rl.hooks import CAT_CARD
++from sts2_rl.potions import make_potion
++from sts2_rl.powers import ThornsPower
++from sts2_rl.relics import make_relic
++
++HOOK = "on_combat_start"        # no arguments, dispatched through `_each`
++
++
++def fresh(**kw) -> CombatState:
++    return CombatState(rng=random.Random(0), **kw)
++
++
++def probe(cs, listeners, log, hook: str = HOOK):
++    """Give each of `listeners` a recorder for `hook` and make the presence
++    cache notice.
++
++    `_has_listener_for` is keyed on `_epoch`, which only register/unregister
++    bump — attaching a method to an already-registered instance is invisible
++    to it by design (a listener's hook set is a property of its CLASS). These
++    tests attach per-instance recorders, so the cache entry for that one hook
++    name is dropped explicitly.
++    """
++    for listener in listeners:
++        def rec(*a, _l=listener, **k):
++            log.append(_l)
++        setattr(listener, hook, rec)
++    cs.hooks._presence_cache.pop(hook, None)
++
++
++def visited(cs, hook: str = HOOK):
++    return [l for l, _ in cs.hooks._each(hook)]
++
++
++# ══════════════════════════════════════════════════════════════════════════
++# G1 — card order is derived from pile membership, per dispatch
++# ══════════════════════════════════════════════════════════════════════════
++
++def test_a_card_that_changes_pile_changes_its_dispatch_position():
++    """`AllPiles` is Hand, Draw, Discard, Exhaust, Play
++    (PlayerCombatState.cs:70-80) and CombatState.cs:449-467 walks it on EVERY
++    dispatch, so moving a card between piles moves it in the listener list.
++
++    The sim registered `player.all_cards` once at combat start
++    (hand + draw + discard + exhaust, evaluated then) and never reordered, so
++    a card kept its combat-start position for the whole fight — gap G1.
++    """
++    cs = fresh()
++    cs.player.hand.clear()
++    # Two cards in the DRAW pile, in a known order.
++    first, second = make_card("strike"), make_card("defend")
++    cs.player.draw_pile[:] = [first, second]
++    for card in (first, second):
++        cs.hooks.register(card)
++        card.combat = cs
++
++    log: list = []
++    probe(cs, [first, second], log)
++    assert visited(cs) == [first, second]
++
++    # Move `second` to the HAND. Hand walks before Draw, so it now dispatches
++    # FIRST, with no register/unregister anywhere.
++    log.clear()
++    cs.player.draw_pile.remove(second)
++    cs.player.hand.append(second)
++    assert visited(cs) == [second, first]
++
++    # ...and back again.
++    cs.player.hand.remove(second)
++    cs.player.draw_pile.append(second)
++    assert visited(cs) == [first, second]
++
++
++def test_pile_order_beats_registration_order():
++    """The stronger form: the card registered LAST dispatches FIRST when its
++    pile says so. Under the old rule (registration index as the tie-break
++    inside the card category) this was impossible."""
++    cs = fresh()
++    cs.player.hand.clear()
++    cs.player.draw_pile.clear()
++    early, late = make_card("strike"), make_card("defend")
++    cs.player.draw_pile.append(early)
++    cs.hooks.register(early)
++    early.combat = cs
++    cs.player.hand.append(late)          # hand walks before draw
++    cs.hooks.register(late)
++    late.combat = cs
++
++    log: list = []
++    probe(cs, [early, late], log)
++    assert cs.hooks._listeners.index(early) < cs.hooks._listeners.index(late)
++    assert visited(cs) == [late, early]
++
++
++def test_the_four_piles_walk_in_allpiles_order():
++    cs = fresh()
++    cs.player.hand.clear()
++    cs.player.draw_pile.clear()
++    cards = {name: make_card("strike")
++             for name in ("hand", "draw", "discard", "exhaust")}
++    for card in cards.values():
++        cs.hooks.register(card)
++        card.combat = cs
++    cs.player.hand.append(cards["hand"])
++    cs.player.draw_pile.append(cards["draw"])
++    cs.player.discard_pile.append(cards["discard"])
++    cs.player.exhaust_pile.append(cards["exhaust"])
++
++    log: list = []
++    probe(cs, list(cards.values()), log)
++    assert visited(cs) == [cards["hand"], cards["draw"],
++                           cards["discard"], cards["exhaust"]]
++
++
++def test_a_card_mid_onplay_walks_in_the_play_slot_last():
++    """CardCmd.cs:116 parks a card being played in `PileType.Play`, which is
++    the FIFTH and last entry of AllPiles. The sim has no fifth list — it
++    leaves the card in the discard and flags it `_playing_card` — so the
++    derivation has to take it out of the discard leg and put it after the
++    exhaust pile."""
++    cs = fresh()
++    cs.player.hand.clear()
++    cs.player.draw_pile.clear()
++    playing, other = make_card("strike"), make_card("defend")
++    for card in (playing, other):
++        cs.hooks.register(card)
++        card.combat = cs
++    cs.player.discard_pile[:] = [playing, other]
++    log: list = []
++    probe(cs, [playing, other], log)
++    assert visited(cs) == [playing, other]
++
++    cs.player._playing_card = playing     # now in Play limbo
++    assert visited(cs) == [other, playing]
++
++
++# ══════════════════════════════════════════════════════════════════════════
++# G2 (slot half) — potions walk PotionSlots, not registration order
++# ══════════════════════════════════════════════════════════════════════════
++
++def test_potions_dispatch_in_belt_slot_order_not_registration_order():
++    """CombatState.cs:436-443 walks `player.PotionSlots` by index. The sim
++    filled the belt slot correctly but appended the potion to `_listeners`,
++    and `_ordered`'s tie-break was that registration index — so a potion
++    procured into a freed slot 0 dispatched AFTER one that had been sitting
++    in slot 1 since combat start (gap G2, slot half)."""
++    cs = fresh(potions=[make_potion("block_potion"),
++                        make_potion("strength_potion")])
++    slot0, slot1 = cs.player.potions[0], cs.player.potions[1]
++    log: list = []
++    probe(cs, [slot0, slot1], log)
++    assert visited(cs) == [slot0, slot1]
++
++    # Drink slot 0's potion, then procure a new one: it lands back in slot 0
++    # (first null index, Player.AddPotionInternal) but registers LAST.
++    cs.player.discard_potion(slot0)
++    fresh_potion = make_potion("fire_potion")
++    assert cs.player.add_potion(fresh_potion)
++    assert cs.player.potions[0] is fresh_potion
++
++    log.clear()
++    probe(cs, [fresh_potion, slot1], log)
++    assert cs.hooks._listeners.index(slot1) < \
++        cs.hooks._listeners.index(fresh_potion)
++    assert visited(cs) == [fresh_potion, slot1]      # slot order wins
++
++
++# ══════════════════════════════════════════════════════════════════════════
++# G5 — MonsterModel is a listener, in its own slot
++# ══════════════════════════════════════════════════════════════════════════
++
++def test_the_monster_is_a_listener_right_after_its_own_powers():
++    """CombatState.cs:417-421 — `creature.Player == null ->
++    list.Add(creature.Monster)`, immediately after `list.AddRange(
++    creature.Powers)` at :416. MonsterModel.cs:51 declares
++    ShouldReceiveCombatHooks. The sim's Monster IS its MonsterModel."""
++    cs = fresh()
++    enemy = cs.enemy
++    PowerCmd.apply(cs.hooks, enemy, ThornsPower, 1, applier=cs.player)
++    order = cs.hooks._ordered()
++    assert enemy in order
++    thorns = enemy.powers["thorns"]
++    assert order.index(thorns) + 1 == order.index(enemy)
++    # ...and after every player-side listener: allies precede enemies (:413).
++    assert order.index(enemy) == len(order) - 1
++
++
++def test_a_monster_removed_from_combat_stops_being_dispatched_to():
++    """`Contains`' MonsterModel arm is `Creature.CombatState != null`
++    (CombatState.cs:585) and nothing else. `is_removed_from_combat` is the
++    sim's stand-in for the nulled back-pointer."""
++    cs = fresh()
++    enemy = cs.enemy
++    log: list = []
++    probe(cs, [enemy], log)
++    assert visited(cs) == [enemy]
++
++    enemy.hp = 0                       # dead but retained -> still a listener
++    enemy.retained_after_death = True
++    assert enemy.is_dead and not enemy.is_removed_from_combat
++    assert visited(cs) == [enemy]
++
++    enemy.retained_after_death = False  # now really removed
++    assert enemy.is_removed_from_combat
++    assert visited(cs) == []
++
++
++# ══════════════════════════════════════════════════════════════════════════
++# G6 — AfflictionModel is a listener, between its card and its enchantment
++# ══════════════════════════════════════════════════════════════════════════
++
++class _HookedAffliction(Affliction):
++    """A synthetic affliction that implements a hook.
++
++    G6 is DORMANT on content: none of the seven ported afflictions defines a
++    hook, and the only C# affliction that overrides one (Hexed.cs,
++    AfterCardEnteredCombat) is an unported stub. What this pins is the
++    MACHINERY — that when such an affliction is ported it lands in the slot
++    CombatState.cs:458-461 gives it.
++    """
++
++    id = "test_hooked"
++    name = "TestHooked"
++
++    def on_combat_start(self) -> None:      # noqa: D102 - recorder patched in
++        pass
++
++
++def test_an_affliction_dispatches_immediately_after_its_own_card():
++    """CombatState.cs:456-465, in order: `list.Add(cardModel)`, then
++    `cardModel.Affliction`, then `cardModel.Enchantment`."""
++    from sts2_rl.enchantments import make_enchantment
++
++    cs = fresh()
++    cs.player.hand.clear()
++    cs.player.draw_pile.clear()
++    before, card, after = (make_card("strike"), make_card("defend"),
++                           make_card("strike"))
++    for c in (before, card, after):
++        cs.hooks.register(c)
++        c.combat = cs
++    cs.player.hand[:] = [before, card, after]
++
++    affliction = CardCmd.afflict(card, _HookedAffliction, 1)
++    assert affliction is not None
++    enchantment = make_enchantment("sharp")
++    enchantment.attach_internal(card)
++    cs.hooks.register(enchantment)
++
++    log: list = []
++    probe(cs, [before, card, affliction, enchantment, after], log)
++    assert visited(cs) == [before, card, affliction, enchantment, after]
++
++
++def test_an_affliction_is_registered_and_unregistered_with_its_card():
++    cs = fresh()
++    card = cs.player.draw_pile[0]
++    affliction = CardCmd.afflict(card, _HookedAffliction, 1)
++    assert affliction in cs.hooks._listeners
++    assert affliction.card is card
++
++    CardCmd.clear_affliction(card)
++    # CardModel.ClearAfflictionInternal (CardModel.cs:1532-1540) calls
++    # AfflictionModel.ClearInternal (:249-254), which nulls `_card` — so
++    # `HasCard`, the first leg of Contains' affliction arm (:591), goes false.
++    assert card.affliction is None
++    assert affliction.card is None
++    assert affliction not in cs.hooks._listeners
++    assert affliction.hook_contains() is False
++
++
++def test_an_affliction_whose_card_left_its_pile_is_not_derived():
++    """The affliction has no pile of its own: C# reaches it only THROUGH the
++    card (CombatState.cs:458), so a card outside AllPiles takes its
++    affliction with it."""
++    cs = fresh()
++    cs.player.hand.clear()
++    cs.player.draw_pile.clear()
++    card = make_card("strike")
++    cs.hooks.register(card)
++    card.combat = cs
++    cs.player.hand.append(card)
++    affliction = CardCmd.afflict(card, _HookedAffliction, 1)
++
++    order = cs.hooks._ordered()
++    assert order.index(affliction) == order.index(card) + 1
++
++    other = make_card("defend")
++    cs.hooks.register(other)
++    other.combat = cs
++    cs.player.discard_pile.append(other)
++
++    cs.player.hand.remove(card)          # in no pile at all now
++    order = cs.hooks._ordered()
++    # Still reachable — the sim never silently retires a registered listener —
++    # but out of the pile walk entirely, so it sits at the end of the card
++    # group with its affliction still glued behind it.
++    assert order.index(affliction) == order.index(card) + 1
++    assert order.index(card) > order.index(other)
++
++
++# ══════════════════════════════════════════════════════════════════════════
++# G7 — the lazy, per-item Contains re-check
++# ══════════════════════════════════════════════════════════════════════════
++
++def test_a_card_removed_from_state_mid_dispatch_is_skipped():
++    """`Contains` is evaluated per item as the enumeration reaches it
++    (CombatState.cs:482-488), and the CardModel arm (:593) is
++    `!HasBeenRemovedFromState && Owner.IsActiveForHooks`. So a card that an
++    EARLIER listener in the same dispatch removed from state never runs."""
++    cs = fresh()
++    cs.player.hand.clear()
++    cs.player.draw_pile.clear()
++    remover, victim = make_card("strike"), make_card("defend")
++    for card in (remover, victim):
++        cs.hooks.register(card)
++        card.combat = cs
++    cs.player.hand[:] = [remover, victim]
++
++    log: list = []
++    probe(cs, [remover, victim], log)
++    assert visited(cs) == [remover, victim]
++
++    def kill_the_victim(*a, **k):
++        log.append(remover)
++        victim.has_been_removed_from_state = True
++
++    remover.on_combat_start = kill_the_victim
++    log.clear()
++    for _, fn in cs.hooks._each(HOOK):
++        fn()
++    assert log == [remover]              # the victim was reached and refused
++
++
++def test_a_relic_removed_from_state_mid_dispatch_is_skipped():
++    """Same shape, RelicModel arm (CombatState.cs:597)."""
++    cs = fresh(relics=[make_relic("pen_nib"), make_relic("orichalcum")])
++    first, second = cs.relics
++    log: list = []
++    probe(cs, [first, second], log)
++    assert visited(cs) == [first, second]
++
++    def melt_the_second(*a, **k):
++        log.append(first)
++        second.has_been_removed_from_state = True
++
++    first.on_combat_start = melt_the_second
++    log.clear()
++    for _, fn in cs.hooks._each(HOOK):
++        fn()
++    assert log == [first]
++
++
++def test_a_melted_relic_is_skipped_by_the_walk():
++    """The one skip inside the relic leg itself (CombatState.cs:431), not part
++    of Contains. Dormant on today's content — the sim drops a melted relic
++    from the run rather than flagging it — so this pins the machinery."""
++    cs = fresh(relics=[make_relic("pen_nib"), make_relic("orichalcum")])
++    first, second = cs.relics
++    log: list = []
++    probe(cs, [first, second], log)
++    assert visited(cs) == [first, second]
++
++    second.is_melted = True
++    assert visited(cs) == [first]
++    # ...and it is NOT quietly re-seated by the extras merge, which exists for
++    # listeners the walk could not reach, not ones it refused.
++    assert second not in cs.hooks._ordered()
++
++
++def test_an_inactive_player_contributes_only_its_powers():
++    """CombatState.cs:424-427 — `!player.IsActiveForHooks -> continue`, which
++    skips that player's relics, potions, orbs and cards but NOT the powers
++    added one line earlier at :416."""
++    cs = fresh(relics=[make_relic("pen_nib")],
++               potions=[make_potion("block_potion")])
++    PowerCmd.apply(cs.hooks, cs.player, ThornsPower, 3, applier=cs.player)
++    order = cs.hooks._ordered()
++    assert cs.relics[0] in order
++    assert cs.player.potions[0] in order
++    assert cs.player.draw_pile[0] in order
++
++    cs.player.is_active_for_hooks = False
++    order = cs.hooks._ordered()
++    assert cs.player.powers["thorns"] in order      # :416 already added it
++    assert cs.relics[0] not in order
++    assert cs.player.potions[0] not in order
++    assert all(c not in order for c in cs.player.all_cards)
++    assert cs.enemy in order                        # the enemy is unaffected
++
++
++def test_the_player_stops_being_active_for_hooks_once_it_really_dies():
++    """`Player.DeactivateHooks` (Player.cs:857-860) is called from
++    CreatureCmd.cs:553, in the REAL-death arm only and after Hook.AfterDeath —
++    a prevented death (Fairy in a Bottle, Lizard Tail) leaves the flag alone,
++    which is the whole reason the flag exists instead of reading IsAlive."""
++    from sts2_rl.cmds import CreatureCmd
++
++    cs = fresh()
++    assert cs.player.is_active_for_hooks is True
++    CreatureCmd.kill(cs.hooks, cs.player)
++    assert cs.player.is_dead
++    assert cs.player.is_active_for_hooks is False
++
++
++def test_a_revive_puts_the_player_back_in_the_walk():
++    """`Creature.HealInternal` (Creature.cs:477-485) calls
++    `Player?.ActivateHooks()` when a heal takes a dead creature back above
++    zero. `Player.ReviveBeforeCombatEnd` (:821-827) exists ONLY to exploit
++    that before `Hook.AfterCombatEnd`, and Player.cs:816-819 says why: a
++    still-dead player's relics "will not be subscribed to the HookBus, and
++    relics which rely on AfterCombatEnd to reset state will not be reset for
++    the next combat"."""
++    from sts2_rl.cmds import CreatureCmd
++
++    cs = fresh(relics=[make_relic("pen_nib")])
++    CreatureCmd.kill(cs.hooks, cs.player)
++    assert cs.player.is_active_for_hooks is False
++    assert cs.relics[0] not in cs.hooks._ordered()
++
++    CreatureCmd.heal(cs.hooks, cs.player, 1)
++    assert cs.player.is_active_for_hooks is True
++    assert cs.relics[0] in cs.hooks._ordered()
++
++
++def test_the_victory_path_revives_before_dispatching_after_combat_end():
++    """CombatManager.EndCombatInternal (CombatManager.cs:986-988) runs every
++    player's ReviveBeforeCombatEnd and only THEN Hook.AfterCombatEnd, so a
++    player who won at 0 HP still gets their relics' end-of-combat resets."""
++    cs = fresh(relics=[make_relic("chosen_cheese")])
++    cs.player.hp = 0
++    cs.player.is_active_for_hooks = False        # as a real death would leave it
++    before = cs.player.max_hp
++    cs._end_combat_internal()
++    assert cs.player.is_active_for_hooks is True
++    assert cs.player.max_hp == before + 1        # ChosenCheese.cs:16 fired
++
++
++def test_death_prevention_leaves_the_player_active_for_hooks():
++    cs = fresh()
++
++    class _Saviour:
++        hook_category = CAT_CARD
++
++        def should_die(self, creature, preventer=None):
++            if preventer is not None:
++                preventer.append(self)
++            return False
++
++    cs.hooks.register(_Saviour())
++    from sts2_rl.cmds import CreatureCmd
++    CreatureCmd.kill(cs.hooks, cs.player)
++    assert cs.player.is_active_for_hooks is True
++
++
++# ══════════════════════════════════════════════════════════════════════════
++# Listeners the walk cannot reach are seated, not dropped
++# ══════════════════════════════════════════════════════════════════════════
++
++def test_a_registered_listener_the_walk_cannot_reach_keeps_its_category_slot():
++    """C# has no such case, but the sim's registry can outlive the structure:
++    an orphaned Instanced power (power_cmd/G5 — C#'s `Creature.Powers` is a
++    LIST that keeps both instances where the sim's dict indexes one), a card
++    in no pile, a bare object a test registered. `_merge_extras` seats each at
++    the end of its (creature, category) group rather than dropping it."""
++    cs = fresh(relics=[make_relic("pen_nib")])
++
++    class _PowerSlot:
++        hook_category = 0                    # CAT_POWER
++
++    class _Tail:
++        hook_category = 99                   # past every declared slot
++
++    power_slot, tail = _PowerSlot(), _Tail()
++    cs.hooks.register(power_slot)
++    cs.hooks.register(tail)
++    log: list = []
++    probe(cs, [power_slot, tail, cs.relics[0]], log)
++    order = visited(cs)
++    assert order == [power_slot, cs.relics[0], tail]
++
++
++def test_a_played_power_card_stops_listening():
++    """A Power card's result pile is `PileType.None`
++    (CardModel.GetResultPileTypeForCardPlay, CardModel.cs:2070-2075), which
++    CardModel.cs:1979-1982 resolves to `CardPileCmd.RemoveFromCombat` — it
++    leaves every combat pile and so leaves `AllPiles`. The sim kept it
++    registered for the rest of the combat."""
++    cs = fresh()
++    cs.player.hand.clear()
++    inflame = make_card("inflame")
++    cs.player.hand.append(inflame)
++    from sts2_rl.cmds import CardPileCmd
++    CardPileCmd._enter_combat(cs.hooks, inflame)
++    assert inflame in cs.hooks._listeners
++
++    cs.player.energy = 9
++    assert cs.play_card(0)
++    assert inflame not in cs.hooks._listeners
++    assert inflame not in cs.hooks._ordered()
++
++
++# ══════════════════════════════════════════════════════════════════════════
++# Performance contract
++# ══════════════════════════════════════════════════════════════════════════
++
++def test_the_presence_gate_stays_above_the_derivation():
++    """Requirement 1 of the round-13 performance contract: a dispatch no live
++    listener implements must not build the order at all."""
++    cs = fresh()
++    calls = []
++    real = type(cs.hooks)._derive
++    try:
++        type(cs.hooks)._derive = lambda self, *a, **k: (calls.append(1),
++                                                        real(self, *a, **k))[1]
++        assert list(cs.hooks._each("no_such_hook_anywhere")) == []
++        assert calls == []
++    finally:
++        type(cs.hooks)._derive = real
++
++
++def test_a_pile_move_does_not_invalidate_the_presence_cache():
++    """Requirement 3: the presence cache keys on listener-SET membership only.
++    Moving a card between piles changes the ORDER, never the set, so the
++    cached answer must survive it — `_epoch` must not move."""
++    cs = fresh()
++    cs.hooks._has_listener_for("on_card_drawn")
++    epoch = cs.hooks._epoch
++    cached = dict(cs.hooks._presence_cache)
++
++    card = cs.player.draw_pile[0]
++    cs.player.draw_pile.remove(card)
++    cs.player.hand.append(card)
++
++    assert cs.hooks._epoch == epoch
++    assert cs.hooks._presence_cache == cached
++    assert cs.hooks._ordered()[-1] is cs.enemy      # order still re-derived
++    assert cs.hooks._ordered().index(card) < \
++        cs.hooks._ordered().index(cs.player.draw_pile[0])
+diff --git a/test/test_task8_aeonglass_generated_wither.py b/test/test_task8_aeonglass_generated_wither.py
+index 441c3d6..2223668 100644
+--- a/test/test_task8_aeonglass_generated_wither.py
++++ b/test/test_task8_aeonglass_generated_wither.py
+@@ -4,8 +4,9 @@ generated Withers are now fake-upgraded through the hook, not open-coded.
+ Aeonglass.cs:150-166 fake-upgrades EVERY card generated for combat that is a
+ Wither, from any source, via `MatchWitherToUpgradeCount`. Once Task 8's
+ Mechanism B wires `on_card_generated_for_combat` at the sim's two dispatch
+-sites, `monsters/glory/aeonglass.py`'s `_AeonglassWitherListener` is the
+-sim's first ported listener for it, and the two former open-coded upgrade
++sites, `monsters/glory/aeonglass.py`'s Aeonglass hook is the
++sim's first ported listener for it (as of round 13 the handler is on the
++Aeonglass monster itself -- hook_dispatch/G5), and the two former open-coded upgrade
+ loops -- the boss's own Increasing Intensity Wither (aeonglass.py) and
+ WitheringPresencePower's punish Wither (powers.py) -- are deleted in favour
+ of it.
+@@ -21,7 +22,6 @@ from sts2_rl.cards import make_card
+ from sts2_rl.cmds import CardCmd, CardPileCmd
+ from sts2_rl.monsters import Encounter
+ from sts2_rl.monsters.glory import Aeonglass
+-from sts2_rl.monsters.glory.aeonglass import _AeonglassWitherListener
+ 
+ 
+ def fresh_with(monster_cls, seed: int = 0) -> CombatState:
+@@ -31,7 +31,7 @@ def fresh_with(monster_cls, seed: int = 0) -> CombatState:
+ 
+ def test_boss_own_wither_arrives_fake_upgraded_via_the_hook():
+     """`_intensity` no longer open-codes the upgrade at its own generation
+-    site -- it relies on `_AeonglassWitherListener` firing off
++    site -- it relies on Aeonglass's own hook firing off
+     `add_to_discard`'s new AfterCardGeneratedForCombat dispatch."""
+     cs = fresh_with(Aeonglass)
+     boss = cs.enemies[0]
+@@ -132,20 +132,33 @@ def test_third_party_generated_card_is_untouched():
+ 
+ 
+ def test_listener_ignores_a_card_with_no_upgrade_count_pending():
+-    """Direct unit check on the listener class: zero pending upgrades is a
+-    no-op (range(0)), matching a freshly-spawned Aeonglass before its first
++    """Direct unit check on the handler: zero pending upgrades is a no-op
++    (range(0)), matching a freshly-spawned Aeonglass before its first
+     Increasing Intensity move."""
+     cs = fresh_with(Aeonglass)
+     boss = cs.enemies[0]
+     assert boss.wither_upgrade_count == 0
+-    listener = _AeonglassWitherListener(boss)
+     wither = make_card("wither")
+-    listener.on_card_generated_for_combat(wither)
++    boss.on_card_generated_for_combat(wither)
+     assert wither.fake_upgrade_level == 0
+ 
+ 
+-def test_aeonglass_registers_the_wither_listener_on_construction():
++def test_aeonglass_is_itself_the_listener():
++    """hook_dispatch/G5: the handler used to live on a private
++    `_AeonglassWitherListener` registered in a hand-made "Powers + 1" slot,
++    because the sim had no MonsterModel listener category. It now sits on the
++    monster, which is where `Aeonglass.AfterCardGeneratedForCombat`
++    (Aeonglass.cs:150-166) sits, and the monster is the registered listener
++    (CombatState.cs:417-421)."""
++    import sts2_rl.monsters.glory.aeonglass as mod
++
++    assert not hasattr(mod, "_AeonglassWitherListener")
+     cs = fresh_with(Aeonglass)
+     boss = cs.enemies[0]
+-    assert any(isinstance(l, _AeonglassWitherListener) and l.aeonglass is boss
+-              for l in cs.hooks._listeners)
++    assert boss in cs.hooks._listeners
++    assert boss.on_card_generated_for_combat.__self__ is boss
++    # ...and it dispatches from the monster's own slot in the derived walk:
++    # right after that creature's powers (CombatState.cs:416-421).
++    order = cs.hooks._ordered()
++    powers = [p for p in boss.powers.values()]
++    assert order.index(boss) == max(order.index(p) for p in powers) + 1

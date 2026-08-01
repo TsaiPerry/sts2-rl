@@ -854,6 +854,7 @@
   "upgrade",
   "from_draw",
   "choose_a_card",
-  "choose_a_card_optional"
+  "choose_a_card_optional",
+  "enchant_optional"
  ]
 }

@@ -335,5 +335,10 @@ class StackCard(Card):
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cmds import BlockCmd
-        discard_count = sum(1 for c in ctx.player.discard_pile if c is not self)
+        # The resolving card is in `PileType.Play`, never in the discard pile
+        # it is counting (CardModel.cs:1875). This used to need an explicit
+        # `c is not self` filter because the sim parked it in the discard —
+        # the single piece of ported content that made creature_card_cmds
+        # N9/step82's exposure visible. Round 13 (R5) made the pile real.
+        discard_count = len(ctx.player.discard_pile)
         BlockCmd.apply(ctx.hooks, ctx.player, self._block + discard_count, card=self)

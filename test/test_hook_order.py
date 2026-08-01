@@ -341,8 +341,16 @@ class TestCreatureCardCmdsOrder:
         played sits in PileType.Play, and CardPileCmd.Shuffle only ever reads
         the Draw and Discard piles (CardPileCmd.cs:870-871) -- so a reshuffle
         the card's own effect triggers must not shuffle it back into the draw
-        pile. The sim models the limbo with PlayerCombatState._playing_card
-        (combat.py:452-454, player.py:202-215)."""
+        pile.
+
+        RE-STAGED 2026-08-01 (round 13, R5). It used to park the card in
+        `discard_pile` and mark it `_playing_card`, and `reshuffle_discard_
+        into_draw` subtracted the mark back out by hand. `play_pile` is a real
+        list now (creature_card_cmds N9/step82), so the exclusion is
+        structural and the hold-back code is gone -- the intent of the pin is
+        unchanged, the state it sets up is the state the game is really in.
+        `test_round13_play_pile.py` pins the same fact end-to-end, through an
+        actual play."""
         cs = CombatState(
             starting_deck=[make_card("strike") for _ in range(3)],
             rng_set=RunRngSet("creature-card-cmds-limbo"),
@@ -352,11 +360,12 @@ class TestCreatureCardCmdsOrder:
         p.draw_pile.clear()
         p.discard_pile.clear()
         held = make_card("pommel_strike")
-        p.discard_pile.extend([held, make_card("strike")])
-        p._playing_card = held           # mid-OnPlay: the card is in Play limbo
+        p.discard_pile.append(make_card("strike"))
+        p.play_pile.append(held)         # mid-OnPlay: the card is in Play
         p.reshuffle_discard_into_draw()
         assert held not in p.draw_pile
-        assert p.discard_pile == [held]  # it lands in its result pile after OnPlay
+        assert p.play_pile == [held]     # it leaves Play only after OnPlay
+        assert p.discard_pile == []
 
     def test_add_to_discard_refuses_a_duplicate_instance(self):
         """CardPile.AddInternal (CardPile.cs:86-89): throws if the target
@@ -919,20 +928,24 @@ def listener_categories(hooks):
 
     Every HookSystem dispatcher walks `self._each(...)`, which walks
     `_ordered()` (hooks.py), so that list IS the sim's cross-listener ordering
-    rule made visible. Categories mirror the five kinds C#'s
-    CombatState.IterateHookListeners walks, plus the sim-only CombatHistory
+    rule made visible. Categories mirror the kinds C#'s
+    CombatState.IterateHookListeners walks -- powers, the MonsterModel,
+    relics, potions, orbs (none in the sim), and per card the card, its
+    affliction and its enchantment -- plus the sim-only CombatHistory
     (hook_dispatch note N3).
     """
+    from sts2_rl.afflictions import Affliction
     from sts2_rl.cards.base import Card
     from sts2_rl.enchantments import Enchantment
     from sts2_rl.history import CombatHistory
+    from sts2_rl.monsters.base import Monster
     from sts2_rl.potions import Potion
     from sts2_rl.powers import Power
     from sts2_rl.relics.base import Relic
 
     kinds = [(CombatHistory, "history"), (Enchantment, "enchantment"),
-             (Card, "card"), (Relic, "relic"), (Potion, "potion"),
-             (Power, "power")]
+             (Affliction, "affliction"), (Card, "card"), (Relic, "relic"),
+             (Potion, "potion"), (Power, "power"), (Monster, "monster")]
     out = []
     for listener in hooks._ordered():
         out.append(next((name for cls, name in kinds
@@ -943,12 +956,20 @@ def listener_categories(hooks):
 
 class TestHookDispatchOrder:
     """hook_dispatch audit (audit/seams/hook_dispatch.md,
-    audit/records/seam/hook_dispatch.json): pins the cross-listener ordering rule the
-    sim actually implements plus the seam's four pinnable gaps.
+    audit/records/seam/hook_dispatch.json): pins the cross-listener ordering
+    rule the sim implements plus the seam's pinnable gaps.
 
-    The sim's rule is "registration order over one flat list"; the game's is a
-    structural per-creature walk (CombatState.cs:413-467). The two are close to
-    reversed, which is what gap G2 records.
+    THE RULE, as of round 13 (this docstring used to say "the sim's rule is
+    registration order over one flat list", which was the pre-round-8 state,
+    and then "a sort of registration order into the derived walk", which was
+    the round-8-to-12 state): the sim now DERIVES the walk per dispatch from
+    the live combat state, which is what `CombatState.IterateHookListeners`
+    (CombatState.cs:410-493) does. Order is a function of current pile
+    membership, potion-slot occupancy, relic order, `creature.powers` and the
+    enemy list -- not of registration history. `_listeners` remains the
+    MEMBERSHIP set (what `register`/`unregister` maintain and what the
+    presence cache keys on) and no longer decides position, except as a
+    tie-break for a listener the derivation cannot reach.
     """
 
     @staticmethod
@@ -970,18 +991,17 @@ class TestHookDispatchOrder:
         return seen
 
     def test_dispatch_order_is_the_games_derived_per_creature_walk(self):
-        """Spec steps 41-44 and gap G2, now closed.
+        """Spec steps 41-44 and gaps G2/G5, now closed.
 
         `CombatState.IterateHookListeners` (CombatState.cs:410-493) builds no
-        list: it re-derives the listeners per dispatch from the creatures
-        themselves, allies before enemies, and within a player walks Powers
-        (416) -> Relics (428-435) -> PotionSlots (436-443) -> Orbs (448) ->
-        the cards of AllPiles (449-467). `HookSystem._ordered` sorts the
-        registration-order `_listeners` into exactly that, with registration
-        order as the tie-break inside one (creature, category) pair -- which is
-        what keeps an enchantment immediately after its own card. The sim-only
-        CombatHistory (note N3) has no C# counterpart and stays ahead of the
-        walk, so an entry exists when anything reacts to it.
+        registry: it re-derives the listeners per dispatch from the creatures
+        themselves, allies before enemies (:413-415), and per creature walks
+        Powers (:416) then either the MonsterModel (:417-421) or, for a
+        player, Relics (:428-435) -> PotionSlots (:436-443) -> Orbs (:448) ->
+        the cards of AllPiles (:449-467). `HookSystem._ordered` builds exactly
+        that list from the live combat state. The sim-only CombatHistory
+        (note N3) has no C# counterpart and stays ahead of the walk, so an
+        entry exists when anything reacts to it.
 
         Both halves are asserted: the derived composition, and that a real
         dispatch visits exactly that sequence -- the second is what makes this
@@ -1000,15 +1020,15 @@ class TestHookDispatchOrder:
         PowerCmd.apply(cs.hooks, cs.enemy, VulnerablePower, 2,
                        applier=cs.player)
 
-        # Registration order is unchanged -- it is the tie-break input, not the
-        # dispatch rule.
+        # Registration order is NOT the dispatch rule; the history still
+        # happens to register first because the combat builds it first.
         assert [type(l).__name__ for l in cs.hooks._listeners][:1] == \
             ["CombatHistory"]
 
         # The player's whole walk (powers, relics, potions, cards), then the
-        # enemy's.
+        # enemy's -- its powers and then the MonsterModel itself (gap G5).
         expected = (["history", "power", "relic", "relic", "potion"]
-                    + ["card"] * 9 + ["power"])
+                    + ["card"] * 9 + ["power", "monster"])
         assert listener_categories(cs.hooks) == expected
 
         # ...and a dispatch really does visit them in that order.
@@ -1016,12 +1036,12 @@ class TestHookDispatchOrder:
         cs.hooks.on_combat_start()
         assert visited == cs.hooks._ordered()
 
-        # The enemy's Vulnerable is last: enemies come after allies, and it is
-        # the only listener that enemy owns.
+        # The enemy walks last -- its own Vulnerable, then the MonsterModel.
         from sts2_rl.powers import Power
-        last = cs.hooks._ordered()[-1]
-        assert isinstance(last, Power)
-        assert last.owner is cs.enemy
+        order = cs.hooks._ordered()
+        assert order[-1] is cs.enemy                     # CombatState.cs:420
+        assert isinstance(order[-2], Power)
+        assert order[-2].owner is cs.enemy               # CombatState.cs:416
 
     def test_powers_modify_energy_cost_before_relics_do(self):
         from sts2_rl.powers import CuriousPower

@@ -275,6 +275,16 @@ class TestDismantle:
 
 class TestFeed:
     def test_fatal_grants_max_hp_and_heals(self):
+        # RE-STAGED 2026-08-01 (round 13, R5 fix pass, R5-review RV-2): the
+        # last assertion used to be `card in cs.player.exhaust_pile`, which is
+        # not what the game does. Feed's own OnPlay lands the killing blow, so
+        # `CombatManager.IsEnding` (CombatManager.cs:180-201) is already true
+        # when OnPlayWrapper reaches its exit switch, and `case Exhaust:` is a
+        # `CardCmd.Exhaust` call whose whole body sits inside
+        # `if (!CombatManager.Instance.IsOverOrEnding)` (CardCmd.cs:239). The
+        # game therefore leaves the card in `PileType.Play` and fires no
+        # `Hook.AfterCardExhausted`. The Fatal max-HP grant is unaffected —
+        # it happens inside OnPlay, before the exit.
         cs = fresh()
         cs.enemy.hp = 5
         cs.player.hp = 70
@@ -283,7 +293,8 @@ class TestFeed:
         assert cs.enemy.is_dead
         assert cs.player.max_hp == 83
         assert cs.player.hp == 73
-        assert card in cs.player.exhaust_pile
+        assert card in cs.player.play_pile
+        assert card not in cs.player.exhaust_pile
 
     def test_no_max_hp_without_kill(self):
         cs = fresh()

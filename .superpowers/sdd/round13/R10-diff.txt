@@ -1,0 +1,235 @@
+﻿diff --git a/sts2_rl/driver.py b/sts2_rl/driver.py
+index 8c6b2ce..f12ed22 100644
+--- a/sts2_rl/driver.py
++++ b/sts2_rl/driver.py
+@@ -39,7 +39,12 @@ from .full_env import (
+     apply_combat_action,
+     combat_action_masks,
+ )
+-from .rewards import GOLD_REWARD_RANGES, CardRewardGroup, CombatRewards
++from .rewards import (
++    GOLD_REWARD_RANGES,
++    CardRewardGroup,
++    CombatRewards,
++    apply_reward_modifiers,
++)
+ from .rooms import SHARED_ANCIENTS, RoomType
+ 
+ if TYPE_CHECKING:
+@@ -426,9 +431,27 @@ class RunDriver:
+             self._run_shop(resolution.shop)
+         elif room_type == RoomType.REST_SITE:
+             self._run_rest()
+-        # TREASURE resolved inside enter_point (chest gold + relic); MAP is
++        elif room_type == RoomType.TREASURE:
++            self._offer_treasure_extra_rewards()
++        # The chest's own gold + relic is resolved inside enter_point; MAP is
+         # a no-op in the sim.
+ 
++    def _offer_treasure_extra_rewards(self) -> None:
++        """`TreasureRoom.DoExtraRewardsIfNeeded` (TreasureRoom.cs:75-97): after
++        the chest's own direct gold+relic grant (`enter_point`'s TREASURE
++        branch — matches `OneOffSynchronizer.DoTreasureRoomRewards`, which
++        never touches a RewardsSet), the room ALSO dispatches
++        `Hook.ModifyRewards` over an otherwise-empty, Room=Treasure reward
++        set (`RunState.enter_point` builds and dispatches it, stashing the
++        result only if a hook actually added something). Normally a no-op —
++        no ported relic is Room==Treasure-sensitive today — but this is
++        where a future one's screen would surface, offered the same way any
++        other reward screen is."""
++        extra = self.run.pending_treasure_extra_rewards
++        if extra is not None:
++            self.run.pending_treasure_extra_rewards = None
++            self._offer_rewards(extra)
++
+     def _run_combat(self, encounter: "Encounter", room_type) -> "CombatState":
+         run = self.run
+         combat = run.create_combat(encounter, room_type=room_type)
+@@ -451,6 +474,14 @@ class RunDriver:
+ 
+     def _offer_rewards(self, rewards: "CombatRewards") -> None:
+         run = self.run
++        # Offer-time backstop (R10): mirrors `RewardsSet.Offer` calling
++        # `GenerateWithoutOffering` again at RewardsSet.cs:159 no matter how
++        # the set was built. Every real construction site already calls
++        # `apply_reward_modifiers` itself, so this is normally a harmless
++        # repeat (`CombatRewards.generated` guards it) — but a FUTURE site
++        # that forgets the explicit call still gets dispatched exactly once,
++        # here, instead of silently skipping every reward-modifying relic.
++        apply_reward_modifiers(run, rewards)
+         # A reward set holds a LIST of Rewards, and each CardReward on it is
+         # its own pick-one-of-N screen taken separately (RewardsSet.cs:49) —
+         # Prayer Wheel puts a second one on every Monster room. Offer them in
+diff --git a/sts2_rl/rewards.py b/sts2_rl/rewards.py
+index db0feb2..97397b0 100644
+--- a/sts2_rl/rewards.py
++++ b/sts2_rl/rewards.py
+@@ -32,6 +32,10 @@ Deliberate deviations (repo conventions):
+   - non-ascension values only (no Scarcity/Poverty scaling);
+   - Hook.ModifyRewards / reward-modifying relics (Prayer Wheel-likes) are
+     dispatched duck-typed over the run's relics, like run.py's map pipeline.
++  - the dispatch itself (`apply_reward_modifiers`) runs at each construction
++    site AND, idempotently (`CombatRewards.generated`), as an offer-time
++    backstop in driver._offer_rewards / RunState.offer_rewards — see that
++    function's docstring for why both call it.
+ """
+ from __future__ import annotations
+ 
+@@ -585,6 +589,17 @@ class CombatRewards:
+     # Each is an independent take-or-skip offer, separate from the pity-rolled
+     # `potion` slot.
+     special_potions: "list[Potion]" = field(default_factory=list)
++    # `RewardsSet._isGenerated` (RewardsSet.cs:41, guard :127-130, set :146):
++    # whether `apply_reward_modifiers` has already run on this set. Makes the
++    # dispatch idempotent per instance, mirroring how `GenerateWithoutOffering`
++    # no-ops on a set that already went through it — which is what lets
++    # `Offer()` call it again unconditionally at RewardsSet.cs:159. R10
++    # (2026-08-01): construction sites still call `apply_reward_modifiers`
++    # explicitly (the RNG-order-preserving choice — see the function's own
++    # docstring), and `driver._offer_rewards` / `RunState.offer_rewards` now
++    # call it too, as a backstop; this flag is what makes calling it from both
++    # places safe instead of double-firing every hook.
++    generated: bool = False
+ 
+     # ── The first CardReward, as flat attributes ─────────────────────────
+     # Every screen the sim generates on its own has exactly one card group,
+@@ -649,14 +664,33 @@ def apply_reward_modifiers(run: "RunState", rewards: CombatRewards) -> None:
+     TryModifyRewardsLate, so Driftwood's reroll flag lands on a reward list
+     that already holds everything the plain pass added.
+ 
+-    Its ONE caller is `RewardsSet.GenerateWithoutOffering` (RewardsSet.cs:136),
++    C#'s ONE caller is `RewardsSet.GenerateWithoutOffering` (RewardsSet.cs:136),
+     which every RewardsSet goes through — the combat screen, but equally the
+     custom sets RewardsCmd.OfferCustom builds for a rest-site heal
+-    (HealRestSiteOption.cs:112), an event or a relic. So this belongs at every
+-    screen-generation site, not just the combat one; what keeps the room-gated
+-    relics off a custom screen is `rewards.room` being None there, exactly as
+-    `RewardsSet.Room` is null.
++    (HealRestSiteOption.cs:112), an event or a relic. `GenerateWithoutOffering`
++    is guarded idempotent by `_isGenerated` (RewardsSet.cs:127-130, set :146),
++    which is what lets `Offer()` (RewardsSet.cs:153-196) call it AGAIN
++    unconditionally at :159 — the repeat is always a no-op in practice, since
++    every real caller generates before offering, but the guard is what makes
++    that safe to do from two places.
++
++    The sim mirrors both halves of that shape (R10, 2026-08-01):
++    `rewards.generated` is the `_isGenerated` mirror — a set this function has
++    already processed returns immediately — so this call still sits at each
++    construction site (rewards.py:698,761; run.py:1419; glass_eye.py:78;
++    brain_leech.py:89; trial.py:118), preserving their exact RNG draw order,
++    AND `driver._offer_rewards` / `RunState.offer_rewards` call it again as a
++    harmless repeat — exactly like `Offer()` — so a FUTURE site that forgets
++    the explicit call still gets dispatched exactly once, at offer time,
++    instead of silently skipping every reward-modifying relic (the trap round
++    12 recorded and fixed per-site: GAP-QUEUE.md's event/3C section).
++
++    What keeps the room-gated relics off a custom screen is `rewards.room`
++    being None there, exactly as `RewardsSet.Room` is null for
++    `WithCustomRewards`.
+     """
++    if rewards.generated:
++        return
+     for relic in list(run.relics):
+         relic.modify_combat_rewards(run, rewards)
+     for relic in list(run.relics):
+@@ -668,6 +702,9 @@ def apply_reward_modifiers(run: "RunState", rewards: CombatRewards) -> None:
+     for group in rewards.card_rewards:
+         if not group.populated:
+             group.populate(run)
++    # `_isGenerated = true` (RewardsSet.cs:146) — set LAST, after the passes
++    # and the populate sweep, matching the source's own ordering.
++    rewards.generated = True
+ 
+ 
+ def generate_combat_rewards(
+diff --git a/sts2_rl/run.py b/sts2_rl/run.py
+index f294716..e6e1405 100644
+--- a/sts2_rl/run.py
++++ b/sts2_rl/run.py
+@@ -45,6 +45,7 @@ from .rewards import (
+     CombatRewards,
+     PotionRewardOdds,
+     RewardExtra,
++    apply_reward_modifiers,
+     generate_combat_rewards,
+ )
+ 
+@@ -264,6 +265,12 @@ class RunState:
+         # generate_combat_rewards drains it. First entry type: Thieving Hopper's
+         # returned card.
+         self.pending_reward_extras: list["RewardExtra"] = []
++        # R10: `TreasureRoom.DoExtraRewardsIfNeeded`'s otherwise-empty,
++        # Room=Treasure reward set (TreasureRoom.cs:75-97) — stashed by
++        # enter_point's TREASURE branch only when a hook actually added
++        # something to it, and drained by the driver's TREASURE room
++        # resolution. None the rest of the time (the common case today).
++        self.pending_treasure_extra_rewards: "CombatRewards | None" = None
+         # ── Run / act sequencing (populated by start_run) ────────────────
+         # The full act list, rolled once at run start (ActModel.GetRandomList);
+         # empty until start_run is called (single-act tests use start_act).
+@@ -531,7 +538,18 @@ class RunState:
+         about Driftwood's reroll and Pael's Wing's sacrifice. With no offerer
+         attached (bare RunState, unit tests) it falls back to the same
+         pick-one-per-group loop through `select_cards`.
++
++        Offer-time backstop (R10): dispatches `apply_reward_modifiers` before
++        doing anything else, mirroring `Offer()`'s own repeat call to
++        `GenerateWithoutOffering` (RewardsSet.cs:159). Every real caller
++        already dispatched at its construction site, so this is normally a
++        harmless repeat (`CombatRewards.generated` guards it) — but it is what
++        makes the selectorless fallback loop below safe for a set nobody
++        generated yet, and it covers `self.rewards_offerer` being unset
++        (bare RunState) the same way `driver._offer_rewards` covers the
++        installed-driver case.
+         """
++        apply_reward_modifiers(self, rewards)
+         offerer = getattr(self, "rewards_offerer", None)
+         if offerer is not None:
+             offerer(rewards)
+@@ -1318,6 +1336,27 @@ class RunState:
+                 self.gain_gold(treasure_gold)
+                 resolution.gold = treasure_gold
+             resolution.gold += self._complete_map_point_quests(point)
++            # `TreasureRoom.DoExtraRewardsIfNeeded` (TreasureRoom.cs:75-97),
++            # called UNCONDITIONALLY after `DoNormalRewards` — even when
++            # Hook.ShouldGenerateTreasure suppressed the chest above.
++            # `RewardsCmd.GenerateForRoomEnd` -> `WithRewardsFromRoom(this)`
++            # -> `GenerateWithoutOffering` fires `Hook.ModifyRewards`
++            # (RewardsSet.cs:136) over an EMPTY base reward list
++            # (`GenerateRewardsFor` returns [] for a TreasureRoom,
++            # RewardsSet.cs:213-219 — it only throws for a room that is
++            # neither CombatRoom nor TreasureRoom) with `Room` set to this
++            # TreasureRoom — a dispatch the chest's own direct gold+relic
++            # grant above never goes through. No ported relic is
++            # Room==Treasure-sensitive today (every TryModifyRewards[Late]
++            # implementer is gated to Monster/Elite/Boss, or only touches
++            # EXISTING card_rewards groups, which stay empty here), so this
++            # stays a no-op in practice — stashed for the driver to offer
++            # only when a future one actually adds something.
++            treasure_rewards = CombatRewards(
++                room_type=RoomType.MONSTER, room=RoomType.TREASURE)
++            apply_reward_modifiers(self, treasure_rewards)
++            if not treasure_rewards.is_empty:
++                self.pending_treasure_extra_rewards = treasure_rewards
+         elif room_type == RoomType.SHOP:
+             from .shop import MerchantInventory
+ 
+@@ -1414,8 +1453,6 @@ class RunState:
+         # reroll reaches a rest-site card choice. `rewards.room` stays None
+         # here, which is what keeps the room-gated relics out (a custom set
+         # never sets RewardsSet.Room).
+-        from .rewards import apply_reward_modifiers
+-
+         apply_reward_modifiers(self, rewards)
+         return rewards
+ 
+ M sts2_rl/driver.py
+ M sts2_rl/rewards.py
+ M sts2_rl/run.py
+ M test/test_hook_order.py
+ M test/test_task8_aeonglass_generated_wither.py
+ M test/test_underdocks_hive_events.py
+?? test/test_r13_power1.py
+?? test/test_r13_relic1.py
+?? test/test_reward_dispatch_choke_point.py
+?? test/test_round13_listener_derivation.py

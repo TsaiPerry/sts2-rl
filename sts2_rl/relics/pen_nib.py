@@ -58,13 +58,24 @@ class PenNib(Relic):
             # while it still sits in hand. The pile clause is load-bearing: drop
             # it and the real play would double twice.
             #
-            # The sim's PileType.Play analogue is `player._playing_card`, set for
-            # the duration of the play by `_resolve_card_play`. The sim consumes
-            # the previewed number in its OBSERVATION vector (previews.
-            # preview_card_damage -> full_env), not only in a sprite, which is
-            # why this is a gap and not presentation.
-            playing = getattr(self.player, "_playing_card", None)
-            if card is not playing and self._attacks_played == self.ATTACKS - 1:
+            # The sim consumes the previewed number in its OBSERVATION vector
+            # (previews.preview_card_damage -> full_env), not only in a sprite,
+            # which is why this is a gap and not presentation.
+            #
+            # The predicate is `pile == null || pile.Type != PileType.Play`
+            # verbatim: `card not in play_pile` is true both for a card in no
+            # pile at all and for a card in any of the other four. Until round
+            # 13 (R5) the sim had no Play pile and read `player._playing_card`
+            # instead; that marker is now the NARROWER "the card whose
+            # OnPlayWrapper is on the stack", and the two differ whenever
+            # `CardPileCmd.AutoPlayFromDrawPile` has more than one pick parked
+            # in Play (Havoc, Mayhem, Cascade, Distilled Chaos) — the parked
+            # picks are in `PileType.Play` and are NOT `_playing_card`, so the
+            # old predicate would have doubled a queued Attack's preview.
+            # `getattr` because a relic's `player` is not always a live
+            # PlayerCombatState (out-of-combat previews).
+            if (card not in getattr(self.player, "play_pile", ())
+                    and self._attacks_played == self.ATTACKS - 1):
                 return 2.0
             return 1.0
         if card is self._card_to_double:   # :129

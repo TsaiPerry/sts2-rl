@@ -13,6 +13,7 @@ _INK_BLOT_DMG = 7
 _INKY_LANCE_DMG = 6
 _INKY_LANCE_HITS = 2
 _DISMEMBER_DMG = 26
+_DISMEMBER_WOUNDS = 3     # Vantom.cs:34 _dismemberWounds; also StatusIntent(3) at :119
 _PREPARE_STR = 2
 _SLIPPERY_START = 8
 
@@ -42,9 +43,16 @@ class Vantom(Monster):
         if self._move_key == "INKY_LANCE":
             return Intent(MoveType.ATTACK, damage=_INKY_LANCE_DMG, hits=_INKY_LANCE_HITS)
         if self._move_key == "DISMEMBER":
-            # Vantom.cs:119 — SingleAttackIntent(26) AND StatusIntent(3).
+            # Vantom.cs:119 — SingleAttackIntent(26) AND StatusIntent(3). The
+            # intent must carry the C# StatusIntent's CardCount, not just the
+            # STATUS_CARD flag bit. monster/_intent_count_lost is NOT closed:
+            # the spec has 18 `new StatusIntent(N)` sites and only 5 are
+            # ported (round 13 R11 fix pass corrected the earlier "4 known
+            # sites, all done" claim). See test_monster_tier_families.py's
+            # census ledger for the 13 that remain.
             return Intent(MoveType.ATTACK, damage=_DISMEMBER_DMG,
-                          also=(MoveType.STATUS_CARD,))
+                          also=(MoveType.STATUS_CARD,),
+                          status_count=_DISMEMBER_WOUNDS)
         from ...powers import StrengthPower
         return Intent(MoveType.BUFF, buffs=[(StrengthPower, _PREPARE_STR)])
 
@@ -58,7 +66,7 @@ class Vantom(Monster):
             self._execute_attack(ctx, _DISMEMBER_DMG, 1)
             from ...cards import WoundCard
             from ...cmds import CardPileCmd
-            for _ in range(3):
+            for _ in range(_DISMEMBER_WOUNDS):
                 CardPileCmd.add_to_discard(ctx.hooks, ctx.player, WoundCard())
         else:
             from ...powers import StrengthPower

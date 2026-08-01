@@ -185,6 +185,11 @@ PURPOSE_IDS: list[str] = frozen_ids("purposes", [
     # Skippability is per-screen in the source, so the same screen shape needs
     # both purposes here.
     "choose_a_card_optional",
+    # Kifuda's non-cancelable MinSelect-0 enchant screen (Kifuda.cs:26-29,
+    # driver.SKIPPABLE_PURPOSES) — registered so it doesn't fall into the
+    # shared "_unknown" bucket like the pre-existing "transform_optional"
+    # (Claws.cs) currently does; see this round's report for that gap.
+    "enchant_optional",
 ])
 PURPOSE_INDEX: dict[str, int] = {p: i for i, p in enumerate(PURPOSE_IDS)}
 N_PURPOSES = vocab_capacity("purposes")

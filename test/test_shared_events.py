@@ -264,6 +264,7 @@ def test_future_of_potions_gate_needs_two_potions():
 
 
 def test_future_of_potions_trades_potion_for_upgraded_card():
+    from sts2_rl.driver import DecisionKind, RunDriver
     from sts2_rl.potions import make_potion
 
     run = fresh_run(4)
@@ -271,11 +272,25 @@ def test_future_of_potions_trades_potion_for_upgraded_card():
     run.add_potion(make_potion("fire_potion"))
     run.add_potion(make_potion("block_potion"))
     deck0 = len(run.deck)
+
+    def take_first(request):
+        if request.kind == DecisionKind.REWARD_CARD:
+            return 0
+        return request.legal_actions()[0]
+
+    driver = RunDriver(run, take_first)
     event = make_event("the_future_of_potions", run).begin()
     # One option per held potion (max 3), keyed POTION_0..n.
     assert event.option_keys() == ["POTION_0", "POTION_1"]
     assert event.choose("POTION_0")
     assert len(run.held_potions) == 1    # the traded potion is gone
+    # R2 (round 13): the trade now rides `pending_rewards` (brain_leech.py /
+    # trial.py's own mid-event OfferCustom channel) instead of an immediate
+    # `run.select_cards` grant — a driver drains it through a real
+    # REWARD_CARD decision, same as any other reward screen.
+    assert event.pending_rewards is not None
+    pending, event.pending_rewards = event.pending_rewards, None
+    driver._offer_rewards(pending)
     added = [c for c in run.deck if c.rarity.name == "COMMON"
              and c.upgrade_level > 0]
     assert len(run.deck) == deck0 + 1

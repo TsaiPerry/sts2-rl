@@ -32,30 +32,21 @@ class CascadeCard(Card):
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         num = self.captured_x + (1 if self.upgrade_level > 0 else 0)
-        # In the game the resolving card sits in the Play pile; here it is
-        # already in the discard pile, so step out of it while resolving —
-        # otherwise a reshuffle could sweep Cascade up and auto-play itself.
-        in_discard = self in ctx.player.discard_pile
-        if in_discard:
-            ctx.player.discard_pile.remove(self)
-        try:
-            # Pull all num cards off the draw pile before playing any (mirrors
-            # AutoPlayFromDrawPile moving them to the Play pile in one pass).
-            cards = []
-            for _ in range(num):
-                if not ctx.player.draw_pile:
-                    if not ctx.player.discard_pile:
-                        break
-                    ctx.player.reshuffle_discard_into_draw()
-                    # AfterShuffle hooks (e.g. Stratagem) can drain the
-                    # pile; AutoPlayFromDrawPile null-checks and stops.
-                    if not ctx.player.draw_pile:
-                        break
-                cards.append(ctx.player.draw_pile.pop())
-            for card in cards:
-                if ctx.combat.is_over or ctx.player.is_dead:
-                    break
-                ctx.combat.auto_play_card(card)
-        finally:
-            if in_discard:
-                ctx.player.discard_pile.append(self)
+        # Cascade.cs:23 is ONE statement: `await CardPileCmd.AutoPlayFromDraw
+        # Pile(choiceContext, Owner, num, CardPilePosition.Top,
+        # forceExhaust: false)`. This method used to reimplement the verb's
+        # two phases inline, which meant its phase-1 picks were parked in NO
+        # pile (C# parks them in `PileType.Play`, CardPileCmd.cs:954) and its
+        # per-card break tested `combat.is_over` where C# tests only
+        # `item.Owner.Creature.IsDead` (:958).
+        #
+        # It also had to take ITSELF out of the discard pile for the duration
+        # and put it back in a `finally`, because the sim parked a resolving
+        # card in the discard and a reshuffle would otherwise have handed
+        # Cascade back to the draw pile for its own verb to replay. That is
+        # structural now: the resolving card sits in `PileType.Play`
+        # (CardModel.cs:1875) and `CardPileCmd.Shuffle` reads only the Draw and
+        # Discard piles (CardPileCmd.cs:870-871). Round 13, R5.
+        from ..cmds import CardPileCmd
+        CardPileCmd.auto_play_from_draw_pile(
+            ctx.hooks, ctx.player, num, position="top", force_exhaust=False)

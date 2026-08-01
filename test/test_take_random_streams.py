@@ -165,21 +165,22 @@ def test_entropy_legacy_transform_uses_the_identical_shared_rng_object():
 def test_transform_finds_a_card_that_is_mid_play():
     """CardCmd.cs:391 reads `item.Original.Pile` — whatever pile currently
     holds the card, not a fixed list — so during OnPlay, when that property
-    genuinely IS Play, C# transforms a mid-play card exactly like any other.
-    The sim's Play-limbo stand-in physically parks a resolving card in
-    `discard_pile` and marks it with `player._playing_card` (player.py:99-104,
-    guard N9), so `transform_to_random`'s existing discard-pile branch
-    (cmds.py) already finds and swaps it — there was no Play-pile gap here.
-    Re-verified 2026-07-30: the queue's "returns None for a card mid-play"
-    premise does not hold against today's code."""
+    genuinely IS Play, C# transforms a mid-play card exactly like any other,
+    and the replacement takes its slot IN PLAY.
+
+    RE-STAGED 2026-08-01 (round 13, R5). The old form parked the card in
+    `discard_pile` behind a `_playing_card` marker and concluded from
+    `transform_to_random`'s discard branch finding it that "there was no
+    Play-pile gap here". That conclusion was an artefact of the stand-in: with
+    a real `play_pile` the four-pile scan would have returned None, so the
+    fifth branch is what actually makes the claim true."""
     cs = _fresh()
     card = make_card("strike")
-    cs.player.discard_pile.append(card)
-    cs.player._playing_card = card
+    cs.player.play_pile.append(card)
     replacement = CardCmd.transform_to_random(cs.hooks, cs.player, card)
     assert replacement is not None
-    assert replacement in cs.player.discard_pile
-    assert card not in cs.player.discard_pile
+    assert replacement in cs.player.play_pile
+    assert card not in cs.player.play_pile
 
 
 # ══════════════════════════════════════════════════════════════════════════

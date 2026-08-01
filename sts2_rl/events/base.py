@@ -29,7 +29,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
-    from ..cards import Card
     from ..combat import CombatState
     from ..monsters import Encounter
     from ..potions import Potion
@@ -211,15 +210,55 @@ class Event:
         a potion can be declined to keep the belt slot and a card reward can be
         skipped to keep the deck lean.
 
-        The decision is the run's `reward_offer_selector` — a callable
-        (purpose, payload) -> bool — the headless stand-in for the reward
-        screen, exactly as `run.card_selector` stands in for CardSelectCmd and
-        `run.option_selector` for a pick-one-of-N screen. With none installed
-        every offer is taken."""
+        Resolution order (R6, 2026-08-01):
+
+        1. `run.reward_offer_selector` — a callable (purpose, payload) -> bool,
+           if one is explicitly installed. This is the finest-grained override
+           (it sees `purpose`, unlike `reward_selector` below) and is what
+           `test/test_event_offer_screens.py` installs directly on a bare
+           `RunState` to unit-test one event in isolation, no driver required.
+        2. For `purpose == "potion"`, with no (1): fall back onto
+           `run.reward_selector` — the seam a real `RunDriver` ALREADY wires
+           unconditionally (`driver.py:303` -> `_reward_selector`) for
+           `RunState.offer_relic` / `RunState.offer_potion`. `_reward_selector`
+           treats any kind other than `"relic"` as a potion offer and asks a
+           REWARD_POTION decision — exactly the shape `RunState.offer_potion`
+           itself already calls it with (`run.py:592`, `selector("potion",
+           potion)`). Before this fallback existed, `reward_offer_selector`
+           was defined NOWHERE outside the test helper above, so a real
+           driver (real play, and the conformance `_ForceWinDriver`) had
+           nothing to ask and every potion event offer auto-accepted.
+        3. `purpose == "card_reward"` — HISTORICAL, and dead code today.
+           `Event.offer_card_reward` was the only method that ever passed this
+           purpose and was removed 2026-08-01 (R2, round 13,
+           event/the_future_of_potions/g15; see the tombstone comment below),
+           so nothing in the tree reaches this branch — it falls straight to
+           the true-default below. It is kept, rather than raising, for any
+           future `OfferCustom`-style caller that reintroduces the purpose, in
+           which case the same reasoning applies and is why it must stay
+           un-wired to `reward_selector`: a CardReward's real take-or-skip
+           decision belongs on the ONE screen C#'s protocol models
+           (`CardReward.OnSelect` picks a card, `OnSkipped` declines, and
+           `CardRewardAlternative.Generate` puts Skip / REROLL / SACRIFICE on
+           that same index space — CardRewardAlternative.cs:53-74), which the
+           sim spells as `pending_rewards` -> the driver's REWARD_CARD
+           decision -> `_offer_card_group` (driver.py). Asking here as well
+           would ask a driver-attached policy TWICE for what C# shows once.
+           (The surviving empirical evidence for this method is the POTION
+           leg, step 2 above:
+           `test_drowning_beacon_declines_through_a_real_driver_with_no_
+           explicit_selector` in test_event_offer_screens.py.)
+        4. With none of the above (no selector installed anywhere, e.g. a
+           bare RunState in most unit tests) every offer is taken — preserved
+           unchanged from before R6."""
         selector = getattr(self.run, "reward_offer_selector", None)
-        if selector is None:
-            return True
-        return bool(selector(purpose, payload))
+        if selector is not None:
+            return bool(selector(purpose, payload))
+        if purpose == "potion":
+            reward_selector = getattr(self.run, "reward_selector", None)
+            if reward_selector is not None:
+                return bool(reward_selector("potion", payload))
+        return True
 
     def offer_potion(self, potion: "Potion") -> bool:
         """`RewardsCmd.OfferCustom` with a single `PotionReward`
@@ -228,16 +267,26 @@ class Event:
             return False
         return self.run.add_potion(potion)
 
-    def offer_card_reward(self, cards: list["Card"]) -> "Card | None":
-        """`RewardsCmd.OfferCustom` with a single `CardReward`
-        (TheFutureOfPotions.cs:127-130): the whole screen is skippable, and
-        taking it picks one of the offered cards. Returns the card taken."""
-        if not cards or not self._accept_offer("card_reward", cards):
-            return None
-        chosen = self.run.select_cards("card_reward", cards, 1)
-        for card in chosen:
-            self.run.add_card(card)
-        return chosen[0] if chosen else None
+    # `offer_card_reward` (RewardsCmd.OfferCustom with a single CardReward,
+    # TheFutureOfPotions.cs:127-130) was REMOVED 2026-08-01 (R2, round 13,
+    # event/the_future_of_potions/g15): its `run.select_cards("card_reward",
+    # ...)` protocol was a boolean take-or-skip with no reroll/sacrifice slot
+    # and never called `apply_reward_modifiers`, so Driftwood/Pael's Wing
+    # could never reach this screen — C#'s CardReward.OnSelect shows ONE
+    # screen with cards + Skip + REROLL alternatives together
+    # (CardRewardAlternative.cs:53-74), which is what `pending_rewards` ->
+    # the driver's REWARD_CARD decision -> `_offer_card_group` already
+    # models (driver.py:519-542). `the_future_of_potions.py:95` was this
+    # method's sole caller (verified: `grep -rn offer_card_reward`) and now
+    # builds its own `CombatRewards`/`CardRewardGroup` and sets
+    # `self.pending_rewards` directly, the same channel brain_leech.py's Rip
+    # and trial.py's Nondescript Guilty already use. `_accept_offer`'s
+    # `purpose == "card_reward"` branch (above) is accordingly now dead code
+    # with no caller left anywhere in the tree — left in place rather than
+    # removed here, since `_accept_offer` itself is outside this task's
+    # footprint (R2-brief.md scopes sts2_rl/events/base.py to "the
+    # `offer_card_reward` block only"); see R2-report.md for the exact
+    # docstring diff proposed for `_accept_offer` at fold time.
 
     @property
     def options(self) -> list[EventOption]:

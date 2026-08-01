@@ -801,7 +801,9 @@ class TestVantomDismember:
 
     def test_dismember_telegraphs_the_status_intent_too(self):
         # Vantom.cs:119 builds DISMEMBER_MOVE with TWO intents:
-        # SingleAttackIntent(26) AND StatusIntent(3).
+        # SingleAttackIntent(26) AND StatusIntent(3). Round 13 R11 item 2:
+        # the 4th site of monster/_intent_count_lost -- the StatusIntent's
+        # CardCount (3) must be carried, not just the STATUS_CARD flag bit.
         cs = fresh_with(Vantom)
         vantom = cs.enemies[0]
         vantom._move_key = "DISMEMBER"
@@ -809,6 +811,7 @@ class TestVantomDismember:
         assert intent.move_type == MoveType.ATTACK
         assert intent.damage == 26 and intent.hits == 1
         assert intent.has(MoveType.STATUS_CARD)
+        assert intent.status_count == 3
 
 
 class TestVineShamblerGraspingVines:

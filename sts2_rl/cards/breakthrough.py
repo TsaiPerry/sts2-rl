@@ -54,8 +54,16 @@ class BreakthroughCard(Card):
         DamageCmd.deal(
             ctx.hooks, ctx.player, self._hp_loss, dealer=ctx.player, card=self,
             props=ValueProp.UNBLOCKABLE | ValueProp.UNPOWERED | ValueProp.MOVE)
-        if ctx.player.is_dead:
-            return
+        # Breakthrough.cs has no is_dead guard here -- C# unconditionally
+        # awaits DamageCmd.Attack(...).TargetingAllOpponents(...).Execute()
+        # next (Breakthrough.cs:28-30). No divergence to reproduce: the
+        # per-enemy DamageCmd.deal below already carries dealer=ctx.player, and
+        # DamageCmd.deal's own dealer.is_dead bail (cmds.py, mirrors
+        # AttackCommand.Execute's Attacker.IsDead bail, AttackCommand.cs:528 --
+        # checked once per hit-iteration, and Breakthrough is a single hit) is
+        # a no-op on every enemy once the self-damage has killed the player --
+        # see card/_is_dead_early_return (Task 27) and
+        # test/test_is_dead_early_returns.py.
         # 9 (+ Strength) damage to each living enemy.
         for enemy in list(ctx.enemies):
             if not enemy.is_dead:

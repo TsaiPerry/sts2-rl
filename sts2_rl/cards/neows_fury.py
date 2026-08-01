@@ -19,6 +19,14 @@ class NeowsFuryCard(Card):
       OnPlay: attack 10 → FromCombatPile(discard, 0..2) → add to hand,
         capped at MaxCardsInHand
       OnUpgrade: damage +4 (→ 14), cards +1 (→ 3)
+
+    Neow's Fury can never pick itself: while it resolves it is in the Play
+    pile (CardModel.cs:1875), not the discard, and `NeowsFury.cs:39` passes
+    `new CardSelectorPrefs(prompt, 0, num)` with NO filter of any kind. That
+    used to need an explicit `c is not self` predicate here, because the sim
+    parked a resolving card in the discard pile; round 13 (R5) made the Play
+    pile real and the deviation is gone. Same de-hack as `headbutt.py`'s
+    (R5-review RV-4).
     """
 
     id = "neows_fury"
@@ -63,8 +71,7 @@ class NeowsFuryCard(Card):
         # always consulted, and confirming NONE is legal.
         chosen = CardSelectCmd.from_pile(
             ctx.hooks, ctx.player.discard_pile, "from_discard",
-            count=count, predicate=lambda c: c is not self,
-            min_select=0,
+            count=count, min_select=0,
         )
         for card in chosen:
             ctx.player.discard_pile.remove(card)

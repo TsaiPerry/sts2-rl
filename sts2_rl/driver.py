@@ -39,7 +39,12 @@ from .full_env import (
     apply_combat_action,
     combat_action_masks,
 )
-from .rewards import GOLD_REWARD_RANGES, CardRewardGroup, CombatRewards
+from .rewards import (
+    GOLD_REWARD_RANGES,
+    CardRewardGroup,
+    CombatRewards,
+    apply_reward_modifiers,
+)
 from .rooms import SHARED_ANCIENTS, RoomType
 
 if TYPE_CHECKING:
@@ -81,7 +86,7 @@ N_REST_OPTIONS = 3
 # MaxSelect (or none at all). `_card_selector` offers a skip action for these and
 # never auto-resolves them. `*_optional` names the up-to-N pickup screens
 # (Claws.cs:24 `CardSelectorPrefs(prompt, 0, CardsVar(6))`, RequireManualConfirmation).
-# "gambling_chip" is GamblingChip.cs:12's `CardSelectorPrefs(prompt, 0,
+# "gambling_chip" is GamblingChip.cs:20's `CardSelectorPrefs(prompt, 0,
 # 999999999)` — the same MinSelect-0 shape, so "discard nothing" is a
 # first-class outcome and the whole-hand offer must not be short-circuited.
 # "choose_a_card_optional" is `FromChooseACardScreen(..., canSkip: true)`
@@ -90,9 +95,44 @@ N_REST_OPTIONS = 3
 # and ChoicesParadox.cs:46 open the very same choose-a-card screen and forbid the
 # decline, so the two need separate purposes here (same split as
 # "transform" / "transform_optional").
+# "enchant_optional" is Kifuda.cs:26-29's `new CardSelectorPrefs(
+# EnchantSelectionPrompt, 0, Cards.IntValue) { Cancelable = false,
+# RequireManualConfirmation = true }` — MinSelect 0 / MaxSelect 3, same shape
+# as Claws' "transform_optional": the player may confirm 0, 1, 2 or 3
+# enchants but the SCREEN AS A WHOLE is not cancelable (Cancelable = false
+# only gates a separate "back out entirely" affordance, which SELECT_CARDS
+# never models here — there is no legal action for it, skippable or not).
+# CAVEAT (round-13 review): the 0..3 range is the PREFS range that
+# `CardSelectCmd.FromDeckForEnchantment`'s automated-selector arm
+# (`Selector.GetSelectedCards(list, MinSelect, MaxSelect)`, CardSelectCmd.cs:582)
+# and this driver both operate at — it is NOT a literal description of the
+# shipped single-player screen. `NDeckEnchantSelectScreen.ConfirmSelection`
+# (NDeckEnchantSelectScreen.cs:258-264) opens with
+# `if (_selectedCards.Count != 0)`, so a 0-card
+# selection can never be finalized by clicking Confirm there, and
+# `CloseSelection` (:186-190) — the only path that DOES resolve with zero
+# cards — is gated behind `Cancelable` (false for Kifuda), so it is
+# unreachable too. The shipped UI's actual reachable floor is 1. Modelling
+# the prefs range rather than that button-state machine is a deliberate
+# choice: the sim already operates at the `ICardSelector`/driver
+# abstraction (a policy callback, not a button click), which is the level
+# `AutoSlayCardSelector` and every headless choice in the source operates at
+# too. (NOT "remote": CardSelectCmd.cs:600's remote arm is screen-level.) See relics/kifuda.py's docstring for the full citation.
+# GnarledHammer.cs:30-34 builds the identical CardSelectorPrefs shape
+# (0..CardsVar(3), Cancelable = false, RequireManualConfirmation = true) but
+# relics/gnarled_hammer.py is a different lane's footprint this round, so it
+# still passes "enchant" (not skippable) and still force-fills 3 — see
+# relics/kifuda.py and this round's report for the citation. Named
+# "enchant_optional" rather than reusing "enchant" because "enchant" also
+# covers six other relics/events whose own CardSelectorPrefs constructors are
+# the exact-count overload (`CardSelectorPrefs(prompt, N)`, MinSelect ==
+# MaxSelect — beautiful_bracelet/electric_shrymp/paels_growth/royal_stamp/
+# tri_boomerang and every "enchant"-purpose event site) — those must keep
+# force-filling, so they must NOT share a purpose string with Kifuda's genuine
+# range.
 SKIPPABLE_PURPOSES = frozenset({
-    "card_reward", "choose_a_card_optional", "gambling_chip", "obtain",
-    "transform_optional",
+    "card_reward", "choose_a_card_optional", "enchant_optional",
+    "gambling_chip", "obtain", "transform_optional",
 })
 
 # Answer namespace for "drink the belt potion in slot N" — see
@@ -426,8 +466,26 @@ class RunDriver:
             self._run_shop(resolution.shop)
         elif room_type == RoomType.REST_SITE:
             self._run_rest()
-        # TREASURE resolved inside enter_point (chest gold + relic); MAP is
+        elif room_type == RoomType.TREASURE:
+            self._offer_treasure_extra_rewards()
+        # The chest's own gold + relic is resolved inside enter_point; MAP is
         # a no-op in the sim.
+
+    def _offer_treasure_extra_rewards(self) -> None:
+        """`TreasureRoom.DoExtraRewardsIfNeeded` (TreasureRoom.cs:75-97): after
+        the chest's own direct gold+relic grant (`enter_point`'s TREASURE
+        branch — matches `OneOffSynchronizer.DoTreasureRoomRewards`, which
+        never touches a RewardsSet), the room ALSO dispatches
+        `Hook.ModifyRewards` over an otherwise-empty, Room=Treasure reward
+        set (`RunState.enter_point` builds and dispatches it, stashing the
+        result only if a hook actually added something). Normally a no-op —
+        no ported relic is Room==Treasure-sensitive today — but this is
+        where a future one's screen would surface, offered the same way any
+        other reward screen is."""
+        extra = self.run.pending_treasure_extra_rewards
+        if extra is not None:
+            self.run.pending_treasure_extra_rewards = None
+            self._offer_rewards(extra)
 
     def _run_combat(self, encounter: "Encounter", room_type) -> "CombatState":
         run = self.run
@@ -451,6 +509,14 @@ class RunDriver:
 
     def _offer_rewards(self, rewards: "CombatRewards") -> None:
         run = self.run
+        # Offer-time backstop (R10): mirrors `RewardsSet.Offer` calling
+        # `GenerateWithoutOffering` again at RewardsSet.cs:159 no matter how
+        # the set was built. Every real construction site already calls
+        # `apply_reward_modifiers` itself, so this is normally a harmless
+        # repeat (`CombatRewards.generated` guards it) — but a FUTURE site
+        # that forgets the explicit call still gets dispatched exactly once,
+        # here, instead of silently skipping every reward-modifying relic.
+        apply_reward_modifiers(run, rewards)
         # A reward set holds a LIST of Rewards, and each CardReward on it is
         # its own pick-one-of-N screen taken separately (RewardsSet.cs:49) —
         # Prayer Wheel puts a second one on every Monster room. Offer them in

@@ -570,11 +570,11 @@ def _return_to_hand_if_played_last_turn(card: Card) -> None:
     # Bolas.cs:43-47 / ThrummingHatchet.cs:37-41 test only
     # `pile == null || pile.Type != PileType.Hand` and then
     # `CardPileCmd.Add(this, PileType.Hand)`, which moves the card from
-    # WHEREVER it is — the EXHAUST pile included. Searching only draw and
-    # discard silently stranded an exhausted card (Brand, Burning Pact, Second
-    # Wind and Fiend Fire all exhaust from hand with a null filter).
-    for pile in (player.draw_pile, player.discard_pile, player.exhaust_pile):
-        if card in pile:
-            pile.remove(card)
-            player.hand.append(card)
-            return
+    # WHEREVER it is — the EXHAUST pile included, and the PLAY pile too
+    # (the hook fires from a turn boundary, but a card can sit in Play across
+    # one: `AutoPlayFromDrawPile` parks all its picks before playing any).
+    # Searching only draw and discard silently stranded an exhausted card
+    # (Brand, Burning Pact, Second Wind and Fiend Fire all exhaust from hand
+    # with a null filter).
+    if player.remove_from_current_pile(card) is not None:
+        player.hand.append(card)

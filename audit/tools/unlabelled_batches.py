@@ -21,10 +21,11 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-OUT = ROOT / ".superpowers" / "sdd" / "unlabelled"
+OUT = ROOT / ".superpowers" / "sdd" / "unlabelled-r13"
 
 # (batch id, [record ids]) -- seams are one batch per record because a seam
 # record is both the biggest and the one every content record binds back to.
+# Members with no unlabelled entries left are dropped at build time.
 SEAM_BATCHES = {
     "seam-ccc": ["creature_card_cmds"],
     "seam-power-cmd": ["power_cmd"],
@@ -34,8 +35,19 @@ SEAM_BATCHES = {
 MISC_BATCH = "misc"
 MISC_RECORDS = ["hook_dispatch"]
 
-POWER_BATCHES = 5
-RELIC_BATCHES = 8
+# Records whose unlabelled entries are settled by a DEDICATED round-13 lane,
+# not the triage batches: the AfterAttack task owns skittish/suck/painful_stabs,
+# the Play-pile task owns smoggy's pile-limbo entry, the kifuda task owns kifuda.
+EXCLUDED_RECORDS = {
+    "power/skittish",
+    "power/suck",
+    "power/painful_stabs",
+    "power/smoggy",
+    "relic/kifuda",
+}
+
+POWER_BATCHES = 2
+RELIC_BATCHES = 2
 
 
 def load_entries() -> list[dict]:
@@ -70,15 +82,18 @@ def chunk(records: list[str], counts: dict[str, int], n: int) -> list[list[str]]
 def build() -> dict[str, list[str]]:
     entries = load_entries()
     recs = by_record(entries)
+    recs = {r: v for r, v in recs.items() if r not in EXCLUDED_RECORDS}
     counts = {r: len(v) for r, v in recs.items()}
 
     batches: dict[str, list[str]] = {}
     claimed: set[str] = set()
     for bid, members in SEAM_BATCHES.items():
-        batches[bid] = members
+        live = [r for r in members if r in recs]
+        if live:
+            batches[bid] = live
         claimed.update(members)
 
-    misc = list(MISC_RECORDS)
+    misc = [r for r in MISC_RECORDS if r in recs]
     claimed.update(MISC_RECORDS)
 
     powers = sorted(r for r in recs if r.startswith("power/"))
@@ -87,12 +102,15 @@ def build() -> dict[str, list[str]]:
         r for r in recs if r not in claimed and r not in powers and r not in relics
     )
     misc += leftovers
-    batches[MISC_BATCH] = misc
+    if misc:
+        batches[MISC_BATCH] = misc
 
     for i, group in enumerate(chunk(powers, counts, POWER_BATCHES), 1):
-        batches[f"power-{i}"] = sorted(group)
+        if group:
+            batches[f"power-{i}"] = sorted(group)
     for i, group in enumerate(chunk(relics, counts, RELIC_BATCHES), 1):
-        batches[f"relic-{i}"] = sorted(group)
+        if group:
+            batches[f"relic-{i}"] = sorted(group)
 
     # Every record exactly once, every entry accounted for.
     flat = [r for group in batches.values() for r in group]
@@ -105,6 +123,11 @@ def main() -> int:
     cmd = sys.argv[1] if len(sys.argv) > 1 else "plan"
     entries = load_entries()
     recs = by_record(entries)
+    excluded = sum(len(v) for r, v in recs.items() if r in EXCLUDED_RECORDS)
+    recs = {r: v for r, v in recs.items() if r not in EXCLUDED_RECORDS}
+    if excluded:
+        print(f"(excluded: {excluded} entries in {sorted(EXCLUDED_RECORDS)} "
+              f"-- owned by dedicated round-13 lanes)")
     batches = build()
 
     total = 0

@@ -3,7 +3,6 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ...hooks import CAT_POWER
 from ..base import Encounter, Intent, Monster, MoveType
 from ..state_machine import (
     ConditionalBranchState,
@@ -87,26 +86,6 @@ class TorchHeadAmalgam(MachineMonster):
         self._execute_attack(ctx, _BEAM_DMG, _BEAM_HITS)
 
 
-class _AmalgamDeathListener:
-    """Stand-in for Queen.AfterDeath (Queen.cs:221-234).
-
-    CombatState.IterateHookListeners (CombatState.cs:413-420) adds a monster's
-    MonsterModel to the listener walk right after that creature's Powers, but
-    the sim has no MonsterModel listener category at all (hook_dispatch G5), so
-    the Queen registers this listener in that slot instead."""
-
-    hook_category = CAT_POWER + 1
-
-    def __init__(self, queen: Queen) -> None:
-        self.queen = queen
-        self.owner = queen  # dispatch-order slot: the Queen's own creature
-
-    def on_death(self, creature: Creature,
-                 was_removal_prevented: bool = False) -> None:
-        if isinstance(creature, TorchHeadAmalgam) and not self.queen.is_dead:
-            self.queen.on_amalgam_died()
-
-
 class Queen(MachineMonster):
     """Puppet Strings (Chains of Binding 3) → You Are Mine (Frail/Weak/
     Vulnerable 99) → while the Torch Head Amalgam lives, Burn Bright For Me
@@ -120,9 +99,16 @@ class Queen(MachineMonster):
     min_hp = 400
     max_hp = 400
 
-    def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
-        super().__init__(hooks, rng or random.Random())
-        hooks.register(_AmalgamDeathListener(self))
+    def on_death(self, creature: Creature,
+                 was_removal_prevented: bool = False) -> None:
+        """`Queen.AfterDeath` (Queen.cs:221-234).
+
+        Lived on a private `_AmalgamDeathListener` registered in a hand-made
+        Powers+1 slot until hook_dispatch/G5 gave the sim a real MonsterModel
+        listener category (CombatState.cs:417-421); the body is unchanged.
+        """
+        if isinstance(creature, TorchHeadAmalgam) and not self.is_dead:
+            self.on_amalgam_died()
 
     def on_amalgam_died(self) -> None:
         """Queen.cs:226-232 — HasAmalgamDied/Amalgam are derived state in the

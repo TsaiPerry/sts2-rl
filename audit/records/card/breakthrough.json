@@ -72,6 +72,11 @@
       "what": "the per-enemy `if ctx.player.is_dead: break` inside the AoE loop (breakthrough.py:55-56)",
       "verdict": "faithful",
       "rationale": "Mirrors the combat-over check the game's attack command performs between hits; both stop fanning out once the player has died mid-attack (thorns, Flame Barrier)."
+    },
+    {
+      "what": "the sim returned early on `if ctx.player.is_dead` between the HP loss and the AoE loop (breakthrough.py) -- now deleted",
+      "verdict": "faithful",
+      "issue": "Closed 2026-08-01 (round 13, R11). DELETED -- Breakthrough.OnPlay (Breakthrough.cs:24-31) runs self-damage then the AoE attack with no IsDead/IsEnding check between them and NO tail after the attack at all, so the sim's guard had no counterpart. Deleting it is behaviour-neutral today because the per-enemy DamageCmd.deal(..., dealer=ctx.player, ...) the loop reaches self-gates on `dealer.is_dead` as its FIRST statement, ahead of every hook -- mirroring AttackCommand.Execute's Attacker.IsDead bail (AttackCommand.cs:528-531), which for Breakthrough (_hitCount == 1) refuses the whole opponent batch as one unit. Verified by DIFFERENTIAL EXECUTION against a reconstructed pre-edit subclass over 48 configurations (hp x seed x encounter size x first-enemy-dead): zero differences in HP, piles, powers, energy, phase, result, or the full ordered HookSystem dispatch trace. CAVEAT, recorded because the argument is hostage to another file: this deletion's correctness rests ENTIRELY on DamageCmd.deal's `dealer.is_dead` bail in sts2_rl/cmds.py. If that bail moves, weakens, or is reordered behind a hook, Breakthrough regresses SILENTLY and the tests in this record will NOT catch it -- they assert outcomes downstream of the bail. Same family and reasoning as card/blood_wall, card/brand and card/hemokinesis under card/_is_dead_early_return (Task 27). Pins: test/test_is_dead_early_returns.py::TestBreakthroughGuardDeleted (2 tests), which are honestly non-RED-able: the change is provably inert."
     }
   ],
   "verdict": "gap",

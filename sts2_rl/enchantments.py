@@ -41,9 +41,26 @@ class Enchantment:
 
     id: str
     name: str
-    # The game reaches an enchantment through the card that owns it, so it
-    # shares the card slot; registration order keeps it right after its card.
+    # The game reaches an enchantment through the card that owns it
+    # (CombatState.cs:462-465 adds it immediately after the card), so it shares
+    # the card slot. `HookSystem._ordered` emits it right after its own card as
+    # part of the pile walk; this is only the fallback slot hint for an
+    # enchantment whose card is in no pile.
     hook_category = CAT_CARD
+    # Rides on a card rather than sitting in a pile itself: `HookSystem` counts
+    # these so it can splice the four piles in wholesale when there are none.
+    hook_is_card_rider = True
+
+    def hook_contains(self) -> bool:
+        """`CombatState.Contains`' EnchantmentModel arm (CombatState.cs:589):
+        `HasCard && !Card.HasBeenRemovedFromState && Card.Owner.IsActiveForHooks`.
+
+        `HasCard` is `_card != null` (EnchantmentModel.cs:154) — an enchantment
+        detached from its card is not a listener even while it is still
+        registered.
+        """
+        card = self.card
+        return card is not None and card.hook_contains()
 
     # Hook.ModifyDamage / Hook.ModifyBlock apply the SOURCE CARD's enchantment
     # to the running amount before either listener loop (Hook.cs:1487-1499,

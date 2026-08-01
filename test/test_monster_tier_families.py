@@ -6,7 +6,12 @@ Five independent mechanisms:
   built from C#'s EMPTY ``params AbstractIntent[]`` (no telegraph at all);
   the sim's ``Intent`` dataclass could not express that.
 * ``monster/_intent_count_lost`` — C#'s ``StatusIntent(N)`` carries a card
-  count the sim's ``Intent`` dropped (Aeonglass/TheInsatiable/TestSubject).
+  count the sim's ``Intent`` dropped. The spec has **18** ``new
+  StatusIntent(`` sites; 5 are ported (Aeonglass, TheInsatiable,
+  TestSubject, Vantom, Noisebot) and **13 are still open** — see
+  ``test_status_intent_count_census_is_still_five_of_eighteen``. The round-13
+  first pass recorded this as a 4-site mechanism that was fully closed; it
+  is not.
 * ``monster/_retained_corpse_in_scan`` — Guardbot's ``GuardMove`` and Queen's
   ``BurnBrightForMe`` scan C#'s teammate/enemy lists on MEMBERSHIP alone; the
   sim's ports also filtered on liveness, so a death-vetoed retained corpse
@@ -165,14 +170,87 @@ class TestIntentCountLost:
         assert intent.has(MoveType.STATUS_CARD)
         assert intent.status_count == 3
 
-    def test_other_status_card_intents_are_unaffected(self):
-        """Byte-identical guard: a STATUS_CARD intent NOT among this
-        mechanism's three sites (Noisebot's NOISE_MOVE) must keep the
-        field's default."""
+    def test_noisebot_noise_carries_its_status_count(self):
+        """Noisebot.cs:45 `new StatusIntent(2)` (`_noiseStatusCount = 2`,
+        Noisebot.cs:23; NoiseMove adds exactly 2 Dazed, one to Discard and
+        one to Draw, Noisebot.cs:58-64).
+
+        This test REPLACES `test_other_status_card_intents_are_unaffected`,
+        which asserted `status_count is None` here and called Noisebot "a
+        STATUS_CARD intent NOT among this mechanism's three sites". That
+        premise was never checked against the C#: Noisebot is squarely
+        inside monster/_intent_count_lost, so the old assertion pinned a
+        divergence as intended behaviour. Found by the round-13 R11 review;
+        the site is now ported and the pin inverted."""
         cs = fresh_with(Noisebot)
         intent = cs.enemy.current_intent
         assert intent.move_type == MoveType.STATUS_CARD
-        assert intent.status_count is None
+        assert intent.status_count == 2
+
+    def test_status_intent_count_census_is_still_five_of_eighteen(self):
+        """Ledger for monster/_intent_count_lost -- NOT a claim that the
+        open sites are correct.
+
+        `grep -rn "new StatusIntent(" --include=*.cs` over the spec returns
+        exactly 18 sites (Aeonglass:102, Chomper:59, EyeWithTeeth:39,
+        HauntedShip:44, LeafSlimeM:34, LeafSlimeS:32, MechaKnight:83,
+        Myte:49, Noisebot:45, PhrogParasite:42, SlimedBerserker:52,
+        SoulFysh:113, SoulFysh:115, TestSubject:201, TheInsatiable:96,
+        TwigSlimeM:37, Vantom:119, Wriggler:55), and the sim has an exact
+        1:1 STATUS_CARD `Intent` construction for each. FIVE of them now
+        carry `status_count`; the other THIRTEEN drop it and are OPEN
+        divergences, listed below with the C# count each one loses.
+
+        This test exists because the round-13 first pass told the queue
+        "all 4 known sites now carry their count" when 14 were open. It
+        goes RED the moment a site is ported (update both tables AND
+        GAP-QUEUE.md) or a new StatusIntent site appears un-ported. Keyed by
+        FILE, not file:line -- line numbers churn under concurrent lanes and
+        a ledger that breaks on an unrelated edit gets deleted, not fixed."""
+        import collections
+        import pathlib
+        import re
+
+        root = pathlib.Path(__file__).resolve().parent.parent / "sts2_rl" / "monsters"
+        # Every sim construction of an Intent whose primary or `also` type is
+        # STATUS_CARD, and whether that same call passes status_count=.
+        call = re.compile(r"Intent\((?:[^()]|\([^()]*\))*?\)", re.S)
+        done = collections.Counter()
+        open_sites = collections.Counter()
+        for path in sorted(root.rglob("*.py")):
+            text = path.read_text(encoding="utf-8")
+            for m in call.finditer(text):
+                body = m.group(0)
+                if "MoveType.STATUS_CARD" not in body:
+                    continue
+                where = path.relative_to(root).as_posix()
+                (done if "status_count=" in body else open_sites)[where] += 1
+
+        assert sum(done.values()) + sum(open_sites.values()) == 18, \
+            (dict(done), dict(open_sites))
+        assert dict(done) == {
+            "glory/aeonglass.py": 1,        # Aeonglass.cs:102 StatusIntent(WitherAmount)
+            "glory/fabricator.py": 1,       # Noisebot.cs:45   StatusIntent(2)
+            "glory/test_subject.py": 1,     # TestSubject.cs:201 StatusIntent(BurningGrowlBurnCount)
+            "hive/the_insatiable.py": 1,    # TheInsatiable.cs:96 StatusIntent(6)
+            "overgrowth/vantom.py": 1,      # Vantom.cs:119    StatusIntent(3)
+        }
+        # OPEN -- each of these loses a count the game telegraphs. Not
+        # intended behaviour; work remaining under monster/_intent_count_lost.
+        assert dict(open_sites) == {
+            "glory/mecha_knight.py": 1,     # MechaKnight.cs:83  StatusIntent(4)
+            "glory/slimed_berserker.py": 1,  # SlimedBerserker.cs:52 StatusIntent(10)
+            "hive/chomper.py": 1,           # Chomper.cs:59      StatusIntent(3)
+            "hive/myte.py": 1,              # Myte.cs:49         StatusIntent(2)
+            "overgrowth/fogmog.py": 1,      # EyeWithTeeth.cs:39 StatusIntent(3)
+            # Wriggler.cs:55 StatusIntent(1) + PhrogParasite.cs:42 StatusIntent(3)
+            "overgrowth/phrog_parasite.py": 2,
+            # LeafSlimeS.cs:32 (1), LeafSlimeM.cs:34 (2), TwigSlimeM.cs:37 (1)
+            "overgrowth/slimes.py": 3,
+            "underdocks/haunted_ship.py": 1,  # HauntedShip.cs:44 StatusIntent(HauntDazed)
+            # SoulFysh.cs:113 StatusIntent(Beckon) + :115 StatusIntent(Gaze)
+            "underdocks/soul_fysh.py": 2,
+        }
 
 
 # ══════════════════════════════════════════════════════════════════════════

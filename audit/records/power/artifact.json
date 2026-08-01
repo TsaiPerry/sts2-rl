@@ -67,8 +67,8 @@
     },
     "AfterModifyingPowerAmountReceived": {
       "maps_to": "cmds.py:301-305 `artifact.amount -= 1` + on_power_amount_changed + _expire",
-      "verdict": "gap",
-      "issue": "The stack-consumption event is hand-inlined. C# consumes the stack via `PowerCmd.Decrement(this)` from AfterModifyingPowerAmountReceived (ArtifactPower.cs:38-41) -- i.e. through the full ModifyAmount pipeline, which is what runs ShouldRemoveDueToAmount. The sim decrements the field and calls _expire() directly. This is audit/records/seam/power_cmd.json's gap G4 (no AfterModifyingPowerAmountGiven/Received machinery exists in the sim, and both real C# listeners -- Artifact and Ruined Helmet -- are hand-inlined instead); per rule 3 the same verdict, cross-referenced. The observable for Artifact specifically is identical, which is why power_cmd calls the inline reimplementation individually correct."
+      "verdict": "faithful",
+      "issue": "Closed 2026-08-01 (tier-2 round 13): STALE. The record predates round 12 Task 18's AfterModifyingPowerAmount* machinery (power_cmd/G3+G4). Re-verified against today's powers.py/cmds.py: Artifact is now a real listener consuming its stack through the full ModifyAmount pipeline, matching ArtifactPower.cs:38-41 exactly. The reasoning replaced: that the stack-consumption event was hand-inlined because no such machinery existed -- it exists now.  The text it replaced read: The stack-consumption event is hand-inlined. C# consumes the stack via `PowerCmd.Decrement(this)` from AfterModifyingPowerAmountReceived (ArtifactPower.cs:38-41) -- i.e. through the full ModifyAmount pipeline, which is what runs ShouldRemoveDueToAmount. The sim decrements the field and calls _expire() directly. This is audit/records/seam/power_cmd.json's gap G4 (no AfterModifyingPowerAmountGiven/Received machinery exists in the sim, and both real C# listeners -- Artifact and Ruined Helmet -- are hand-inlined instead); per rule 3 the same verdict, cross-referenced. The observable for Artifact specifically is identical, which is why power_cmd calls the inline reimplementation individually correct."
     }
   },
   "guards": [

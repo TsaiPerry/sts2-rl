@@ -109,8 +109,31 @@ class Relic:
     name: str
     rarity: RelicRarity
     # After its owner's powers in the dispatch walk
-    # (CombatState.IterateHookListeners, CombatState.cs:428-435).
+    # (CombatState.IterateHookListeners, CombatState.cs:428-435). Only the
+    # fallback slot hint now — `HookSystem._ordered` derives relic position
+    # from `combat.relics`, which IS `player.Relics`.
     hook_category = CAT_RELIC
+    # `RelicModel.IsMelted` (RelicModel.cs:271), the one skip inside the relic
+    # leg of the walk (CombatState.cs:431). The sim removes a melted relic from
+    # the run entirely rather than leaving it in `Relics` flagged (see
+    # `is_tradable` below), so `combat.relics` never holds one and this is
+    # False for every relic that exists; declared so the skip is expressible
+    # and so a future wax port has the flag to set.
+    is_melted: bool = False
+    # `RelicModel.HasBeenRemovedFromState` (RelicModel.cs:420), set by
+    # `RemoveInternal` (:531-534) from `Player.RemoveRelicInternal`
+    # (Player.cs:476-492) and cleared by `AfterCloned` (:525). The first leg of
+    # `CombatState.Contains`' RelicModel arm (CombatState.cs:597).
+    #
+    # MACHINERY-ONLY, exactly like `is_melted` above: NO production code sets
+    # it. Every sim relic-removal site is a plain `run.relics.remove(...)` in a
+    # file outside this mechanism's reach (`events/ranwid_the_elder.py`,
+    # `events/relic_trader.py`, `relics/toy_box.py`, `conformance/runner.py`),
+    # and none of them has a `RelicCmd.Remove` command to hang the flag off.
+    # Declared so the arm is literal and so those call sites have something to
+    # set when a relic-removal command is built. The LIVE leg of the arm is
+    # `Owner.IsActiveForHooks`.
+    has_been_removed_from_state: bool = False
     # RelicModel.IsAllowedInShops — a handful of relics (Amethyst Aubergine,
     # Bowler Hat, Lucky Fysh, Old Coin, The Courier) opt out of shop stock.
     is_allowed_in_shops: bool = True
@@ -197,6 +220,23 @@ class Relic:
         inside `play_card` on the player's own turn never reaches
         `on_player_turn_end`, which is where Diamond Diadem's counter would
         otherwise have been cleared."""
+
+    def hook_contains(self) -> bool:
+        """`CombatState.Contains`' RelicModel arm (CombatState.cs:597):
+        `!relicModel.HasBeenRemovedFromState && relicModel.Owner.IsActiveForHooks`.
+
+        Evaluated per item as the enumeration reaches this relic (:482-488), so
+        a relic an earlier listener in the same dispatch removed is skipped.
+        A relic with no combat (a run-level duck-typed call, relics/base.py's
+        run-hook surface) has no owner to ask and passes.
+        """
+        if self.has_been_removed_from_state:
+            return False
+        combat = self.combat
+        if combat is None:
+            return True
+        player = getattr(combat, "player", None)
+        return player is None or player.is_active_for_hooks
 
     def attach(self, combat: CombatState) -> None:
         self.combat = combat

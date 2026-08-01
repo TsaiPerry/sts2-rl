@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .hooks import CAT_CARD
+
 if TYPE_CHECKING:
     from .cards import Card
 
@@ -28,9 +30,42 @@ class Affliction:
     #: Only Galvanized and Tainted override it True in the game source.
     is_stackable: bool = False
 
+    # `CombatState.IterateHookListeners` adds `cardModel.Affliction` to the
+    # listener list immediately after its card and before that card's
+    # Enchantment (CombatState.cs:458-461) — THAT is the load-bearing citation.
+    # `AfflictionModel.cs:146`'s `ShouldReceiveCombatHooks => true` corroborates
+    # it but is decorative: `grep -rn ShouldReceiveCombatHooks src/` finds
+    # declarations and zero readers in this build. So an affliction shares its
+    # card's slot; `HookSystem._ordered` emits it from the pile walk, and this
+    # is the fallback hint for one whose card is in no pile.
+    #
+    # DORMANT on today's content, both ends: none of the seven sim Affliction
+    # subclasses below defines any HookSystem hook, and of the ten C# files
+    # under src/Core/Models/Afflictions exactly one overrides an AbstractModel
+    # hook (Hexed.cs, AfterCardEnteredCombat) and Hexed is a data-only stub
+    # here. The machinery exists so that porting Hexed is a content change and
+    # not an engine change (hook_dispatch/G6).
+    hook_category = CAT_CARD
+    # Rides on a card rather than sitting in a pile itself; see Enchantment.
+    hook_is_card_rider = True
+
     def __init__(self, amount: int) -> None:
         self.amount = amount
         self.card: Card | None = None
+
+    def hook_contains(self) -> bool:
+        """`CombatState.Contains`' AfflictionModel arm (CombatState.cs:591):
+        `HasCard && !Card.HasBeenRemovedFromState && Card.Owner.IsActiveForHooks`.
+
+        `HasCard` is `_card != null` (AfflictionModel.cs:90). C# guarantees it
+        goes false the moment the affliction is cleared —
+        `CardModel.ClearAfflictionInternal` (CardModel.cs:1532-1540) calls
+        `AfflictionModel.ClearInternal` (:249-254), which nulls `_card`, before
+        nulling the card's own `Affliction`. `CardCmd.clear_affliction` mirrors
+        both halves for exactly this reason.
+        """
+        card = self.card
+        return card is not None and card.hook_contains()
 
     def __repr__(self) -> str:
         return f"{self.name}({self.amount})"

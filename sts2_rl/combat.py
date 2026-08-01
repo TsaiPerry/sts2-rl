@@ -198,6 +198,15 @@ class CombatState:
             card.reset_combat_state()
             card.combat = self
             self.hooks.register(card)
+            # An affliction listens alongside its card too — C# adds it to the
+            # walk between the card and the card's enchantment
+            # (CombatState.cs:458-461), and AfflictionModel.cs:146 declares
+            # ShouldReceiveCombatHooks. A deck card can arrive already
+            # afflicted: `CardCmd.afflict` is the same command in and out of
+            # combat and deliberately allows the out-of-combat case (see its
+            # asymmetric IsEnding guard). hook_dispatch/G6.
+            if card.affliction is not None:
+                self.hooks.register(card.affliction)
             # Enchantments listen alongside their card (the game clones the
             # canonical enchantment into each combat with a fresh status).
             if card.enchantment is not None:
@@ -554,6 +563,29 @@ class CombatState:
         return [e for e in self.enemies
                 if not (e.is_gone and not e.retained_after_death)]
 
+    def _perform_move(self, enemy) -> None:
+        """`MonsterModel.PerformMove` (MonsterModel.cs:434-453) around the
+        move itself.
+
+        Two lines of it are load-bearing outside the visuals: `IsPerformingMove`
+        is raised at :440 and dropped at :447, and `CreatureCmd.cs:527` refuses
+        the `combatState.RemoveCreature` half of the death removal while it is
+        raised — so a monster that dies in the middle of its own move keeps its
+        `Creature.CombatState` back-pointer, and therefore keeps receiving
+        hooks (`Contains`' MonsterModel arm, CombatState.cs:585), until the
+        move returns. `PerformMove`'s tail (:448-451) then completes the
+        deferred removal. `retained_after_death` is the sim's cached answer to
+        the same `ShouldCreatureBeRemovedFromCombatAfterDeath` consultation
+        :449 re-runs, so it is read rather than re-dispatched.
+        """
+        enemy.is_performing_move = True
+        try:
+            enemy.take_turn(self._ctx())
+        finally:
+            enemy.is_performing_move = False
+            if enemy.is_dead and not enemy.retained_after_death:
+                enemy.combat_removal_committed = True
+
     def _run_enemy_turns(self) -> None:
         # CombatManager.StartTurn runs THREE complete passes over the side's
         # captured participants before any of them acts, with one side-scoped
@@ -661,13 +693,13 @@ class CombatState:
                 enemy.stunned = False
                 move = getattr(enemy, "_current_move", None)
                 if move is not None and move.id == STUN_STATE_ID:
-                    enemy.take_turn(self._ctx())
+                    self._perform_move(enemy)
                 # MonsterModel.PerformMove -> MoveStateMachine.OnMovePerformed:
                 # from here on the monster's telegraphed move is no longer
                 # sticky, so the player-turn-start pass rolls it.
                 enemy.performed_first_move = True
             else:
-                enemy.take_turn(self._ctx())
+                self._perform_move(enemy)
                 enemy.performed_first_move = True
             if self.player.is_dead:
                 self.phase = Phase.COMBAT_OVER
@@ -758,6 +790,16 @@ class CombatState:
         # reset state will not be reset for the next combat."
         if self.player.is_dead:
             self.player.hp = 1
+            # The revive is `CreatureCmd.Heal(Creature, 1)` (Player.cs:823-826),
+            # and `Creature.HealInternal` (Creature.cs:477-485) calls
+            # `Player?.ActivateHooks()` when the heal takes a dead creature back
+            # above zero. That is the entire POINT of doing the revive here
+            # rather than after the hooks — Player.cs:816-819 spells it out: a
+            # still-dead player's relics "will not be subscribed to the HookBus,
+            # and relics which rely on AfterCombatEnd to reset state will not be
+            # reset for the next combat". Chosen Cheese and every future
+            # AfterCombatEnd relic reads through this flag now.
+            self.player.is_active_for_hooks = True
         self.hooks.on_combat_end()
         self.hooks.on_combat_victory()
 
@@ -785,7 +827,14 @@ class CombatState:
 
         # Cards with a turn-end effect: fire the effect, then exhaust or discard.
         for card in [c for c in self.player.hand if c.has_turn_end_in_hand_effect]:
-            self.player.hand.remove(card)
+            # `CardModel.OnTurnEndInHandWrapper` (CardModel.cs:1682-1698) opens
+            # with `await CardPileCmd.Add(this, PileType.Play)` (:1684) and its
+            # own doc comment says so at :1673 ("While this method is being
+            # run, this card will be in the Play pile"). The sim left the card
+            # in NO pile for the duration of the effect, so a sweep over
+            # `AllCards` could not see it and a reshuffle the effect triggered
+            # behaved the same only by accident.
+            self._add_to_play_pile(card)
             card.on_turn_end_in_hand(ctx)
             if self.player.is_dead:
                 # CreatureCmd.Kill -> LoseCombat (CreatureCmd.cs:450-455) MARKS
@@ -799,12 +848,18 @@ class CombatState:
             # only for the cards that had no turn-end effect. Re-consulting it
             # here would send a vetoed card to the discard pile where the game
             # exhausts it.
+            # Both arms are pile-agnostic moves in C# (`CardCmd.Exhaust` at
+            # :1692, `CardPileCmd.Add(this, Discard)` at :1696), so neither
+            # assumes the effect left the card in Play.
             if card.is_ethereal:
+                self.player.remove_from_current_pile(card)
                 self.player.exhaust_pile.append(card)
                 # CardModel.cs:1692 — the other one.
                 self.hooks.on_card_exhausted(card, caused_by_ethereal=True)
             else:
+                old_pile = self.player.remove_from_current_pile(card)
                 self.player.discard_pile.append(card)
+                self.hooks.after_card_changed_piles(card, old_pile, None)
                 # No Hook.AfterCardDiscarded here. CardModel.cs:1696
                 # (OnTurnEndInHandWrapper's non-Ethereal branch) calls
                 # `CardPileCmd.Add(this, PileType.Discard...)` directly; the
@@ -855,7 +910,12 @@ class CombatState:
         # ResourceInfo.EnergyValue to the SAME number on the manual path.
         card.energy_value = actual_cost
         self.hooks.on_energy_spent(card, actual_cost)
-        self.player.hand.pop(hand_index)
+        # The card is NOT taken out of the hand here: `CardPileCmd.
+        # AddDuringManualCardPlay` (CardPileCmd.cs:669-670) is what removes it
+        # from its current pile, and it is the first statement of
+        # `OnPlayWrapper` (CardModel.cs:1875). The sim popped it early, which
+        # is why `oldPile` was unavailable to the entry dispatch (G8) and why
+        # `Hook.AfterEnergySpent` saw a hand the game still has the card in.
         self._resolve_card_play(card, target_idx)
 
         # CheckWinCondition (CombatManager.cs:1046-1059) — the loss
@@ -872,29 +932,76 @@ class CombatState:
         pay spend it themselves). Returns False if not in the player turn."""
         if self.phase != Phase.PLAYER_TURN:
             return False
-        if card in self.player.hand:
-            self.player.hand.remove(card)
+        # Same as the manual path: the move out of the hand belongs to the
+        # Play-pile entry inside `_resolve_card_play` (CardModel.cs:1879's
+        # `CardPileCmd.Add(this, PileType.Play, ...)`).
         self._resolve_card_play(card, target_idx, is_auto_play=True)
         # CheckWinCondition (CombatManager.cs:1046-1059) — the loss
         # arm is tested FIRST, so it wins a simultaneous death.
         self._check_win_condition()
         return True
 
+    def _result_pile_type_for_card_play(self, card: Card) -> str:
+        """`CardModel.GetResultPileTypeForCardPlay` (CardModel.cs:2070-2082).
+
+        `IsDupe || Type == Power -> PileType.None`; then
+        `ExhaustOnNextPlay || Keywords.Contains(Exhaust) -> PileType.Exhaust`,
+        CONSUMING `ExhaustOnNextPlay` on the spot (:2078); else Discard.
+
+        The sim has no `IsDupe`: `CardModel.CreateDupe` (:2186-2196) is
+        unported — `DuplicationPower` replays through the play COUNT, it does
+        not mint a duplicate card — so the first leg reduces to the Power test
+        and `getattr` keeps the citation literal for a later dupe port.
+        """
+        if getattr(card, "is_dupe", False) or card.card_type == CardType.POWER:
+            return "none"
+        if card.exhaust_on_next_play or card.exhausts:
+            card.exhaust_on_next_play = False
+            return "exhaust"
+        return "discard"
+
+    def _add_to_play_pile(self, card: Card) -> None:
+        """The Play-pile ENTRY, shared by both wrappers.
+
+        Manual: `CardPileCmd.AddDuringManualCardPlay` (CardPileCmd.cs:647-684)
+        — capture `oldPile` (:659), `RemoveFromCurrentPile` (:669),
+        `AddInternal` into Play (:670, a raw insert with no per-card hook),
+        then ONE `Hook.AfterCardChangedPiles(..., oldPile?.Type ?? None,
+        clonedBy: null)` at :683, AFTER the move.
+        Auto: `CardPileCmd.Add(this, PileType.Play, Bottom, null, ...)`
+        (CardModel.cs:1879), whose dispatch is CardPileCmd.cs:635 with the same
+        `oldPile?.Type ?? PileType.None` and the same literal null `clonedBy`.
+
+        Both shapes are the same three statements, which is why this is one
+        method. seam/creature_card_cmds guard G8's last unwired site.
+
+        Both refuse once the combat is over or ending, and by the same
+        predicate: `AddDuringManualCardPlay` returns on `IsOverOrEnding`
+        outright (:649-652), while `Add`'s two guards — `IsCombatPile &&
+        IsEnding -> success:false` (:312-319) and `IsCombatPile &&
+        !IsInProgress -> return` (:398-401) — are together the same thing. The
+        card then stays where it was, and every caller's Play gate turns the
+        rest of its own work into a no-op for it.
+        """
+        if self.is_over_or_ending:
+            return
+        old_pile = self.player.remove_from_current_pile(card)
+        self.player.play_pile.append(card)
+        self.hooks.after_card_changed_piles(card, old_pile, None)
+
     def _resolve_card_play(self, card: Card, target_idx: int | None,
                            is_auto_play: bool = False) -> None:
-        """Shared card-play resolution: result pile placement, play-count loop,
-        exhaust-keyword move, and the played hook. The card must already be
-        removed from the hand (or whichever pile it was played from)."""
-        # Power cards are removed from the combat entirely when played;
-        # everything else resolves from the discard pile. The game actually
-        # holds the card in PileType.Play (a limbo pile) during OnPlay and only
-        # moves it to its result pile (discard) AFTER the effect resolves
-        # (CardCmd.cs:116). The sim keeps it in discard for simplicity, but
-        # marks it as "being played" so a reshuffle its own effect triggers
-        # excludes it (parity — see PlayerCombatState.reshuffle_discard_into_draw).
-        if card.card_type != CardType.POWER:
-            self.player.discard_pile.append(card)
-            self.player._playing_card = card
+        """`CardModel.OnPlayWrapper` (CardModel.cs:1867-2005): the card moves
+        into `PileType.Play`, its result pile is decided, the play-count loop
+        runs, and the card leaves Play through a switch that is GATED on it
+        still being there.
+
+        The card must still be in whichever pile it is being played FROM —
+        this method performs the move, exactly as the wrapper's first
+        statement does.
+        """
+        # :1875 (manual) / :1879 (auto) — into Play, before anything else.
+        self._add_to_play_pile(card)
 
         # Resolve the single creature this play targeted (mirrors CardPlay.
         # Target): only ANY_ENEMY cards resolve to one enemy up front; AoE/
@@ -906,28 +1013,35 @@ class CombatState:
             if card.target_type == TargetType.ANY_ENEMY
             else None
         )
+        # :1890 — `Hook.ModifyCardPlayResultPileTypeAndPosition` is consulted
+        # ONCE, with `GetResultPileTypeForCardPlay()` as its `defaultPileType`
+        # argument, and it is consulted BEFORE `GeneratePlayCount` (:1895) and
+        # before any CardPlayStarted entry for this card exists. Nostalgia
+        # counts CardPlaysStarted this turn, so it must not see the play it is
+        # deciding about. The MOVE still happens after the loop, at :1976-1991.
+        #
+        # The sim used to ask for the play count FIRST and to pass the literal
+        # "discard" for every card, which forced Rebound to re-derive the
+        # Exhaust seed itself (see ReboundPower's docstring) and hid the
+        # Exhaust/None arms from every listener.
+        result_pile = self.hooks.modify_card_play_result_pile(
+            card, self._result_pile_type_for_card_play(card))
         # BaseReplayCount (Hidden Gem) seeds the play count; enchantment
         # replays (Spiral/Glam) stack on top via the hook.
         play_count = self.hooks.modify_card_play_count(
             card, self.enemy, 1 + card.base_replay_count
         )
+        # :1896-1899 — `if (Owner.Creature.IsDead) return;`, BETWEEN
+        # GeneratePlayCount and BeginCardOrPotionEffect. A player already dead
+        # here never reaches BeforeCardPlayed, and the return skips the exit
+        # switch, so the card stays in Play.
+        if self.player.is_dead:
+            return
         # Attack plays are bracketed by the attack-command boundary (mirrors
         # AttackCommand firing BeforeAttack/AfterAttack) so "next attack"
         # powers on the player (Vigor from Akabeko) consume their stacks after
         # one full multi-hit attack.
         is_attack = card.card_type == CardType.ATTACK
-        # ModifyCardPlayResultPileTypeAndPosition is consulted ONCE, when
-        # `resultPileType` is computed for the CardPlay (CardModel.cs:1922) —
-        # i.e. BEFORE the loop and before any CardPlayStarted entry for this
-        # card exists. Nostalgia counts CardPlaysStarted this turn, so it must
-        # not see the play it is deciding about. The MOVE still happens after
-        # the loop, in the finally.
-        result_pile = self.hooks.modify_card_play_result_pile(card, "discard")
-        # GetResultPileTypeForCardPlay (CardModel.cs:2070-2082) is evaluated
-        # here, as the hook's `defaultPileType` argument, and it CONSUMES
-        # ExhaustOnNextPlay on the spot (:2078) — before OnPlay runs, not after.
-        exhausts_this_play = card.exhausts or card.exhaust_on_next_play
-        card.exhaust_on_next_play = False
         # CardModel.cs:1904-1965 builds a FRESH CardPlay each iteration
         # (PlayIndex = i, :1919-1928) and fires Hook.BeforeCardPlayed (:1929)
         # AND Hook.AfterCardPlayed (:1959) INSIDE the loop. The sim fired each
@@ -937,6 +1051,36 @@ class CombatState:
         # CombatManager.BeginCardOrPotionEffect (CardModel.cs:1901) wraps
         # the whole play-count loop and is released in a `finally`
         # (:1967-1970), so the hand-empty check below sees a settled hand.
+        #
+        # `_playing_card` names the card whose wrapper is on the stack. It is
+        # SAVED and RESTORED, not just cleared: a card whose OnPlay auto-plays
+        # another card (Cascade) nests, and the old unconditional
+        # `_playing_card = None` at the tail wiped the outer card's mark for
+        # the rest of its own play.
+        previous_playing = self.player._playing_card
+        self.player._playing_card = card
+        try:
+            self._play_count_loop(card, play_count, played_target, is_attack,
+                                  target_idx, is_auto_play)
+        finally:
+            self.player._playing_card = previous_playing
+        # Every `if (Owner.Creature.IsDead) return;` inside the wrapper
+        # (CardModel.cs:1932, :1940, :1950, :1960) returns out of the WHOLE
+        # method — past the exit switch (:1976-1991) and past CheckForEmptyHand
+        # (:1992). The card is left in the Play pile; C# leaves it there too.
+        if self.player.is_dead:
+            return
+        self._move_to_result_pile_after_play(card, result_pile)
+        # CardModel.cs:1992 — the FIRST of CheckForEmptyHand's two callers, and
+        # the one the sim never had. It runs after the result-pile move, so a
+        # card that exhausted itself has already left the hand.
+        self._check_for_empty_hand()
+
+    def _play_count_loop(self, card: Card, play_count: int, played_target,
+                         is_attack: bool, target_idx: int | None,
+                         is_auto_play: bool) -> None:
+        """CardModel.cs:1901-1970 — the play-count loop and the
+        BeginCardOrPotionEffect bracket it runs inside."""
         with self._card_or_potion_effect():
             for play_index in range(play_count):
                 card.current_play_index = play_index
@@ -962,11 +1106,21 @@ class CombatState:
                     card.on_play(self._ctx(), target_idx)
                 if is_attack:
                     self.hooks.after_attack(self.player, card)
+                # CardModel.cs:1932-1935 — `if (Owner.Creature.IsDead) return;`
+                # IMMEDIATELY after `await OnPlay`, i.e. BEFORE the enchantment
+                # leg. A card play that kills its own player stops here.
+                if self.player.is_dead:
+                    return
                 # EnchantmentModel.OnPlay is a DIRECT in-loop call, not a hook
                 # (CardModel.cs:1937-1945) — after the card's own OnPlay and before
                 # Hook.AfterCardPlayed.
                 if card.enchantment is not None:
                     card.enchantment.on_play(card, played_target)
+                    # :1940-1943 — the same early return after the enchantment.
+                    if self.player.is_dead:
+                        return
+                # (:1946-1955, `Affliction.OnPlay` and its own IsDead return,
+                # has no sim counterpart: no ported affliction has an OnPlay.)
                 # Hook.AfterCardPlayed, per iteration and gated on the combat still
                 # being in progress (CardModel.cs:1957-1959).
                 #
@@ -985,38 +1139,132 @@ class CombatState:
                 # (Hook.cs:263-270), which IS gated and which the sim does not gate.
                 if not self.is_over:
                     self.hooks.on_card_played(card, is_auto_play)
-                # CardModel.cs:1950-1952 and :1960-1963 return early on
-                # `Owner.Creature.IsDead` ALONE — the PLAYER dying. A dead
-                # ENEMY does not end the Replay loop: a Throwing-Axe-doubled
-                # card that kills on iteration 0 still runs iteration 1, which
-                # is how the game's per-play counters (Tuning Fork's run-scoped
-                # SkillsPlayed) reach 2. The sim also broke on
+                    # :1960-1963 — the last of the four IsDead returns, right
+                    # after Hook.AfterCardPlayed.
+                    if self.player.is_dead:
+                        return
+                # A dead ENEMY does not end the Replay loop: a Throwing-Axe-
+                # doubled card that kills on iteration 0 still runs iteration
+                # 1, which is how the game's per-play counters (Tuning Fork's
+                # run-scoped SkillsPlayed) reach 2. The sim also broke on
                 # `_all_enemies_dead()`, so it reached 0.
-                if self.player.is_dead:
-                    break
 
-        # OnPlay resolved: the card leaves limbo (moves to its result pile), so
-        # later reshuffles include it normally again.
-        self.player._playing_card = None
+    def remove_card_from_combat(self, card: Card) -> None:
+        """`CardPileCmd.RemoveFromCombat` (CardPileCmd.cs:90-191) for one card:
+        take it out of its combat pile (:129), dispatch
+        `Hook.AfterCardChangedPiles` with the pile it just left and a literal
+        null `clonedBy` (:188), then `RemoveFromState()` (:189).
 
-        # Exhaust keyword (or a consumed ExhaustOnNextPlay): move the played
-        # card from discard to exhaust.
-        if exhausts_this_play and card in self.player.discard_pile:
-            self.player.discard_pile.remove(card)
-            self.player.exhaust_pile.append(card)
-            self.hooks.on_card_exhausted(card)
+        `RemoveFromState` (CardModel.cs:1604-1608) is the first leg of the
+        CardModel `Contains` arm (CombatState.cs:593), so the card also stops
+        being a hook listener; the sim unregisters it (and its riders) for the
+        same reason. `Card.reset_combat_state` clears the flag next combat,
+        mirroring `AfterCloned` (:1228).
+        """
+        old_pile = self.player.remove_from_current_pile(card)
+        self.hooks.after_card_changed_piles(card, old_pile, None)
+        card.has_been_removed_from_state = True
+        for listener in (card, card.enchantment, card.affliction):
+            if listener is None:
+                continue
+            try:
+                self.hooks.unregister(listener)
+            except ValueError:
+                pass
 
-        # Result-pile redirect (ModifyCardPlayResultPileTypeAndPosition):
-        # Nostalgia sends the first Attack/Skill plays of the turn to the top
-        # of the draw pile instead of the discard pile.
-        if card in self.player.discard_pile and result_pile == "draw_top":
-            self.player.discard_pile.remove(card)
-            self.player.draw_pile.append(card)  # end of list = top of pile
+    def _move_to_result_pile_after_play(self, card: Card,
+                                        result_pile: str) -> None:
+        """CardModel.cs:1976-1991 — the play's EXIT.
 
-        # CardModel.cs:1992 — the FIRST of CheckForEmptyHand's two callers, and
-        # the one the sim never had. It runs after the result-pile move, so a
-        # card that exhausted itself has already left the hand.
-        self._check_for_empty_hand()
+            CardPile? pile = Pile;
+            if (pile != null && pile.Type == PileType.Play)
+                switch (resultPileType) {
+                  case None:    await CardPileCmd.RemoveFromCombat(this);
+                  case Exhaust: await CardCmd.Exhaust(choiceContext, this);
+                  default:      await CardPileCmd.Add(this, resultPileType,
+                                                      resultPilePosition);
+                }
+
+        The GATE is the point: an effect that moved the card out of Play
+        during its own OnPlay (a return-to-hand, a transform, an exhaust) OWNS
+        it, and the exit does nothing. The sim's two exit legs used to be
+        guarded on discard membership instead, which is the same gate spelled
+        with the wrong pile and which silently stopped matching once the card
+        stopped being parked in the discard.
+
+        A played Power card takes the `None` arm, which is why it leaves
+        `AllPiles` and stops being a listener (CombatState.cs:449-467). Dormant
+        on today's content — none of the NINE hook-implementing card classes
+        (Bolas, Clash, Drum of Battle, Enthralled, Howl from Beyond, Normality,
+        Regret, Stomp, Thrumming Hatchet) is a Power — but it is also what
+        keeps `HookSystem._ordered` on its fast path after the first Power card
+        of a combat.
+
+        TWO of the three arms carry a combat-ending refusal of their own, and
+        the third carries none. That asymmetry is C#'s and it is the whole
+        reason the killing blow's card is still lying in the Play pile when
+        the fight ends:
+
+        * `default:` is `CardPileCmd.Add`, refused for a COMBAT pile while
+          `IsEnding` (CardPileCmd.cs:312-319, every result `success:false`) and
+          while `!IsInProgress` (:398-401, an early `return results`) — both
+          strictly BEFORE `RemoveFromCurrentPile` (:496) and `AddInternal`
+          (:510), so a refused add leaves the card exactly where it was.
+        * `case Exhaust:` is `CardCmd.Exhaust`, whose entire body is inside
+          `if (!CombatManager.Instance.IsOverOrEnding)` (CardCmd.cs:239-245) —
+          so the move, `History.CardExhausted` and `Hook.AfterCardExhausted`
+          are skipped TOGETHER.
+        * `case None:` is `CardPileCmd.RemoveFromCombat` (:102-191), which has
+          no liveness gate at all. A Power played as the killing blow still
+          leaves the state.
+
+        `IsOverOrEnding` is `IsEnding || !IsInProgress`
+        (CombatManager.cs:210-219) and the two `Add` guards are together
+        exactly that, which is why both arms below read the same predicate.
+        `IsEnding` (:180-201) is true from the instant the last primary enemy
+        dies — inside the killing blow's own wrapper, long before
+        `CheckWinCondition`. Downstream this is dormant (`BlockCmd`,
+        `DrawCmd`, `DamageCmd` and the draw itself are each separately
+        `IsOverOrEnding`-gated, which is exactly why C# can afford to put the
+        gate one level up); what it changes is the card's final pile and two
+        dispatches C# does not make. R5-review RV-2.
+        """
+        if card not in self.player.play_pile:
+            return
+        if result_pile == "none":
+            # No gate: CardPileCmd.RemoveFromCombat (:102-191) has none.
+            self.remove_card_from_combat(card)
+            return
+        if result_pile == "exhaust":
+            # `CardCmd.Exhaust` (CardCmd.cs:237-246). Its `!IsOverOrEnding`
+            # wrapper at :239 covers the whole body, so an ending combat
+            # leaves the card in Play and fires no AfterCardExhausted — and
+            # that gate lives in `ExhaustCmd.exhaust`, where C# puts it, so it
+            # covers this arm and the thirteen other sim exhaust sites alike.
+            # Its own `CardPileCmd.Add(card, PileType.Exhaust, ...)` (:242) is
+            # an AfterCardChangedPiles site in C# too; the sim's `ExhaustCmd.
+            # exhaust` does not dispatch it, uniformly at every exhaust site —
+            # see the R5 report's finding on the Add site's remaining sim
+            # entry points.
+            from .cmds import ExhaustCmd
+            ExhaustCmd.exhaust(self.hooks, self.player, card)
+            return
+        # `default:` — a full `CardPileCmd.Add(this, resultPileType,
+        # resultPilePosition)`, which dispatches AfterCardChangedPiles at
+        # CardPileCmd.cs:635 with oldPileType = Play. "draw_top" is the sim's
+        # spelling of `(PileType.Draw, CardPilePosition.Top)`, the only
+        # non-default (pile, position) pair any ported listener returns
+        # (Nostalgia, Rebound).
+        if self.is_over_or_ending:
+            # :312-319 / :398-401, both before the move. Same predicate as
+            # `_add_to_play_pile`'s entry refusal, and for the same reason.
+            return
+        self.player.play_pile.remove(card)
+        if result_pile == "draw_top":
+            self.player.draw_pile.append(card)   # end of list = top of pile
+        else:
+            self.player.discard_pile.append(card)
+        self.hooks.after_card_changed_piles(card, "play", None)
 
     def sort_enemies_by_slot_name(self) -> None:
         """`CombatState.SortEnemiesBySlotName` (CombatState.cs:495-501) —
@@ -1041,25 +1289,51 @@ class CombatState:
         self.enemies.sort(key=key)
 
     def _move_to_result_pile_without_playing(self, card: Card) -> None:
-        """`CardModel.MoveToResultPileWithoutPlaying` (CardModel.cs:2089-2107),
-        the destination of every card `CardCmd.AutoPlay` refuses to play.
+        """`CardCmd.MoveToResultPileWithoutPlaying` (CardCmd.cs:133-137) plus
+        the model method it delegates to (CardModel.cs:2089-2107) — the
+        destination of every card `CardCmd.AutoPlay` refuses to play.
 
-        It is NOT "append to the discard pile", which is what the sim did: it
-        honours `ExhaustOnNextPlay || Keywords.Contains(Exhaust)` and routes
-        those to `CardCmd.Exhaust` (:2098-2101), firing AfterCardExhausted. That
-        is how Havoc's `forceExhaust` reaches an UNPLAYABLE card — a Burn pulled
-        off the draw pile is exhausted, not discarded. Its own doc comment names
-        the one way it differs from the played path: a Power card here goes to the
-        discard rather than to limbo.
+            await CardPileCmd.Add(card, PileType.Play);      // CardCmd.cs:135
+            await card.MoveToResultPileWithoutPlaying(...);  // :136
+
+        and the model method is GATED the same way the played exit is:
+
+            if (pile != null && pile.Type == PileType.Play)
+                IsDupe                      -> RemoveFromCombat
+                ExhaustOnNextPlay|Exhaust   -> CardCmd.Exhaust
+                else                        -> Add(Discard)
+
+        Two things the sim's version had wrong, both now fixed. (1) It never
+        moved the card into Play, so the gate had nothing to test and the
+        entry's `AfterCardChangedPiles` never fired. (2) It had no `IsDupe`
+        arm. The doc comment at :2086-2087 names the ONE way this differs from
+        the played path — "Power cards do not get sent to Limbo, and instead
+        get sent to the discard" — which falls out of the None arm being
+        `IsDupe` here where `GetResultPileTypeForCardPlay` also tests
+        `Type == Power`. The sim has no dupes (see
+        `_result_pile_type_for_card_play`), so the arm is expressible but
+        unreachable.
+
+        The Exhaust arm is how Havoc's `forceExhaust` reaches an UNPLAYABLE
+        card: a Burn pulled off the draw pile is exhausted, not discarded.
         """
-        if card.exhaust_on_next_play or card.exhausts:
+        self._add_to_play_pile(card)                     # CardCmd.cs:135
+        if card not in self.player.play_pile:            # :2092's gate
+            return
+        if getattr(card, "is_dupe", False):              # :2094-2097
+            self.remove_card_from_combat(card)
+            return
+        if card.exhaust_on_next_play or card.exhausts:   # :2098-2101
             card.exhaust_on_next_play = False
-            self.player.exhaust_pile.append(card)
-            self.hooks.on_card_exhausted(card)
-        else:
-            self.player.discard_pile.append(card)
+            from .cmds import ExhaustCmd
+            ExhaustCmd.exhaust(self.hooks, self.player, card)
+            return
+        self.player.play_pile.remove(card)               # :2104 Add(Discard)
+        self.player.discard_pile.append(card)
+        self.hooks.after_card_changed_piles(card, "play", None)
 
-    def auto_play_card(self, card: Card, target_idx: int | None = None) -> None:
+    def auto_play_card(self, card: Card, target_idx: int | None = None,
+                       auto_play_type: str = "default") -> None:
         """Play a card for free (mirrors CardCmd.AutoPlay): no energy is spent.
 
         The card is removed from whichever pile currently holds it. Unplayable
@@ -1069,16 +1343,14 @@ class CombatState:
         """
         if self.phase == Phase.COMBAT_OVER or self.player.is_dead:
             return
-        piles = (
-            self.player.hand,
-            self.player.draw_pile,
-            self.player.discard_pile,
-            self.player.exhaust_pile,  # e.g. Howl From Beyond replays itself
-        )
-        for pile in piles:
-            if card in pile:
-                pile.remove(card)
-                break
+        # The card is NOT taken out of its pile here. `CardCmd.AutoPlay` only
+        # pre-adds a PILE-LESS card (`if (card.Pile == null) CardPileCmd.Add(
+        # card, PileType.Play)`, CardCmd.cs:114-116) — the real move is
+        # `OnPlayWrapper`'s own `Add(this, PileType.Play)` (CardModel.cs:1879),
+        # or, for a refused play, `MoveToResultPileWithoutPlaying`'s
+        # (CardCmd.cs:135). Both are pile-agnostic, so the "e.g. Howl From
+        # Beyond replays itself from the exhaust pile" case the old four-pile
+        # scan existed for is covered by construction.
         if not card.is_playable or not self.hooks.should_play_card(card, auto_play=True):
             self._move_to_result_pile_without_playing(card)
             return
@@ -1124,7 +1396,8 @@ class CombatState:
             self._ctx().resolve_target(target_idx)
             if card.target_type == TargetType.ANY_ENEMY else None
         )
-        self.hooks.before_card_auto_played(card, auto_play_target)
+        self.hooks.before_card_auto_played(card, auto_play_target,
+                                           auto_play_type)
         self._resolve_card_play(card, target_idx, is_auto_play=True)
 
         # CheckWinCondition (CombatManager.cs:1046-1059) — the loss

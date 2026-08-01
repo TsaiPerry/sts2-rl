@@ -211,14 +211,18 @@ def test_reshuffle_discard_into_draw_dispatches_for_every_card():
 
 
 def test_reshuffle_discard_into_draw_excludes_the_held_card():
-    """A card mid-OnPlay sits in limbo (`_playing_card`), not the discard --
-    it must not fire the hook either."""
+    """A card mid-OnPlay sits in `PileType.Play`, not the discard -- the
+    reshuffle never sees it, so it must not fire the hook for it either.
+
+    RE-STAGED 2026-08-01 (round 13, R5): the card is now physically in
+    `player.play_pile` instead of being parked in the discard behind a
+    `_playing_card` marker. Same intent, real pile."""
     cs = fresh()
     cs.player.draw_pile.clear()
     held = make_card("pommel_strike")
     other = make_card("strike")
-    cs.player.discard_pile[:] = [held, other]
-    cs.player._playing_card = held
+    cs.player.discard_pile[:] = [other]
+    cs.player.play_pile[:] = [held]
     spy = PileSpy()
     cs.hooks.register(spy)
     cs.player.reshuffle_discard_into_draw()

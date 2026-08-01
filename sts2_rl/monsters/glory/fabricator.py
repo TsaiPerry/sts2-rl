@@ -62,14 +62,29 @@ class Noisebot(MachineMonster):
     min_hp = 18
     max_hp = 23
 
+    # Noisebot.cs:23 `private const int _noiseStatusCount = 2;`. The
+    # decompiler inlined it at both use sites (the `new StatusIntent(2)` at
+    # :45 and the `new CardPileAddResult[2]` at :58), so one constant serving
+    # the intent and the two Dazed adds is a faithful de-inlining.
+    _NOISE_STATUS_COUNT = 2
+
     def build_machine(self) -> MonsterMoveStateMachine:
-        noise = MoveState("NOISE_MOVE", self._noise, Intent(MoveType.STATUS_CARD))
+        # Noisebot.cs:45 `new StatusIntent(2)` -- StatusIntent.CardCount is
+        # telegraphed to the player, so the intent must carry it and not just
+        # the STATUS_CARD flag bit. 5th site of monster/_intent_count_lost
+        # (13 of the mechanism's 18 sites are still open; see
+        # test_monster_tier_families.py's census ledger).
+        noise = MoveState("NOISE_MOVE", self._noise,
+                          Intent(MoveType.STATUS_CARD,
+                                 status_count=self._NOISE_STATUS_COUNT))
         noise.follow_up = noise
         return MonsterMoveStateMachine([noise], noise)
 
     def _noise(self, ctx: CombatCtx) -> None:
         from ...cards import DazedCard
         from ...cmds import CardPileCmd
+        # Noisebot.cs:58-64 -- Discard first, then Draw (at a random
+        # position), which is the order the intent's count of 2 covers.
         CardPileCmd.add_to_discard(ctx.hooks, ctx.player, DazedCard())
         CardPileCmd.add_to_draw(ctx.hooks, ctx.player, DazedCard())
 

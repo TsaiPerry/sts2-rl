@@ -24,7 +24,9 @@ Probes:
   move-rng          which sim monsters roll their move off combat_rng.monster_ai
                     and which use some other stream.
   zero-weight       is "every branch weight zeroed" reachable in a ported
-                    machine? (C# returns branch 0; the sim raises RuntimeError)
+                    machine? (round 12 T22: both sides now return branch 0 --
+                    see zero_weight()'s docstring for the message-grep fix
+                    and why the mechanism this probe hunted is now closed)
   cs-conditional    the ConditionalBranchState.AddState census (the second
                     branch dispatcher; cs-addbranch does not see it).
   mismatch          EXECUTED: for every ported RandomBranchState, the C#
@@ -374,13 +376,85 @@ def _fractional_branch_weights(machine) -> list[str]:
     return out
 
 
+# ── the two machine fall-through raises, which must NOT share a bucket ──────
+# `sts2_rl/monsters/state_machine.py` raises at 11 sites (96, 120, 131, 196,
+# 240, 273, 324, 381, 432, 491, 508). Exactly two of them are branch
+# fall-throughs, and they belong to DIFFERENT mechanisms:
+#
+#   :273  RandomBranchState.get_next_state   "No valid state found in
+#         RandomBranchState {id}!"  == RandomBranchState.cs:127 verbatim.
+#         This is the one `zero_weight`/`nondyadic_weights` hunt.
+#   :324  ConditionalBranchState.get_next_state  "No valid branch in
+#         ConditionalBranchState {id}"  -- a different dispatcher (see
+#         `cs_conditional`), a different asymmetry question.
+#
+# The probes' PRE-round-13 grep was the bare substring "No valid branch",
+# which (a) does NOT match :273's current message at all -- round 12's T22
+# reworded it to the C# text -- so every genuine RandomBranchState hit was
+# reclassified as an "other error", and (b) DOES still match :324, so a
+# ConditionalBranchState fall-through would have been counted and printed
+# under a headline reading "(total weight 0)". It was a live false-positive
+# source, not merely a dead grep. Both substrings below therefore name their
+# state class, so neither can drift onto the other. Naming the class also
+# keeps :432's lowercase `f"no valid state found: {next_id}"` -- a THIRD,
+# unrelated raise one capitalisation away from the first -- out of the bucket
+# by construction rather than by case-sensitivity luck. (Round 13 R11 item 4
+# + fix pass.)
+_RAND_FALLTHROUGH = "No valid state found in RandomBranchState"
+_COND_FALLTHROUGH = "No valid branch in ConditionalBranchState"
+
+
+def _classify_machine_raise(exc: BaseException) -> tuple[str, str]:
+    """('rand' | 'cond' | 'other', text) for an exception out of a machine.
+
+    Used by every classification point in `zero_weight` and
+    `nondyadic_weights` -- including the ones that wrap Encounter/CombatState
+    CONSTRUCTION, not just the walk. A machine that falls through on its very
+    first roll does so during construction, so a construction-site `except`
+    that files everything under "couldn't fuzz it" hides exactly the hit the
+    probe exists to report. That hole used to swallow TwoTailedRat and
+    Fabricator -- and TwoTailedRat is this probe's own named G7-clause-c
+    trigger, i.e. pass 2 was blind on the case pass 2 was added for.
+    """
+    text = str(exc)
+    if isinstance(exc, RuntimeError):
+        if _RAND_FALLTHROUGH in text:
+            return "rand", text
+        if _COND_FALLTHROUGH in text:
+            return "cond", text
+    return "other", f"{type(exc).__name__}: {exc}"
+
+
 def zero_weight(walks: int = 200, steps: int = 400) -> None:
     """Can a ported RandomBranchState reach total weight 0?
 
     C# GetNextState (RandomBranchState.cs:117-127) does rng.NextFloat(0) -> 0,
     then `num -= 0; if (num <= 0) return States[0]` — it BURNS a draw and picks
-    the FIRST branch. The sim raises RuntimeError before drawing
-    (state_machine.py:182-183).
+    the FIRST branch. STALE CITATION FIXED (round 13 R11 item 4): this used to
+    say "the sim raises RuntimeError before drawing (state_machine.py:182-183)"
+    -- both the path and the claim are wrong on the current tree. The real
+    file is `sts2_rl/monsters/state_machine.py`, and round 12's T22 didn't
+    just reword the raise message, it also fixed the REACHABILITY: the sim's
+    `get_next_state` (state_machine.py:255-273) now draws FIRST via the same
+    `_weighted_roll` primitive C# uses and only THEN loops branches, so an
+    all-zero-weight vector resolves to branch 0 exactly like C# — it no
+    longer raises at all. The remaining `RuntimeError` at state_machine.py:273
+    ("No valid state found in RandomBranchState {id}!", matching
+    RandomBranchState.cs:127 verbatim) is reachable only by a GENUINE
+    sequential-subtraction float-rounding fall-through, which is SYMMETRIC
+    with C#'s own throw at the same site — not the zero-weight ASYMMETRY this
+    probe was built to detect. That mechanism is closed; what this probe can
+    still show is whether the (now merely theoretical) fall-through is
+    reachable at all, and whether the probe's own hit-detection still works
+    when it is forced — see the standalone proof cited in R11-report.md item 4.
+
+    The old `"No valid branch"` grep was NOT merely dead. It still matches
+    ConditionalBranchState's raise (state_machine.py:324), a different
+    dispatcher entirely, so the probe had a live FALSE-POSITIVE source as
+    well as a miss: a ConditionalBranchState fall-through would have been
+    counted and printed under a headline reading "(total weight 0)". The two
+    are now classified separately and printed under separate headlines — see
+    `_classify_machine_raise`.
 
     Executed reachability: drive every ported MachineMonster's machine through
     `walks` random walks of `steps` transitions each and count RuntimeErrors.
@@ -414,8 +488,14 @@ def zero_weight(walks: int = 200, steps: int = 400) -> None:
     from sts2_rl.monsters.fake_merchant import FakeMerchantMonster
     units["fake_merchant_monster"] = FakeMerchantMonster
 
-    def _walk_machine(machine, owner, seed) -> tuple[int, str | None, str | None]:
-        """(transitions, 'No valid branch' text or None, other error or None)"""
+    def _walk_machine(machine, owner, seed
+                      ) -> tuple[int, str | None, str | None, str | None]:
+        """(transitions, RandomBranch hit, ConditionalBranch hit, other error).
+
+        The two branch fall-throughs are reported in separate slots -- see
+        `_classify_machine_raise` for why sharing a bucket was wrong in both
+        directions.
+        """
         rng = _random.Random(seed)
         machine._performed_first_move = True
         n = 0
@@ -424,15 +504,16 @@ def zero_weight(walks: int = 200, steps: int = 400) -> None:
                 move = machine.roll_move(owner, rng)
                 machine.on_move_performed(move)
                 n += 1
-        except RuntimeError as exc:
-            if "No valid branch" in str(exc):
-                return n, str(exc), None
-            return n, None, f"{type(exc).__name__}: {exc}"
-        except Exception as exc:                    # pragma: no cover
-            return n, None, f"{type(exc).__name__}: {exc}"
-        return n, None, None
+        except Exception as exc:
+            kind, text = _classify_machine_raise(exc)
+            return (n,
+                    text if kind == "rand" else None,
+                    text if kind == "cond" else None,
+                    text if kind == "other" else None)
+        return n, None, None, None
 
     fuzzed, deferred, hits, transitions = [], [], [], 0
+    cond_hits: list[tuple[str, str]] = []
     fractional: list[str] = []
     for unit_id, cls in sorted(units.items()):
         if not issubclass(cls, MachineMonster):
@@ -448,11 +529,14 @@ def zero_weight(walks: int = 200, steps: int = 400) -> None:
             machine = cls.__new__(cls).build_machine()
             owner = _Owner()
             owner.machine = machine
-            n, hit, err = _walk_machine(machine, owner, w)
+            n, hit, cond, err = _walk_machine(machine, owner, w)
             ok += n
             if w == 0:
                 fractional += [f"{cls.__name__}.{f}"
                                for f in _fractional_branch_weights(machine)]
+            if cond:
+                cond_hits.append((cls.__name__, cond))
+                break
             if hit:
                 hits.append((cls.__name__, hit))
                 break
@@ -478,22 +562,52 @@ def zero_weight(walks: int = 200, steps: int = 400) -> None:
         if cls is None:                             # pragma: no cover
             live_bad.append((name, "class not in the roster"))
             continue
+        # Building the Encounter/CombatState ALSO drives the machine (the
+        # monster rolls its opening move), so a fall-through can be raised
+        # right here. Classify it exactly as the walk does instead of filing
+        # every construction failure under "couldn't fuzz it" -- see
+        # `_classify_machine_raise` (round 13 R11 fix pass; this hole hid
+        # TwoTailedRat, the probe's own named G7-clause-c trigger).
         try:
             enc = Encounter(id="probe_zero_weight", monster_classes=[cls])
             base = CombatState(rng=_random.Random(0), encounter=enc)
             mon = base.enemies[0]
         except Exception as exc:
-            live_bad.append((name, f"CombatState: {type(exc).__name__}: {exc}"))
+            kind, text = _classify_machine_raise(exc)
+            if kind == "rand":
+                hits.append((name, text))
+            elif kind == "cond":
+                cond_hits.append((name, text))
+            else:
+                live_bad.append((name, f"CombatState: {text}"))
             continue
         fractional += [f"{name}.{f}"
                        for f in _fractional_branch_weights(mon.machine)]
         ok, err, hit_here = 0, None, None
         for w in range(walks):
-            enc = Encounter(id="probe_zero_weight", monster_classes=[cls])
-            cs = CombatState(rng=_random.Random(w), encounter=enc)
-            m = cs.enemies[0]
-            n, hit, err = _walk_machine(m.machine, m, w)
+            # Same classification for the per-walk rebuild: unguarded, a
+            # construction fall-through on any seed > 0 crashed the probe.
+            try:
+                enc = Encounter(id="probe_zero_weight", monster_classes=[cls])
+                cs = CombatState(rng=_random.Random(w), encounter=enc)
+                m = cs.enemies[0]
+            except Exception as exc:
+                kind, text = _classify_machine_raise(exc)
+                if kind == "rand":
+                    hit_here = text
+                    hits.append((name, text))
+                elif kind == "cond":
+                    hit_here = text
+                    cond_hits.append((name, text))
+                else:
+                    err = f"CombatState: {text}"
+                break
+            n, hit, cond, err = _walk_machine(m.machine, m, w)
             ok += n
+            if cond:
+                hit_here = cond
+                cond_hits.append((name, cond))
+                break
             if hit:
                 hit_here = hit
                 hits.append((name, hit))
@@ -516,8 +630,16 @@ def zero_weight(walks: int = 200, steps: int = 400) -> None:
 
     print(f"\nTOTAL machines fuzzed: {len(fuzzed) + len(live_ok)}  "
           f"transitions: {transitions + live_transitions}")
-    print(f"'No valid branch' (total weight 0) hits: {len(hits)}")
+    print(f"RandomBranchState fall-through "
+          f"('{_RAND_FALLTHROUGH} ...') hits: {len(hits)}")
     for h in hits:
+        print(f"  {h[0]}: {h[1]}")
+    # A DIFFERENT mechanism, printed under its own headline so it can never be
+    # read as a zero-weight hit (the old shared "No valid branch" grep could).
+    print(f"ConditionalBranchState fall-through "
+          f"('{_COND_FALLTHROUGH} ...') hits: {len(cond_hits)}  "
+          f"[different mechanism -- not a zero-weight hit]")
+    for h in cond_hits:
         print(f"  {h[0]}: {h[1]}")
     print(f"fractional (non-whole) branch weight vectors reached: "
           f"{len(fractional)}")
@@ -543,7 +665,16 @@ def nondyadic_weights(walks: int = 200, steps: int = 400) -> None:
     callable branch weight, it searches the monster's own integer fields for a
     setting that opens the gate (each candidate set to 0, then restored), prints
     the resulting weight vector, and fuzzes the machine with the gate open,
-    counting `No valid branch` fall-throughs."""
+    counting RandomBranchState fall-throughs (message text corrected, round 13
+    R11 item 4 -- see `zero_weight`'s docstring and `_classify_machine_raise`
+    for why the old "No valid branch" grep both missed the raise it was aiming
+    at and still matched a DIFFERENT one).
+
+    Scope caveat, stated because it bounds the claim: this probe's population
+    is a SINGLE machine (TwoTailedRat). Its corrected classification is
+    therefore exercised only as far as that one machine goes; the executed
+    "the corrected grep really does fire" evidence in R11-report.md covers
+    `zero_weight`, not this probe."""
     import random as _random
 
     import sts2_rl.monsters  # noqa: F401
@@ -561,6 +692,7 @@ def nondyadic_weights(walks: int = 200, steps: int = 400) -> None:
         return CombatState(rng=_random.Random(seed), encounter=enc).enemies[0]
 
     callable_weight, opened, hits, transitions = [], [], [], 0
+    cond_hits: list[tuple[str, str]] = []
     for _uid, cls in sorted(units.items()):
         if not issubclass(cls, MachineMonster):
             continue
@@ -601,7 +733,22 @@ def nondyadic_weights(walks: int = 200, steps: int = 400) -> None:
         opened.append(f"{cls.__name__}.{found[0]}")
         ok, err = 0, None
         for w in range(walks):
-            m = _live(cls, w)
+            # `_live` builds an Encounter + CombatState, which drives the
+            # machine's opening roll -- a fall-through can land here, so it
+            # gets the same classification as the walk (round 13 R11 fix
+            # pass; unguarded, this both crashed the probe and, when it did
+            # not, hid the hit). See `_classify_machine_raise`.
+            try:
+                m = _live(cls, w)
+            except Exception as exc:
+                kind, text = _classify_machine_raise(exc)
+                if kind == "rand":
+                    hits.append((cls.__name__, text))
+                elif kind == "cond":
+                    cond_hits.append((cls.__name__, text))
+                else:
+                    err = f"CombatState: {text}"
+                break
             setattr(m, found[0], 0)
             m.machine._performed_first_move = True
             rng = _random.Random(w)
@@ -611,14 +758,14 @@ def nondyadic_weights(walks: int = 200, steps: int = 400) -> None:
                     mv = m.machine.roll_move(m, rng)
                     m.machine.on_move_performed(mv)
                     ok += 1
-            except RuntimeError as exc:
-                if "No valid branch" in str(exc):
-                    hits.append((cls.__name__, str(exc)))
-                    break
-                err = f"{type(exc).__name__}: {exc}"
-                break
-            except Exception as exc:               # pragma: no cover
-                err = f"{type(exc).__name__}: {exc}"
+            except Exception as exc:
+                kind, text = _classify_machine_raise(exc)
+                if kind == "rand":
+                    hits.append((cls.__name__, text))
+                elif kind == "cond":
+                    cond_hits.append((cls.__name__, text))
+                else:
+                    err = text
                 break
         transitions += ok
         print(f"     fuzzed with the gate OPEN: {ok} transitions"
@@ -628,8 +775,12 @@ def nondyadic_weights(walks: int = 200, steps: int = 400) -> None:
     print(f"of those, gate opened to a fractional weight vector: {len(opened)}"
           f"  ({', '.join(opened) or 'none'})")
     print(f"transitions fuzzed with a fractional vector live: {transitions}")
-    print(f"'No valid branch' fall-throughs: {len(hits)}")
+    print(f"RandomBranchState fall-throughs: {len(hits)}")
     for h in hits:
+        print(f"  {h[0]}: {h[1]}")
+    print(f"ConditionalBranchState fall-throughs: {len(cond_hits)}  "
+          f"[different mechanism -- not a G7c hit]")
+    for h in cond_hits:
         print(f"  {h[0]}: {h[1]}")
 
 
@@ -1489,40 +1640,104 @@ def spawn_roll() -> None:
 # ONE-SIDED-GUARD = only one side has a deliberate guard, but the other happens
 # to raise anyway for an unrelated reason. DEAD = a defensive throw on a state
 # the API on that side cannot produce, with no field to mirror.
+#
+# REFRESHED 2026-08-01 (round 13 R11 fix pass). Every row below was re-derived
+# BY EXECUTION against the current `sts2_rl/monsters/state_machine.py`, not by
+# reading the old text. The table it replaces was badly stale: SIX of the
+# twelve rows described sim behaviour that no longer exists (rows 6-11 below,
+# all of which asserted an asymmetry that has since been closed), a seventh
+# (row 2) had the wrong bucket AND a misread of what the C# guard even checks,
+# and ALL TWELVE sim line citations pointed at lines that hold something else.
+# The old summary line therefore read "guard N7 covers 5 sites; 6
+# raise-behaviour sites are gaps (G7 x3, G8 x3)" when the true count is 8
+# symmetric and ONE gap. Rounds 12-13 closed those gaps in the engine and
+# nobody re-ran this census.
+#
+# One bucket is new. "SYM" was documented as "both sides raise on the same
+# input, so only the TYPE differs" -- that is guard N7's entire scope, so a
+# row where NEITHER side raises must not inflate N7's count. Two rows are now
+# in that state (the engine matched C# by no longer raising at all), so they
+# get their own bucket and are kept as a record of a closed asymmetry rather
+# than deleted.
 _RAISE_PAIRS = [
     # (bucket, what, C# site, sim site)
     ("SYM", "machine: RollMove landed on a non-move",
-     "MonsterMoveStateMachine.cs:39", "state_machine.py:252"),
-    ("SYM", "machine: no initial state to fall back to",
-     "MonsterMoveStateMachine.cs:58", "state_machine.py:271"),
-    ("SYM", "machine: unknown state id from GetNextState",
-     "MonsterMoveStateMachine.cs:70", "state_machine.py:271"),
-    ("SYM", "MoveState: no follow-up at all",
-     "MoveState.cs:69", "state_machine.py:138"),
-    ("SYM", "conditional: no branch evaluated > 0",
-     "ConditionalBranchState.cs:53", "state_machine.py:232"),
-    ("ASYM", "branch: the subtract-and-check loop falls through (step 15, G7c)",
-     "RandomBranchState.cs:127", "state_machine.py:189 returns the LAST branch"),
-    ("ASYM", "branch: every weight is 0 (G7 clause b)",
-     "RandomBranchState.cs:117-124 burns a draw and picks branch 0",
-     "state_machine.py:183 raises before drawing"),
-    ("ASYM", "branch: CanRepeatXTimes with maxTimes == 0 (step 21, G7a)",
-     "RandomBranchState.cs:144-147 builds a permanently dead branch",
-     "state_machine.py:168-169 raises ValueError"),
-    ("ASYM", "register: duplicate state id (step 3, G8 clause a)",
-     "MonsterState.cs:19 -> Dictionary.Add throws",
-     "state_machine.py:87 silently overwrites"),
-    ("ASYM", "model: the MoveStateMachine setter set twice (step 37, G8 clause b)",
-     "MonsterModel.cs:228-236 throws",
-     "no setter; `self.machine = ...` silently rebinds"),
+     "MonsterMoveStateMachine.cs:37-40",
+     "state_machine.py:380-381 raises RuntimeError with the same text "
+     "('{id} is not a valid move state')"),
     ("ONE-SIDED-GUARD",
+     "machine: FindNextMoveState entered with a NULL current state",
+     "MonsterMoveStateMachine.cs:56-59 throws InvalidOperationException "
+     "('Cannot find next move state when current state is null.')",
+     "no deliberate guard: `_find_next_move_state` (state_machine.py:424) "
+     "reads `self.current.can_transition_away` and the constructor "
+     "(state_machine.py:373) reads `initial_state.should_appear_in_logs`, so "
+     "a None lands as an AttributeError from attribute access -- a different "
+     "predicate's side effect, which is what this bucket means. NOTE: the "
+     "row this replaces was labelled 'no initial state to fall back to', "
+     "which misreads the C#; :56-59 guards the CURRENT state, and the "
+     "initial-state fallback at :72 has no guard on either side"),
+    ("SYM", "machine: unknown state id from GetNextState",
+     "MonsterMoveStateMachine.cs:68-71",
+     "state_machine.py:431-432 raises RuntimeError with C#'s text verbatim "
+     "('no valid state found: {id}')"),
+    ("SYM", "MoveState: no follow-up at all",
+     "MoveState.cs:69",
+     "state_machine.py:196 raises RuntimeError "
+     "('MoveState {id} has no follow-up state')"),
+    ("SYM", "conditional: no branch evaluated > 0",
+     "ConditionalBranchState.cs:53",
+     "state_machine.py:324 raises RuntimeError "
+     "('No valid branch in ConditionalBranchState {id}')"),
+    ("SYM", "branch: the subtract-and-check loop falls through (step 15, G7c)",
+     "RandomBranchState.cs:127",
+     "state_machine.py:273 RAISES, with RandomBranchState.cs:127's text "
+     "verbatim -- executed under a forced overshoot. The row this replaces "
+     "was bucketed ASYM on the claim 'state_machine.py:189 returns the LAST "
+     "branch'; that has not been true since round 12's T22"),
+    ("SYM-NO-RAISE", "branch: every weight is 0 (step 15, G7 clause b)",
+     "RandomBranchState.cs:117-124 burns a draw and picks branch 0 -- no throw",
+     "state_machine.py:265-273 does the same: `_weighted_roll` draws FIRST, "
+     "roll starts at 0 and branch 0's `roll <= 0` is immediately true. "
+     "Executed: an all-zero vector returns branch 0, no raise. The row this "
+     "replaces was bucketed ASYM on 'state_machine.py:183 raises before "
+     "drawing'"),
+    ("SYM-NO-RAISE",
+     "branch: CanRepeatXTimes with an explicit maxTimes == 0 (step 21, G7a)",
+     "RandomBranchState.cs:144-147 builds a permanently dead branch -- no throw",
+     "state_machine.py:239-240's guard fires only for `max_times is None`; an "
+     "explicit `max_times=0` is legal and ported in `_effective_weight`. "
+     "Executed: accepted, no raise. The row this replaces claimed "
+     "'state_machine.py:168-169 raises ValueError'"),
+    ("SYM", "register: duplicate state id (step 3, G8 clause a)",
+     "MonsterState.cs:19 -> Dictionary.Add throws ArgumentException",
+     "state_machine.py:130-134 raises ValueError ('duplicate state id ...'). "
+     "Executed. The row this replaces claimed 'state_machine.py:87 silently "
+     "overwrites'"),
+    ("SYM", "model: the MoveStateMachine setter set twice (step 37, G8 clause b)",
+     "MonsterModel.cs:222-237 throws InvalidOperationException; "
+     "ResetStateMachine (MonsterModel.cs:389-392) is the sanctioned clear",
+     "state_machine.py:482-495 IS a property setter and raises RuntimeError; "
+     "`reset_state_machine` (state_machine.py:497-505) mirrors C#'s clear and "
+     "is the only way to reassign. Both executed. The row this replaces "
+     "claimed 'no setter; `self.machine = ...` silently rebinds'"),
+    ("SYM",
      "AddBranch overload #1 given CanRepeatXTimes (step 22, G8 clause c)",
-     "RandomBranchState.cs:48-51 throws ArgumentException",
-     "no analogue of C#'s guard; state_machine.py:168-169 happens to raise for "
-     "a DIFFERENT predicate (max_times <= 0), which is itself G7 clause a"),
+     "RandomBranchState.cs:48-51 throws ArgumentException "
+     "('Use other constructor to specify number of repeats')",
+     "state_machine.py:239-240 raises ValueError on exactly C#'s predicate -- "
+     "repeat_type CAN_REPEAT_X_TIMES with no maxRepeats supplied "
+     "(`max_times is None`). Executed. The row this replaces called it "
+     "'no analogue of C#'s guard ... happens to raise for a DIFFERENT "
+     "predicate (max_times <= 0)', which is doubly wrong: the predicate is "
+     "the same one, and `max_times <= 0` is not what the code tests"),
     ("DEAD", "branch: StateWeight.GetWeight with a null lambda (step 12)",
      "RandomBranchState.cs:29 -- unreachable, no overload can leave it null",
-     "no such field; the sim's weight default is in the add_branch signature"),
+     "no such field; the sim's weight default is in the add_branch signature "
+     "(`weight: float | Callable = 1.0`, state_machine.py:220). Caveat found "
+     "while re-deriving: an EXPLICIT `add_branch(state, None)` is accepted and "
+     "stored verbatim, so it would TypeError at roll time rather than at "
+     "build time -- unreached today (no caller passes None) but not guarded"),
 ]
 
 
@@ -1558,6 +1773,9 @@ def raise_sites() -> None:
     labels = {
         "SYM": "SYMMETRIC (both sides raise -> only the TYPE differs; "
                "this is guard N7's ENTIRE scope)",
+        "SYM-NO-RAISE": "SYMMETRIC, NEITHER SIDE RAISES (the sim used to and "
+                        "no longer does -> a CLOSED asymmetry, and NOT part "
+                        "of N7's count, which is about raise TYPE)",
         "ASYM": "ASYMMETRIC (exactly one side raises -> a gap, NOT N7's)",
         "ONE-SIDED-GUARD": "ONE-SIDED GUARD (only C# guards it deliberately; "
                            "the sim's raise is a different predicate's "
@@ -1565,15 +1783,26 @@ def raise_sites() -> None:
         "DEAD": "DEAD ON BOTH SIDES (a defensive throw the API cannot reach; "
                 "faithful)",
     }
+    seen = set()
     for bucket, label in labels.items():
         rows = [p for p in _RAISE_PAIRS if p[0] == bucket]
+        seen.update(p[0] for p in rows)
         print(f"\n  {label}: {len(rows)}")
         for _b, what, cs, py in rows:
             print(f"    {what}\n        C#: {cs}\n        sim: {py}")
+    unlabelled = {p[0] for p in _RAISE_PAIRS} - set(labels)
+    if unlabelled:                                   # pragma: no cover
+        print(f"\n  !! rows in unlabelled buckets (not counted): {unlabelled}")
     n_sym = sum(1 for p in _RAISE_PAIRS if p[0] == "SYM")
+    n_closed = sum(1 for p in _RAISE_PAIRS if p[0] == "SYM-NO-RAISE")
     n_gap = sum(1 for p in _RAISE_PAIRS if p[0] in ("ASYM", "ONE-SIDED-GUARD"))
-    print(f"\n  => guard N7 covers {n_sym} sites; {n_gap} raise-behaviour sites "
-          f"are gaps and are NOT N7's (G7 x3, G8 x3)")
+    print(f"\n  => guard N7 covers {n_sym} sites; {n_gap} raise-behaviour "
+          f"site(s) remain gaps and are NOT N7's; {n_closed} former "
+          f"asymmetries are now closed on both sides.")
+    print("     (Refreshed by execution 2026-08-01, round 13 R11 fix pass. "
+          "The previous printout said '5 sites / 6 gaps (G7 x3, G8 x3)' from "
+          "a table whose sim half had gone stale in six rows -- see the "
+          "comment above _RAISE_PAIRS.)")
 
 
 PROBES = {

@@ -19,9 +19,11 @@ class HeadbuttCard(Card):
         CardPileCmd.Add(card, Draw, Top)
       OnUpgrade: damage +3 (→ 12)
 
-    Deviation guard: in the game the played card sits in the Play pile while
-    resolving, so Headbutt can never pick itself; here it is already in the
-    discard pile, so it is filtered out of the candidates.
+    Headbutt can never pick itself: while it resolves it is in the Play pile
+    (CardModel.cs:1875), not the discard. That used to need an explicit
+    `c is not self` predicate here, because the sim parked a resolving card in
+    the discard pile; round 13 (R5) made the Play pile real and the
+    deviation is gone.
     """
     id = "headbutt"
     name = "Headbutt"
@@ -42,7 +44,6 @@ class HeadbuttCard(Card):
         DamageCmd.deal(ctx.hooks, target, self._damage, dealer=ctx.player, card=self)
         chosen = CardSelectCmd.from_pile(
             ctx.hooks, ctx.player.discard_pile, "to_draw_top",
-            predicate=lambda c: c is not self,
         )
         if chosen:
             ctx.player.discard_pile.remove(chosen[0])

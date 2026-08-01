@@ -6,6 +6,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from ..creatures import Creature
+from ..hooks import CAT_MONSTER
 
 if TYPE_CHECKING:
     from ..combat import CombatCtx
@@ -59,8 +60,14 @@ class Intent:
     For BUFF:   buffs is a list of (PowerClass, amount) to apply to self.
     For a StatusIntent (move_type or a member of `also` is STATUS_CARD):
         status_count carries the C# `StatusIntent.CardCount` — how many
-        status cards are about to land. Every StatusIntent site now sets it;
-        every other Intent construction leaves it at its default (None), and
+        status cards are about to land. The spec has EIGHTEEN
+        `new StatusIntent(` sites and the sim has a 1:1 construction for
+        each; as of 2026-08-01 only FIVE set the count (Aeonglass,
+        Test Subject, The Insatiable, Vantom, Noisebot) and THIRTEEN still
+        leave it None — see `monster/_intent_count_lost`, which is open, not
+        closed. `test_monster_tier_families.py`'s census ledger goes RED the
+        moment that 5-of-18 split changes.
+        Every other Intent construction leaves it at its default (None), and
         the observation encoder (full_env.py:571) still reads only the
         STATUS_CARD flag bit, not this value — the count is carried but
         unencoded (a checkpoint-tier concern, not this mechanism's).
@@ -94,6 +101,53 @@ class Monster(Creature):
 
     min_hp: int = 0
     max_hp: int = 0
+
+    # `CombatState.IterateHookListeners` adds `creature.Monster` to the listener
+    # list for every creature with no Player, immediately after that creature's
+    # Powers (CombatState.cs:417-421) — THAT is the load-bearing citation.
+    # `MonsterModel.cs:51`'s `ShouldReceiveCombatHooks => true` corroborates it
+    # but is decorative: `grep -rn ShouldReceiveCombatHooks src/` finds
+    # declarations and zero readers in this build. The sim's Monster IS its own
+    # MonsterModel, so the Monster object is the listener and `__init__`
+    # registers it (hook_dispatch/G5). Twelve C# monster models override an
+    # AbstractModel hook; before this the sim had no listener category to hang
+    # one on and the two ported cases (Aeonglass, Queen) each carried a
+    # private stand-in listener registered in the Powers+1 slot.
+    hook_category = CAT_MONSTER
+
+    # `Creature.CombatState == null`, as the hook walk needs it: an EVENT, set
+    # at the two statements that call `CombatState.RemoveCreature` (which is
+    # what nulls the back-pointer, CombatState.cs:299-302) —
+    # `CreatureCmd.cs:529` on the death path and `:601` -> `CombatState.
+    # CreatureEscaped` (CombatState.cs:266-270) on the escape path.
+    #
+    # Deliberately NOT `Creature.is_removed_from_combat`, which is the same
+    # fact computed as a PREDICTION: `is_gone and not retained_after_death` is
+    # true the instant HP reaches zero, i.e. before `_resolve_death` is even
+    # entered, where C# does not null the back-pointer until two statements
+    # AFTER `Hook.AfterDeath` (CreatureCmd.cs:519 vs :523-531). Reading the
+    # prediction here dropped a dying monster from its OWN AfterDeath, and
+    # from the `ShouldDie` (:505) / `ShouldCreatureBeRemovedFromCombatAfterDeath`
+    # (:508) consultations that precede it. Eight of the ten C# monster
+    # AfterDeath overrides are self-death-only, KinPriest.cs:104-107 among
+    # them, so that window is where the first content port lands.
+    # The prediction stays correct for its own callers (`can_receive_powers`,
+    # the enemy-turn filters, teammate membership) and is left alone.
+    combat_removal_committed: bool = False
+
+    def hook_contains(self) -> bool:
+        """`CombatState.Contains`' MonsterModel arm (CombatState.cs:585):
+        `monsterModel.Creature.CombatState != null` — the ONLY leg; a monster
+        listener is not tested against HasBeenRemovedFromState or an owner
+        flag.
+
+        Note what this does NOT exclude: a creature that is DEAD but still in
+        the combat — a death-vetoed corpse or a withered Decimillipede segment
+        (the `:523-531` block never ran), and a creature in the middle of its
+        own death sequence (it has not run YET) — all still pass, exactly as
+        in C#.
+        """
+        return not self.combat_removal_committed
 
     def adjust_hp_after_added(self, teammates: "list[Monster]") -> None:
         """MonsterModel.AfterAddedToRoom's HP fix-up, applied AFTER the parity
@@ -141,6 +195,32 @@ class Monster(Creature):
         # replacement while Poison is still resolving in AfterSideTurnStart,
         # before the move loop's own snapshot is taken).
         self.spawned_this_turn = True
+        # `MonsterModel.IsPerformingMove` (MonsterModel.cs:137, set at :440 and
+        # cleared at :447). Read by CreatureCmd.cs:527, which REFUSES the
+        # `combatState.RemoveCreature` half of the death removal while the
+        # monster is mid-move; `MonsterModel.PerformMove`'s own tail
+        # (MonsterModel.cs:448-451) completes the deferred removal once the
+        # move returns. `CombatState._run_enemy_turns` is the sim's PerformMove.
+        self.is_performing_move = False
+        # The MonsterModel joins the hook walk (CombatState.cs:420). Registered
+        # at construction because that is where the sim's Monster becomes real:
+        # both creature-addition paths (the encounter's `create_monsters` and
+        # `CreatureCmd.add`) build the object and put it in `combat.enemies` in
+        # the same step. The one exception is combat SETUP —
+        # `Encounter.create_monsters` builds the whole roster before
+        # `CombatState.enemies` is assigned (see the round-13 R1 report, F7) —
+        # so for the few dispatches inside `CombatState.__init__` a monster is
+        # registered but not yet reachable by the walk, and `_merge_extras`
+        # seats it in its category tail. `_ordered()` otherwise places it from
+        # `combat.enemies`, so registration ORDER here is immaterial — only
+        # membership is.
+        #
+        # `hooks` is None for a monster built outside any combat (the
+        # state-machine construction tests do exactly that); such a creature is
+        # in no `CombatState.Enemies` either, so C# has no listener for it and
+        # there is nothing here to register it with.
+        if hooks is not None:
+            hooks.register(self)
 
     @property
     def has_rolled_a_move(self) -> bool:

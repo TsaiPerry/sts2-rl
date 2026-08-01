@@ -29,9 +29,10 @@ class GamblingChip(Relic):
         )
         if not chosen:
             return
-        from ..cmds import DrawCmd
-        for card in chosen:
-            player.hand.remove(card)
-            player.discard_pile.append(card)
-            self.hooks.on_card_discarded(card)
-        DrawCmd.draw(player, len(chosen))
+        # GamblingChip.cs:21 is `CardCmd.DiscardAndDraw(picked, picked.Count)`
+        # — the same command Gambler's Brew uses, which is why neither should
+        # open-code it: the two sim copies disagreed about whether
+        # `AfterCardDiscarded` fires before or after the append (C# appends
+        # first, CardCmd.cs:192-194) and neither had the Sly tail (:201-204).
+        from ..cmds import CardCmd
+        CardCmd.discard_and_draw(self.hooks, player, chosen, len(chosen))

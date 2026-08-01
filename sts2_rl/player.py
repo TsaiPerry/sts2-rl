@@ -75,11 +75,58 @@ class PlayerCombatState(Creature):
     ) -> None:
         super().__init__(max_hp)
         self.side = "player"
+        # `Player.IsActiveForHooks` (Player.cs:112). "Almost equivalent to
+        # Creature.IsAlive, except for a brief period between the player's HP
+        # reaching zero and DieInternal" (Player.cs:103-111) — it is what lets
+        # death-prevention hooks run before the player counts as dead, and it
+        # exists on Player rather than Creature because a dead player STAYS in
+        # the combat where a dead monster is removed from it.
+        #
+        # `CombatState.IterateHookListeners` reads it twice: structurally at
+        # :424-427, where a false value skips that player's relics, potions,
+        # orbs and cards (but not the powers already added at :416), and lazily
+        # in `Contains` (:589-597) as the owner leg of every card/relic/potion/
+        # affliction/enchantment arm. Initialised true (`= Creature.IsAlive`,
+        # Player.cs:272/:438) and cleared by `DeactivateHooks` (:857-860) from
+        # CreatureCmd.cs:553 — after AfterDeath, i.e. only once the death is
+        # real and unprevented.
+        #
+        # RE-SET by `ActivateHooks` (:868-871), and single-player DOES reach it
+        # — do not delete the two lines that do. C#'s own doc comment there
+        # guesses "likely only called in multiplayer scenarios", but the caller
+        # is `Creature.HealInternal` (Creature.cs:477-485, `if (isDead &&
+        # !IsDead) Player?.ActivateHooks()`), and `CombatManager.
+        # EndCombatInternal` runs EVERY player's `ReviveBeforeCombatEnd`
+        # (CombatManager.cs:986) — which heals a dead player to 1 — immediately
+        # before `Hook.AfterCombatEnd` (:988). Player.cs:813-819 says in as many
+        # words why the order matters: a still-dead player's relics "will not be
+        # subscribed to the HookBus, and relics which rely on AfterCombatEnd to
+        # reset state will not be reset for the next combat". The sim mirrors
+        # both callers (`CreatureCmd.heal`, `CombatState._end_combat_internal`)
+        # and the window is genuinely open: `_check_win_condition` tests
+        # `_has_pending_loss` first, but seven other call sites reach
+        # `_end_combat(player_won=True)` without that test. Verified by
+        # execution: without the reactivation, Chosen Cheese silently loses its
+        # AfterCombatEnd max-HP gain (80 -> 80 instead of 80 -> 81) and no other
+        # test in the suite notices. Pinned by
+        # `test_the_victory_path_revives_before_dispatching_after_combat_end`.
+        self.is_active_for_hooks = True
         self.energy = 0
         self.hand: list[Card] = []
         self.draw_pile: list[Card] = deck.copy()
         self.discard_pile: list[Card] = []
         self.exhaust_pile: list[Card] = []
+        # `PlayerCombatState.PlayPile` (PlayerCombatState.cs:68) — the FIFTH
+        # combat pile (PileTypeExtensions.cs:35-42) and the LAST entry of
+        # `AllPiles` (:76). A card sits here for the whole of its own
+        # `OnPlayWrapper` (CardModel.cs:1875/:1879), and `CardPileCmd.Shuffle`
+        # reads only Draw and Discard (CardPileCmd.cs:870-871) — which is the
+        # entire mechanism behind "a reshuffle a card's own effect triggers
+        # cannot pick that card up". The sim used to fake it by parking the
+        # card in the DISCARD pile and marking it `_playing_card`, then
+        # subtracting it back out at every reader (see the de-hack list in
+        # `Combat._resolve_card_play`). creature_card_cmds N9 + step82.
+        self.play_pile: list[Card] = []
         # Belt size defaults to the base 3; runs pass their own (Phial
         # Holster grows RunState.max_potions). Fixed-length list[Potion |
         # None] mirroring Player.cs's `_potionSlots` — see RunState.potions
@@ -96,11 +143,30 @@ class PlayerCombatState(Creature):
         # PlayerCombatState.Phase. `None` until StartTurn runs; content reads
         # it (UnceasingTop.cs:18). See sts2_rl/turn_phase.py.
         self.turn_phase = PlayerTurnPhase.NONE
-        # The card currently mid-OnPlay, if any. The game holds a card being
-        # played in PileType.Play (limbo), not the discard, so a reshuffle its
-        # own effect triggers must not shuffle it back into the draw pile
-        # (CardCmd.cs:116; see reshuffle_discard_into_draw). Set by
-        # Combat._resolve_card_play for the duration of the play.
+        # The card whose `OnPlayWrapper` is currently executing, if any.
+        #
+        # This is NO LONGER the sim's PileType.Play stand-in — `play_pile`
+        # above is the real pile. What survives here is the strictly narrower
+        # fact "this card's OnPlay is on the stack right now", which the Play
+        # pile cannot express: `CardPileCmd.AutoPlayFromDrawPile` parks EVERY
+        # pick in Play (CardPileCmd.cs:954) before playing any of them, and a
+        # card whose OnPlay auto-plays another card (Cascade) leaves both in
+        # Play at once. Maintained by `Combat._resolve_card_play`, which saves
+        # and restores it so a nested play does not clear the outer card's
+        # mark.
+        #
+        # ZERO consumers as of 2026-08-01. Its last one was `relics/pen_nib.py`,
+        # whose C# reads `cardSource.Pile?.Type != PileType.Play`
+        # (PenNib.cs:120-128) and therefore wants `card not in
+        # player.play_pile`; that debt is paid, and the two predicates
+        # genuinely differ whenever `AutoPlayFromDrawPile` has more than one
+        # pick parked in Play (the parked picks are in the pile and are NOT
+        # `_playing_card`). It is kept, written and correctly saved/restored
+        # because the fact it names has no other expression in the sim and
+        # C#'s own `CardPlay`/`BeginCardOrPotionEffect` bracket is the thing a
+        # future port would attach here — but it is now UNREAD state, and a
+        # reader added later must first check whether the Play pile answers
+        # the question instead. R5-review RV-9 / R5 fix pass.
         self._playing_card: Card | None = None
         # Combat-start draw-pile randomization is CardPile.RandomizeOrderInternal
         # -> UnstableShuffle (Fisher-Yates, NO stabilizing sort), unlike the
@@ -112,25 +178,47 @@ class PlayerCombatState(Creature):
 
     @property
     def all_cards(self) -> list[Card]:
-        """Every card the player owns in this combat, across all piles
-        (mirrors STS2's PlayerCombatState.AllCards)."""
-        return self.hand + self.draw_pile + self.discard_pile + self.exhaust_pile
+        """`PlayerCombatState.AllCards` (PlayerCombatState.cs:82) —
+        `AllPiles.SelectMany(p => p.Cards)` over the five piles in their
+        declared PILE order, Play LAST (:76).
+
+        The Play leg is what makes a card sweep reach the card that is being
+        played right now: SmoggyPower's AfterCardPlayed sweep
+        (SmoggyPower.cs:24-34) afflicts the very Skill that triggered it,
+        because in C# that Skill is sitting in Play.
+
+        WITHIN a pile the equivalence is not exact, and only for one leg:
+        `CardPile` is TOP-FIRST (`MoveToTopInternal` is `Insert(0, …)` and
+        `CardPileCmd.cs:843` draws `FirstOrDefault()`), while the sim's
+        `draw_pile` is BOTTOM-first — end of list = top of pile. So the draw
+        leg is emitted in the reverse of `AllPiles.SelectMany`'s order; the
+        other four are stored in C#'s order. `HookSystem._derive` flips the
+        draw pile for exactly this reason and this method does not, because
+        nothing that reads it is order-sensitive: every consumer is an
+        unconditional sweep (`apotheosis`, `maul`, `ghost_seed`,
+        `end_of_turn_cleanup`, the Smoggy/Ringing/Tainted/Galvanized affliction
+        sweeps, `combat.py`'s listener REGISTRATION — whose dispatch order
+        `_derive` recomputes anyway) or a count (`perfected_strike`), and
+        `CardCmd.afflict` draws no RNG. Flipping it is a one-line change if a
+        first-match or RNG-proportional consumer is ever ported; do not assume
+        the equivalence holds before then. R5-review RV-7."""
+        return (self.hand + self.draw_pile + self.discard_pile
+                + self.exhaust_pile + self.play_pile)
 
     def pile_type_of(self, card: Card) -> str | None:
         """`CardModel.Pile?.Type` — which pile holds this card RIGHT NOW, or
-        None for a card that is in no combat pile (a Power mid-play, which
-        CardCmd removes from the combat entirely, or a run-deck card that was
-        never dealt in).
+        None for a card that is in no combat pile (a played Power, which
+        `CardPileCmd.RemoveFromCombat` takes out of the combat entirely, or a
+        run-deck card that was never dealt in).
 
-        `PileType.Play` is checked first and is NOT a fifth list: the sim
-        parks a card being played in the discard pile and marks it with
-        `_playing_card` (see `Combat._resolve_card_play`), so a membership test
-        alone would report Discard for a card the game has in Play limbo.
+        A straight membership test over `AllPiles`, in `AllPiles` order: with
+        a real `play_pile` there is no marker to consult and no card in two
+        piles at once. (It used to test `_playing_card` FIRST, because the
+        sim parked a resolving card in the discard pile and would otherwise
+        have answered Discard for a card the game holds in Play.)
 
         Several C# models guard on the pile — `FreeAttackPower.cs:26-39` and
         `:48-59` want `Hand` or `Play` — and the sim had no way to ask."""
-        if self._playing_card is card:
-            return "play"
         if card in self.hand:
             return "hand"
         if card in self.draw_pile:
@@ -139,6 +227,25 @@ class PlayerCombatState(Creature):
             return "discard"
         if card in self.exhaust_pile:
             return "exhaust"
+        if card in self.play_pile:
+            return "play"
+        return None
+
+    def remove_from_current_pile(self, card: Card) -> str | None:
+        """`CardModel.RemoveFromCurrentPile` (CardPileCmd.cs:496 ->
+        CardModel.cs) — take the card out of whatever combat pile holds it and
+        return that pile's name, or None if it was in none.
+
+        Pile-agnostic by construction, which is the property every ad-hoc
+        four-pile scan in the sim was approximating; the fifth pile is why
+        they are centralised here."""
+        for name, pile in (("hand", self.hand), ("draw", self.draw_pile),
+                           ("discard", self.discard_pile),
+                           ("exhaust", self.exhaust_pile),
+                           ("play", self.play_pile)):
+            if card in pile:
+                pile.remove(card)
+                return name
         return None
 
     # ── Potions ──────────────────────────────────────────────────────────
@@ -377,31 +484,15 @@ class PlayerCombatState(Creature):
         CardPileCmd.ShuffleIfNecessary's reshuffle step)."""
         if _is_over_or_ending(self._hooks):
             return          # CardPileCmd.cs:866-869
-        held = self._playing_card
-        if held is not None and held in self.discard_pile:
-            # A card mid-OnPlay lives in PileType.Play (limbo), not the discard,
-            # so a reshuffle its own effect triggers (e.g. Pommel Strike drawing
-            # the draw pile empty) must NOT shuffle it into the draw pile — the
-            # game reshuffles discard+draw WITHOUT the being-played card, then
-            # the card lands in the (now-empty) discard as its result pile after
-            # OnPlay. Hold it back so the shuffled set matches the game exactly.
-            #
-            # UNCONDITIONAL as of 2026-07-29 (round 7, card/havoc/OnPlay). This
-            # used to be gated on `_combat_rng.is_parity`, keeping the old
-            # byte-for-byte legacy behaviour (reshuffle the WHOLE discard). That
-            # gate was not a fidelity choice with two defensible sides — it made
-            # legacy mode reshuffle a card the game holds in limbo — and once
-            # Havoc was routed through the real CardPileCmd.AutoPlayFromDrawPile
-            # it became an infinite recursion: Havoc sat in the discard, the
-            # reshuffle handed it back to the draw pile, and the verb picked it as
-            # the top card and played it again. Measured before removing the gate:
-            # the whole suite passes either way apart from the six tests this
-            # round moved for other reasons, so nothing depended on it.
-            cards = [c for c in self.discard_pile if c is not held]
-            new_discard = [held]
-        else:
-            cards = list(self.discard_pile)   # COPY -- see _shuffle_cards
-            new_discard = []
+        # `CardPileCmd.Shuffle` reads exactly two piles — `PileType.Draw` and
+        # `PileType.Discard` (CardPileCmd.cs:870-871). A card mid-OnPlay is in
+        # NEITHER: it sits in `PileType.Play` for the whole of its wrapper
+        # (CardModel.cs:1875/:1879). So the exclusion this method used to
+        # implement by hand — hold `_playing_card` back out of the discard,
+        # then put it back afterwards — is now structural and the hold-back
+        # code is gone (round 13, R5; creature_card_cmds N9/step82).
+        cards = list(self.discard_pile)   # COPY -- see _shuffle_cards
+        new_discard: list[Card] = []
         # A mid-combat reshuffle is CardPileCmd.Shuffle -> StableShuffle. Shuffle
         # and dispatch BEFORE touching self.draw_pile/self.discard_pile -- see
         # _shuffle_cards (creature_card_cmds/G10, RE-VERIFIED 2026-07-30,
@@ -432,17 +523,12 @@ class PlayerCombatState(Creature):
         ever runs with an empty draw pile; the explicit command shuffles both
         piles together (`list = discard.ToList(); list.AddRange(drawPileCards);
         list.StableShuffle(Rng.Shuffle)`), so the draw pile's contents survive
-        into the new order. Same PileType.Play limbo rule as the reshuffle: a
-        card mid-OnPlay is in neither pile."""
+        into the new order. Same two piles, so the same PileType.Play rule: a
+        card mid-OnPlay is in neither and needs no hold-back."""
         if _is_over_or_ending(self._hooks):
             return          # CardPileCmd.cs:866-869
-        held = self._playing_card
-        if held is not None and held in self.discard_pile:
-            discard = [c for c in self.discard_pile if c is not held]
-            new_discard = [held]
-        else:
-            discard = self.discard_pile
-            new_discard = []
+        discard = self.discard_pile
+        new_discard: list[Card] = []
         # CardPileCmd.cs:874 `drawPileCards = drawPile.Cards.ToHashSet()` --
         # captured BEFORE the shuffle, so it names each card's ORIGIN pile,
         # not its post-shuffle position. Only non-origin (discard-sourced)

@@ -57,8 +57,8 @@
     },
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:3542-3543 on_enemy_side_end -> Power._tick (combat.py:345)",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27, and the reason it stands has changed. THE ROOT CAUSE NAMED HERE IS FIXED: `should_take_extra_turn` moved to combat.py:823, AFTER `on_player_turn_end`, `_process_turn_end_cards`, the flush and `after_player_turn_end` (:793-809) -- turn_structure G3, mirroring SwitchFromPlayerToEnemySide (CombatManager.cs:1360-1373). But this power still ticks from `on_enemy_side_end` (powers.py:3542-3543), and an extra turn still skips that, because combat.py:823-831 returns before `_execute_enemy_turn`. So the executed witness stands -- one end_turn with a should_take_extra_turn listener leaves Retain Hand(1) on the player where C# has already decremented at :1307 -- and this entry's closing sentence, that 'moving the tick to after_player_turn_end would NOT fix it', is now FALSE: that slot is exactly what would fix it. VERIFIED by reading combat.py:781-833 and powers.py."
+      "verdict": "faithful",
+      "issue": "Closed 2026-08-01 (tier-2 round 13): FIXED. The tick moved from on_enemy_side_end (Hook.AfterTurnEnd for the ENEMY side, which an extra player turn never reaches) to after_player_turn_end, matching RetainHandPower.cs:28-34 / CombatManager.cs:1307's PLAYER-side timing. An extra turn now ticks it as C# does. The reasoning replaced: the record's assumption that the two side-end slots were interchangeable.  The text it replaced read: NARROWED 2026-07-27, and the reason it stands has changed. THE ROOT CAUSE NAMED HERE IS FIXED: `should_take_extra_turn` moved to combat.py:823, AFTER `on_player_turn_end`, `_process_turn_end_cards`, the flush and `after_player_turn_end` (:793-809) -- turn_structure G3, mirroring SwitchFromPlayerToEnemySide (CombatManager.cs:1360-1373). But this power still ticks from `on_enemy_side_end` (powers.py:3542-3543), and an extra turn still skips that, because combat.py:823-831 returns before `_execute_enemy_turn`. So the executed witness stands -- one end_turn with a should_take_extra_turn listener leaves Retain Hand(1) on the player where C# has already decremented at :1307 -- and this entry's closing sentence, that 'moving the tick to after_player_turn_end would NOT fix it', is now FALSE: that slot is exactly what would fix it. VERIFIED by reading combat.py:781-833 and powers.py."
     }
   },
   "guards": [
@@ -78,6 +78,6 @@
       "rationale": "The sim's discard_hand keeps cards with card.retain (player.py:192-196) independently of this power, which is C#'s per-card ShouldRetainThisTurn path. Two independent mechanisms on both sides; this power's false ShouldFlush short-circuits the whole flush, so the per-card path is moot when it is active."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

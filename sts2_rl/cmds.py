@@ -160,7 +160,50 @@ def _resolve_death(hooks: HookSystem, target: Creature) -> None:
             not hooks.should_remove_from_combat_after_death(target)
         )
         hooks.on_death(target, False)
+        # CreatureCmd.cs:523-531 — the REMOVAL, two statements after
+        # Hook.AfterDeath (:519) and one before the power strip (:533-537).
+        # `CombatState.RemoveCreature` (CombatState.cs:299-302) is what nulls
+        # `Creature.CombatState`, so everything above this line — ShouldDie
+        # (:505), ShouldCreatureBeRemovedFromCombatAfterDeath (:508) and
+        # AfterDeath itself — ran with the dying creature still IN the combat
+        # and therefore still a hook listener (the MonsterModel arm of
+        # `Contains`, :585, tests that back-pointer and nothing else). That is
+        # why the commit is an explicit flag rather than a read of
+        # `is_removed_from_combat`, which is `is_gone and not
+        # retained_after_death` and so goes true the moment HP hits zero —
+        # see `Monster.combat_removal_committed`.
+        #
+        # Three gates, all from :523-531: enemies only (a dead PLAYER stays in
+        # the combat, Player.cs:103-111), the removal must have been agreed
+        # (`retained_after_death` is the cached answer), and `:527` refuses
+        # while the monster is performing its move — `CombatState.
+        # _run_enemy_turns` completes that deferred case, mirroring
+        # MonsterModel.cs:448-451.
+        if (target.side == "enemy"
+                and not target.retained_after_death
+                and not getattr(target, "is_performing_move", False)):
+            target.combat_removal_committed = True
         _strip_powers_after_death(hooks, target)
+        # CreatureCmd.cs:546-553 — the player-only tail of the real-death arm,
+        # after Hook.AfterDeath (:519) and after the power strip (:533-537):
+        # `player.DeactivateHooks()` (Player.cs:857-860). From here the
+        # player's relics, potions, orbs and cards stop being listeners, both
+        # structurally (CombatState.cs:424-427) and through the owner leg of
+        # every `Contains` arm (:589-597). C# also drops the player's POWERS
+        # here — they are added to the list at :416, before the structural
+        # skip, but the PowerModel arm of Contains (:599) tests
+        # `Owner.Player?.IsActiveForHooks ?? true` and this owner IS a player.
+        # The sim cannot honour that leg from inside this footprint (`Power`
+        # has no `hook_contains`; the exact one-line diff is in the round-13
+        # R1 report), and it is moot in practice: the strip above has already
+        # removed every power that does not override
+        # `should_power_be_removed_after_owner_death`.
+        #
+        # Only reached when the death is real: the prevented arm below leaves
+        # the flag alone, which is the whole reason the flag exists rather
+        # than reading `is_dead`.
+        if getattr(target, "side", None) == "player":
+            target.is_active_for_hooks = False
     else:
         # CreatureCmd.cs:565-570. The creature stays at 0 HP: `AfterDeath`
         # fires with wasRemovalPrevented=True, then the preventer is notified
@@ -501,9 +544,23 @@ class CreatureCmd:
         if (combat is not None and getattr(combat, "is_over", False)
                 and target.side != "player"):
             return 0
+        was_dead = target.is_dead
         healed = min(amount, target.max_hp - target.hp)
         if healed > 0:
             target.hp += healed
+        # `Creature.HealInternal` (Creature.cs:477-485): a heal that takes a
+        # DEAD creature back above zero calls `Player?.ActivateHooks()`
+        # (Player.cs:868-871), putting the player's relics, potions and cards
+        # back in the listener walk. Without this the revive
+        # `ReviveBeforeCombatEnd` performs (Player.cs:821-827) would be
+        # pointless -- its whole documented purpose (:816-819) is that "if the
+        # player is still dead during HookBus.AfterCombatEnd, their relics will
+        # not be subscribed to the HookBus, and relics which rely on
+        # AfterCombatEnd to reset state will not be reset for the next combat".
+        # `_resolve_death` is what cleared the flag; this is its one reversal.
+        if was_dead and not target.is_dead and getattr(
+                target, "side", None) == "player":
+            target.is_active_for_hooks = True
         # CreatureCmd.cs:751-754 -- Hook.AfterCurrentHpChanged fires whenever
         # the REQUESTED amount is positive, carrying that RAW amount -- NOT
         # the clamped `healed` -- and fires even when healed is 0 (already at
@@ -712,6 +769,13 @@ class CreatureCmd:
         for power in list(creature.powers.values()):
             power._expire()
         creature.escaped = True
+        # CreatureCmd.cs:601 — `creature.CombatState?.CreatureEscaped(creature)`
+        # -> `CombatState.CreatureEscaped` (CombatState.cs:266-270) ->
+        # `RemoveCreature`, which nulls the back-pointer. The escape path has
+        # no hook to consult and always removes, so the commit is
+        # unconditional. See `Monster.combat_removal_committed`.
+        if creature.side == "enemy":
+            creature.combat_removal_committed = True
         hooks.on_creature_escaped(creature)
         # Escaping can end the fight (mirrors CheckWinCondition after Escape).
         combat = hooks.combat
@@ -1084,10 +1148,15 @@ class ExhaustCmd:
         whatever pile it is currently in, not just hand/discard. The old code
         here only checked those two, so a draw-pile card stayed in draw_pile
         AND was appended to exhaust_pile — the same instance in two piles at
-        once. The scan below covers every OTHER combat pile the card could be
-        in (a card mid-OnPlay is already physically in discard_pile by the
-        time it can be exhausted — see step82/N9 — so no fourth "Play limbo"
-        case exists to scan for).
+        once. `PlayerCombatState.remove_from_current_pile` is that verb, and
+        it covers all FIVE piles.
+
+        The fifth one is load-bearing here: an earlier version of this
+        docstring argued that "no fourth Play limbo case exists to scan for,
+        because a card mid-OnPlay is already physically in discard_pile". That
+        premise died with round 13's real `play_pile` (creature_card_cmds
+        N9/step82) — an exhaust fired from inside a card's own OnPlay is
+        exactly the double-membership bug this scan exists to prevent.
 
         The exhaust pile is scanned TOO, and re-exhausting an
         already-exhausted card is a legal no-throw REPOSITION to the bottom
@@ -1103,21 +1172,125 @@ class ExhaustCmd:
         the sim raise where the game performs a legal move. N4's loud-failure
         idiom applies to the ADD helpers whose C# counterparts really can
         throw — this path's C# demonstrably cannot.
+
+        `CardCmd.Exhaust`'s ENTIRE body is inside
+        `if (!CombatManager.Instance.IsOverOrEnding)` (CardCmd.cs:239-245), so
+        the move, `History.CardExhausted` (:243) and `Hook.AfterCardExhausted`
+        (:244) are refused TOGETHER once the fight is ending, and the card is
+        left in whatever pile it was in. The gate belongs HERE and not at any
+        call site: `CardCmd.cs:242` is the ONLY
+        `CardPileCmd.Add(..., PileType.Exhaust, ...)` in the whole source, so
+        every exhaust in the game passes through this one method, and `Add`
+        itself would refuse anyway (`IsCombatPile && IsEnding`,
+        CardPileCmd.cs:312-319; `!IsInProgress`, :398-401 — both before the
+        move at :496/:510). It is NOT cosmetic: `JossPaper.CardsExhausted` is
+        a `[SavedProperty]` (JossPaper.cs:60-76) incremented from
+        `AfterCardExhausted` (:102-114) and cleared by nothing at combat end
+        (`AfterCombatEnd` :144-148 clears `EtherealCount` only), so every
+        fight that ended on an exhaust used to over-credit a RUN-scoped
+        counter by one. R5-review RV-2 / R5 fix pass.
         """
-        for pile in (
-            player.hand,
-            player.draw_pile,
-            player.discard_pile,
-            player.exhaust_pile,
-        ):
-            if card in pile:
-                pile.remove(card)
-                break
+        if is_over_or_ending(hooks):
+            return
+        player.remove_from_current_pile(card)
         player.exhaust_pile.append(card)
         hooks.on_card_exhausted(card)
 
 
 class CardCmd:
+    # `PileType` raw enum values (PileType.cs). NOT `AllPiles` order — Draw
+    # sorts before Hand here, where `AllPiles` puts Hand first. See
+    # `pile_index_sort_key`.
+    _PILE_TYPE_ORDER = {
+        "none": 0, "draw": 1, "hand": 2, "discard": 3,
+        "exhaust": 4, "play": 5, "deck": 6,
+    }
+
+    @staticmethod
+    def pile_index_sort_key(pile_name: str, index: int) -> tuple[int, int]:
+        """`CardCmd.PileIndexSort` (CardCmd.cs:353-360), as a sort key.
+
+            if (value1.Item2.Type != value2.Item2.Type)
+                return value1.Item2.Type.CompareTo(value2.Item2.Type);
+            return value1.Item3.CompareTo(value2.Item3);
+
+        `Item2` is the original's `CardPile` and `Item3` is its index INSIDE
+        that pile, captured before the removal (`pile.Cards.IndexOf(...)` at
+        :396, `RemoveFromCurrentPile()` at :402). `CardPile.Type.CompareTo` is
+        the RAW `PileType` enum compare — None=0, Draw=1, Hand=2, Discard=3,
+        Exhaust=4, Play=5, Deck=6 — so this is deliberately NOT `AllPiles`
+        order and a Draw-pile original is re-seated before a Hand one.
+
+        Applied at :405 to the whole transformation batch, which is what makes
+        a MULTI-card transform's re-insertion order deterministic. The sim's
+        transform verbs (`CardCmd.transform_to_random`, `RunState.
+        transform_card`) are single-card, so there is nothing to sort YET —
+        this is the key the batch path must use when one is ported, and it is
+        pinned so the ordering is not re-derived from `AllPiles` by mistake.
+        creature_card_cmds/step56.
+
+        A pile name the map does not know raises `KeyError` rather than
+        silently sorting as `PileType.None` (note N4's loud-failure idiom):
+        `PileIndexSort` cannot be reached with a null pile at all, because
+        :392-394 THROWS ("Can't transform … because it has no pile") before
+        the index is taken at :396. A silent 0 would be exactly the wrong
+        default to hand a future batch transform. R5-review RV-8.
+        """
+        return (CardCmd._PILE_TYPE_ORDER[pile_name], index)
+
+    @staticmethod
+    def discard_and_draw(
+        hooks: HookSystem,
+        player: PlayerCombatState,
+        cards_to_discard,
+        cards_to_draw: int = 0,
+    ) -> None:
+        """`CardCmd.DiscardAndDraw` (CardCmd.cs:172-205), which `Discard` (the
+        single- and multi-card overloads, :147-160) is a zero-draw call to.
+
+        The whole point of the verb is the ORDER, and its own warning at
+        :139-143 says so — "if you're discarding multiple cards at once for an
+        effect like Concentrate or Gambler's Brew, do NOT use this method
+        inside a loop, because the timing of the Sly effect will be
+        incorrect":
+
+          :174-177  IsOverOrEnding -> return
+          :179-182  no cards -> return
+          :186-195  per card: collect it if `IsSlyThisTurn` (:188-191),
+                    `CardPileCmd.Add(card, discardPile)` (:192),
+                    History.CardDiscarded (:193), then
+                    `Hook.AfterCardDiscarded` (:194) — APPEND FIRST, hook
+                    second
+          :197-200  THEN the draw, once, for the whole batch
+          :201-204  THEN auto-play every collected Sly card, with
+                    `AutoPlayType.SlyDiscard`
+
+        The two sim call sites that open-coded this loop disagreed with each
+        other about the append/hook order — `potions.py`'s Gambler's Brew
+        fired `on_card_discarded` BEFORE appending, `relics/gambling_chip.py`
+        appended first — and neither had the Sly tail. Both now route here.
+        creature_card_cmds/step50 + step51.
+        """
+        if is_over_or_ending(hooks):
+            return                                  # :174-177
+        discard_cards = list(cards_to_discard)
+        if not discard_cards:
+            return                                  # :179-182
+        sly_cards: list[Card] = []
+        for card in discard_cards:
+            if card.is_sly_this_turn:               # :188-191
+                sly_cards.append(card)
+            player.remove_from_current_pile(card)   # :192 Add -> RemoveFromCurrentPile
+            player.discard_pile.append(card)
+            hooks.on_card_discarded(card)           # :194, AFTER the append
+        if cards_to_draw > 0:
+            DrawCmd.draw(player, cards_to_draw)     # :197-200
+        combat = hooks.combat
+        for card in sly_cards:                      # :201-204
+            if combat is None:
+                break
+            combat.auto_play_card(card, auto_play_type="sly_discard")
+
     @staticmethod
     def downgrade(hooks: HookSystem | None, card: Card) -> None:
         """`CardCmd.Downgrade` (CardCmd.cs:212-223).
@@ -1178,10 +1351,10 @@ class CardCmd:
         # out of combat, which is the same command).
         combat = card.combat
         if getattr(combat, "is_over_or_ending", False):
-            player = combat.player
-            if any(card in pile for pile in (player.hand, player.draw_pile,
-                                             player.discard_pile,
-                                             player.exhaust_pile)):
+            # "is this card in a COMBAT pile" — and Play is one
+            # (PileTypeExtensions.cs:35-42), which is why this asks
+            # `pile_type_of` rather than scanning four lists by hand.
+            if combat.player.pile_type_of(card) is not None:
                 return None
         new_affliction = affliction_cls(amount)
         # Hook.ShouldAfflict (CardCmd.cs:637) -- an AND-all veto dispatched
@@ -1204,6 +1377,16 @@ class CardCmd:
         if card.affliction is None:
             new_affliction.card = card
             card.affliction = new_affliction
+            # `CombatState.IterateHookListeners` adds `cardModel.Affliction`
+            # to the listener list right after its card (CombatState.cs:
+            # 458-461) and `AfflictionModel.cs:146` declares
+            # `ShouldReceiveCombatHooks => true`, so an affliction is a hook
+            # listener for as long as it is attached (hook_dispatch/G6). The
+            # walk in `HookSystem._ordered` finds it through the card, so this
+            # only has to put it in the membership set; the position comes
+            # from the card's pile.
+            if hooks is not None:
+                hooks.register(new_affliction)
             return new_affliction
         if isinstance(card.affliction, affliction_cls):
             card.affliction.amount += amount
@@ -1212,8 +1395,31 @@ class CardCmd:
 
     @staticmethod
     def clear_affliction(card: Card) -> None:
-        """Remove a card's affliction if it has one (mirrors ClearAffliction)."""
+        """Remove a card's affliction if it has one.
+
+        `CardModel.ClearAfflictionInternal` (CardModel.cs:1532-1540) does TWO
+        things, and the sim only did the second: it calls
+        `AfflictionModel.ClearInternal` (:249-254), which nulls the
+        affliction's own `_card` back-reference, and THEN nulls the card's
+        `Affliction`. The sim left a cleared affliction still pointing at the
+        card it no longer afflicts, which `AfflictionModel.HasCard`
+        (AfflictionModel.cs:90) — the first leg of `CombatState.Contains`'
+        affliction arm (CombatState.cs:591) — reads. With the affliction now a
+        real listener (hook_dispatch/G6) that stale back-reference would be a
+        cleared affliction that still passed `Contains`, so both halves are
+        mirrored here, plus the unregistration the sim's registry needs.
+        """
+        affliction = card.affliction
+        if affliction is None:
+            return
+        affliction.card = None
         card.affliction = None
+        hooks = getattr(card.combat, "hooks", None)
+        if hooks is not None:
+            try:
+                hooks.unregister(affliction)
+            except ValueError:
+                pass
 
     @staticmethod
     def transform_to_random(
@@ -1245,9 +1451,13 @@ class CardCmd:
         # the only in-combat caller.
         replacement = make_card(
             hooks.combat.combat_rng.card_selection.choice(options))
+        # `CardCmd.cs:391-395` reads `item.Original.Pile` and THROWS if it is
+        # null — whatever pile holds the card, Play included (a card can be
+        # transformed from inside its own OnPlay).
         for pile_name, pile in (
             ("hand", player.hand), ("draw", player.draw_pile),
             ("discard", player.discard_pile), ("exhaust", player.exhaust_pile),
+            ("play", player.play_pile),
         ):
             if card in pile:
                 pile[pile.index(card)] = replacement
@@ -1258,6 +1468,11 @@ class CardCmd:
             hooks.unregister(card)
         except ValueError:
             pass
+        # `CardCmd.Transform`'s tail (CardCmd.cs:498-506) calls
+        # `Original.RemoveFromState()` on every original once the replacements
+        # have landed — the first leg of `Contains`' CardModel arm
+        # (CombatState.cs:593). See `Card.has_been_removed_from_state`.
+        card.has_been_removed_from_state = True
         CardPileCmd._enter_combat(hooks, replacement)
         # CardCmd.cs:447-450, in this order, and shared by both branches of the
         # pile-type test above them:
@@ -1351,6 +1566,14 @@ class CardPileCmd:
         """
         card.combat = hooks.combat
         hooks.register(card)
+        if card.affliction is not None and card.affliction not in hooks._listeners:
+            # CombatState.cs:458-461 — the card's Affliction joins the walk
+            # right after it. A card can arrive already afflicted: `create_clone`
+            # (cards/base.py) rebuilds the source's affliction on the copy
+            # (CardModel.cs:1204-1215's `AfflictInternal`) without going through
+            # `CardCmd.afflict`, which is where the registration otherwise
+            # happens. hook_dispatch/G6.
+            hooks.register(card.affliction)
         if card.enchantment is not None:
             card.enchantment.combat = hooks.combat
             if card.enchantment not in hooks._listeners:
@@ -1456,6 +1679,12 @@ class CardPileCmd:
         limbo). Both sim callers interleaved instead — Havoc and Mayhem picked
         and played one card per iteration.
 
+        Phase 1's park is a REAL move into `play_pile` as of round 13 (R5).
+        Before that the picks were removed from the draw pile into a local list
+        and were in no pile at all, which bought the reshuffle immunity by a
+        different mechanism but hid them from every `AllCards` sweep and from
+        the listener walk.
+
         `force_exhaust` is applied through `exhaust_on_next_play`, not by moving
         the card by hand: that is what routes it through the normal result-pile
         path, so an unplayable pick reaches `CardCmd.Exhaust`
@@ -1481,9 +1710,11 @@ class CardPileCmd:
                 # thing in both engines.
                 card = combat.combat_rng.card_selection.choice(list(reversed(pile)))
             cards.append(card)
-            # `await Add(cardModel, PileType.Play)` (:954) — the card leaves the
-            # draw pile now and is in no pile a reshuffle can see.
+            # `await Add(cardModel, PileType.Play)` (:954) — the card leaves
+            # the draw pile now, for a pile no reshuffle reads.
             pile.remove(card)
+            player.play_pile.append(card)
+            hooks.after_card_changed_piles(card, "draw", None)
         for card in cards:
             if player.is_dead:
                 break                               # :958-964

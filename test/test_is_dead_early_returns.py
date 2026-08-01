@@ -1,12 +1,14 @@
-"""Task 27 / Task 20 — `card/_is_dead_early_return`: dependency-check pins.
+"""Task 27 / Task 20 / round 13 R11 item 1 — `card/_is_dead_early_return`:
+dependency-check pins.
 
-Five cards (Blood Wall, Bloodletting, Brand, Hemokinesis, Offering) all deal
-self HP loss and then check `if ctx.player.is_dead: return` before continuing
-to the rest of their effect. The 2026-07-26 audit records assumed C# has no
-such return (true) and that the sim's death-prevention path "floors a saved
-creature at 1 HP" so the check is dormant. That premise is now STALE: two
-things changed underneath it since (both already staged, both already
-covered by `test_combat_ending_command_guards.py`, `power_cmd G6` /
+Six cards (Blood Wall, Bloodletting, Brand, Breakthrough, Hemokinesis,
+Offering) all deal self HP loss and then check `if ctx.player.is_dead:
+return` before continuing to the rest of their effect. The 2026-07-26 audit
+records assumed C# has no such return (true) and that the sim's
+death-prevention path "floors a saved creature at 1 HP" so the check is
+dormant. That premise is now STALE: two things changed underneath it since
+(both already staged, both already covered by
+`test_combat_ending_command_guards.py`, `power_cmd G6` /
 `creature_card_cmds G14`):
 
   1. `cmds.py:_resolve_death`'s prevented-death arm no longer floors at 1 HP
@@ -31,13 +33,20 @@ covered by `test_combat_ending_command_guards.py`, `power_cmd G6` /
      and `AttackCommand.Execute`'s `IsOverOrEnding`/`Attacker.IsDead` bails
      (AttackCommand.cs:520,528).
 
-For BLOOD_WALL, BRAND and HEMOKINESIS this makes the `is_dead` guard a
-now-redundant, provably-inert duplicate of a check the callee already makes
-correctly -- deleting it changes NOTHING observable today (both arms produce
-the identical no-op) and is what makes the sim's structure match C#'s (which
-has no card-level check at all; the callee's own bail does the work). DELETED
-below, pinned by the `*Deleted` test classes -- written and green BEFORE the
-line was removed from the card file, and green identically AFTER.
+For BLOOD_WALL, BRAND, HEMOKINESIS and now BREAKTHROUGH (round 13 R11 item 1;
+Breakthrough's tail is a per-enemy DamageCmd.deal loop rather than a single
+call, but each iteration passes dealer=ctx.player, so the same dealer.is_dead
+bail fires on every enemy once the self-damage is lethal) this makes the
+`is_dead` guard a now-redundant, provably-inert duplicate of a check the
+callee already makes correctly -- deleting it changes NOTHING observable
+today (both arms produce the identical no-op) and is what makes the sim's
+structure match C#'s (which has no card-level check at all; the callee's own
+bail does the work). DELETED below, pinned by the `*Deleted` test classes --
+written and green BEFORE the line was removed from the card file, and green
+identically AFTER. As with the original three, there is no true RED/GREEN
+transition to show here: the whole point of "provably redundant" is that the
+callee's bail already made the guard's presence unobservable, so the pin is
+green on both sides of the deletion by construction, not by accident.
 
 For BLOODLETTING and OFFERING, Task 27 found the first (and, for
 Bloodletting, only) downstream call is `EnergyCmd.gain` (cmds.py), which had
@@ -67,6 +76,7 @@ from sts2_rl.cards import (
     BloodlettingCard,
     BloodWallCard,
     BrandCard,
+    BreakthroughCard,
     HemokinesisCard,
     OfferingCard,
     StrikeCard,
@@ -202,6 +212,35 @@ class TestHemokinesisGuardDeleted:
         play(cs, HemokinesisCard())
         assert cs.player.hp == p_before - 2
         assert cs.enemy.hp == e_before - 15
+
+
+class TestBreakthroughGuardDeleted:
+    """Round 13 R11 item 1. Breakthrough's tail is a per-enemy loop, not one
+    call, but every iteration's `DamageCmd.deal(ctx.hooks, enemy,
+    self._damage, dealer=ctx.player, card=self)` carries dealer=ctx.player, so
+    the same dealer.is_dead bail HemokinesisCard relies on fires on every
+    enemy -- Breakthrough.cs:28-30 attacks TargetingAllOpponents in a single
+    hit-iteration and AttackCommand.Execute's Attacker.IsDead bail
+    (AttackCommand.cs:528) is checked once for that whole iteration, so no
+    enemy is hit either way."""
+
+    def test_dying_from_the_hp_loss_lands_no_attack_on_any_enemy(self):
+        cs = fresh()
+        cs.player.hp = 1          # BreakthroughCard._hp_loss
+        enemy_hps_before = [e.hp for e in cs.enemies]
+        play(cs, BreakthroughCard())
+        assert_combat_lost(cs)
+        assert [e.hp for e in cs.enemies] == enemy_hps_before
+
+    def test_nonlethal_play_is_unaffected(self):
+        cs = fresh()
+        p_before = cs.player.hp
+        enemy_hps_before = [e.hp for e in cs.enemies]
+        play(cs, BreakthroughCard())
+        assert cs.player.hp == p_before - 1
+        assert [e.hp for e in cs.enemies] == [
+            h - 9 for h in enemy_hps_before
+        ]
 
 
 # ══════════════════════════════════════════════════════════════════════════

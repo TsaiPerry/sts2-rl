@@ -12,9 +12,23 @@ if TYPE_CHECKING:
 
 @register_relic
 class Vambrace(Relic):
-    """The first time you gain Block from a card each combat, double it. The
-    multiplier hook stays stateless (safe for previews); the one-shot flag is
-    set from the real on_block_gained event."""
+    """The first time you gain Block from a card each combat, double it.
+
+    `modify_block_multiplicative` READS `_triggering_card`/`_used` -- a
+    preview call is still safe because only `after_modify_block_amount`/
+    `on_card_played` write them DURING a card play (`__init__` and
+    `reset_for_combat` also write them, but only to clear).
+
+    Vambrace overrides no `AfterBlockGained` hook -- not in this port and not
+    in `Vambrace.cs`, whose overrides are ModifyBlockMultiplicative,
+    AfterModifyingBlockAmount, AfterCardPlayed, BeforeCombatStart and
+    AfterCombatEnd. The hook itself is real on BOTH sides (Hook.cs:143,
+    dispatched from CreatureCmd.cs:662, overridden by JuggernautPower.cs:17
+    and BeaconOfHopePower.cs:36; here `on_block_gained`, hooks.py:138/:1712,
+    fired from cmds.py:502) -- it is simply not one of Vambrace's. The state
+    comes from the other pair instead: `after_modify_block_amount` latches
+    `_triggering_card` (Vambrace.cs:82-96) and `on_card_played` spends
+    `_used` at the END of that card's play (Vambrace.cs:98-113)."""
 
     id = "vambrace"
     name = "Vambrace"

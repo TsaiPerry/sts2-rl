@@ -7,6 +7,196 @@ is explicitly working it. Generated, not transcribed.
 **Do not trust a count stated in prose anywhere in this project, including this
 file. Re-run `py audit/tools/gap_queue.py counts`.**
 
+## Round 13 (2026-08-01) — Tier 2, 10 tasks
+
+**Round 12's headline is broken, and this round broke it.** Round 12 ended with
+*"0 live entries across all six seam records — the engine tier has no live gap."*
+That is no longer true: **there are 3 live seam entries** (plus a 4th that is a real live gap but misfiled onto a seam record), both found by this
+round's own work, both confirmed by execution, neither previously recorded.
+The engine tier was never clean; it was unmeasured.
+
+| | round 12 close | round 13 close |
+|---|---|---|
+| gap entries | 372 | **360** |
+| mechanisms | 349 | **339** |
+| entries labelled LIVE | 7 | **17** |
+| mechanisms with a live entry | 7 | **16** |
+| **live entries in seam records** | **0** | **3** (a 4th is misfiled onto a seam; see below) |
+| suite | 3766 passed | **3942 passed** (+2 known fixture-gap failures) |
+
+Entries fell by 16 and mechanisms by 14, while **LIVE rose by 5 and the seam
+tier went from 0 to 2**. Both directions are the point. A round whose count
+only falls is not measuring honestly.
+
+### Round 13's own new entries — the coverage list
+
+`gap_queue.py coverage` requires every mechanism to be NAMED here. These are
+the entries round 13 itself filed; several are LIVE. Ids are the generator's,
+so a positional `guardN` means the guard's own `what` text does not begin
+with a `G`/`N` label.
+
+- `hook_dispatch/guard10` (LIVE) — F3: `HookSystem.combat_is_over` tests
+  `phase == COMBAT_OVER` where C# gates on `IsOverOrEnding` (`Hook.cs:53-63`),
+  across all 73 combat-gated dispatchers. Witnessed: Forgotten Soul dealt real
+  damage and burned an RNG draw in the ending window.
+- `hook_dispatch/guard11` (dormant) — `can_receive_powers` and
+  `_combat_contains_creature` still read the eager removal PREDICTION, not the
+  `combat_removal_committed` event. Not blocked on footprint; deferred for
+  live blast radius on `PowerCmd.apply`.
+- `hook_dispatch/guard12` (LIVE) — F2: `run.py`'s `_map_listeners` returns
+  `[*relics, *deck]` where `RunState.cs:548-562` is deck-first; map-hook
+  implementers exist on BOTH sides, so the relic wins where C# gives the card
+  precedence.
+- `creature_card_cmds/G4` (dormant) — the reopened heal-guard family.
+- `creature_card_cmds/guard25` (LIVE) — `SKIPPABLE_PURPOSES` is a lossy
+  string-keyed re-encoding of C#'s two `CardSelectorPrefs` integers; five
+  purpose forks for one C# field, and the two halves already disagree at three
+  live sites.
+- `creature_card_cmds/guard26` (LIVE) — `NoUpgradeRoll` unmodelled at ~11
+  non-combat creation sites (`2*count` draws, `+2` cards where C# gives
+  `+1`). **A blind sweep is wrong**: Orrery and Lasting Candy use the raw
+  constructor and DO take the roll.
+- `turn_structure/guard23` (dormant) — `Relic._check_win()` has the win/loss
+  tie-break backwards; the FIFTH site of a class G13 claims it eliminated at
+  four. Ten relics route through it.
+- `event/brain_leech/g6` + `event/trial/g17` (LIVE) — the reroll redraws from
+  the CHARACTER pool at Monster odds and mutates the pity counter; a
+  Colorless-only screen becomes an Ironclad screen.
+- `event/brain_leech/g7` (LIVE) — `modify_hooks=False` stands in for a
+  different C# flag, so Silken Tress/Silver Crucible/eggs/Glitter never fire.
+- `potion/_min_select_zero` — `potion/ashwater/g1` and
+  `potion/gamblers_brew/g1` (both LIVE, both REOPENED): closed on a consumer
+  enumeration that never listed `RunDriver`; executed, Ashwater exhausts the
+  whole hand with ZERO decisions raised.
+- `relic/gnarled_hammer/g3` (LIVE, REOPENED) — shares Kifuda's exact C#
+  `CardSelectorPrefs` shape and still force-fills 3; its `faithful` rationale
+  was doubly stale. This is why `relic/_auto_keep` NARROWS, not closes.
+### The live seam gaps
+
+- **`hook_dispatch/F3-R13`** — `HookSystem.combat_is_over` tests
+  `phase == COMBAT_OVER` where C# gates on `IsOverOrEnding` (`Hook.cs:53-63`),
+  affecting all 73 combat-gated dispatchers between the killing blow and
+  teardown. Not theoretical: on the pending-loss path `ForgottenSoul` dealt
+  **real damage** (enemy 56→55) and burned a `CombatTargets` RNG draw where C#
+  refuses. The faithful predicate `CombatState.is_over_or_ending` already
+  exists.
+- **`creature_card_cmds/F-R13c`** — `SKIPPABLE_PURPOSES` is a lossy
+  re-encoding of C#'s two `CardSelectorPrefs` integers as a string-keyed
+  boolean, in a different file from the call site that has the numbers. It
+  can only express `MinSelect ∈ {0, count}`, it now stands at five purpose
+  forks for one C# field, and **its two halves silently disagree at three
+  live sites today** — Ashwater, Gambler's Brew and Neow's Fury all pass
+  `min_select=0` and are force-filled anyway. Executed: Ashwater's five-card
+  hand goes to zero with **zero decisions raised**.
+
+### What this round did NOT do
+
+- **`R9` (the AttackCommand-level `AfterAttack` payload) and `R7` (the
+  power-2 unlabelled batch) were never started.** Both were blocked all round
+  on `powers.py`/`cmds.py`, held by the Play-pile lane. R9's brief is written
+  and current (`.superpowers/sdd/round13/R9-brief.md`) and carries a premise
+  correction worth keeping: the hook already exists and Suck/Painful Stabs are
+  already on it — the real work is Skittish plus three payload defects
+  (no hit-grouping, non-attack damage polluting the window, nested brackets
+  clobbering).
+- **`creature_card_cmds/G8` is NARROWED, not closed**, and its own site
+  enumeration was one short: `CardCmd.Exhaust` IS
+  `CardPileCmd.Add(card, PileType.Exhaust)` (`CardCmd.cs:242`), so every
+  exhaust dispatches `AfterCardChangedPiles` in C# and none does in the sim.
+  Deferred for a stated reason — a faithful wiring is five sites, not one,
+  and landing two of five is worse than landing none.
+- **`hook_dispatch/G7` is NARROWED**: the Relic `HasBeenRemovedFromState` leg
+  is machinery-only (never set in production) and the Card leg is set at 2 of
+  3 in-combat sites.
+- **`step56` (PileIndexSort) is machinery with no consumer** — it closes when
+  the first multi-card transform is ported.
+- **The 39 unlabelled entries are still unlabelled**, down from 56.
+- `monster/_intent_count_lost` is **reopened**: the spec has **18**
+  `StatusIntent` sites, not 4 — 5 ported, 13 open. A 5-of-18 partial port is
+  the worst resting state; batch the remaining 13 as one task.
+
+### Findings that outrank the fixes
+
+- **Four fixes introduced new divergences that the full suite passed straight
+  over** — the round-12 lesson, four more times. A power spending a stack
+  where C# abstains; a monster silently dropped from its own `AfterDeath`; a
+  reward screen widened by a relic C# forbids there; a killing-blow card
+  leaving a pile C# leaves it in. **All four were found by reading the C#, none
+  by a test.**
+- **Three tests were defending bugs.** One asserted a divergence was intended
+  (a missing status count); one asserted a card lands in the exhaust pile where
+  the game leaves it in Play, and was *the only thing* keeping the suite green
+  over a real fix; several others passed with their mechanism deleted.
+- **Dormancy arguments failed on their enumerations, not their verdicts.** A
+  4-site census was really 10; a "backstop" for four entries was **dead code**
+  (dominated by an earlier guard — executed both ways, identical results); a
+  guard closed on a consumer census that never listed the production driver;
+  and one reviewer withdrew its own dormancy rating after finding it had
+  generalised from two probes instead of enumerating nine listeners —
+  **"commands re-gate; counters do not"** (a `[SavedProperty]` exhaust counter
+  never self-corrects, permanently phase-shifting every later draw).
+- **Records are wrong about their reasoning more than their verdicts**, again:
+  a recorded divergence that **never existed** (two differently-named C#
+  methods conflated); an entry filed under the wrong hook; a premise that was
+  true of the C# and false of the sim; and one report that repeated, over a
+  record, the exact archived-prose error it had correctly caught its brief
+  making.
+- **Cross-record staleness is systemic.** A seam rewrite closed on 2026-07-31
+  left downstream relic records still citing it as open — two lanes
+  rediscovered the same root independently, and one record cited a gap that
+  had closed *three rounds before that record's own audit date*.
+
+### Tooling
+
+`closer.py`'s entry lookup honours **two disagreeing conventions**, and case
+alone silently selects between them: `find(rec, "G2")` matches the record's
+own guard label, `find(rec, "g2")` falls through to a **positional** lookup.
+The queue's ids are positional, so a report quoting a record's own label lands
+on the wrong entry. **This bit the controller twice in one round.** `closer.py`
+now documents it as TRAP 3 and ships `find_labelled(local_id, label)`, which
+asserts the landing. Never fold a guard entry without it.
+
+## Round 13 (2026-08-01) — corrections that REOPEN or WIDEN recorded work
+
+These are recorded first because they move the count the wrong way, which is
+the honest direction when a closure turns out to have been wrong.
+
+- **`monster/_intent_count_lost` — NOT closed; the denominator was wrong.** The
+  spec has **18** `new StatusIntent(` sites, not 4: Aeonglass:102, Chomper:59,
+  EyeWithTeeth:39, HauntedShip:44, LeafSlimeM:34, LeafSlimeS:32, MechaKnight:83,
+  Myte:49, Noisebot:45, PhrogParasite:42, SlimedBerserker:52, SoulFysh:113 and
+  :115, TestSubject:201, TheInsatiable:96, TwigSlimeM:37, Vantom:119,
+  Wriggler:55 — the sim has an exact 1:1 construction for each. **5 ported**
+  (Aeonglass, Test Subject, The Insatiable, Vantom, Noisebot as of round 13),
+  **13 OPEN**. Round 13's first pass recorded "All 4 known sites now carry their
+  count", a false completeness claim on a wrong denominator; do not carry it
+  forward. It had also left a test PINNING Noisebot's MISSING count as intended
+  while `Noisebot.cs:45` is `StatusIntent(2)`; that pin is now inverted and a
+  census ledger goes RED the moment the 5-of-18 split changes. A 5-of-18 partial
+  port is the worst resting state — batch the remaining 13 as one task.
+- **`creature_card_cmds/step19` + guard G4 REOPENED (faithful -> gap), G14
+  narrowed.** The closure's claim that the sim's `combat.is_over` IS C#'s
+  `IsEnding` is FALSE, not imprecise: `is_over` is `phase == COMBAT_OVER` (=
+  `!IsInProgress`), while `IsEnding` (CombatManager.cs:180-202) opens with
+  `if (!IsInProgress) return false;` — the **complementary** window. Executed
+  both ways: enemies dead but combat not torn down, `heal(enemy, 7)` returns 7
+  where C# refuses; at `COMBAT_OVER` it returns 0 where C# permits. The right
+  predicate is `combat.is_ending`, and specifically NOT `is_over_or_ending`.
+- **`hook_dispatch` F3 (new, unowned).** `HookSystem.combat_is_over` tests
+  `phase == COMBAT_OVER` where C# gates on `IsOverOrEnding` (Hook.cs:53-63),
+  affecting all 73 combat-gated dispatchers between the killing blow and
+  teardown. The faithful predicate `CombatState.is_over_or_ending` already
+  exists. **ADJACENT to the step19 defect, not identical** — different file,
+  different mechanism, different correct replacement; one fix cannot close both.
+  A dedicated sweep is warranted (56 `is_over`/`COMBAT_OVER` reads); note a
+  naive grep misses `getattr(combat, "is_over", False)`.
+- **`card/_is_dead_early_return` — the site list says 6; `cards/thunderclap.py`
+  is a 7th** with the same top-level shape and, unlike Breakthrough, a real
+  non-damage tail (`PowerCmd.apply` of Vulnerable) that the Breakthrough
+  argument does NOT cover; it needs `PowerCmd.apply`'s own bail argued
+  separately. Found by review, not fixed.
+
+
 ## Round 12 (2026-07-31) — Tier 2 dormant gaps, 29 tasks
 
 **The engine tier has no live gap left: 0 live entries across all six seam
@@ -78,13 +268,8 @@ plus the `relic/kifuda/AfterObtained` site under `relic/_stub`.
 
 ### Still open, found this round, owned by nobody
 
-- `run.reward_offer_selector` is **never wired by `driver.py`** (set only in
-  test files), so take-or-skip reward screens auto-accept in real play.
-  Pre-existing and larger than the flag it was found beside.
-- The sim dispatches reward modifiers at several construction sites where C#
-  has exactly one choke point (`RewardsSet.GenerateWithoutOffering`). Task 32
-  fixed per-site because consolidating was out of footprint; **the next event
-  ported this way can reintroduce the same bug.**
+- ~~`run.reward_offer_selector` is never wired by `driver.py`~~ **CLOSED for potion offers, CORRECTED for card offers, 2026-08-01 (round 13, R6):** `Event._accept_offer` now falls back onto `run.reward_selector` -- the seam every RunDriver already wires unconditionally (`driver.py:303`) -- for `purpose == "potion"`, so the six events offering a bare PotionReward ask a real REWARD_POTION decision in real play and in the conformance `_ForceWinDriver` instead of permanently auto-accepting. `purpose == "card_reward"` turned out to be a WRONG PREMISE, not a gap: its decline path already ran through `RunState.select_cards`'s SKIPPABLE_PURPOSES, wired unconditionally via `run.card_selector` -- proven by driving the PRE-R6 code with a real RunDriver. `run.reward_offer_selector` stays deliberately unwired: a test-only override with zero production writers by design, so a future grep finding it unwired is expected, NOT a re-opened gap. See `event/the_future_of_potions/g15`'s updated note. **Caveat worth keeping:** the conformance suite only walks act 0, where `_accept_offer` is never reached -- its greenness proves nothing here; the act-2 re-drive of all 15 recordings is the real evidence.
+- ~~The sim dispatches reward modifiers at several construction sites~~ **CLOSED 2026-08-01 (round 13, R10):** `CombatRewards.generated` + an idempotent offer-time backstop in `driver._offer_rewards` / `RunState.offer_rewards` now mirror C#'s real shape -- ONE choke point (`RewardsSet.cs`'s `_isGenerated`-guarded `GenerateWithoutOffering`) reached from TWO entry points: generate-time for room-end sets (`RewardsCmd.cs:55-60`) and offer-time, for the first and only time, for every `RewardsCmd.OfferCustom` set (`RewardsCmd.cs:47-50`). A future construction site that forgets the explicit call is caught by the backstop. Also closed the same way: the TREASURE-room dispatch hole (`run.py`'s TREASURE branch never dispatched at all; dormant on today's roster, fixed pre-emptively; see seam/hook_dispatch G-R10). `RewardsCmd.OfferForRoomEnd` is dead code -- do not cite it.
 - `PowerCmd.apply` is 28-42% slower after Task 18 (three dispatches where there
   was one). `end_turn` is a net 14.8% *faster*, but 147 files call `apply`.
 
@@ -2706,13 +2891,9 @@ callers that already dispatch at construction time (`rewards.py:698,761`,
 duplicate AmethystAubergine/BlackStar/LavaRock gold and relics. **That leaves
 the sim structurally unlike C#'s single choke point, and the next event ported
 this way can reintroduce the same bug** — consolidating the construction-time
-dispatches onto one choke point is the real fix and wants its own task.
+dispatches onto one choke point is the real fix and wants its own task. **Done 2026-08-01 (round 13, R10):** the two-entry-point shape landed (see the round-13 closed bullet above); construction sites unchanged, offer-time backstop catches any future omission.
 
-**Separate and larger, found in the same pass:** `run.reward_offer_selector` is
-never wired by `driver.py` (set only in test files, confirmed by repo-wide
-grep), so take-or-skip reward screens AUTO-ACCEPT in real play. Pre-existing,
-out of Task 32's scope, recorded on `event/the_future_of_potions/g15` for want
-of a better home, and worth more than the reroll flag it was found beside.
+**Separate and larger, found in the same pass -- closed/corrected 2026-08-01 (round 13, R6):** the 'auto-accept in real play' claim was RIGHT for the six events wrapping a bare `Event.offer_potion` and WRONG for this event's own `Event.offer_card_reward` screen. `_accept_offer` now falls back onto the already-wired `run.reward_selector` for `purpose=='potion'` (fixing the six); `purpose=='card_reward'` already declined correctly through `RunState.select_cards`'s existing SKIPPABLE_PURPOSES machinery whenever a real driver is attached, so nothing there needed a fix -- `_accept_offer` stays a deliberate pass-through, to avoid asking twice for the one screen C# shows. `run.reward_offer_selector` remains a test-only override with zero production writers by design; a grep finding it unwired is expected, not a gap. The reroll-surface gap above is UNCHANGED, stays open, and belongs on the **REWARD_CARD** decision -- NOT `SELECT_CARDS` -- per C#'s single `{cards..., Skip, REROLL}` screen (`CardRewardAlternative.cs:53-74`, `CardReward.cs:189`; sim shape at `driver.py:207-214` / `driver.py:519-542`); closing it most likely means routing `Event.offer_card_reward` through `run.offer_rewards` and retiring the `card_reward` pass-through, not extending `RunState.select_cards`.
 
 The event tier's `EV-n` mechanisms are closed except `event/EV-3`, which is in
 Tier 1. These are the per-event findings that no `EV-n` covers.
