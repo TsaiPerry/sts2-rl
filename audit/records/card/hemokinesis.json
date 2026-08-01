@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\hemokinesis.py",
-    "sha256": "2b8dd056cfd9c9e9638c9f719284609e796dd2ecdfd35a2332317dac0994f38f"
+    "sha256": "0884845fb19842f369e4004e16f82cb81fec2c5b7237e3f8a541e20d04beb138"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     }
   ],
@@ -45,10 +45,10 @@
   "guards": [
     {
       "what": "the sim returns early on `if ctx.player.is_dead` between the HP loss and the attack (hemokinesis.py:38-39)",
-      "verdict": "gap",
-      "issue": "Hemokinesis.cs has no such early return; C# would still run the attack command, which self-guards on `Attacker.IsDead` (AttackCommand.cs:528-531) and returns without hitting -- so the two actually agree on the attack itself. What C# still does and the sim skips is `Hook.BeforeAttack` / `AfterAttack` (AttackCommand.cs:536, 655), which fire around the no-op attack. DORMANT: the sim floors a death-prevented creature at 1 HP (cmds.py:106-112), so `is_dead` means the combat is already lost, and no ported before/after-attack listener acts after the player's death. Same family as card/blood_wall's and card/bloodletting's guards (rule 3)."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-31 (tier-2 campaign): (Task 27.) The early return is DELETED. C# genuinely continues past the self-damage with no IsDead check (BloodWall.cs:36-40, Brand.cs:41-49, Hemokinesis.cs:28-31), and the sim now matches because every command the continued effect reaches ALREADY self-gates exactly as its C# counterpart does: BlockCmd.apply <-> CreatureCmd.GainBlock (CreatureCmd.cs:637-640, both IsOverOrEnding -> return 0); combat.select_cards <-> CardSelectCmd.FromHand (CardSelectCmd.cs:694-696, both -> []); PowerCmd.apply <-> PowerCmd.Apply<T> (PowerCmd.cs:69-72, both IsEnding -> null, already closed as power_cmd guard 1); DamageCmd.deal's dealer-dead bail <-> AttackCommand.Execute's IsOverOrEnding + Attacker.IsDead checks (AttackCommand.cs:520,528), both preceding Hook.BeforeAttack (:536). Death is synchronous on both sides -- C#'s Kill -> LoseCombat sets _pendingLoss before Damage() returns (CreatureCmd.cs:409,454; CombatManager.cs:945-950,180-220), which the sim's is_over_or_ending mirrors -- so the guard was provably redundant, not load-bearing. NOTE the recorded dependency was wrong: this did NOT need power/_death_prevention_branch (its remaining open sites are per-power revival paths; the generic _resolve_death arm no longer floors HP at 1). Pins: test/test_is_dead_early_returns.py (11).  The text it replaced read: Hemokinesis.cs has no such early return; C# would still run the attack command, which self-guards on `Attacker.IsDead` (AttackCommand.cs:528-531) and returns without hitting -- so the two actually agree on the attack itself. What C# still does and the sim skips is `Hook.BeforeAttack` / `AfterAttack` (AttackCommand.cs:536, 655), which fire around the no-op attack. DORMANT: the sim floors a death-prevented creature at 1 HP (cmds.py:106-112), so `is_dead` means the combat is already lost, and no ported before/after-attack listener acts after the player's death. Same family as card/blood_wall's and card/bloodletting's guards (rule 3)."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

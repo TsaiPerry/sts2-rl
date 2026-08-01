@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\doubt.py",
-    "sha256": "0a54c3a5c89de6db3a28389e9ecf7b9e50f010da3a43ecbf83fe00b2ead0b15e"
+    "sha256": "66dcf3977ee500fca3e68cfc5e9866794ff3936d15007f03ab4e14eb798a0f0f"
   },
   "extra_sources": [
     {
@@ -21,17 +21,17 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
+      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/event_cards.py",
-      "sha256": "57208afe6ae70f9dd177e57aee53a7f5b5624a5ba5d830a46de5263c8732e691",
+      "sha256": "dfd78fff2c2a36323033d8c74d986f9211a6cff57920b7380b731bb6cf9d3a5a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "06f9d38ecefba5bb61280da2dae7e92350e163a00481f23bfe8443b722327ad8",
+      "sha256": "63c0df752ca09e9de59285b0c9bc9be809da18e69b61b65424d75f37ee1ffc6b",
       "side": "sim"
     },
     {
@@ -73,13 +73,13 @@
     },
     "ctor": {
       "maps_to": "class attrs (doubt.py:23-31) + _init_vars (33-34)",
-      "verdict": "gap",
-      "issue": "CURSE / CURSE / NONE map exactly. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier and keeps reporting -1; the sim runs a base of 0 through the full modifier chain (cards/base.py:222-232). `GetAmountToSpend()` clamps to Math.Max(0, ...) on both sides, so only what is READ diverges. Same mechanism and same verdict as card/ascenders_bane's ctor entry (rule 3). DORMANT: the ported cost readers all filter `> 0` or skip `<= 1` (relics/mummified_hand.py:25, potions.py:168, cards/event_cards.py:328), and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses or statuses."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): `Card.energy_cost` (`sts2_rl/cards/base.py`) now short-circuits on `self._energy_cost < 0` as its first check, returning the raw canonical value before consulting `_free_this_turn` / `_cost_this_turn` / `_cost_this_combat` / `_cost_delta_this_turn` -- mirrors `CardEnergyCost.GetWithModifiers`'s `if (_base < 0) return num;` short-circuit (`CardEnergyCost.cs:101-104`; the record's `:100-103` cite is one line of decompiler drift), which runs before any local or global modifier. All 29 unplayable curse/status/quest cards now set `self._energy_cost = -1` in `_init_vars` (previously 0), each verified individually against its own C# `base(-1, CardType.X, ...)` constructor -- no exceptions, no ascension-gated cost variant. Readers audit (every non-cards/ `energy_cost` hit read in context): combat play/auto-play/valid_actions/action-mask sites gate on `is_playable` first and never see -1; every global-modifier site routes through `hooks.modify_card_energy_cost`, whose dispatcher ends `return max(0, cost)` -- the sim's analogue of C#'s `Math.Max(0, GetWithModifiers(...))` in `GetAmountToSpend`/`GetResolved` (`CardEnergyCost.cs:134-141`) -- so what is SPENT and what the observation encoder reads (`full_env.py` card_features via `previews.py` preview_card_energy_cost) are byte-for-byte unchanged. The three previously-known readers (`relics/mummified_hand.py`, `potions.py` TouchOfInsanity, `cards/event_cards.py` Enlightenment) remain correct, confirmed by unit tests. NOT closed here: `selectors.py`'s `scripted_card_selector` 'to_draw_top' purpose (Headbutt/Thinking Ahead) ranks by raw `card.energy_cost` unclamped -- a sim-only heuristic with no C# analogue; a curse in a Headbutt-eligible discard pile now ranks below-cost instead of tying at 0. No test exercises it; filed in GAP-QUEUE.md's 'Named work with no entry of its own'. New pins: test/test_unplayable_cost.py (15 tests).  The text it replaced read: CURSE / CURSE / NONE map exactly. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier and keeps reporting -1; the sim runs a base of 0 through the full modifier chain (cards/base.py:222-232). `GetAmountToSpend()` clamps to Math.Max(0, ...) on both sides, so only what is READ diverges. Same mechanism and same verdict as card/ascenders_bane's ctor entry (rule 3). DORMANT: the ported cost readers all filter `> 0` or skip `<= 1` (relics/mummified_hand.py:25, potions.py:168, cards/event_cards.py:328), and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses or statuses."
     },
     "CanonicalVars": {
       "maps_to": "nothing -- the sim passes the literal 1 (doubt.py:42)",
-      "verdict": "gap",
-      "issue": "`new PowerVar<WeakPower>(1m)` (Doubt.cs:20) is a printed var with no `_weak` in `_init_vars`, so `magic_number` returns None where the game prints 1. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the dealt/applied number is identical), LIVE for the observation encoder."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 24.) All 23 cards now store their printed C# var under a `_`-attribute (or, for 3 cards whose C# var is a live/computed value at display time -- guilty, normality, expect_a_fight -- a `magic_number` property override; wither similarly overrides `base_damage`) so `Card.base_damage`/`base_block`/`base_hp_loss`/`magic_number` report the C# value instead of the 0/None default. Two additive base.py changes: `_frail` added to `_MAGIC_ATTRS` (shame) and a new `base_gold` property (debt, spoils_map -- GoldVar had no base property at all). feel_no_pain's `_block` was renamed to `_power_amount` (fixing a WRONG value, not just a missing one -- `base_block` no longer misreports it as block-granting; matches Rage/Corruption/Stampede's DynamicVar('Power', ...) convention). Combat behavior / dealt numbers are byte-identical in every case -- a printed-number / observation-encoder fix only. 3 of the 23 (debt, spoils_map, rolling_boulder's secondary IncrementAmount) have NO obs-vector change despite the API fix (full_env.py has no base_gold read site; magic_number carries one number per card and _power_amount dominates rolling_boulder's scan) -- documented, not closed further. CHECKPOINT NOTE for training: encoded VALUES changed for the other 20 cards in feature slots f[17]/f[18] damage, f[20]/f[21] block, f[22] hp_loss, f[23] magic_number; obs LAYOUT unchanged. Pins: test/test_printed_vars.py (48 tests).  The text it replaced read: `new PowerVar<WeakPower>(1m)` (Doubt.cs:20) is a printed var with no `_weak` in `_init_vars`, so `magic_number` returns None where the game prints 1. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the dealt/applied number is identical), LIVE for the observation encoder."
     },
     "OnTurnEndInHand": {
       "maps_to": "DoubtCard.on_turn_end_in_hand (doubt.py:39-42)",
@@ -93,6 +93,6 @@
     }
   },
   "guards": [],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

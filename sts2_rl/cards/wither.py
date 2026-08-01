@@ -31,12 +31,24 @@ class WitherCard(Card):
     _BASE_DAMAGE = 3
 
     def _init_vars(self) -> None:
-        self._energy_cost = 0
+        self._energy_cost = -1
         self.fake_upgrade_level = 0
 
     @property
     def damage(self) -> int:
         return self._BASE_DAMAGE + self._BASE_DAMAGE * self.fake_upgrade_level
+
+    @property
+    def base_damage(self) -> int:
+        """Overrides `Card.base_damage` (which reads a static `_damage`
+        instance attribute -- Wither.cs:44's DamageVar). Wither has no such
+        attribute because its printed damage grows via FakeUpgrade rather
+        than the ordinary `upgrade_level`/`_on_upgrade` path (Wither.cs:65
+        mutates the DynamicVar directly); reporting `self.damage` here
+        surfaces the exact live number `on_turn_end_in_hand` already deals,
+        instead of the base class's None default.
+        """
+        return self.damage
 
     def fake_upgrade(self) -> None:
         """Mirrors Wither.FakeUpgrade — +3 to the printed damage."""

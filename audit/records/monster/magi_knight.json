@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\glory\\knights.py",
-    "sha256": "6a095775bb36c20f59234a35a2885a456613f46c41b390ef0212df45c6a4854e"
+    "sha256": "c0ef52dd119eee94e8cdf1d8f4a25ab2e22cb35c3589c30f1a099b10563c418c"
   },
   "hooks": {
     "MinInitialHp": {
@@ -43,9 +43,8 @@
   "guards": [
     {
       "what": "DampenMove's caster set: C# adds a caster and applies the power ONLY if it was absent (MagiKnight.cs:78-96); the sim always applies (knights.py:69-72)",
-      "verdict": "gap",
-      "issue": "MagiKnight.cs:82-92 fetches the target's existing DampenPower, calls AddCaster(base.Creature) on it, and calls PowerCmd.Apply only when it had to create one. DampenPower.AfterDeath then removes the power only once the LAST caster has died (DampenPower.cs:40-54: remove the dying creature from internalData.casters, `if (casters.Count == 0) await PowerCmd.Remove(this)`). The sim has no caster set at all: DampenPower.on_death is `if creature is not self.applier: return` then _expire (powers.py:3176-3186), so the downgrade lifts when the FIRST applier dies, and knights.py:72 applies unconditionally on every cast. Two observables would diverge with two Dampen appliers: the upgrades come back early, and the second apply fires hooks.on_power_amount_changed('dampen', player, 0) (cmds.py:308-311) that C# never fires, because C#'s StackType is PowerStackType.None (DampenPower.cs:22). DORMANT, with the trigger named and checked rather than asserted: `grep -rln DampenPower src/` returns only AbstractModelSubtypes.cs, MagiKnight.cs and DampenPower.cs -- the Magi Knight is the game's ONLY Dampen applier -- and `grep -rln MagiKnight src/Core/Models/Encounters/` returns only KnightsElite.cs, whose GenerateMonsters yields exactly one MagiKnight alongside a FlailKnight and a SpectralKnight (KnightsElite.cs:36-45), matching the sim's KNIGHTS_ELITE (knights.py:129-132). A single Magi Knight also casts DAMPEN at most once, because nothing in the chain returns to DAMPEN_MOVE. Concrete trigger: a second Dampen applier -- a second MagiKnight in one encounter, or any new model calling PowerCmd.Apply<DampenPower>.",
-      "live": false
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 28.) DampenPower now models the caster set: add_caster/on_death refcounting with the wasRemovalPrevented guard, expiring only when the set empties (DampenPower.cs:15,41-56,73-76); MagiKnight._dampen fetches-or-creates and calls PowerCmd.apply only on the create path (MagiKnight.cs:78-96). One disclosed, unobservable divergence: add_caster runs after construction rather than before (PowerCmd.apply has no pre-built-instance overload); nothing reads _casters in between. Witness: test/test_monster_tier_families.py::TestDampenCasterSet + the unedited test_glory.py MagiKnight test.  The text it replaced read: MagiKnight.cs:82-92 fetches the target's existing DampenPower, calls AddCaster(base.Creature) on it, and calls PowerCmd.Apply only when it had to create one. DampenPower.AfterDeath then removes the power only once the LAST caster has died (DampenPower.cs:40-54: remove the dying creature from internalData.casters, `if (casters.Count == 0) await PowerCmd.Remove(this)`). The sim has no caster set at all: DampenPower.on_death is `if creature is not self.applier: return` then _expire (powers.py:3176-3186), so the downgrade lifts when the FIRST applier dies, and knights.py:72 applies unconditionally on every cast. Two observables would diverge with two Dampen appliers: the upgrades come back early, and the second apply fires hooks.on_power_amount_changed('dampen', player, 0) (cmds.py:308-311) that C# never fires, because C#'s StackType is PowerStackType.None (DampenPower.cs:22). DORMANT, with the trigger named and checked rather than asserted: `grep -rln DampenPower src/` returns only AbstractModelSubtypes.cs, MagiKnight.cs and DampenPower.cs -- the Magi Knight is the game's ONLY Dampen applier -- and `grep -rln MagiKnight src/Core/Models/Encounters/` returns only KnightsElite.cs, whose GenerateMonsters yields exactly one MagiKnight alongside a FlailKnight and a SpectralKnight (KnightsElite.cs:36-45), matching the sim's KNIGHTS_ELITE (knights.py:129-132). A single Magi Knight also casts DAMPEN at most once, because nothing in the chain returns to DAMPEN_MOVE. Concrete trigger: a second Dampen applier -- a second MagiKnight in one encounter, or any new model calling PowerCmd.Apply<DampenPower>."
     },
     {
       "what": "PowerShieldMove / PrepMove block amount and props",
@@ -68,7 +67,7 @@
       "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. SHARED-FINDINGS section 4 waives L10NMonsterLookup / TalkCmd barks and the bestiary list explicitly."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-27",
   "extra_sources": [
     {
@@ -83,12 +82,12 @@
     },
     {
       "path": "sts2_rl\\powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {

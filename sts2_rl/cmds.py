@@ -75,6 +75,30 @@ def can_receive_powers(hooks: HookSystem, target: Creature) -> bool:
             and hooks.should_allow_hitting(target))
 
 
+def _combat_contains_creature(hooks: HookSystem, creature: Creature) -> bool:
+    """`ICombatState.ContainsCreature` (CombatState.cs:306-313): true if
+    `creature` is one of the combat's allies or enemies right now.
+
+    C# tests physical list membership; `CombatState.RemoveCreature`
+    (CombatState.cs:299-302) is what nulls a removed creature's back-pointer
+    and is why membership can go false. The sim never physically drops a
+    creature from `combat.enemies` (`Creature.is_removed_from_combat`'s own
+    note, creatures.py) — conformance addresses enemies by index — so
+    membership here is "is the combat's player, or is one of combat.enemies"
+    AND-ed with "not removed", the sim's stand-in for the same fact.
+
+    Consulted only by `PowerCmd.apply`'s given-side gate (`applier != null &&
+    combatState.ContainsCreature(applier)`, PowerCmd.cs:122-123, power_cmd/G3
+    steps 12 and 27).
+    """
+    combat = getattr(hooks, "combat", None)
+    if combat is None:
+        return False
+    is_member = (creature is getattr(combat, "player", None)
+                 or creature in getattr(combat, "enemies", ()))
+    return is_member and not creature.is_removed_from_combat
+
+
 def should_trigger_fatal(target: Creature) -> bool:
     """`cardPlay.Target.Powers.All(p => p.ShouldOwnerDeathTriggerFatal())`,
     the test Feed.cs:38 and HandOfGreed.cs:49 both take BEFORE their attack.
@@ -109,9 +133,26 @@ def _resolve_death(hooks: HookSystem, target: Creature) -> None:
     `true` (CreatureCmd.cs:566) — and neither floors the creature's HP. The
     prevented creature is left DEAD AT 0 and the preventer is expected to heal
     it; C# then re-kills it if nobody did.
+
+    The real-death arm's own gate is `force || creature.MaxHp <= 0 ||
+    Hook.ShouldDie(...)` (CreatureCmd.cs:505, read live on every call, not
+    passed in by whichever caller reached it) — a short-circuit OR, so
+    whenever `target.max_hp <= 0` the whole `ShouldDie` consultation is
+    skipped and death is unconditional: no listener (Lizard Tail, Fairy in a
+    Bottle, Torii) is ever asked, and none of their charges are spent. This
+    is reachable in the sim only through `CreatureCmd.set_max_hp`'s own
+    `MaxHp <= 0` branch (tier-2 Task 19, mechanism E) and, while it's still
+    true, any death that follows it — e.g. `set_max_and_current_hp`'s own
+    trailing `set_current_hp` call. Ordinary damage-driven death
+    (`DamageCmd.deal`, `CreatureCmd.kill`) always has a positive `max_hp`,
+    so this clause is inert for them and `should_die` still runs normally —
+    a death-prevention listener genuinely CAN save a creature from an
+    ordinary max-HP-loss hit (the damage `lose_max_hp` deals through
+    `DamageCmd.deal` before this ever runs), just not from the floor-driven
+    Kill afterwards.
     """
     preventer: list = []
-    if hooks.should_die(target, preventer):
+    if target.max_hp <= 0 or hooks.should_die(target, preventer):
         # CreatureCmd.cs:508 — the death stands; a listener may still keep the
         # corpse in the combat rather than removing it (Decimillipede's
         # ReattachPower).
@@ -210,6 +251,21 @@ class DamageCmd:
         # first hit's reflect must not land the rest of the attack.
         if dealer is not None and dealer.is_dead:
             return 0
+        # CreatureCmd.cs:256-259, the per-target loop's FIRST statement (the
+        # sim's single-target `deal` stands in for one iteration of that
+        # loop — see guard N2): `originalTarget.IsDead -> continue` skips an
+        # already-dead target before ModifyDamage or any other hook runs.
+        # IsDead == !IsAlive == CurrentHp <= 0 (Creature.cs:206-208), the same
+        # predicate the sim's `is_dead` already is — not `is_gone` (which
+        # would also catch an escaped-but-alive creature C# does not skip
+        # here). A withered, retained Decimillipede segment (hp <= 0,
+        # `retained_after_death`) is ALSO `is_dead` for the whole window it
+        # is unhittable, so this guard alone reproduces that case; the sim's
+        # `should_allow_hitting` hook (guard N1) exists for the same segment
+        # but is not made redundant by this — it is the documented
+        # C#-has-no-single-hook-here divergence, kept as is.
+        if target.is_dead:
+            return 0
         if not hooks.should_allow_hitting(target):
             return 0
 
@@ -257,6 +313,7 @@ class DamageCmd:
 
         # 5. Block absorption (skipped for unblockable HP loss like Poison)
         hp_lost = amount
+        absorbed = 0   # tracked outside the `if` for step 9's WasFullyBlocked
         if target.block > 0 and ValueProp.UNBLOCKABLE not in props:
             absorbed = min(target.block, amount)
             target.block -= absorbed
@@ -282,20 +339,67 @@ class DamageCmd:
             target.hp = max(0, target.hp - hp_lost)
             hooks.on_hp_changed(target, target.hp - old_hp)
 
+            # The killing-blow skip decision (step 9 below) is a SNAPSHOT
+            # taken here, immediately after the HP write and before death
+            # resolution runs — mirroring Creature.LoseHpInternal's
+            # WasTargetKilled (Creature.cs:445-457) plus the live IsDead read
+            # CreatureCmd.cs:392 makes, both of which happen strictly BEFORE
+            # `Kill()` (CreatureCmd.cs:409). Kill() is what runs
+            # ShouldDie/ShouldDieLate and a preventer's own synchronous heal
+            # (LizardTail.AfterPreventingDeath, LizardTail.cs:53-59), so a
+            # death that gets prevented-and-healed can never un-skip the
+            # decision in C#. See guard G4 / damage_pipeline step 17.5 — this
+            # used to be a live `target.is_dead` re-read taken AFTER
+            # `_resolve_death` (below), which let a Lizard Tail heal
+            # resurrect Centennial Puzzle's draw.
+            was_lethal = target.is_dead
+
             # 8. Death check — listeners can prevent death (e.g. Fairy in a Bottle)
             if target.hp <= 0:
                 _resolve_death(hooks, target)
+        else:
+            # No HP was lost this call, so death resolution never runs below
+            # either way — reading the snapshot here is exactly the live
+            # value step 9 would have read under the old, unsnapshotted code.
+            was_lethal = target.is_dead
 
-        # 9. Post-damage events. A killing blow skips the victim's
-        #    AfterDamageReceived (CreatureCmd.cs:392 — `!WasTargetKilled ||
-        #    !IsDead`): the hit that kills a creature does not trigger its
-        #    on-damage-received powers (e.g. PersonalHive shuffles no Dazed on
-        #    the hit that kills its owner). AfterDamageGiven (on_damage_dealt)
-        #    is not guarded and still fires on the kill.
-        if not target.is_dead:
+        # 9. Post-damage events. AfterDamageGiven (dealer side, unconditional)
+        #    fires BEFORE the killing-blow-guarded AfterDamageReceived
+        #    (CreatureCmd.cs:388-395) — swapped from the sim's historical
+        #    victim-then-dealer order to match. See guard G6 / damage_pipeline
+        #    step 17.4. A killing blow skips the victim's AfterDamageReceived
+        #    (CreatureCmd.cs:392 — `!WasTargetKilled || !IsDead`, captured as
+        #    `was_lethal` above): the hit that kills a creature does not
+        #    trigger its on-damage-received powers (e.g. PersonalHive
+        #    shuffles no Dazed on the hit that kills its owner).
+        #    AfterDamageGiven (on_damage_dealt) is not killing-blow guarded
+        #    and still fires on the kill.
+        #
+        #    C#'s dispatch (CreatureCmd.cs:390) is `if (combatState != null)
+        #    { await Hook.AfterDamageGiven(...) }` — no amount/hp_lost test at
+        #    all, so it sees a fully-blocked or zero-damage hit exactly like
+        #    every other one; `result.WasFullyBlocked` (DamageResult.cs) is a
+        #    field listeners are expected to read (ImbalancedPower.cs:19). The
+        #    sim used to require `hp_lost > 0`, which made a fully-blocked hit
+        #    invisible to the dealer-side event (power/_after_damage_given_
+        #    substitution, tier-2 Task 26) — dropped here; only the
+        #    `dealer is not None` half remains, since there is no dealer to
+        #    attribute the event to otherwise.
+        #    `was_fully_blocked` mirrors `WasFullyBlocked` (CreatureCmd.cs:268
+        #    `!props.HasFlag(Unblockable) && (blockedDamage > 0 ||
+        #    originalTarget.Block > 0) && (int)unblockedDamage == 0`): not
+        #    unblockable, some block was in play (this hit absorbed some, or
+        #    the target still has block left), and the FINAL hp_lost is 0.
+        was_fully_blocked = (
+            ValueProp.UNBLOCKABLE not in props
+            and (absorbed > 0 or target.block > 0)
+            and hp_lost == 0
+        )
+        if dealer is not None:
+            hooks.on_damage_dealt(dealer, target, hp_lost, card, props,
+                                   was_fully_blocked)
+        if not was_lethal:
             hooks.on_damage_received(target, hp_lost, dealer, card, props)
-        if dealer is not None and hp_lost > 0:
-            hooks.on_damage_dealt(dealer, target, hp_lost, card)
 
         # AttackCommand.Results: every hit of the attack currently bracketed by
         # before_attack / after_attack, for the listeners that read them
@@ -328,6 +432,11 @@ class BlockCmd:
             return 0
         if props is None:
             props = ValueProp.MOVE
+        # CreatureCmd.cs:642 — Hook.BeforeBlockGained, unconditional, fired
+        # with the RAW amount before the enchantment fold and before
+        # ModifyBlock's chain (tier-2 Task 11, item A; creature_card_cmds/
+        # step12, dormant).
+        hooks.before_block_gained(target, amount, card, props)
         # The source card's own enchantment folds in before either listener
         # loop (Hook.cs:1315-1320), like the damage side.
         ench = card.enchantment if card is not None else None
@@ -349,6 +458,28 @@ class BlockCmd:
         target.block += amount
         hooks.on_block_gained(target, amount, card)
         return amount
+
+    @staticmethod
+    def lose_block(hooks: HookSystem, target: Creature, amount: int) -> None:
+        """Remove block outside the damage pipeline (mirrors CreatureCmd.
+        LoseBlock, CreatureCmd.cs:666-678; creature_card_cmds/step18).
+
+        Three guards folded into one `if`, all C#'s: not over/ending, target
+        not dead, amount positive. `LoseBlockInternal` (Creature.cs:468-475)
+        floors at 0; when the target HELD block beforehand and now has none,
+        `AfterBlockBroken` re-fires -- with NO dealer/card, unlike the
+        damage pipeline's own call (DamageCmd.deal step 5's `on_block_broken
+        (target, dealer, card)`) -- exactly mirroring C#'s two-argument
+        `Hook.AfterBlockBroken(creature.CombatState, creature)` call here.
+        BurrowedPower's `AfterRemoved` is the one ported caller
+        (`CreatureCmd.LoseBlock(oldOwner, 999999999m)`, BurrowedPower.cs:40).
+        """
+        if is_over_or_ending(hooks) or target.is_dead or amount <= 0:
+            return
+        block = target.block
+        target.block = max(0, target.block - amount)
+        if block > 0 and target.block <= 0:
+            hooks.on_block_broken(target)
 
 
 class CreatureCmd:
@@ -373,7 +504,15 @@ class CreatureCmd:
         healed = min(amount, target.max_hp - target.hp)
         if healed > 0:
             target.hp += healed
-            hooks.on_hp_changed(target, healed)
+        # CreatureCmd.cs:751-754 -- Hook.AfterCurrentHpChanged fires whenever
+        # the REQUESTED amount is positive, carrying that RAW amount -- NOT
+        # the clamped `healed` -- and fires even when healed is 0 (already at
+        # full HP). creature_card_cmds/G5 + step22: the sim used to gate on
+        # `healed > 0` and report `healed`; dormant because the only ported
+        # on_hp_changed listener, Red Skull, ignores the delta and
+        # recomputes its strength idempotently from current HP.
+        if amount > 0:
+            hooks.on_hp_changed(target, amount)
         return healed
 
     @staticmethod
@@ -387,17 +526,118 @@ class CreatureCmd:
         CreatureCmd.heal(hooks, target, amount)
 
     @staticmethod
-    def lose_max_hp(hooks: HookSystem, target: Creature, amount: int) -> None:
-        """Reduce max HP by amount, clamping current HP down to it (mirrors
-        CreatureCmd.LoseMaxHp: both max and current HP drop). Max HP floors at
-        1. Used by Paper Cuts (Scroll of Biting)."""
+    def lose_max_hp(
+        hooks: HookSystem, target: Creature, amount: int,
+        from_card: bool = False,
+    ) -> None:
+        """Reduce max HP by amount (mirrors CreatureCmd.LoseMaxHp,
+        CreatureCmd.cs:811-828; creature_card_cmds/G6 + step28/step29).
+
+        The ORDER is load-bearing: `newMaxHp = MaxHp - amount` is computed
+        UNFLOORED, and when that undercuts CurrentHp, the difference is
+        dealt as Unblockable|Unpowered damage (`+Move` when `from_card` --
+        C#'s `isFromCard`, which is how Rupture-style triggers tell a
+        card-sourced max-HP loss from a power's) through the FULL damage
+        pipeline (hooks, death check, Kill) -- and only AFTERWARDS does
+        MaxHp floor at 1 (`set_max_hp`). The sim used to floor MaxHp first
+        and clamp HP with a bare `on_hp_changed`, so no modify_hp_lost /
+        on_damage_received / should_die / on_death ever fired and no
+        creature could die of max-HP loss: a 10/10 creature losing 30 max HP
+        now takes 30 unblockable damage and can die, where it used to end
+        alive at 1/1.
+
+        `set_max_hp`'s own MaxHp<=0 Kill branch is unreachable from here --
+        the floor passed to it is always >= 1 -- but stays live for
+        `set_max_and_current_hp`'s direct callers.
+        """
         if amount <= 0:
             return
-        target.max_hp = max(1, target.max_hp - amount)
-        if target.hp > target.max_hp:
-            old_hp = target.hp
-            target.hp = target.max_hp
-            hooks.on_hp_changed(target, target.hp - old_hp)
+        new_max_hp = target.max_hp - amount        # UNFLOORED -- may go negative
+        if new_max_hp < target.hp:
+            props = DamageProps.CARD_HP_LOSS if from_card else DamageProps.NON_CARD_HP_LOSS
+            DamageCmd.deal(hooks, target, target.hp - new_max_hp, props=props)
+        CreatureCmd.set_max_hp(hooks, target, max(1, new_max_hp))
+
+    @staticmethod
+    def set_max_hp(hooks: HookSystem, target: Creature, amount: int) -> int:
+        """Set max HP to a new value (mirrors CreatureCmd.SetMaxHp,
+        CreatureCmd.cs:839-849; creature_card_cmds/step26). Returns the
+        delta applied (new MaxHp - old MaxHp).
+
+        `SetMaxHpInternal` (Creature.cs:493-501) floors the new MaxHp at 0
+        and SILENTLY clamps CurrentHp down to it -- no `AfterCurrentHpChanged`
+        fires for that clamp; only a caller's own separate HP-changing step
+        (the `DamageCmd.deal` in `lose_max_hp`, or `set_current_hp` in
+        `set_max_and_current_hp`) fires one. If MaxHp lands at or below 0,
+        the creature is killed (:844-847) through `_resolve_death` directly
+        -- not through `CreatureCmd.kill`, whose own `if target.is_dead:
+        return` entry guard would no-op here, since HP is already clamped to
+        <= 0 by the line above by the time this check runs. Unreachable from
+        `lose_max_hp` (which always floors the amount it passes here at 1);
+        live for a direct `set_max_and_current_hp` caller passing <= 0.
+
+        This branch is exactly `_resolve_death`'s own `target.max_hp <= 0`
+        short-circuit (CreatureCmd.cs:844-846's `force || MaxHp <= 0 ||
+        ShouldDie(...)`) -- Hook.ShouldDie is never consulted here, so no
+        death-prevention listener gets a veto or spends a charge, unlike an
+        ordinary damage-driven death (the Unblockable hit `lose_max_hp`
+        deals through `DamageCmd.deal` beforehand IS still preventable --
+        only the floor's own Kill is unconditional).
+        """
+        old_max_hp = target.max_hp
+        target.max_hp = max(0, amount)
+        target.hp = min(target.hp, target.max_hp)
+        if target.max_hp <= 0:
+            _resolve_death(hooks, target)
+        return target.max_hp - old_max_hp
+
+    @staticmethod
+    def set_current_hp(hooks: HookSystem, target: Creature, amount: int) -> None:
+        """Set current HP to a new value through the death pipeline (mirrors
+        CreatureCmd.SetCurrentHp, CreatureCmd.cs:762-779;
+        creature_card_cmds/step23).
+
+        `SetCurrentHpInternal` (Creature.cs:488-491) clamps the new value to
+        MaxHp only -- no floor -- so, like the property setter C# leans on
+        to catch the mistake, callers must not pass a negative amount.
+        `AfterCurrentHpChanged` fires whenever the RAW requested `amount`
+        differs from the OLD CurrentHp, carrying `amount - old` as the
+        delta -- like Heal (creature_card_cmds/G5), this is the raw
+        requested value, not the clamped one actually applied. A creature
+        left dead afterwards is killed through `_resolve_death` directly,
+        the same reasoning as `set_max_hp` above: HP is already at (or
+        below) zero by the time this runs. `_resolve_death`'s own
+        `target.max_hp <= 0` short-circuit is a LIVE read, not something
+        this method decides -- called on its own with a positive `max_hp`
+        (the ordinary case) `should_die` still runs normally, but reached
+        through `set_max_and_current_hp` with `amount <= 0`, `max_hp` is
+        already 0 from the `set_max_hp` call just before it, so this pass
+        skips `should_die` too.
+        """
+        old_hp = target.hp
+        target.hp = min(amount, target.max_hp)
+        if amount != old_hp:
+            hooks.on_hp_changed(target, amount - old_hp)
+        if target.is_dead:
+            _resolve_death(hooks, target)
+
+    @staticmethod
+    def set_max_and_current_hp(hooks: HookSystem, target: Creature, amount: int) -> None:
+        """Set both max and current HP to the same new value (mirrors
+        CreatureCmd.SetMaxAndCurrentHp, CreatureCmd.cs:856-860;
+        creature_card_cmds/step26). SetMaxHp runs first: for the ported
+        callers' strictly-positive amounts its own Kill branch and its
+        silent CurrentHp-down-clamp are both no-ops, but they still run in
+        the C#-mandated order.
+
+        For `amount <= 0` both of the resulting `_resolve_death` passes --
+        `set_max_hp`'s own and `set_current_hp`'s trailing one -- skip
+        `Hook.ShouldDie` (`target.max_hp` is already <= 0 for both calls),
+        so no death-prevention listener is ever consulted or spends a
+        charge on either pass; the creature simply dies, matching C#'s own
+        live re-read of `MaxHp` inside `KillWithoutCheckingWinCondition`."""
+        CreatureCmd.set_max_hp(hooks, target, amount)
+        CreatureCmd.set_current_hp(hooks, target, amount)
 
     @staticmethod
     def kill(hooks: HookSystem, target: Creature) -> None:
@@ -437,13 +677,40 @@ class CreatureCmd:
 
     @staticmethod
     def escape(hooks: HookSystem, creature: Creature) -> None:
-        """Remove a creature from combat without killing it (mirrors Escape).
+        """Remove a creature from combat without killing it (mirrors
+        `CreatureCmd.Escape`, CreatureCmd.cs:579-603).
 
         Escaped creatures no longer act, cannot be targeted, and count as gone
         for the win condition.
+
+        creature_card_cmds/G13 + step8: `RemoveAllPowersInternalExcept()`
+        (:589) strips EVERY power via `PowerModel.RemoveInternal`
+        (Creature.cs:658-666) — silently, with NO `AfterRemoved` awaited.
+        This is the deliberate contrast with death (`_strip_powers_after_death`
+        above, CreatureCmd.cs:533-537), which DOES await one per power. C#
+        passes no `except` list here (unlike `RemoveAllPowersAfterDeath`'s
+        survivor filter), so every power goes, no exceptions. `Power._expire()`
+        is the sim's own existing no-`on_removed` primitive for exactly this
+        shape (already used by `PowerCmd.apply`'s re-stack-to-zero branch and
+        `PowerCmd.modify_amount`'s duration-tick expiry) — reused here rather
+        than hand-rolling a second one. The list is snapshotted BEFORE
+        mutating (mirroring `_strip_powers_after_death`'s own
+        snapshot-then-mutate two-pass shape): `BattlewornDummyTimeLimitPower`
+        calls this method on ITS OWN owner from inside its own hook, so the
+        power being stripped can be the very listener whose method is on the
+        call stack.
+
+        `on_creature_escaped` has no C# hook counterpart — it is one of the
+        sim-only dispatch names hooks.py's own architecture comment already
+        documents and accepts (alongside on_stunned/on_hp_changed/
+        on_extra_turn, hooks.py:83-86) — kept unchanged; nothing in the C#
+        Escape path (`CombatManager.RemoveCreature`, `CombatState.
+        CreatureEscaped`) dispatches a Hook.AfterX either.
         """
         if creature.is_dead or creature.escaped:
             return
+        for power in list(creature.powers.values()):
+            power._expire()
         creature.escaped = True
         hooks.on_creature_escaped(creature)
         # Escaping can end the fight (mirrors CheckWinCondition after Escape).
@@ -519,7 +786,7 @@ class PowerCmd:
         If the power is already present on the target, on_stack() is called instead
         of creating a new instance.
         """
-        from .powers import PowerType
+        from .powers import PowerInstanceType, PowerType
 
         # PowerCmd.cs:69-72 — Apply<T> opens on `IsEnding -> return null`, and
         # ModifyAmount re-tests it for the stacking branch (:217-220). The sim
@@ -540,34 +807,99 @@ class PowerCmd:
         if not can_receive_powers(hooks, target):
             return
 
-        # C# PowerCmd.Apply runs the "given" power-amount modifiers
-        # (Hook.ModifyPowerAmountGiven — e.g. Unsettling Lamp's first-debuff
-        # latch + double) BEFORE Artifact negates the debuff
-        # (ArtifactPower.TryModifyPowerAmountReceived, which fires later on the
-        # "received" side). So a debuff card whose debuff Artifact fully eats
-        # STILL spends the Lamp's once-per-combat activation (it latched on that
-        # card), and a later debuff card is not doubled. Running
-        # modify_power_amount before the Artifact early-return mirrors that
-        # ordering; the doubled amount is simply discarded when the debuff is
-        # then blocked.
-        amount = hooks.modify_power_amount(power_cls, target, amount, applier)
+        # PowerCmd.cs:165-174 — FindExistingInstanceForStacking dispatches on
+        # PowerInstanceType (PowerModel.cs:144; power_cmd/G5). NONE (the
+        # default) finds the target's existing instance by id, as before.
+        # INSTANCED never finds one — every application starts its own,
+        # independently ticking/expiring instance. INSTANCED_PER_APPLIER
+        # finds one only if it shares this application's applier; a
+        # different applier starts its own instance too. `target.powers`
+        # still holds one dict slot per id, so a forced "not found" below
+        # falls into the new-instance branch, which OVERWRITES that slot —
+        # the instance it replaces is not touched or unregistered, so it
+        # keeps ticking toward its own expiry via the hook system (which
+        # dispatches from its own listener list, not from `target.powers`);
+        # only a direct `target.powers` lookup sees just the newest one.
+        #
+        # Computed HERE, before the modifier chains, not just for the
+        # stacking-vs-new branch below: `existing is None` is also what
+        # decides whether the raw-amount `step6` guard just below applies
+        # (only `Apply(power, target, ...)`'s own path has it — `Apply<T>`
+        # routes an existing instance straight to `ModifyAmount`, which
+        # never re-tests the raw amount at all).
+        existing = target.powers.get(power_cls.id)
+        if existing is not None:
+            if power_cls.instance_type is PowerInstanceType.INSTANCED:
+                existing = None
+            elif (power_cls.instance_type is PowerInstanceType.INSTANCED_PER_APPLIER
+                    and existing.applier is not applier):
+                existing = None
 
-        # ArtifactPower.cs:24 tests `canonicalPower.GetTypeForAmount(amount)`,
-        # not the static Type: a negative-amount application of a Buff-typed
-        # allow_negative power (Strength/Dexterity) is a Debuff by C#'s rule.
-        if power_cls.type_for_amount(amount) == PowerType.DEBUFF:
-            artifact = target.powers.get("artifact")
-            if artifact is not None:
-                artifact.amount -= 1
-                hooks.on_power_amount_changed("artifact", target, -1)
-                if artifact.amount <= 0:
-                    artifact._expire()
-                return  # debuff blocked (Lamp already latched above)
+        # PowerCmd.cs:103 — `Apply(power, target, amount, ...)`'s own
+        # `amount == 0m` disjunct (power_cmd/step6): C# returns here, before
+        # `Hook.BeforePowerAmountChanged` or either modifier chain ever runs,
+        # so a raw zero never even reaches Unsettling Lamp/Artifact/Ruined
+        # Helmet. Only the "no existing instance" branch has this check —
+        # `ModifyAmount` (the stacking branch) has no such guard at all, and
+        # a zero OFFSET flows through its chains normally.
+        if existing is None and amount == 0:
+            return
 
-        if power_cls.id in target.powers:
-            existing = target.powers[power_cls.id]
+        # PowerCmd.cs:122-127 — the two chains run in THIS order, before
+        # anything downstream sees the amount. A debuff card whose debuffs
+        # Artifact fully blocks still spends Unsettling Lamp's
+        # once-per-combat activation (it latched on that card via the
+        # given-side chain) even though the doubled amount never lands —
+        # Artifact (now a real `modify_power_amount_received` listener,
+        # ArtifactPower.cs:17-41, power_cmd/G3+G4) sees whatever the given
+        # chain already produced and still only consumes ONE stack, however
+        # much Lamp doubled the incoming debuff. Note: the two COMPANION
+        # events that Artifact/RuinedHelmet actually act on
+        # (`after_modify_power_amount_given/received`) do NOT fire here —
+        # they moved to AFTER the power's state is mutated, in each branch
+        # below (PowerCmd.cs:148-152 for Apply, :238-242 for ModifyAmount).
+        #
+        # GIVEN: gated on `applier != null && combatState.ContainsCreature(
+        # applier)` (PowerCmd.cs:122-123) — the gate lives HERE, at the call
+        # site, mirroring where C# puts it (`Hook.ModifyPowerAmountGiven`
+        # itself has no such gate). Two full passes, additive-sum then
+        # multiplicative-product (Hook.cs:1888-1912) — not commutative with
+        # a naive fold, so two separate dispatcher calls, not one.
+        given_modifiers: list = []
+        if applier is not None and _combat_contains_creature(hooks, applier):
+            amount = hooks.modify_power_amount_given_additive(
+                power_cls, target, amount, applier, given_modifiers)
+            amount = hooks.modify_power_amount_given_multiplicative(
+                power_cls, target, amount, applier, given_modifiers)
+
+        # RECEIVED: UNCONDITIONAL (Hook.cs:1917-1930 has no applier gate at
+        # all) — a single pass of full-value overrides
+        # (`TryModifyPowerAmountReceived` either replaces the running amount
+        # or leaves it alone), not an additive/multiplicative fold.
+        # ArtifactPower (ArtifactPower.cs:17-36) and RuinedHelmet
+        # (RuinedHelmet.cs:32-53) both live here now, as real listeners
+        # instead of a hand-rolled block outside the hook loop.
+        received_modifiers: list = []
+        amount = hooks.modify_power_amount_received(
+            power_cls, target, amount, applier, received_modifiers)
+
+        if existing is not None:
+            # PowerCmd.cs:236-242 (ModifyAmount) — SetAmount runs FIRST,
+            # THEN the companion events, UNCONDITIONALLY: this pipeline has
+            # no CanReceivePowers gate anywhere (the asymmetry with the
+            # new-power branch below is real, verified by reading both
+            # methods side by side — not an oversight). They also run
+            # BEFORE the ShouldRemoveDueToAmount/Remove check further down
+            # (:247-249): a stack that drops a power to 0 still notifies
+            # Artifact/Ruined Helmet, with the POST-mutation power, before
+            # it disappears.
             old_amount = existing.amount
             existing.on_stack(amount)
+            power = existing
+            if given_modifiers:
+                hooks.after_modify_power_amount_given(given_modifiers, power)
+            if received_modifiers:
+                hooks.after_modify_power_amount_received(received_modifiers, power)
             hooks.on_power_amount_changed(
                 power_cls.id, target, existing.amount - old_amount, applier
             )
@@ -578,7 +910,6 @@ class PowerCmd:
             ):
                 existing._expire()
                 return
-            power = existing
         else:
             # PowerCmd.cs:133 — CanReceivePowers is re-tested HERE, after the
             # given/received modifier chains have run, because any listener
@@ -586,23 +917,78 @@ class PowerCmd:
             # meantime (a revival latching mid-application). The sim tested it
             # only at the entry. C# re-tests it on the NEW-power path alone:
             # Apply<T> routes an existing instance to ModifyAmount, which never
-            # consults CanReceivePowers at all.
+            # consults CanReceivePowers at all. C# wraps its ENTIRE tail —
+            # ApplyInternal through BOTH companion events, :135-152 — inside
+            # this SAME `if (target.CanReceivePowers)` (:133-158): a target
+            # that fails this re-test gets NEITHER companion event, not just
+            # no power. The `return` below therefore has to skip the
+            # companions too, not only skip construction — which it does,
+            # simply by returning before `power` is even built.
             if not can_receive_powers(hooks, target):
                 return
+            # PowerCmd.cs:81 (`power = powerModel.ToMutable()`, done by the
+            # `Apply<T>` wrapper before this inner `Apply` even starts) — the
+            # PowerModel instance exists, unowned and unregistered, BEFORE
+            # ApplyInternal ever runs, and STAYS that way when the
+            # post-modifier amount is exactly 0. That is the very object C#
+            # still passes to both companion events below (PowerCmd.cs:150,
+            # :152) even for a debuff Artifact fully zeroed. Constructing it
+            # here unconditionally (`Power.__init__` is pure attribute
+            # assignment — no registration, no hook side effect) mirrors
+            # that, instead of passing `None` for "nothing to point to".
             power = power_cls(owner=target, amount=amount, hooks=hooks, applier=applier)
-            target.powers[power_cls.id] = power
-            hooks.register(power)
-            hooks.on_power_applied(power_cls.id, target, amount, applier)
-            # Debuffs landing on the player skip their first duration tick.
-            # This belongs to the NEW-power branch only: C# sets
-            # SkipNextDurationTick in Apply (PowerCmd.cs:144-147) and
-            # ModifyAmount (PowerCmd.cs:215-271) never touches it. Setting it
-            # at function scope re-armed the flag on every re-stack, so a
-            # second Vulnerable or Weak stack applied in the same turn skipped
-            # a tick it should have taken and the debuff expired a turn late.
-            if (target.side == "player"
-                    and power_cls.power_type == PowerType.DEBUFF):
-                power.skip_next_tick = True
+            # PowerModel.ApplyInternal (PowerModel.cs:564-573): `if (!(amount
+            # == 0m)) { ...; Owner.ApplyPowerInternal(this); }` — a
+            # POST-modifier amount of exactly 0 never registers anything.
+            # This is what makes a debuff Artifact zeroed via the received
+            # chain create nothing, matching the pre-refactor hard-coded
+            # early return, without a second special case for Artifact
+            # specifically — any received-side listener that zeroes an
+            # incoming debuff gets the same "nothing created" outcome. THE
+            # TRAP: this zero-check is INTERNAL to ApplyInternal — in C# it
+            # gates only the SetAmount/Owner-assignment/registration inside
+            # ApplyInternal's own body, not the companion events that sit
+            # AFTER the ApplyInternal call but still inside the
+            # CanReceivePowers block. So the `if amount != 0` below governs
+            # ONLY attach/registration; the companion dispatch after it is
+            # unconditional here (gated solely by CanReceivePowers, already
+            # re-tested above) and must still fire — that's how Artifact's
+            # charge gets spent on a debuff it fully blocks.
+            if amount != 0:
+                target.powers[power_cls.id] = power
+                hooks.register(power)
+                hooks.on_power_applied(power_cls.id, target, amount, applier)
+                # Debuffs landing on the player skip their first duration
+                # tick. This belongs to the attach branch: C# sets
+                # SkipNextDurationTick unconditionally inside the
+                # CanReceivePowers block (PowerCmd.cs:144-147), but on a
+                # power object that — when amount==0 — is never kept
+                # anywhere, so nothing ever observes the flag; gating it on
+                # `amount != 0` here is behaviorally identical. Setting it at
+                # function scope (rather than only here) re-armed the flag on
+                # every re-stack, so a second Vulnerable or Weak stack
+                # applied in the same turn skipped a tick it should have
+                # taken and the debuff expired a turn late — this branch is
+                # reached only on a fresh application, never a re-stack.
+                if (target.side == "player"
+                        and power_cls.power_type == PowerType.DEBUFF):
+                    power.skip_next_tick = True
+            # PowerCmd.cs:148-152 — the companion events: gated on there
+            # having been at least one real modifier (an empty list plays
+            # the same role as C#'s `givenModifiers == null`: nobody to
+            # notify) and on the CanReceivePowers re-test above — NOT on the
+            # `amount != 0` attach branch just above (see the trap note
+            # there). `power` is the real instance, matching C#'s own
+            # `power` local: neither of C#'s two
+            # AfterModifyingPowerAmountReceived implementers currently reads
+            # the PowerModel argument (ArtifactPower.cs:38-41 decrements
+            # ITSELF; RuinedHelmet.cs:55-60 just flips its own flag), but the
+            # mechanism now carries the same value C# does, for a future
+            # listener that does.
+            if given_modifiers:
+                hooks.after_modify_power_amount_given(given_modifiers, power)
+            if received_modifiers:
+                hooks.after_modify_power_amount_received(received_modifiers, power)
 
     @staticmethod
     def modify_amount(hooks: HookSystem, power, offset: int) -> None:
@@ -617,11 +1003,25 @@ class PowerCmd:
 
         This is the DECREMENT path only, and it deliberately does NOT run the
         `ModifyPowerAmountGiven` / `ModifyPowerAmountReceived` chains that
-        `ModifyAmount` runs at :229-233. Wiring them in is blocked on
-        power_cmd/G2: the sim's Unsettling Lamp is missing C#'s `amount <= 0`
-        early bail, so it would double a -1 duration tick into -2. G2 is a
-        separate open entry; adding the chains before it is fixed would ship a
-        known regression.
+        `ModifyAmount` runs at :229-233. STALE NOTE, corrected in the
+        power_cmd/G3+G4 pass: this used to be blocked on power_cmd/G2 (the
+        sim's Unsettling Lamp missing C#'s sign-aware doubling condition, so
+        it would have doubled a -1 duration tick into -2) — G2 is now closed
+        (Task 17: Lamp gates on `type_for_amount`, which self-protects a
+        negative offset on a non-allow_negative debuff by flipping it to
+        Buff). Wiring the chains in here is still NOT done — that is a
+        separate, broader change (every duration tick in the game would
+        start running the received chain) this task's brief did not scope,
+        not a known-regression block anymore. `ArtifactPower.Decrement(this)`
+        (ArtifactPower.cs:38-41) — this method's own C# analogue —
+        deliberately reaches here too (`PowerCmd.modify_amount` is what
+        `Power._tick`/Artifact's own charge-spend both call), and skipping
+        the chains on THAT call is verified harmless: neither
+        `ArtifactPower` nor `RuinedHelmet`'s received-chain check can ever
+        fire on Artifact's own -1 self-decrement (Artifact's
+        `type_for_amount(-1)` is Buff, not Debuff; RuinedHelmet requires
+        `StrengthPower`), so running the chains here would be a no-op for
+        today's exactly-two listeners regardless.
         """
         if is_ending(hooks):
             return
@@ -675,11 +1075,44 @@ class ExhaustCmd:
         player: PlayerCombatState,
         card: Card,
     ) -> None:
-        """Move a card from the hand or discard pile to the exhaust pile."""
-        if card in player.hand:
-            player.hand.remove(card)
-        elif card in player.discard_pile:
-            player.discard_pile.remove(card)
+        """Move a card to the exhaust pile from wherever it currently sits
+        (mirrors `CardCmd.Exhaust` -> `CardPileCmd.Add(card, PileType.Exhaust,
+        Bottom)`, CardCmd.cs:237-246).
+
+        creature_card_cmds/G7: `CardModel.RemoveFromCurrentPile`
+        (CardPileCmd.cs:496) is PILE-AGNOSTIC — it removes the card from
+        whatever pile it is currently in, not just hand/discard. The old code
+        here only checked those two, so a draw-pile card stayed in draw_pile
+        AND was appended to exhaust_pile — the same instance in two piles at
+        once. The scan below covers every OTHER combat pile the card could be
+        in (a card mid-OnPlay is already physically in discard_pile by the
+        time it can be exhausted — see step82/N9 — so no fourth "Play limbo"
+        case exists to scan for).
+
+        The exhaust pile is scanned TOO, and re-exhausting an
+        already-exhausted card is a legal no-throw REPOSITION to the bottom
+        of that pile — not an error. `CardPileCmd.Add` captures
+        `oldPile = card.Pile` (CardPileCmd.cs:364) and runs
+        `if (oldPile != null) card.RemoveFromCurrentPile(...)` at :494-496
+        BEFORE `targetPile.AddInternal(...)` at :510, so when
+        `oldPile == targetPile == Exhaust` the card is taken out first and
+        `AddInternal`'s `Cards.Contains` guard (CardPile.cs:86-89) is tested
+        against an already-emptied slot and never fires. An earlier version of
+        this method asserted the card was absent from the exhaust pile before
+        appending (N4's pile-ADD idiom); that was wrong here, because it made
+        the sim raise where the game performs a legal move. N4's loud-failure
+        idiom applies to the ADD helpers whose C# counterparts really can
+        throw — this path's C# demonstrably cannot.
+        """
+        for pile in (
+            player.hand,
+            player.draw_pile,
+            player.discard_pile,
+            player.exhaust_pile,
+        ):
+            if card in pile:
+                pile.remove(card)
+                break
         player.exhaust_pile.append(card)
         hooks.on_card_exhausted(card)
 
@@ -734,8 +1167,10 @@ class CardCmd:
         """Attach an affliction to a card (mirrors CardCmd.Afflict).
 
         A card holds at most one affliction: an unafflicted card gets a new
-        instance, re-applying the same type stacks the amount, and a card
-        afflicted with a different type is left untouched (returns None).
+        instance, re-applying the same type stacks the amount if the type
+        `is_stackable` (else it is refused, see `Affliction.can_afflict`),
+        and a card afflicted with a different type is left untouched
+        (returns None).
         """
         # CardCmd.cs:627-634, the seam's one ASYMMETRIC liveness guard: refuse
         # when the combat is over or ending AND the card sits in a combat pile,
@@ -748,11 +1183,28 @@ class CardCmd:
                                              player.discard_pile,
                                              player.exhaust_pile)):
                 return None
+        new_affliction = affliction_cls(amount)
+        # Hook.ShouldAfflict (CardCmd.cs:637) -- an AND-all veto dispatched
+        # through IterateCombatHookListeners, same gate should_die/
+        # should_allow_hitting use. A card with no combat has no HookSystem
+        # to consult, so it is treated as passing (the zero-listener default
+        # anyway); C# additionally refuses whenever `combatState` itself is
+        # null (CardCmd.cs:637's `combatState == null || ...`), which is
+        # deliberately NOT mirrored here — the already-closed asymmetric
+        # guard just above depends on an out-of-combat afflict succeeding
+        # (creature_card_cmds/step63's "loose card" witness,
+        # test_afflict_is_refused_only_for_a_card_in_a_combat_pile).
+        hooks = getattr(combat, "hooks", None)
+        if hooks is not None and not hooks.should_afflict(card, new_affliction):
+            return None
+        # AfflictionModel.CanAfflict (AfflictionModel.cs:190-205; card type +
+        # already-afflicted/stackability). CardCmd.cs:641's own guard.
+        if not new_affliction.can_afflict(card):
+            return None
         if card.affliction is None:
-            affliction = affliction_cls(amount)
-            affliction.card = card
-            card.affliction = affliction
-            return affliction
+            new_affliction.card = card
+            card.affliction = new_affliction
+            return new_affliction
         if isinstance(card.affliction, affliction_cls):
             card.affliction.amount += amount
             return card.affliction
@@ -827,6 +1279,18 @@ class CardCmd:
         hooks.after_card_changed_piles(replacement, pile_name, None)
         card.after_transformed_from()
         replacement.after_transformed_to()
+        # CardCmd.cs:499-506 — a THIRD pass, after a presentation-only VFX
+        # wait (`Cmd.Wait(num)`, :498, no sim counterpart) that this method
+        # collapses to nothing: for every successful transform whose card
+        # ended up in a combat pile, `Hook.AfterCardGeneratedForCombat(
+        # combatState, cardAdded, cardAdded.Owner)`. The `IsCombatPile()`
+        # gate is unconditionally true here — `transform_to_random` mirrors
+        # `isInCombat=true` only, so `replacement` always landed in one of
+        # the four combat piles above. `creator` is the transforming
+        # player (`cardAdded.Owner`), unlike the Add site's callers, which
+        # both pass `null` — see `CardPileCmd._generated_for_combat`.
+        # creature_card_cmds/step61.
+        hooks.on_card_generated_for_combat(replacement, player)
         return replacement
 
 
@@ -851,6 +1315,22 @@ class CardPileCmd:
         if combat is None:
             return False
         return getattr(combat, "is_over_or_ending", False) or player.is_dead
+
+    @staticmethod
+    def _assert_not_present(pile: list[Card], card: Card, pile_name: str) -> None:
+        """`CardPile.AddInternal` throws `InvalidOperationException` if the
+        target pile already holds this exact `CardModel` instance
+        (CardPile.cs:86-89). creature_card_cmds/N4 + step102c: the sim's
+        piles were plain lists with no such invariant, which is what let a
+        card end up double-counted across piles silently. Mirrored as
+        `ValueError`, this codebase's idiom for an invariant violation (e.g.
+        `characters.py`'s "already registered" guard) — .NET has no direct
+        analogue and `InvalidOperationException` is a construction-time
+        assertion here, not a value users are expected to catch.
+        """
+        if card in pile:
+            raise ValueError(
+                f"{pile_name} pile already contains {card!r}")
 
     @staticmethod
     def _enter_combat(hooks: HookSystem, card: Card) -> None:
@@ -878,6 +1358,38 @@ class CardPileCmd:
         hooks.on_card_entered_combat(card)
 
     @staticmethod
+    def _generated_for_combat(hooks: HookSystem, card: Card) -> None:
+        """The other two events C#'s `AddGeneratedCardToCombat` fires around a
+        freshly generated card, both still owed by seam/creature_card_cmds
+        (guard G8 for the first, step70 for the second):
+
+          CardPileCmd.cs:635, inside the general `Add` every
+          `AddGeneratedCardsToCombat` call routes through — after tweens
+          settle, `Hook.AfterCardChangedPiles(..., oldPile?.Type ??
+          PileType.None, clonedBy)`. A freshly generated card has no old
+          pile, so `oldPile?.Type` is `PileType.None` here — `pile=None`,
+          not one of the sim's pile-name strings; `clonedBy` is `None` too
+          (none of `add_to_hand`/`add_to_draw`/`add_to_discard`'s callers is
+          a clone verb).
+
+          CardPileCmd.cs:246, in `AddGeneratedCardsToCombat`, right after
+          that `Add` call returns — `Hook.AfterCardGeneratedForCombat(
+          combatState, card, creator)`. `creator` is `None` at both
+          currently reachable call chains (Aeonglass.cs:145's own Wither,
+          WitheringPresencePower.cs:55's punish Wither) — both pass `null`
+          explicitly — so it is not threaded through as a parameter here;
+          a future caller that needs a real creator should add one.
+
+        NOT called by `_enter_combat`: the transform site
+        (`CardCmd.transform_to_random`) also calls `_enter_combat` but
+        dispatches `AfterCardChangedPiles` itself with the pile the
+        replacement landed IN (CardCmd.cs:447), not `None` — folding this
+        helper into `_enter_combat` would double-fire it there.
+        """
+        hooks.after_card_changed_piles(card, None, None)
+        hooks.on_card_generated_for_combat(card, None)
+
+    @staticmethod
     def add_to_discard(
         hooks: HookSystem,
         player: PlayerCombatState,
@@ -887,8 +1399,10 @@ class CardPileCmd:
         CardPileCmd.AddToCombatAndPreview)."""
         if CardPileCmd._refuses_combat_add(hooks, player):
             return
+        CardPileCmd._assert_not_present(player.discard_pile, card, "discard")
         player.discard_pile.append(card)
         CardPileCmd._enter_combat(hooks, card)
+        CardPileCmd._generated_for_combat(hooks, card)
 
     @staticmethod
     def add_to_draw(
@@ -908,6 +1422,7 @@ class CardPileCmd:
         byte-for-byte shared-rng insertion."""
         if CardPileCmd._refuses_combat_add(hooks, player):
             return
+        CardPileCmd._assert_not_present(player.draw_pile, card, "draw")
         crng = hooks.combat.combat_rng
         count = len(player.draw_pile)
         if crng.is_parity:
@@ -916,6 +1431,7 @@ class CardPileCmd:
         else:
             player.draw_pile.insert(hooks.combat._rng.randrange(count + 1), card)
         CardPileCmd._enter_combat(hooks, card)
+        CardPileCmd._generated_for_combat(hooks, card)
 
     @staticmethod
     def auto_play_from_draw_pile(
@@ -986,10 +1502,13 @@ class CardPileCmd:
         if CardPileCmd._refuses_combat_add(hooks, player):
             return
         if len(player.hand) < player.MAX_HAND_SIZE:
+            CardPileCmd._assert_not_present(player.hand, card, "hand")
             player.hand.append(card)
         else:
+            CardPileCmd._assert_not_present(player.discard_pile, card, "discard")
             player.discard_pile.append(card)
         CardPileCmd._enter_combat(hooks, card)
+        CardPileCmd._generated_for_combat(hooks, card)
 
 
 class CardSelectCmd:
@@ -1016,10 +1535,29 @@ class CardSelectCmd:
         purpose: str,
         count: int = 1,
         predicate=None,
+        is_draw_pile: bool = False,
+        min_select: int | None = None,
     ) -> list[Card]:
-        """Pick up to count cards from any pile (mirrors FromCombatPile)."""
+        """Pick up to count cards from any pile (mirrors FromCombatPile).
+
+        `is_draw_pile` must be passed by callers sourcing from the DRAW pile
+        (SecretTechnique/SecretWeapon) — see CombatState.select_cards'
+        `is_draw_pile` docstring (CardSelectCmd.cs:403-408's `orderby Rarity,
+        Id` pre-sort). Discard-pile callers (Headbutt, Neow's Fury) leave it
+        at the default.
+
+        `min_select` must be passed by callers whose C# site builds a genuine
+        `CardSelectorPrefs(prompt, minCount, maxCount)` range (Neow's Fury:
+        `new CardSelectorPrefs(prompt, 0, num)`, NeowsFury.cs:39) so
+        `select_cards`' `RequireManualConfirmation` derivation sees
+        `min_select != count` and never takes the auto-select shortcut.
+        Headbutt's `CardSelectorPrefs(prompt, 1)` two-arg ctor is MinSelect==
+        MaxSelect, so it leaves this at the default.
+        """
         candidates = [c for c in pile if predicate is None or predicate(c)]
-        return hooks.combat.select_cards(purpose, candidates, count)
+        return hooks.combat.select_cards(
+            purpose, candidates, count,
+            min_select=min_select, is_draw_pile=is_draw_pile)
 
 
 class EnergyCmd:
@@ -1029,6 +1567,27 @@ class EnergyCmd:
         player: PlayerCombatState,
         amount: int,
     ) -> None:
-        """Gain bonus energy mid-turn (from cards or effects, not turn reset)."""
+        """Gain bonus energy mid-turn (from cards or effects, not turn reset)
+        (mirrors `PlayerCmd.GainEnergy`, PlayerCmd.cs:29-43).
+
+        card/_is_dead_early_return + relic/lantern/g1: C#'s whole body sits
+        inside `!(amount <= 0m) && !CombatManager.Instance.IsEnding`. `IsEnding`
+        rather than `IsOverOrEnding` — the same narrower gate `CardCmd.
+        downgrade`/`upgrade`, `CardCmd.transform_to_random` and `PowerCmd.apply`
+        use above, matching `IsEnding`'s own `!IsInProgress -> false` opening
+        (creature_card_cmds/G14) — this is what would let an out-of-combat
+        caller through if one ever called this (none currently do). The
+        `amount <= 0m` outer bail and the `finalAmount > 0m` inner one are
+        deliberately NOT mirrored: relic/lantern guard N1 already found both
+        dormant/equivalent for this codebase (`hooks.modify_energy_gain`
+        already clamps with `max(0, amount)`, hooks.py:215, making a
+        post-clamp `+= 0` a provable no-op) — one verdict per mechanism, not
+        re-litigated here. Before this gate, Bloodletting and Offering carried
+        their own `if ctx.player.is_dead: return` specifically to compensate
+        for its absence; both are deleted now that this closes the gap at its
+        root (card/_is_dead_early_return).
+        """
+        if is_ending(hooks):
+            return
         amount = hooks.modify_energy_gain(player, amount)
         player.energy += amount

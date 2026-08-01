@@ -205,8 +205,14 @@ class Queen(MachineMonster):
         from ...powers import StrengthPower
         from ...valueprops import ValueProp
         combat = ctx.hooks.combat
+        # Queen.cs:187-188 `GetTeammatesOf(Creature).Where(t => t != Creature)`
+        # -- the ONLY test is membership of the enemy side (minus self); C#'s
+        # teammate list still holds a death-vetoed retained corpse. Mirrors
+        # Guardbot._guard's fix: `is_removed_from_combat`, not `is_gone`, is
+        # the sim's membership predicate (False for a retained corpse, True
+        # only for a creature actually dropped from Enemies).
         for enemy in combat.enemies:
-            if enemy is not self and not enemy.is_gone:
+            if enemy is not self and not enemy.is_removed_from_combat:
                 PowerCmd.apply(ctx.hooks, enemy, StrengthPower, _BURN_BRIGHT_ALLY_STR)
         BlockCmd.apply(ctx.hooks, self, _BURN_BRIGHT_BLOCK, props=ValueProp.MOVE)
 

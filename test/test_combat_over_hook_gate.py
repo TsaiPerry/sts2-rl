@@ -60,13 +60,37 @@ def test_the_map_is_the_size_the_census_says():
     """73 guarded C# dispatchers, of which the sim ports these. The count is a
     tripwire: adding a sim hook that maps to a guarded C# one without adding it
     here reopens G8 for that hook silently."""
-    assert len(_COMBAT_GATED_HOOKS) == 45
+    assert len(_COMBAT_GATED_HOOKS) == 55
     # Several sim hooks share one C# dispatcher: the two ModifyBlock chains,
     # and the four side hooks the sim splits per side now that the enemy side
     # is side-scoped too (turn_structure G5) — before/after_side_turn_start
     # with before/after_enemy_side_start, on_player_turn_end with
     # before_enemy_side_end, after_player_turn_end with on_enemy_side_end.
-    assert len(set(_COMBAT_GATED_HOOKS.values())) == 40
+    # should_afflict (creature_card_cmds/N2 + step64) added its own distinct
+    # C# dispatcher, ShouldAfflict — tier-2 campaign Task 6.
+    # on_card_generated_for_combat added its own distinct C# dispatcher,
+    # AfterCardGeneratedForCombat (Hook.cs:251-258) — creature_card_cmds/G8,
+    # tier-2 Task 8.
+    # before_block_gained (BeforeBlockGained), before_card_auto_played
+    # (BeforeCardAutoPlayed), before_flush (BeforeFlush) and
+    # after_modifying_hand_draw (AfterModifyingHandDraw) each added their own
+    # distinct, previously-unmapped C# dispatcher — tier-2 Task 11, items A,
+    # B, D and C respectively (creature_card_cmds/step12+step46,
+    # turn_structure/step55+step20).
+    # power_cmd/G3+G4 (tier-2 Task 18) split the single `modify_power_amount`
+    # key (-> ModifyPowerAmountReceived) into five: the given-side additive
+    # and multiplicative passes both map to ModifyPowerAmountGiven (Hook.cs:
+    # 1892, 1901 — one C# dispatcher runs both passes, so this is +1 key with
+    # a SHARED value, same pattern as the two ModifyBlock chains above);
+    # modify_power_amount_received keeps the retained ModifyPowerAmountReceived
+    # value; after_modify_power_amount_given/received are two brand new
+    # distinct C# dispatchers (AfterModifyingPowerAmountGiven, Hook.cs:799;
+    # AfterModifyingPowerAmountReceived, Hook.cs:814) that had no sim
+    # dispatcher at all before. Net: -1 key/-1 value (modify_power_amount
+    # removed) +5 keys/+4 values (given_additive, given_multiplicative,
+    # received, after_given, after_received — given_additive and
+    # given_multiplicative share one value) = +4 keys, +3 values.
+    assert len(set(_COMBAT_GATED_HOOKS.values())) == 49
 
 
 def test_a_gated_hook_reaches_nobody_once_the_combat_is_over():

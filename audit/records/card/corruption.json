@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\corruption.py",
-    "sha256": "d69ac35dbabb4d4a52a28a7969388b35849ad54e3dc9a408a0a676ff3dd028a1"
+    "sha256": "28a5157229b630515490e3923bae0a2feb1f64d1c3aaf8024c65854174cccffe"
   },
   "extra_sources": [
     {
@@ -23,8 +23,8 @@
     },
     "CanonicalVars": {
       "maps_to": "nothing -- the sim passes the literal 1 (corruption.py:35)",
-      "verdict": "gap",
-      "issue": "`new DynamicVar(\"Power\", 1m)` (Corruption.cs:17) is a printed var with no `_`-attribute in `_init_vars`, so `magic_number` returns None. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no corresponding `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the dealt/applied number is identical), LIVE for the observation encoder."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 24.) All 23 cards now store their printed C# var under a `_`-attribute (or, for 3 cards whose C# var is a live/computed value at display time -- guilty, normality, expect_a_fight -- a `magic_number` property override; wither similarly overrides `base_damage`) so `Card.base_damage`/`base_block`/`base_hp_loss`/`magic_number` report the C# value instead of the 0/None default. Two additive base.py changes: `_frail` added to `_MAGIC_ATTRS` (shame) and a new `base_gold` property (debt, spoils_map -- GoldVar had no base property at all). feel_no_pain's `_block` was renamed to `_power_amount` (fixing a WRONG value, not just a missing one -- `base_block` no longer misreports it as block-granting; matches Rage/Corruption/Stampede's DynamicVar('Power', ...) convention). Combat behavior / dealt numbers are byte-identical in every case -- a printed-number / observation-encoder fix only. 3 of the 23 (debt, spoils_map, rolling_boulder's secondary IncrementAmount) have NO obs-vector change despite the API fix (full_env.py has no base_gold read site; magic_number carries one number per card and _power_amount dominates rolling_boulder's scan) -- documented, not closed further. CHECKPOINT NOTE for training: encoded VALUES changed for the other 20 cards in feature slots f[17]/f[18] damage, f[20]/f[21] block, f[22] hp_loss, f[23] magic_number; obs LAYOUT unchanged. Pins: test/test_printed_vars.py (48 tests).  The text it replaced read: `new DynamicVar(\"Power\", 1m)` (Corruption.cs:17) is a printed var with no `_`-attribute in `_init_vars`, so `magic_number` returns None. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no corresponding `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the dealt/applied number is identical), LIVE for the observation encoder."
     },
     "OnPlay": {
       "maps_to": "CorruptionCard.on_play (corruption.py:32-35)",
@@ -38,6 +38,6 @@
     }
   },
   "guards": [],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

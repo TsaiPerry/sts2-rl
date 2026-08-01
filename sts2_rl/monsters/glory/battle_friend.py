@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ..base import Encounter, Intent
 from ..state_machine import MachineMonster, MonsterMoveStateMachine, MoveState
 
 if TYPE_CHECKING:
@@ -29,8 +29,12 @@ class _BattleFriend(MachineMonster):
         PowerCmd.apply(hooks, self, BattlewornDummyTimeLimitPower, _TIME_LIMIT)
 
     def build_machine(self) -> MonsterMoveStateMachine:
+        # BattleFriendV1/2/3.cs:28 construct NOTHING_MOVE with an EMPTY
+        # `params AbstractIntent[]` -- no telegraph at all, not the "?" C#'s
+        # own UnknownIntent draws. Intent.none() is the sim's equivalent of
+        # that empty array (monster/_no_intent_unrepresentable).
         nothing = MoveState(
-            "NOTHING_MOVE", lambda ctx: None, Intent(MoveType.UNKNOWN)
+            "NOTHING_MOVE", lambda ctx: None, Intent.none()
         )
         nothing.follow_up = nothing
         return MonsterMoveStateMachine([nothing], nothing)

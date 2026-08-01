@@ -4,7 +4,10 @@ The steal (SwipePower.cs Steal) removes the card from the run deck for good.
 Killing the hopper queues the stolen card's deck version as a take-or-skip
 post-combat reward (SwipePower.BeforeDeath -> CombatRoom.AddExtraReward with
 a SpecialCardReward); if the hopper escapes, BeforeDeath never runs and the
-card stays lost. See SwipePower.on_death and RunState.finish_combat.
+card stays lost either way. See SwipePower.on_death/hand_off_stolen_origins
+and RunState.finish_combat. `_escape` hands the theft off to
+`combat.stolen_deck_origins` itself, before `CreatureCmd.escape` strips
+SwipePower silently (creature_card_cmds/G13, no on_removed call on escape).
 """
 from __future__ import annotations
 
@@ -104,11 +107,22 @@ class ThievingHopper(MachineMonster):
             # ThievingHopper.cs:222 —
             # base.RunRng.CombatCardGeneration.NextItem(enumerable).
             card = ctx.combat.combat_rng.card_gen.choice(candidates)
-            for pile in (player.draw_pile, player.discard_pile):
+            pile_name = None
+            for name, pile in (("draw", player.draw_pile), ("discard", player.discard_pile)):
                 if card in pile:
                     pile.remove(card)
+                    pile_name = name
                     break
-            # The card leaves the combat entirely (RemoveFromCombat).
+            # The card leaves the combat entirely (RemoveFromCombat,
+            # CardPileCmd.cs:90-191). creature_card_cmds/step69: :188 fires
+            # AfterCardChangedPiles with the OLD/leaving pile (cardPile2.Type)
+            # and a null clonedBy, BEFORE the card is unregistered below —
+            # matching T8's other three wired sites' (card, pile, cloned_by)
+            # shape (hooks.py:995-1042) and C#'s own ordering (the dispatch
+            # runs while `oldCard` is still a live RunState listener;
+            # `RemoveFromState()`, which the sim's `unregister` mirrors, runs
+            # strictly after, CardPileCmd.cs:189).
+            ctx.hooks.after_card_changed_piles(card, pile_name, None)
             try:
                 ctx.hooks.unregister(card)
             except ValueError:
@@ -133,6 +147,24 @@ class ThievingHopper(MachineMonster):
 
     def _escape(self, ctx: CombatCtx) -> None:
         self.is_hovering = False
+        # creature_card_cmds/G13: CreatureCmd.escape strips EVERY power
+        # silently (no on_removed/AfterRemoved) — including SwipePower, whose
+        # `on_removed` is otherwise how a DEAD hopper hands its stolen-card
+        # origins to `combat.stolen_deck_origins` for RunState.finish_combat
+        # to reconcile against the run deck (SwipePower.hand_off_stolen_origins,
+        # powers.py). Escape never calls on_removed, so the hand-off has to
+        # happen here, before the strip removes the power. Before the G13 fix,
+        # escape left the power attached and registered, which is what let
+        # RunState.finish_combat fall back to reading it straight off
+        # `enemy.powers.get("swipe")` post-combat; that fallback walk is now
+        # unreachable for an escaped hopper specifically (the power is gone by
+        # the time finish_combat runs) — left in place in run.py (out of this
+        # task's footprint) rather than pruned, since it is still correct,
+        # order-independent bookkeeping for any OTHER path that reaches
+        # finish_combat with the power still attached.
+        swipe = self.powers.get("swipe")
+        if swipe is not None:
+            swipe.hand_off_stolen_origins()
         from ...cmds import CreatureCmd
         CreatureCmd.escape(ctx.hooks, self)
 

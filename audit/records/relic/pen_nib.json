@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
@@ -71,7 +71,7 @@
     },
     {
       "path": "test/test_hook_order.py",
-      "sha256": "8e1ef674257f412e91b2386d8f622109db5fc9721e9f9c1e0e66806c7869ff8f",
+      "sha256": "38ffe006ed83a6aceffdbfacf5dae020894ea923c55c40b5c9149fef783adec0",
       "side": "sim"
     }
   ],
@@ -102,10 +102,9 @@
       "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. The body already matched PenNib.cs:136-152 clause for clause."
     },
     "AfterCardPlayed": {
-      "maps_to": "on_card_played (pen_nib.py:74-77), dispatched by HookSystem.on_card_played (hooks.py:385-389) from CombatState._resolve_card_play (combat.py:597-600)",
+      "maps_to": "on_card_played (pen_nib.py:48-50), dispatched by HookSystem.on_card_played (hooks.py:385-389) from CombatState._resolve_card_play (combat.py:514)",
       "verdict": "gap",
-      "live": false,
-      "issue": "RE-EXECUTED 2026-07-30 (round 11). Guard G1 (the per-iteration/per-play replay mismatch) is CLOSED -- combat.py:574-602 now fires `on_card_played` once per `play_index`, so a replayed 10th Attack unmarks after its FIRST iteration exactly as `CardModel.cs:1959` does inside the play-count loop; `py -m pytest test/test_relics.py -k test_pen_nib_tenth_attack_doubled` and `test/test_relic_live_tail.py -k test_pen_nib_does_not_double_the_played_card_twice` both pass. WHAT REMAINS is guard G3 alone, still DORMANT: C# skips `Hook.AfterCardPlayed` entirely once `CombatManager.IsInProgress` is false (`CardModel.cs:1957`), so a combat-ending 10th Attack leaves `AttackToDouble` marked into the NEXT combat in C#, while the sim's unconditional dispatch always clears `_card_to_double`. RE-EXECUTED (`.superpowers/sdd/unlabelled/probes/relic-5-checks.py pen-nib-g3`): priming `_attacks_played = 9` and killing the sole enemy with the resulting Strike still leaves `_card_to_double = None` afterward -- the sim's dispatch is unconditional today, so the mark is cleared regardless of whether the play ended the fight. This mechanism is `audit/records/seam/hook_dispatch.json` guard G8 (a gate the sim does not have at all), matched here per binding rule 3 rather than re-derived; as that guard's own text already concedes, whether C#'s `IsInProgress` is actually false at the moment this dispatch would be reached is an unconfirmed corollary owned by that record, not established here. No change to G3's disposition."
+      "issue": "Rollup of guards G1 and G3. The unmark logic is identical (PenNib.cs:154-166: bail unless AttackToDouble is this card, then null it), but the same per-iteration/per-play mismatch applies -- C# fires it at CardModel.cs:1959, INSIDE the play-count loop, so the game clears the mark at the end of iteration 0 and iteration 1 of a replayed 10th Attack is NOT doubled, where the sim clears it only after every iteration and doubles them all. Executed: a Throwing-Axe-replayed 10th Strike costs the enemy 24 HP in the sim (12 + 12) against the game's 18 (12 + 6) -- py audit/tools/relic_probes_b12.py b12-pennib."
     }
   },
   "guards": [

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\ruined_helmet.py",
-    "sha256": "379bd9ed7f301d2bf5b9aa011e275661326b0ae133805956c699150610542f0c"
+    "sha256": "55ff84a9f9bd2ae1fc0430d9c5b18b2720e662458b66c8338fd30b361d9df3c8"
   },
   "extra_sources": [
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
@@ -49,14 +49,12 @@
     "TryModifyPowerAmountReceived": {
       "maps_to": "modify_power_amount (ruined_helmet.py:23-39), dispatched by hooks.modify_power_amount (hooks.py:170-183) from PowerCmd.apply (cmds.py:297)",
       "verdict": "gap",
-      "live": false,
-      "issue": "LABELLED (round 11): DORMANT overall -- both cited guards are dormant, re-checked rather than inherited. The four C# clauses are reproduced exactly -- `canonicalPower is StrengthPower`, `target == Owner.Creature`, `amount <= 0`, `UsedThisCombat` (RuinedHelmet.cs:35-50) against ruined_helmet.py:31-37 -- and so is the `modifiedAmount *= 2m` (RuinedHelmet.cs:51 vs :38). EXECUTED (`py audit/tools/relic_probes_b13.py ruined-helmet`): a first +2 Strength lands as 4 and a second as +2 (total 6), which is C#'s answer; an applier=None application is also doubled, matching the fact that neither side has an applier clause here. G2 (the RECEIVED-side phase collapsed into the sim's single flat chain) is dormant: the sim has exactly two `modify_power_amount` listeners (this relic and relic/unsettling_lamp), and their domains are disjoint (positive StrengthPower on the player vs. debuffs), so no ordering question between a given-side and received-side listener can currently arise -- porting a second given-side power-amount modifier whose domain overlaps positive Strength on the player would make it live. G3 (the 'mark used' side effect hand-inlined instead of dispatched as a separate After-event) is dormant for the reason traced at G3's own entry: reaching it requires either a should_allow_hitting veto on the player or an ending-combat window, neither of which any ported content can produce today. Consistent with audit/records/seam/power_cmd.json G3 (`live: false`) and G4 (dormant in prose, no explicit `live` key set on that record -- HANDOFF, not owned here), which this record cites and matches. The issue it replaced read: Rollup of guards G2 and G3 per binding rule 4. The four C# clauses are reproduced exactly -- `canonicalPower is StrengthPower`, `target == Owner.Creature`, `amount <= 0`, `UsedThisCombat` (RuinedHelmet.cs:35-50) against ruined_helmet.py:31-37 -- and so is the `modifiedAmount *= 2m` (RuinedHelmet.cs:51 vs :38). EXECUTED (`py audit/tools/relic_probes_b13.py ruined-helmet`): a first +2 Strength lands as 4 and a second as +2 (total 6), which is C#'s answer; an applier=None application is also doubled, matching the fact that neither side has an applier clause here. What is verdicted is the RECEIVED-side phase being collapsed into the sim's single flat chain (G2) and the After-event's side effect being hand-inlined (G3)."
+      "issue": "Rollup of guards G2 and G3 per binding rule 4. The four C# clauses are reproduced exactly -- `canonicalPower is StrengthPower`, `target == Owner.Creature`, `amount <= 0`, `UsedThisCombat` (RuinedHelmet.cs:35-50) against ruined_helmet.py:31-37 -- and so is the `modifiedAmount *= 2m` (RuinedHelmet.cs:51 vs :38). EXECUTED (`py audit/tools/relic_probes_b13.py ruined-helmet`): a first +2 Strength lands as 4 and a second as +2 (total 6), which is C#'s answer; an applier=None application is also doubled, matching the fact that neither side has an applier clause here. What is verdicted is the RECEIVED-side phase being collapsed into the sim's single flat chain (G2) and the After-event's side effect being hand-inlined (G3)."
     },
     "AfterModifyingPowerAmountReceived": {
       "maps_to": "the `self._used = True` assignment inside modify_power_amount (ruined_helmet.py:36) -- there is no separate sim hook",
       "verdict": "gap",
-      "live": false,
-      "issue": "LABELLED (round 11): DORMANT, matching guard G3's own already-established dormancy (this hooks-level rollup summarizes G3 alone). RuinedHelmet.cs:55-60 is a SEPARATE C# hook that fires only for listeners whose Try returned true (Hook.cs:1917-1931 collects them into `receivedModifiers`; PowerCmd.cs:152 and :242 dispatch to exactly those), and only after the amount has actually been set. The sim folds the 'mark used' effect into the modifier itself, which is audit/records/seam/power_cmd.json gap G4 at this same site. What the inlining costs (G3's own derivation): C# reaches this hook only after `CombatManager.IsEnding`, `amount == 0m`, `!target.CanReceivePowers` and a second post-apply `CanReceivePowers` re-check (PowerCmd.cs:103-106, 133, 152) -- none of which exist in the sim's `modify_power_amount` -- so a Strength application to an unhittable player, or one made while combat is ending, would spend the charge in the sim and not in the game. DORMANT because the ported `should_allow_hitting` implementer cannot veto the player (it gates on a mid-revival enemy state) and no ported effect grants Strength to the player while combat is ending; porting either makes it live. The issue it replaced read: Rollup of guard G3 per binding rule 4. RuinedHelmet.cs:55-60 is a SEPARATE C# hook that fires only for listeners whose Try returned true (Hook.cs:1917-1931 collects them into `receivedModifiers`; PowerCmd.cs:152 and :242 dispatch to exactly those), and only after the amount has actually been set. The sim folds the 'mark used' effect into the modifier itself, which is audit/records/seam/power_cmd.json gap G4."
+      "issue": "Rollup of guard G3 per binding rule 4. RuinedHelmet.cs:55-60 is a SEPARATE C# hook that fires only for listeners whose Try returned true (Hook.cs:1917-1931 collects them into `receivedModifiers`; PowerCmd.cs:152 and :242 dispatch to exactly those), and only after the amount has actually been set. The sim folds the 'mark used' effect into the modifier itself, which is audit/records/seam/power_cmd.json gap G4."
     },
     "AfterCombatEnd": {
       "maps_to": "reset_for_combat (sts2_rl/relics/ruined_helmet.py:23-25)",

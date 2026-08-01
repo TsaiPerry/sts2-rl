@@ -400,3 +400,87 @@ def test_the_earlier_card_loses_when_the_order_is_reversed():
 
     cs.player.reshuffle_discard_into_draw()
     assert cs.player.draw_pile[-1] is clone
+
+
+def _perfect_fit_pair_setup(seed: int, clone_first: bool):
+    """Shared rig for the two seed-swept tests below: an enchanted original
+    plus its clone, buried in a filler-padded discard, with `clone_first`
+    choosing which one sits later in the discard (and is therefore the C#
+    winner)."""
+    from sts2_rl.cards.base import create_clone
+    from sts2_rl.cmds import CardPileCmd
+    from sts2_rl.enchantments import make_enchantment
+
+    original = make_card("pommel_strike")
+    make_enchantment("perfect_fit").attach(original)
+    cs = CombatState(rng=random.Random(seed),
+                     starting_deck=[original]
+                                   + [make_card("defend") for _ in range(8)])
+    cs.player.hand.clear()
+    cs.player.draw_pile.clear()
+    cs.player.discard_pile.clear()
+    clone = create_clone(original)
+    CardPileCmd.add_to_discard(cs.hooks, cs.player, clone)
+    cs.player.discard_pile.remove(clone)
+    fillers = [make_card("defend") for _ in range(6)]
+    if clone_first:
+        cs.player.discard_pile = fillers[:3] + [clone] + fillers[3:] + [original]
+        expected = original
+    else:
+        cs.player.discard_pile = fillers[:3] + [original] + fillers[3:] + [clone]
+        expected = clone
+    return cs, expected
+
+
+def test_modify_shuffle_order_reads_pre_shuffle_pile_membership_on_reshuffle():
+    """creature_card_cmds/G10 (RE-VERIFIED 2026-07-30, tier-2 Task 5):
+    `reshuffle_discard_into_draw` used to do `self.draw_pile =
+    self.discard_pile; self.discard_pile = []` and only THEN call
+    `_shuffle_draw_pile`, which Fisher-Yates-shuffled `self.draw_pile` in
+    place and dispatched `modify_shuffle_order` against that ALREADY-SHUFFLED
+    pile. `HookSystem.modify_shuffle_order`'s per-dispatch listener order is
+    keyed on `player.all_cards` position (hooks.py:972-985), so this read the
+    POST-shuffle order instead of the discard's pre-shuffle order.
+
+    C# never has this problem: `CardPileCmd.Shuffle` builds a DETACHED local
+    `list` (CardPileCmd.cs:871-876), fires `Hook.ModifyShuffleOrder` on IT
+    while the real Draw/Discard `CardPile` objects are untouched
+    (`CombatState.IterateHookListeners`, CombatState.cs:449-467, walks the
+    still-original piles), and only removes/re-adds cards into the real piles
+    AFTER the hook has run (CardPileCmd.cs:878-913). So in C# the card LATER
+    IN THE ORIGINAL DISCARD always fires last and wins, independent of what
+    the shuffle does to the local list.
+
+    `test_the_later_card_in_the_discard_wins_the_shuffle` /
+    `test_the_earlier_card_loses_when_the_order_is_reversed` above only pin
+    `random.Random(0)`, whose 2-card Fisher-Yates happens not to swap the
+    pair, so they passed on the buggy code by coincidence. Swept across seeds
+    the old code picked the ORIGINAL-discard-order loser roughly half the
+    time. This test cannot pass by luck."""
+    for seed in range(40):
+        for clone_first in (True, False):
+            cs, expected = _perfect_fit_pair_setup(seed, clone_first)
+            cs.player.reshuffle_discard_into_draw()
+            winner = cs.player.draw_pile[-1]
+            assert winner is expected, (
+                f"reshuffle_discard_into_draw seed={seed} "
+                f"clone_first={clone_first}: the later discard entry must "
+                f"win regardless of the shuffle's own permutation")
+
+
+def test_modify_shuffle_order_reads_pre_shuffle_pile_membership_on_bottled_potential():
+    """Same bug, same fix, the OTHER reshuffle caller: `shuffle_draw_and_discard`
+    (Bottled Potential's `CardPileCmd.Shuffle` path, which merges the CURRENT
+    draw pile into the mix) reassigned `self.draw_pile`/`self.discard_pile`
+    before shuffling+dispatching too. See
+    `test_modify_shuffle_order_reads_pre_shuffle_pile_membership_on_reshuffle`
+    for the full citation; creature_card_cmds/G10, tier-2 Task 5."""
+    for seed in range(40):
+        for clone_first in (True, False):
+            cs, expected = _perfect_fit_pair_setup(seed, clone_first)
+            cs.player.shuffle_draw_and_discard()
+            winner = cs.player.draw_pile[-1]
+            assert winner is expected, (
+                f"shuffle_draw_and_discard seed={seed} clone_first={clone_first}: "
+                f"the later discard entry must win regardless of the shuffle's "
+                f"own permutation")

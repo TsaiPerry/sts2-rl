@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/cards/colorless_powers.py",
-      "sha256": "781659d4e8cf5baa55bb1bf61572843ad9180a5bef5de881817c0bf97aadf0de",
+      "sha256": "c2cde0318957b1906d487ec7de4988642829637ed94602ca4f3e4c4d7af298ec",
       "side": "sim"
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
+      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
       "side": "sim"
     }
   ],
@@ -66,10 +66,9 @@
       "issue": "The count is right (count + Amount, DrawCardsNextTurnPower.cs:32 vs powers.py:2749 -- and correctly NOT the flat +1 that its sibling power/clarity uses; the two classes exist precisely to differ here, ClarityPower.cs:12-15). The GUARD is missing: DrawCardsNextTurnPower.cs:28-31 returns count unchanged when base.AmountOnTurnStart == 0, i.e. when the power landed after this turn's snapshot. PowerModel.AmountOnTurnStart has NO sim counterpart -- grep -rn amount_on_turn_start sts2_rl/ returns nothing. C# snapshots every power's Amount into it in Creature.BeforeTurnStart (Creature.cs:673-679), called at CombatManager.cs:453 before any other turn-start hook, and its documented purpose (PowerModel.cs:199-205) is exactly 'preventing same-turn activation when applied mid-turn (e.g., via auto-play effects)'. Only three ported powers read it -- this one, HelloWorldPower and SummonNextTurnPower (unported) -- so it is a small but load-bearing field. DORMANT in isolation, because the sim's one pre-ModifyHandDraw slot (on_player_turn_start, player.py:169) has no ported listener that applies this power -- the ported appliers are the card Relax (cards/relax.py:42) and nothing else. Named trigger: any auto-play or turn-start effect that plays Relax between the sim's energy reset and its hand draw. The REACHABLE half of the same missing field is on the removal hook below."
     },
     "AfterSideTurnStart": {
-      "maps_to": "powers.py:3197-3200 DrawCardsNextTurnPower.after_side_turn_start -> Power._expire",
+      "maps_to": "powers.py:2751-2754 on_player_turn_started -> Power._expire (player.py:186)",
       "verdict": "gap",
-      "live": false,
-      "issue": "RE-READ 2026-07-30 (round 11): the entry's own citations (`powers.py:2751-2754 on_player_turn_started`) are STALE -- the code has moved twice since this text was drafted (per CONTRACT rule: re-execute the witness before trusting the prose). Today DrawCardsNextTurnPower's turn-start removal is `after_side_turn_start` (powers.py:3197-3200), a hook that DID NOT EXIST when this entry (or its 2026-07-27 narrowing) was written -- it is the sim's now-genuinely-separate port of `Hook.AfterSideTurnStart` (hooks.py:696-708, CombatManager.cs:522), split out from `on_player_turn_started` (`Hook.AfterPlayerTurnStart`, CombatManager.cs:675) by the round-5 turn_structure campaign (see this record's g2 guard, closed this same pass). SLOT IS NOW CORRECT, not merely 'right by luck' -- player.py:230-243 fires `after_side_turn_start` (:235) strictly after `_setup_player_turn`'s hand draw and strictly before `after_auto_pre_play_phase_entered` (:243), matching CombatManager.cs's SetupPlayerTurn -> AfterSideTurnStart -> AutoPrePlay order exactly. WHAT REMAINS, unchanged and RE-VERIFIED DORMANT rather than merely re-asserted: WRONG CONDITION. DrawCardsNextTurnPower.cs:37 removes the power only when `participants.Contains(base.Owner) && base.AmountOnTurnStart != 0`; powers.py:3197-3200 expires unconditionally, and `PowerModel.AmountOnTurnStart` (snapshotted in Creature.BeforeTurnStart, Creature.cs:673-679, guarding exactly 'prevent same-turn activation when applied mid-turn') still has no sim counterpart -- EXECUTED, re-run: `grep -rn amount_on_turn_start sts2_rl/` returns nothing. REACHABILITY, worked through explicitly against the NOW-SEPARATED phase order (not assumed): `AmountOnTurnStart == 0` at a given turn's `after_side_turn_start` requires the power to have been APPLIED, on THAT SAME creature, strictly between Creature.BeforeTurnStart's snapshot (before `before_side_turn_start`, player.py:200) and that turn's own `after_side_turn_start` (player.py:235) -- i.e. during `before_side_turn_start`, the block-clear, `on_player_turn_start` (BeforeHandDraw), the hand draw itself, or `on_player_turn_started` (AfterPlayerTurnStart). None of those slots can play a card: the ONLY ported applier of this power is the Relax card (cards/relax.py:42, a manual player-turn card play, which can only happen during PlayerTurnPhase.PLAY, itself entered only AFTER `after_auto_pre_play_phase_entered` at player.py:244 -- i.e. strictly AFTER this same turn's `after_side_turn_start` already fired) and MayhemPower's auto-play, which now runs from `after_auto_pre_play_phase_entered` (powers.py:3763) -- ALSO strictly after `after_side_turn_start` in the same turn (player.py:235 then :241-243). So on the turn Relax is applied (by either route), that turn's own `after_side_turn_start` has already passed before the power exists; the power is only ever checked for removal on a LATER turn, at which point Creature.BeforeTurnStart has already re-snapshotted AmountOnTurnStart to the power's then-current (non-zero, unchanged since application) amount -- so the C# guard would read `!= 0` and remove it anyway, agreeing with the sim's unconditional removal. UNREACHABLE by any ported route; a future auto-play mechanism wired to fire BETWEEN BeforeTurnStart and after_side_turn_start (none currently exist) would need this fixed."
+      "issue": "NARROWED 2026-07-27. The Mayhem-ordering half is CLOSED: MayhemPower moved to the sim's new AutoPrePlay phase, `after_auto_pre_play_phase_entered` (powers.py:3763), dispatched at player.py:221 strictly AFTER `on_player_turn_started` (:218), which is CombatManager.cs:568's RunAutoPrePlayPhase running after Hook.AfterSideTurnStart (:522). So the executed Relax + Mayhem witness now resolves the way the game does, deterministically. WHAT REMAINS is this record's own primary finding, unchanged: RIGHT SLOT, WRONG CONDITION. DrawCardsNextTurnPower.cs:37 removes the power only when participants.Contains(base.Owner) AND `base.AmountOnTurnStart != 0`; powers.py:2917-2920 expires it whenever the owner's turn starts, with no such test, and PowerModel.AmountOnTurnStart (snapshotted in Creature.BeforeTurnStart, Creature.cs:673-679, for exactly this 'prevent same-turn activation when applied mid-turn' purpose) still has NO sim counterpart -- executed grep for `amount_on_turn_start` across sts2_rl/ returns nothing."
     }
   },
   "guards": [

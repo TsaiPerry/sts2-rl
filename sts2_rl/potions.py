@@ -1064,7 +1064,8 @@ class DropletOfPrecognition(Potion):
 
     def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
         player = ctx.player
-        chosen = ctx.combat.select_cards("from_draw", list(player.draw_pile), 1)
+        chosen = ctx.combat.select_cards(
+            "from_draw", list(player.draw_pile), 1, is_draw_pile=True)
         for card in chosen:
             player.draw_pile.remove(card)
             player.hand.append(card)
@@ -1397,9 +1398,14 @@ def _choose_a_card_screen(ctx: CombatCtx, cards: list) -> None:
     # true)` (CardSelectCmd.cs:230,239): MinSelect 0, MaxSelect 1. The
     # `_optional` purpose is what puts the decline in front of a driver-mediated
     # policy (driver.SKIPPABLE_PURPOSES); `min_select=0` is what lets the
-    # selectorless engine default reach it. Toolbox and Choices Paradox keep the
-    # plain "choose_a_card" purpose — their screens forbid the decline.
-    picked = combat.select_cards("choose_a_card_optional", cards, 1, min_select=0)
+    # selectorless engine default reach it. Toolbox keeps the plain
+    # "choose_a_card" purpose — its screen forbids the decline. `min_select=0`
+    # already keeps `require_manual_confirmation` true here (0 != count 1), so
+    # `has_shortcut=False` is redundant today, but FromChooseACardScreen has no
+    # shortcut in C# at all (CardSelectCmd.cs:216-261) — pass it explicitly so
+    # this doesn't rely on that coincidence.
+    picked = combat.select_cards(
+        "choose_a_card_optional", cards, 1, min_select=0, has_shortcut=False)
     combat.resolve_screen_selection(cards.index(picked[0]) if picked else None)
 
 

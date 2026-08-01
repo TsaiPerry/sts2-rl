@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -21,17 +21,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
+      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
       "side": "sim"
     },
     {
@@ -71,10 +71,9 @@
       "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "ModifyBlockMultiplicative": {
-      "maps_to": "powers.py:1351-1380 UnmovablePower.modify_block_multiplicative plus the counters at :1340-1349, :1371-1380",
+      "maps_to": "powers.py:1105-1120 UnmovablePower.modify_block_multiplicative plus the hand-rolled counters at :1094-1103, :1122-1130",
       "verdict": "gap",
-      "live": false,
-      "issue": "NARROWED 2026-07-27. DIVERGENCE (b) IS CLOSED: `on_card_played` now fires once per replay iteration (combat.py, inside `for play_index in range(play_count)`), so a doubled block card consumes the allowance twice, matching UnmovablePower.cs:35's per-CardPlay comparison, with Unmovable 1 a doubled Iron Wave now doubling exactly once in both models and with Unmovable 2 exactly twice in both. WHAT REMAINS is divergence (a), THE RESET SLOT: powers.py:1377-1380 still clears `_plays_used` from `before_side_turn_start` (dispatched pre-draw, player.py:200), where C# keeps no counter at all and re-derives the count on every call from History filtered on `HappenedThisTurn`. DORMANT, RE-EXECUTED 2026-07-30 by enumerating every `BlockCmd.apply(` call site in the tree (grep, ~60 hits) rather than arguing the shape: `BlockCmd.apply`'s own default is `if props is None: props = ValueProp.MOVE` (cmds.py), so a card-sourced player block gain (`BlockCmd.apply(ctx.hooks, ctx.player, N, card=self)`, the shape every ported block card uses -- Defend, Iron Wave, Impervious, Shrug It Off, True Grit, etc.) always carries the Move flag Unmovable's own `is_card_or_monster_move(props)` gate requires, and card PLAYS can only happen during the player's own turn (Phase.PLAYER_TURN) -- exactly the window the `before_side_turn_start` reset opens. EVERY ported RELIC that grants the player block outside a card play does so with EXPLICIT `props=ValueProp.UNPOWERED` (or `DamageProps.NON_CARD_UNPOWERED`), matching each one's own C# `BlockVar(N, Unpowered)` -- Orichalcum, Fake Orichalcum, Anchor, Captain's Wheel, Horn Cleat, Permafrost, Ripple Basin, The Abacus, Tuning Fork, Ornamental Fan, Cloak Clasp, Intimidating Helmet, Self-Forming Clay, Sai, Daughter of the Wind -- so none of them reaches Unmovable's multiplier at all, regardless of when the reset fires: the pipeline-level `is_card_or_monster_move` gate excludes them before the reset-timing question is even reached. So no ported content grants Move-flagged player block outside the player's own turn, and the reset firing at that same turn's start is observationally exact for everything reachable today. Structural difference remains real (a counter vs a re-derived history scan) but produces no reachable divergence under current content."
+      "issue": "NARROWED 2026-07-27. DIVERGENCE (b) IS CLOSED: `on_card_played` now fires once per replay iteration (combat.py:600, inside `for play_index in range(play_count)`), so a doubled block card consumes the allowance twice, matching UnmovablePower.cs:35's per-CardPlay comparison -- traced through powers.py:1175-1199, with Unmovable 1 a doubled Iron Wave now doubles exactly once in both models and with Unmovable 2 exactly twice in both. WHAT REMAINS is divergence (a), THE RESET SLOT: powers.py:1201-1204 still clears `_plays_used` from `on_player_turn_start` (pre-draw), where C# keeps no counter at all and re-derives the count on every call from History.Entries.OfType<BlockGainedEntry>() filtered on `HappenedThisTurn(base.CombatState)`. Any block the owner gains outside the player's own turn therefore falls in a different window on the two sides."
     }
   },
   "guards": [

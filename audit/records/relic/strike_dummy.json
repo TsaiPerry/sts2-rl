@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
@@ -51,7 +51,7 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     }
   ],
@@ -64,8 +64,7 @@
     "ModifyDamageAdditive": {
       "maps_to": "modify_damage_additive (strike_dummy.py:23-32), dispatched by HookSystem.modify_damage_additive (hooks.py:52-64) from DamageCmd.deal (cmds.py:56-57)",
       "verdict": "gap",
-      "live": false,
-      "issue": "NARROWED 2026-07-27. The hoisted-props half (G1) is CLOSED: the hook carries `props`, DamageCmd.deal runs the chain unconditionally (sts2_rl/hooks.py:185-208, sts2_rl/cmds.py:120-133) and sts2_rl/relics/strike_dummy.py self-gates on `is_powered_attack(props)`, which is StrikeDummy.cs:21-23. WHAT REMAINS is guard G2: StrikeDummy.cs:33-36 is `if (dealer != Owner.Creature && cardSource.Owner != Owner) return 0` -- either disjunct alone suffices -- and the port still requires `dealer is self.player` and never consults the card's owner. DORMANT, RE-EXECUTED today (`py audit/tools/relic_probes_b05.py strike-dummy`): 'ported cards carrying CardTag.Strike (8): [ashen_strike, perfected_strike, pommel_strike, seeker_strike, setup_strike, strike, twin_strike, ultimate_strike]' -- all 8 pass dealer=ctx.player, confirmed directly (`git grep -n dealer= sts2_rl/cards/{ashen,perfected,pommel,seeker,setup,twin,ultimate}_strike.py sts2_rl/cards/strike.py`, 0 exceptions) -- and a second, independent census of the OTHER direction, every `DamageCmd.deal` call that passes a card but no dealer (the shape that would hit this gap from the other side): 13 sites, none of them a Strike-tagged card (bad_luck, beckon, blood_wall, bloodletting, burn, decay, hemokinesis, infection, offering, regret, toxic, wither, enchantments.py:616 -- all self-damage/HP-loss effects). This second census is the same one relic/fake_strike_dummy's own G1 guard runs for the mirror-image gap on the sibling relic (mechanism damage_pipeline/G3, binding rule 3) and its record's DORMANT verdict agrees with this one -- no conflict to hand off. Porting a player-side minion/ally that plays a player's Strike card, or any effect dealing a Strike card's damage with dealer=None, makes it live. NOTE this mechanism (damage_pipeline/G3) also appears at relic/vambrace's guard N3/g6 with a DIFFERENT shape (a block-multiplicative gate, not this additive one) -- checked and it is not the same divergence, just a shared naming collision in the id; not a cross-record disagreement."
+      "issue": "NARROWED 2026-07-27. The hoisted-props half (G1) is CLOSED: the hook carries `props`, DamageCmd.deal runs the chain unconditionally (sts2_rl/hooks.py:185-208, sts2_rl/cmds.py:120-133) and sts2_rl/relics/strike_dummy.py self-gates on `is_powered_attack(props)`, which is StrikeDummy.cs:21-23. WHAT REMAINS is guard G2: StrikeDummy.cs:33-36 is `if (dealer != Owner.Creature && cardSource.Owner != Owner) return 0` -- either disjunct alone suffices -- and the port still requires `dealer is self.player` and never consults the card's owner."
     }
   },
   "guards": [

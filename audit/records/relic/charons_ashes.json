@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
@@ -41,10 +41,9 @@
       "verdict": "faithful"
     },
     "AfterCardExhausted": {
-      "maps_to": "on_card_exhausted (charons_ashes.py:21-29)",
+      "maps_to": "on_card_exhausted (charons_ashes.py:21-27)",
       "verdict": "gap",
-      "live": false,
-      "issue": "Rollup of guard G1 per binding rule 4 (G3, the batched-vs-sequential dispatch, carries its own deliberate-divergence verdict and needs no live label). DORMANT, enumerated: of the two guard-level divergences this hook rolls up, only G1 (target set: C#'s `HittableEnemies` vs the sim's `living_enemies()`) is a 'gap' verdict at all -- G3 is deliberate-divergence. G1's own record already establishes the dormancy with an execution: charons_ashes.py:24-28 loops `living_enemies()` and calls `DamageCmd.deal` per enemy (cmds.py:186-214), and EXECUTED (this pass, cmds.py:213-214): `DamageCmd.deal` itself re-checks `hooks.should_allow_hitting(target)` and returns 0 before any damage math when it fails -- the exact predicate C#'s narrower HittableEnemies set encodes. So an alive-but-unhittable enemy admitted by living_enemies() is passed in and then correctly takes 0 damage on both sides; the wrong SET is unobservable through this relic's only consumer (a damage payload). It would go live only if some other ported effect read Charon's Ashes' target list for something other than damage, which none does."
+      "issue": "Rollup of guard G1 per binding rule 4. Amount, props, dealer, card source and the absence of any once-per-turn limit all match; the target SET is built from a different predicate (G1), and the multi-target damage is issued as N sequential single-target calls rather than one batched call (G3)."
     }
   },
   "guards": [

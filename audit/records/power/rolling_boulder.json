@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -31,17 +31,17 @@
     },
     {
       "path": "sts2_rl/cards/colorless_powers.py",
-      "sha256": "781659d4e8cf5baa55bb1bf61572843ad9180a5bef5de881817c0bf97aadf0de",
+      "sha256": "c2cde0318957b1906d487ec7de4988642829637ed94602ca4f3e4c4d7af298ec",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
+      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
       "side": "sim"
     },
     {
@@ -62,9 +62,8 @@
     },
     "InstanceType": {
       "maps_to": "no sim counterpart; cmds.py:308 keys stacking on power id alone",
-      "verdict": "gap",
-      "issue": "PowerInstanceType.Instanced (RollingBoulderPower.cs:24) means every application is an independently tracked instance with its own growing Amount; the sim's PowerCmd.apply merges by id via on_stack (cmds.py:308-311). This is audit/records/seam/power_cmd.json's gap G5 and is not re-verdicted here (binding rule 3) -- G5 lists this power as one of its 11 ported InstanceType units and notes it is among the nine that do not acknowledge the distinction at all, unlike ToricToughnessPower and TheBombPower. What is PER-UNIT is reachability, and for this power two simultaneous instances are REACHABLE and the divergence is arithmetic, not just bookkeeping: the ported Colorless card Rolling Boulder (cards/colorless_powers.py:294-314) is a normal deck card that can be drawn and played twice in one combat, and it applies 5 each time. Two C# instances then deal 5 + 5 = 10 on the next turn and 10 + 10 = 20 on the one after (each grows by its own +5, RollingBoulderPower.cs:52); one merged sim instance holds 10 and deals 10, then 15, then 20 -- so the sim is 5 short on turn 2 and 5 short again on turn 3, converging only later. It also fires ONE damage sweep where the game fires two, which halves the number of on_damage_received dispatches (Thorns, Curl Up) the enemies see. This is the clearest reachable G5 witness among the ported InstanceType units and is recorded here for the seam session's dormancy argument. RULE-3 NOTE (2026-07-26 review fix pass): power/the_bomb, the other ported G5 unit that hand-rolls a workaround, carried `deliberate-divergence` on this same mechanism and is now `gap` too, so G5 has one verdict at every site. Its residue is state-shaped rather than arithmetic -- one merged power at `amount = min(fuses)` where the game has N instances with N Amounts -- because its fuse list does reproduce the damage exactly. LIVE 2026-07-29 (round 11): binding to seam-power-cmd's re-verdict of G5, done concurrently in this round -- G5 now carries `\"live\": true`. This site's own reachability holds independently of G5's own probe (which demonstrates the same mechanism against AutomationPower/PanachePower, not this power): EXECUTED here -- two `PowerCmd.apply(hooks, player, RollingBoulderPower, 5)` calls in one combat produce exactly one `rolling_boulder` entry in `player.powers` with `amount == 10` (not two independent Amount-5 instances), confirming the merge this entry describes actually happens in code, not just in prose. No dedup gate exists for colorless power-card rewards (`grep -i 'unique|dedup' sts2_rl/rewards.py` -> nothing, the same fact G5 itself cites), so drawing two Rolling Boulders across two reward screens is ordinary play. LIVE at both the mechanism level and this site.",
-      "live": true
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): RollingBoulderPower.instance_type = PowerInstanceType.INSTANCED (sts2_rl/powers.py), mirroring RollingBoulderPower.cs:24. Two plays now deal 5+5=10 on the next turn and 10+10=20 on the one after (each instance grows by its own +5) instead of one merged instance's 10, then 15, then 20. Verified by test/test_powers.py::TestPowerInstanceType::test_rolling_boulder_two_applications_deal_independent_growing_damage, which also confirms the two applications are distinct objects.  The text it replaced read: PowerInstanceType.Instanced (RollingBoulderPower.cs:24) means every application is an independently tracked instance with its own growing Amount; the sim's PowerCmd.apply merges by id via on_stack (cmds.py:308-311). This is audit/records/seam/power_cmd.json's gap G5 and is not re-verdicted here (binding rule 3) -- G5 lists this power as one of its 11 ported InstanceType units and notes it is among the nine that do not acknowledge the distinction at all, unlike ToricToughnessPower and TheBombPower. What is PER-UNIT is reachability, and for this power two simultaneous instances are REACHABLE and the divergence is arithmetic, not just bookkeeping: the ported Colorless card Rolling Boulder (cards/colorless_powers.py:294-314) is a normal deck card that can be drawn and played twice in one combat, and it applies 5 each time. Two C# instances then deal 5 + 5 = 10 on the next turn and 10 + 10 = 20 on the one after (each grows by its own +5, RollingBoulderPower.cs:52); one merged sim instance holds 10 and deals 10, then 15, then 20 -- so the sim is 5 short on turn 2 and 5 short again on turn 3, converging only later. It also fires ONE damage sweep where the game fires two, which halves the number of on_damage_received dispatches (Thorns, Curl Up) the enemies see. This is the clearest reachable G5 witness among the ported InstanceType units and is recorded here for the seam session's dormancy argument. RULE-3 NOTE (2026-07-26 review fix pass): power/the_bomb, the other ported G5 unit that hand-rolls a workaround, carried `deliberate-divergence` on this same mechanism and is now `gap` too, so G5 has one verdict at every site. Its residue is state-shaped rather than arithmetic -- one merged power at `amount = min(fuses)` where the game has N instances with N Amounts -- because its fuse list does reproduce the damage exactly. LIVE 2026-07-29 (round 11): binding to seam-power-cmd's re-verdict of G5, done concurrently in this round -- G5 now carries `\"live\": true`. This site's own reachability holds independently of G5's own probe (which demonstrates the same mechanism against AutomationPower/PanachePower, not this power): EXECUTED here -- two `PowerCmd.apply(hooks, player, RollingBoulderPower, 5)` calls in one combat produce exactly one `rolling_boulder` entry in `player.powers` with `amount == 10` (not two independent Amount-5 instances), confirming the merge this entry describes actually happens in code, not just in prose. No dedup gate exists for colorless power-card rewards (`grep -i 'unique|dedup' sts2_rl/rewards.py` -> nothing, the same fact G5 itself cites), so drawing two Rolling Boulders across two reward screens is ordinary play. LIVE at both the mechanism level and this site."
     },
     "AfterPlayerTurnStart": {
       "maps_to": "powers.py:3708-3724 on_player_turn_started (player.py:186)",

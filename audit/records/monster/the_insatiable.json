@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\hive\\the_insatiable.py",
-    "sha256": "836167dc5df3271c3baadd759fcb697ecc3fc1280b8421847d1b66178c1fdf42"
+    "sha256": "c69438d60834cfdfc6793f3bd44fe83d4392373b5c7ff4a56687c14e53374b38"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "b52d8d15ba11856c157ae544d7837db5c35df881260a0065cf1d2b97917bd392",
+      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
       "side": "sim"
     }
   ],
@@ -95,9 +95,8 @@
     },
     {
       "what": "LIQUIFY's intent drops StatusIntent's count",
-      "verdict": "gap",
-      "issue": "TheInsatiable.cs:96 telegraphs `new BuffIntent(), new StatusIntent(6)` -- the 6 is the number of status cards the player is about to receive and is rendered in the intent. The sim's Intent (monsters/base.py:36-59) collapses a C# AbstractIntent[] into one MoveType plus an `also` tuple with no status-count field, so the_insatiable.py:36 records `Intent(MoveType.BUFF, also=(MoveType.STATUS_CARD,))` and the 6 is lost. Same mechanism as aeonglass's StatusIntent(WitherAmount) and the empty intent array on the three BattleFriends; monster_state_machine's scope boundary item 2 records the whole AbstractIntent -> Intent mapping as audited by no seam. NOT LIVE: nothing in the sim consumes an intent's status count because the field does not exist, so no ported consumer can observe the loss today. Named trigger: adding a status-count field to Intent, or any observation/replay consumer that reads one.",
-      "live": false
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 28.) Intent gained a `status_count` field (default None -- no other construction site changed) and the three recorded sites now carry C#'s number: aeonglass INCREASING_INTENSITY = WitherAmount (non-asc 1, Aeonglass.cs:44/:102), the_insatiable LIQUIFY = 6 (TheInsatiable.cs:96), test_subject BURNING_GROWL = BurningGrowlBurnCount (non-asc 3, TestSubject.cs:101/:201). The observation encoder deliberately stays a single flag bit -- the count is carried but unencoded (checkpoint concern, per the queue's own impact note). NOT closed: Vantom.cs:119's StatusIntent(3) on DISMEMBER is a genuine, previously-uncounted 4th site of this mechanism (out of this task's footprint; filed in GAP-QUEUE.md's Named work). Witness: test/test_monster_tier_families.py::TestIntentCountLost.  The text it replaced read: TheInsatiable.cs:96 telegraphs `new BuffIntent(), new StatusIntent(6)` -- the 6 is the number of status cards the player is about to receive and is rendered in the intent. The sim's Intent (monsters/base.py:36-59) collapses a C# AbstractIntent[] into one MoveType plus an `also` tuple with no status-count field, so the_insatiable.py:36 records `Intent(MoveType.BUFF, also=(MoveType.STATUS_CARD,))` and the 6 is lost. Same mechanism as aeonglass's StatusIntent(WitherAmount) and the empty intent array on the three BattleFriends; monster_state_machine's scope boundary item 2 records the whole AbstractIntent -> Intent mapping as audited by no seam. NOT LIVE: nothing in the sim consumes an intent's status count because the field does not exist, so no ported consumer can observe the loss today. Named trigger: adding a status-count field to Intent, or any observation/replay consumer that reads one."
     },
     {
       "what": "`_liquify` order: Sandpit before the cards",
@@ -115,6 +114,6 @@
       "rationale": "ONE MECHANISM ACROSS THIS BATCH (rule 3), recorded at every site: the sim's monster ports drop PowerCmd.Apply's `applier` argument. C# is `Apply<T>(choiceContext, target, amount, applier, cardSource)` (PowerCmd.cs:67) and passes `base.Creature` at TheInsatiable.cs:125 (Sandpit) and :170 (StrengthPower), both applier=base.Creature; the sim's `PowerCmd.apply(hooks, target, power_cls, amount, applier=None)` (cmds.py:271-277) is called without it at the_insatiable.py:64 and :79. In C# a null applier additionally SKIPS the whole Hook.ModifyPowerAmountGiven pass (PowerCmd.cs:123-126) and changes the key FindExistingInstanceForStacking uses (PowerCmd.cs:78, :112). Same observable today, EXECUTED (`py audit/tools/monster_probes_b06.py applier`): the sim has exactly six listener definitions that can see the argument -- powers.py:1172/1181 (ViciousPower, gated `name != \"vulnerable\" or applier is not self.owner`, powers.py:1167), powers.py:3101/3106 (_PossessPower, gated `applier is self.owner and name == self._stat_id and target.side == \"player\" and delta < 0`, powers.py:3092-3099), relics/ruined_helmet.py:23-38 (gated on `target is self.player`, never on applier) and relics/unsettling_lamp.py:44-53 (gated `applier is not self.player`, unsettling_lamp.py:47). None can distinguish `None` from the applying monster for a power this unit applies. Named trigger: porting any listener that reads `applier` positively (a monster-applier-sensitive relic), or porting PowerInstanceType so stacking is keyed by applier. Third-file citations (relics/*.py) not hashed here."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-27"
 }

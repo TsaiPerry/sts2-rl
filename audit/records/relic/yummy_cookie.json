@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
+      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
       "side": "sim"
     },
     {
@@ -61,7 +61,7 @@
     },
     {
       "path": "sts2_rl/selectors.py",
-      "sha256": "53ed073769924748388fa481b657f8d6e9786b384642d9ea30d4941e191a3016",
+      "sha256": "def14ff21fe890231c0c6a48d0c961e3c19915ad6ab7e2103e33e064af57e9ce",
       "side": "sim"
     }
   ],
@@ -111,7 +111,7 @@
     {
       "what": "N6: `IconBaseName` (YummyCookie.cs:21-60) picks a per-character icon and, on the canonical/ownerless instance, does so with `Rng.Chaotic.NextItem(ModelDb.AllCharacters)` cached in a STATIC field; plus `AfterCloned` -> `RelicIconChanged()` (YummyCookie.cs:64-68)",
       "verdict": "waiver",
-      "rationale": "Both are presentation -- which of the five character-flavoured cookie sprites the relic bar shows, and an icon refresh after a model clone. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion. The reason this needed thought rather than a tick is the RNG draw: PROMPT.md bug class 16's second half is about named RNG streams a port silently reroutes, so a `Rng.\u2026NextItem` inside a relic is worth checking even in an icon getter. It cannot matter: `Rng.Chaotic` is `new Rng((uint)DateTimeOffset.Now.ToUnixTimeSeconds())` (src/Core/Random/Rng.cs:22) -- a wall-clock-seeded stream that is not part of the run's deterministic state at all, is not in RunRngSet/PlayerRngSet, and is drawn from once per process into a static cache. So there is no stream position for the sim to keep in parity, and this is the opposite of the astrolabe/fishing_rod case where a named per-run stream was at stake. `CanonicalVars`' CardsVar(4) is presentation for the description text; its VALUE is verdicted in N2, not waived here. Rule 7: src/Core/Random/Rng.cs is not hashed by this record."
+      "rationale": "Both are presentation -- which of the five character-flavoured cookie sprites the relic bar shows, and an icon refresh after a model clone. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion. The reason this needed thought rather than a tick is the RNG draw: PROMPT.md bug class 16's second half is about named RNG streams a port silently reroutes, so a `Rng.…NextItem` inside a relic is worth checking even in an icon getter. It cannot matter: `Rng.Chaotic` is `new Rng((uint)DateTimeOffset.Now.ToUnixTimeSeconds())` (src/Core/Random/Rng.cs:22) -- a wall-clock-seeded stream that is not part of the run's deterministic state at all, is not in RunRngSet/PlayerRngSet, and is drawn from once per process into a static cache. So there is no stream position for the sim to keep in parity, and this is the opposite of the astrolabe/fishing_rod case where a named per-run stream was at stake. `CanonicalVars`' CardsVar(4) is presentation for the description text; its VALUE is verdicted in N2, not waived here. Rule 7: src/Core/Random/Rng.cs is not hashed by this record."
     },
     {
       "what": "N7 (residual, not a divergence): run.select_cards does not de-duplicate and Card.upgrade() does not clamp, so a card_selector policy that returned the same card twice would push it PAST max_upgrade_level -- something C#'s selection screen cannot do",

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\frantic_escape.py",
-    "sha256": "157fa4e33cf09bf2fdc0ad9088b65bd126cd9236fb032dbbd3ef3a69769a387b"
+    "sha256": "a450d664468ba0e4e9f023577281f9046cc6cafab8552ff64ff19a6b73d7699d"
   },
   "extra_sources": [
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
+      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     }
   ],
@@ -38,8 +38,8 @@
     },
     "CanBeGeneratedInCombat": {
       "maps_to": "NOT PORTED -- the sim sets `can_be_generated_by_modifiers = False` instead (frantic_escape.py:28)",
-      "verdict": "gap",
-      "issue": "`public override bool CanBeGeneratedInCombat => false` (FranticEscape.cs:30) has no counterpart: the sim leaves `can_be_generated_in_combat` at its True default and instead turns off `can_be_generated_by_modifiers`, which FranticEscape.cs does not override (C# leaves it `=> true`, CardModel.cs:648). Two mismatched flags in one card -- the SAME mistake as card/disintegration, and the same verdict (rule 3). DORMANT both ways: the in-combat generators the first flag gates draw from `pool_card_ids()` (IRONCLAD_POOL), which holds no Status cards, and the second gates the random-CURSE pool, which a Status of Status rarity is not in. Live for the first flag the moment an in-combat generator is pointed at a pool including statuses."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-31 (tier-2 campaign): Flag pair corrected against the C#, read line-by-line for all six cards: none overrides CanBeGeneratedByModifiers or CanonicalKeywords, so the sim's is_playable=False AND can_be_generated_by_modifiers=False were BOTH wrong and can_be_generated_in_combat=False was missing. These Statuses are playable no-effect cards in the game (the shape the sim already models for card/beckon). LIVENESS CORRECTION: the recorded dormancy checked only pool_card_ids and curse_pool_ids, but a THIRD consumer exists -- transform_options_in_combat's STATUS branch, reached by ported Entropy. Pre-fix this genuinely leaked all four bad cards as transform options for every reachable Status card, including frantic_escape, which The Insatiable really does put in piles (test_hive.py::TestTheInsatiable). Reproduced by execution by both the implementer and the task reviewer, and closed by the same fix -- the STATUS branch's filter is the correct mirror of GetFilteredTransformationOptions (CardFactory.cs:189-203). So this mechanism was recorded DORMANT but was reachable; it is fixed, not merely re-argued. Pinned in test/test_card_generation_pool.py.  The text it replaced read: `public override bool CanBeGeneratedInCombat => false` (FranticEscape.cs:30) has no counterpart: the sim leaves `can_be_generated_in_combat` at its True default and instead turns off `can_be_generated_by_modifiers`, which FranticEscape.cs does not override (C# leaves it `=> true`, CardModel.cs:648). Two mismatched flags in one card -- the SAME mistake as card/disintegration, and the same verdict (rule 3). DORMANT both ways: the in-combat generators the first flag gates draw from `pool_card_ids()` (IRONCLAD_POOL), which holds no Status cards, and the second gates the random-CURSE pool, which a Status of Status rarity is not in. Live for the first flag the moment an in-combat generator is pointed at a pool including statuses."
     },
     "ctor": {
       "maps_to": "class attrs (frantic_escape.py:21-28) + _init_vars (30-31)",
@@ -64,6 +64,6 @@
       "rationale": "Inert: the card deals no damage, so `DamageCmd.deal`'s prop inference never reads it."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

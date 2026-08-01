@@ -31,8 +31,11 @@ class WishCard(Card):
         player = ctx.player
         if not player.draw_pile:
             return
+        # Wish.cs:22 — `CardSelectCmd.FromCombatPile(Draw, 1)`; an installed
+        # Selector sees the `orderby Rarity, Id` pre-sort
+        # (CardSelectCmd.cs:403-408), not draw-pile order.
         chosen = ctx.combat.select_cards(
-            "wish", list(player.draw_pile), 1,
+            "wish", list(player.draw_pile), 1, is_draw_pile=True,
         )
         for card in chosen:
             player.draw_pile.remove(card)

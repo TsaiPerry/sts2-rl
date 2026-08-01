@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
+      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     }
   ],

@@ -16,17 +16,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
+      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     },
     {
@@ -71,7 +71,7 @@
     },
     {
       "path": "sts2_rl/relics/unsettling_lamp.py",
-      "sha256": "7f3e9b4f005331480d2b9dc6c824be57a12abf91bc638639b8d5714e1b5f5b87",
+      "sha256": "fc3c134fc62f28d8c30b2ac40a1ece7bbd914dd9b2766fbca402a96c939bba82",
       "side": "sim"
     }
   ],
@@ -94,14 +94,14 @@
       "issue": "Closed since this guard was last written: `sts2_rl/relics/sparkling_rouge.py:19` is now `def on_block_cleared(self, player) -> None`, the same slot as `relics/captains_wheel.py:19-22` (turn 3) and `relics/horn_cleat.py:19-22` (turn 2), matching `SparklingRouge.cs:29-37`'s `Hook.AfterBlockCleared` at `CombatManager.cs:500-507` -- immediately after the block clear, before the energy reset, the hand draw and every AfterPlayerTurnStart/AfterSideTurnStart listener. EXECUTED 2026-07-30 (round 11, `.superpowers/sdd/unlabelled/probes/relic-5-checks.py sparkling-rouge-slot`): the relic instance implements only `on_block_cleared`; a fresh 3-turn combat shows Strength/Dexterity `None` at the starts of turns 1-2 and `1`/`1` once the turn-3 clear has run, matching `py -m pytest test/test_relics.py -k test_sparkling_rouge_turn_three`. The registration-order dependency this guard used to describe (a sentinel relic before vs. after Sparkling Rouge on `on_player_turn_started`) no longer applies -- the relic is on the unconditional pre-draw slot now, so every turn-start listener sees the buff, exactly as in C#. The text it replaced described the OLD `on_player_turn_started` binding, which is gone from the file."
     },
     {
-      "what": "N1: `creature == base.Owner.Creature` (SparklingRouge.cs:31) vs the sim's `on_block_cleared` firing for enemies too",
+      "what": "N1: `creature == base.Owner.Creature` (SparklingRouge.cs:31) vs the sim firing on_player_turn_started only for the player",
       "verdict": "faithful",
-      "rationale": "Re-read after G1's closure: `sparkling_rouge.py` has no explicit `target is self.player` guard of its own, unlike its two hook-siblings (`captains_wheel.py`, `horn_cleat.py`), which is worth flagging rather than silently correct -- `combat.py`'s enemy arm (`combat.py:544-553`) also calls `on_block_cleared(enemy)`, so an unguarded listener here WOULD fire for enemy clears too. Checked the method signature: `sparkling_rouge.py:19` is `def on_block_cleared(self, player: PlayerCombatState) -> None`, i.e. it is dispatched only through the PLAYER'S OWN `start_turn` call site (`player.py:223`), not through the shared multi-target hook the two siblings' explicit checks guard against -- so the omission is safe by construction, not by a missing guard, and no enemy-side call ever reaches this method. C#'s `creature == base.Owner.Creature` check on the shared hook is structurally satisfied the same way the siblings assert it explicitly."
+      "rationale": "C# needs the check because AfterBlockCleared fires once per creature starting a turn, including every enemy. HookSystem.on_player_turn_started is dispatched only from PlayerCombatState.start_turn (player.py:186), so the sim's slot is player-only by construction. (The sibling ports keep an explicit `target is self.player` because on_block_cleared IS fired for enemies too -- combat.py's enemy arm -- which is why the same guard is load-bearing there and free here.)"
     },
     {
-      "what": "N2: `PlayerCombatState.TurnNumber == 3` (SparklingRouge.cs:31) vs `self.turn == 3` (sparkling_rouge.py:20)",
+      "what": "N2: `PlayerCombatState.TurnNumber == 3` (SparklingRouge.cs:31) vs `self.turn == 3` (sparkling_rouge.py:20), read at two different points in the turn",
       "verdict": "faithful",
-      "rationale": "Both sides now read the turn number at the SAME point in the turn (G1's slot fix), so there is no longer even a same-turn-different-position question to check -- `self.turn` at `on_block_cleared` is the value `CombatManager.cs:500-507`'s loop sees too. EXECUTED (round 11 probe, sparkling-rouge-slot): triggers on turn 3 and only turn 3."
+      "rationale": "EXECUTED (b15-rouge): the sim's combat.turn reads the SAME value at on_block_cleared and at on_player_turn_started within one turn (the probe prints t2/t3 labels from both slots), so moving the read does not change which turn fires. The relic therefore triggers on turn 3 on both sides; only the within-turn position differs (G1)."
     },
     {
       "what": "N3: PowerVar<StrengthPower>(1m) and PowerVar<DexterityPower>(1m) read as BaseValue (SparklingRouge.cs:17-21, 34-35), the ORDER of the two applications, and the applier",

@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     }
   ],
@@ -48,8 +48,7 @@
     "AfterDeath": {
       "maps_to": "on_death (gremlin_horn.py:18-22), dispatched by DamageCmd.deal (cmds.py:105) and CreatureCmd.kill (cmds.py:203)",
       "verdict": "gap",
-      "live": false,
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The relic's own body is exact -- GremlinHorn.cs:24-32's side check, EnergyVar(1) and CardsVar(1) map one-for-one onto gremlin_horn.py:19-22, and EXECUTED (py audit/tools/relic_probes_b07.py horn-death) an enemy death takes energy 3 -> 4 and hand 5 -> 6 while a player-side death changes neither. What diverges is WHICH deaths reach the hook (G1: the sim never fires on_death for a prevented death, and C# does) and WHEN relative to the dealer's own post-damage event (G2). LIVENESS: DORMANT overall, RE-EXECUTED 2026-07-30 (round 11). G1 is CLOSED (this record's own guard is `faithful` since 2026-07-29 round 7, re-confirmed here: `'should_die' in IllusionPower.__dict__` and `AdaptablePower.__dict__` are both False today, and `'should_remove_from_combat_after_death' in` each is True -- neither power takes the prevented-death arm any more, so the case G1 named is gone). G2 remains a genuinely open, still-DORMANT gap: read `sts2_rl/cmds.py` end to end today -- `_resolve_death` (called at cmds.py:287 and :410, inside `DamageCmd.deal`) still dispatches `hooks.on_death` before `hooks.on_damage_received`/`hooks.on_damage_dealt` (cmds.py:296, :298) run for the same hit, inverting C#'s CreatureCmd.cs:388-409 order (AfterDamageGiven/AfterDamageReceived, then Kill). EXECUTED: `grep -rln 'def on_damage_dealt' sts2_rl/relics sts2_rl/powers.py sts2_rl/potions.py sts2_rl/monsters sts2_rl/cards sts2_rl/enchantments.py` returns zero files -- still nobody implements the hook whose reordered window would make the divergence observable, matching `damage_pipeline/G6`'s own dormancy (binding rule 3, cited not re-derived). Porting any `on_damage_dealt` (AfterDamageGiven) implementer that reads energy/hand, or a multi-target attack whose second-victim damage depends on a first victim's death, would make this live."
+      "issue": "Rollup of guards G1 and G2 per binding rule 4. The relic's own body is exact -- GremlinHorn.cs:24-32's side check, EnergyVar(1) and CardsVar(1) map one-for-one onto gremlin_horn.py:19-22, and EXECUTED (py audit/tools/relic_probes_b07.py horn-death) an enemy death takes energy 3 -> 4 and hand 5 -> 6 while a player-side death changes neither. What diverges is WHICH deaths reach the hook (G1: the sim never fires on_death for a prevented death, and C# does) and WHEN relative to the dealer's own post-damage event (G2)."
     }
   },
   "guards": [

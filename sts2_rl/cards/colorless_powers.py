@@ -303,6 +303,16 @@ class RollingBoulderCard(Card):
     def _init_vars(self) -> None:
         self._energy_cost = 3
         self._power_amount = 5
+        # DynamicVar("IncrementAmount", 5m), RollingBoulder.cs:20 — the
+        # per-turn growth the card face prints alongside the starting 5.
+        # `magic_number` still reports `_power_amount` (it precedes `_increase`
+        # in cards/base.py's _MAGIC_ATTRS scan order and IS the number the
+        # game's own hover UI leads with), so this line only makes the second
+        # printed number introspectable; it does not change any encoded obs
+        # value. The growth itself is RollingBoulderPower.INCREMENT (powers.py,
+        # outside this card's footprint) and is NOT rewired to read this — the
+        # two already agree (5) and the power owns that behaviour.
+        self._increase = 5
 
     def _on_upgrade(self) -> None:
         self._power_amount += 5

@@ -246,7 +246,10 @@ class DiscoveryCard(Card):
         options = get_distinct_for_combat_parity(
             ctx.combat.combat_rng.card_gen, 3, pool=ctx.combat.card_pool
         )
-        chosen = ctx.combat.select_cards("obtain", options, 1)
+        # Discovery.cs:28 -- `FromChooseACardScreen(context, cards, owner,
+        # canSkip: true)`, which has no auto-select shortcut at all
+        # (CardSelectCmd.cs:216-261) -- has_shortcut=False.
+        chosen = ctx.combat.select_cards("obtain", options, 1, has_shortcut=False)
         for card in chosen:
             card.set_free_this_turn()
             CardPileCmd.add_to_hand(ctx.hooks, ctx.player, card)
@@ -269,6 +272,7 @@ class EquilibriumCard(Card):
     def _init_vars(self) -> None:
         self._energy_cost = 2
         self._block = 13
+        self._power_amount = 1  # DynamicVar("Equilibrium", 1m), Equilibrium.cs:22 — no upgrade
 
     def _on_upgrade(self) -> None:
         self._block += 3
@@ -277,7 +281,10 @@ class EquilibriumCard(Card):
         from ..cmds import BlockCmd, PowerCmd
         from ..powers import RetainHandPower
         BlockCmd.apply(ctx.hooks, ctx.player, self._block, card=self)
-        PowerCmd.apply(ctx.hooks, ctx.player, RetainHandPower, 1, applier=ctx.player)
+        PowerCmd.apply(
+            ctx.hooks, ctx.player, RetainHandPower, self._power_amount,
+            applier=ctx.player,
+        )
 
 
 @register_card
@@ -652,6 +659,7 @@ class SecretTechniqueCard(Card):
         chosen = CardSelectCmd.from_pile(
             ctx.hooks, player.draw_pile, "from_draw", count=1,
             predicate=lambda c: c.card_type == self._WANTED_TYPE,
+            is_draw_pile=True,
         )
         for card in chosen:
             if len(player.hand) >= player.MAX_HAND_SIZE:
@@ -740,7 +748,9 @@ class SplashCard(Card):
             for card in options:
                 if card.is_upgradable:
                     card.upgrade()
-        chosen = ctx.combat.select_cards("obtain", options, 1)
+        # Splash.cs:41 -- `FromChooseACardScreen(..., canSkip: true)`; no
+        # auto-select shortcut (CardSelectCmd.cs:216-261) -- has_shortcut=False.
+        chosen = ctx.combat.select_cards("obtain", options, 1, has_shortcut=False)
         for card in chosen:
             card.set_free_this_turn()
             CardPileCmd.add_to_hand(ctx.hooks, ctx.player, card)

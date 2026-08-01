@@ -26,17 +26,17 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
+      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "03b13195368f9b62ffdaef867883b236c1573dd14c05724c40c439ede14a6fbf",
+      "sha256": "0e7260041e0b6693c08bf4aa4ddbb8743311d7fd72d6212fdc7c7d358a7c5030",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
@@ -79,8 +79,8 @@
     },
     {
       "what": "G3 (DORMANT): CardFactory.FilterForCombat also drops CardRarity.Event (CardFactory.cs:161); the sim's pool_card_ids (cards/pool.py:100-117) drops only Basic and Ancient",
-      "verdict": "gap",
-      "issue": "MECHANISM: C# filters the Attack list through FilterForCombat, whose predicate is 'CanBeGeneratedInCombat && Rarity != Basic && Rarity != Ancient && Rarity != Event'. pool_card_ids implements the first three clauses and omits the Event one, so an Event-rarity Attack in the Ironclad pool would be offerable by Crossbow in the sim and not in the game. DORMANT, executed rather than assumed (py audit/tools/relic_probes_b04.py crossbow): zero cards in IRONCLAD_POOL carry CardRarity.EVENT, so the missing clause is a no-op on today's content. Porting any Event-rarity Attack into the Ironclad pool makes it live -- and it would go live for every in-combat card generator at once, not just Crossbow, because the defect is in the shared helper. RULE 7: cards/pool.py is not hashed by this record."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-31 (tier-2 campaign): Same root as potion/_filter_for_combat_event_rarity, closed in the same pass: cards/pool.py's pool_card_ids now implements the FOURTH clause too (cards/pool.py:130 excludes CardRarity.EVENT alongside BASIC and ANCIENT), so Crossbow's Attack list matches CardFactory.FilterForCombat (CardFactory.cs:159-162) exactly. The executed dormancy below still holds (no Event-rarity card is in IRONCLAD_POOL), but the sim no longer depends on that to be correct.  The text it replaced read: MECHANISM: C# filters the Attack list through FilterForCombat, whose predicate is 'CanBeGeneratedInCombat && Rarity != Basic && Rarity != Ancient && Rarity != Event'. pool_card_ids implements the first three clauses and omits the Event one, so an Event-rarity Attack in the Ironclad pool would be offerable by Crossbow in the sim and not in the game. DORMANT, executed rather than assumed (py audit/tools/relic_probes_b04.py crossbow): zero cards in IRONCLAD_POOL carry CardRarity.EVENT, so the missing clause is a no-op on today's content. Porting any Event-rarity Attack into the Ironclad pool makes it live -- and it would go live for every in-combat card generator at once, not just Crossbow, because the defect is in the shared helper. RULE 7: cards/pool.py is not hashed by this record."
     },
     {
       "what": "N1: `if (!participants.Contains(base.Owner.Creature)) return;` (Crossbow.cs:19-22) and `if (readOnlyList.Count == 0) return;` (Crossbow.cs:26-29)",
@@ -98,6 +98,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / RefreshCounter / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

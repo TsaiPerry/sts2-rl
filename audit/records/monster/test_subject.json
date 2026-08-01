@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\glory\\test_subject.py",
-    "sha256": "ee82a7b8118e90eceac29b7e899cd29ec2efb9a4337aebe6f44e38e725150ba1"
+    "sha256": "800eed5a3cd3bb1471be6533ce6035049a0b185d8cf2662e0019126b77840fa7"
   },
   "hooks": {
     "Title": {
@@ -104,9 +104,8 @@
     },
     {
       "what": "BURNING_GROWL_MOVE: StatusIntent(BurningGrowlBurnCount) loses its count in the sim's intent vocabulary",
-      "verdict": "gap",
-      "live": false,
-      "issue": "TestSubject.cs:201 telegraphs `new StatusIntent(BurningGrowlBurnCount)` -- the intent carries the NUMBER 3, which the game's intent panel displays. The sim's Intent dataclass (monsters/base.py:36-59) has fields for damage and hits and for a buff list, but nothing a status count can live in, so test_subject.py:96 degrades it to a bare `Intent(MoveType.STATUS_CARD, also=(MoveType.BUFF,))`. The EFFECT is right -- _growl adds exactly _GROWL_BURN = 3 Burns to the discard (test_subject.py:166-167) against CardPileCmd.AddToCombatAndPreview<Burn>(..., PileType.Discard, 3, ...) (TestSubject.cs:331) -- it is only the telegraph that is lossy. DORMANT, executed: every sim consumer of current_intent reads flags or the attack numbers and none reads a status count -- full_env.py:571-572 sets a single STATUS_CARD flag bit, env.py:121/:159 and previews.py:98/:120 read damage and hits only, and the conformance driver matches on move identity. Named trigger that would make it live: any consumer that reads a status-intent count -- an observation feature for 'how many statuses are incoming', or a replay assertion on the intent panel text. This is monster_state_machine boundary item 2 (the AbstractIntent -> Intent mapping is in no seam's scope) landing on a concrete unit. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 28.) Intent gained a `status_count` field (default None -- no other construction site changed) and the three recorded sites now carry C#'s number: aeonglass INCREASING_INTENSITY = WitherAmount (non-asc 1, Aeonglass.cs:44/:102), the_insatiable LIQUIFY = 6 (TheInsatiable.cs:96), test_subject BURNING_GROWL = BurningGrowlBurnCount (non-asc 3, TestSubject.cs:101/:201). The observation encoder deliberately stays a single flag bit -- the count is carried but unencoded (checkpoint concern, per the queue's own impact note). NOT closed: Vantom.cs:119's StatusIntent(3) on DISMEMBER is a genuine, previously-uncounted 4th site of this mechanism (out of this task's footprint; filed in GAP-QUEUE.md's Named work). Witness: test/test_monster_tier_families.py::TestIntentCountLost.  The text it replaced read: TestSubject.cs:201 telegraphs `new StatusIntent(BurningGrowlBurnCount)` -- the intent carries the NUMBER 3, which the game's intent panel displays. The sim's Intent dataclass (monsters/base.py:36-59) has fields for damage and hits and for a buff list, but nothing a status count can live in, so test_subject.py:96 degrades it to a bare `Intent(MoveType.STATUS_CARD, also=(MoveType.BUFF,))`. The EFFECT is right -- _growl adds exactly _GROWL_BURN = 3 Burns to the discard (test_subject.py:166-167) against CardPileCmd.AddToCombatAndPreview<Burn>(..., PileType.Discard, 3, ...) (TestSubject.cs:331) -- it is only the telegraph that is lossy. DORMANT, executed: every sim consumer of current_intent reads flags or the attack numbers and none reads a status count -- full_env.py:571-572 sets a single STATUS_CARD flag bit, env.py:121/:159 and previews.py:98/:120 read damage and hits only, and the conformance driver matches on move identity. Named trigger that would make it live: any consumer that reads a status-intent count -- an observation feature for 'how many statuses are incoming', or a replay assertion on the intent panel text. This is monster_state_machine boundary item 2 (the AbstractIntent -> Intent mapping is in no seam's scope) landing on a concrete unit. Third-file citations, not hashed here."
     },
     {
       "what": "AfterPowerApplied / AfterPowerRemoved (TestSubject.cs:238-252) -- the IntanglePower colour tell",
@@ -199,37 +198,37 @@
     },
     {
       "path": "sts2_rl/monsters/state_machine.py",
-      "sha256": "bcec29d18fdbd56453de4872aad26b727a9eb3afe1a1961d802713b5e7efe68e",
+      "sha256": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "b52d8d15ba11856c157ae544d7837db5c35df881260a0065cf1d2b97917bd392",
+      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/creatures.py",
-      "sha256": "34e44031a337c75e1c2685e0521a075d95fa7a1478ca8594e6a138651c361078",
+      "sha256": "1c73063f3ca726775f0a121fe826933fe8a4dfdcbda18bb0e0d4dfacff69de7f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     },
     {

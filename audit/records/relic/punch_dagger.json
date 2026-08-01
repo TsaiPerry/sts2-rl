@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\punch_dagger.py",
-    "sha256": "475a7d4c54a4879f98e9c8c3d0edbf2320a8b3617a78348e4c26d155ece7040b"
+    "sha256": "b8ae1807d2a7b5797af042f50de555fe5b004916dff21a28742fffce54d779a2"
   },
   "extra_sources": [
     {

@@ -44,8 +44,15 @@ class Guardbot(MachineMonster):
         combat = ctx.hooks.combat
         if combat is None:
             return
+        # Guardbot.cs:51 `Enemies.Where(c => c.Monster is Fabricator)` -- the
+        # ONLY test is membership of CombatState.Enemies, which C# still
+        # holds a death-vetoed retained corpse in. `is_removed_from_combat`
+        # (not `is_gone`) is the sim's mirror of that membership test: it is
+        # False for a retained corpse (still "in Enemies") and True only for
+        # a creature C# has actually dropped from Enemies (an ordinary kill,
+        # or an escape -- both real removals).
         for enemy in combat.enemies:
-            if isinstance(enemy, Fabricator) and not enemy.is_gone:
+            if isinstance(enemy, Fabricator) and not enemy.is_removed_from_combat:
                 BlockCmd.apply(ctx.hooks, enemy, _GUARD_BLOCK, props=ValueProp.UNPOWERED)
 
 

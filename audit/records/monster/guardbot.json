@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\glory\\fabricator.py",
-    "sha256": "0ff27ed874500a6003bf19d100d95848dae28c8afbc7b3ed38cc22891cffbddb"
+    "sha256": "789a1a3297f11e8b4097b8c315c4d63c2509d5e1d68a164d4d56ce40a4326284"
   },
   "hooks": {
     "MinInitialHp": {
@@ -38,9 +38,8 @@
   "guards": [
     {
       "what": "GuardMove's target set: C# iterates Enemies with NO IsAlive filter (Guardbot.cs:51), the sim filters `not enemy.is_gone` (fabricator.py:47-49)",
-      "verdict": "gap",
-      "issue": "Guardbot.cs:51 is `Creature.CombatState.Enemies.Where(c => c.Monster is Fabricator)` -- membership of Enemies is the only test, and a creature whose removal was vetoed (Hook.ShouldCreatureBeRemovedFromCombatAfterDeath, the death-is-not-removal case the stream prompt names) STAYS in Enemies at 0 HP and would still be handed 15 block. The sim's enemies list retains every corpse, so the port has to filter, and it filters on `is_gone` = `is_dead or escaped` (creatures.py:43-46) -- which also excludes the retained corpse C# would include. Same mechanism, same verdict, at monster/queen's _burn_bright teammate loop (governing rule 3). DORMANT, and the trigger is concrete: no ported power or relic sets `retained_after_death` on a Fabricator (the three sim implementers of should_die are IllusionPower / SteamEruptionPower / AdaptablePower, none of which any Glory monster applies), and the Fabricator's own death ends the fight anyway because every bot carries MinionPower. Note that the sim's filter is the RIGHT shape for the ordinary case -- dropping it would hand block to ordinary corpses -- so this is a missing third state, not a wrong one.",
-      "live": false
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 28.) Both scans now filter on `not enemy.is_removed_from_combat` (membership-only, matching Guardbot.cs:51's `Enemies.Where(c => c.Monster is Fabricator)` and Queen.cs:187-188's teammate walk): a death-vetoed retained corpse (is_gone and retained_after_death, set through the real should_remove_from_combat_after_death hook) is now a valid target in both, while ordinarily killed/escaped creatures stay excluded. Witness: test/test_monster_tier_families.py::TestRetainedCorpseInScan (constructs the corpse via the sim's retention machinery, not a hand-set flag).  The text it replaced read: Guardbot.cs:51 is `Creature.CombatState.Enemies.Where(c => c.Monster is Fabricator)` -- membership of Enemies is the only test, and a creature whose removal was vetoed (Hook.ShouldCreatureBeRemovedFromCombatAfterDeath, the death-is-not-removal case the stream prompt names) STAYS in Enemies at 0 HP and would still be handed 15 block. The sim's enemies list retains every corpse, so the port has to filter, and it filters on `is_gone` = `is_dead or escaped` (creatures.py:43-46) -- which also excludes the retained corpse C# would include. Same mechanism, same verdict, at monster/queen's _burn_bright teammate loop (governing rule 3). DORMANT, and the trigger is concrete: no ported power or relic sets `retained_after_death` on a Fabricator (the three sim implementers of should_die are IllusionPower / SteamEruptionPower / AdaptablePower, none of which any Glory monster applies), and the Fabricator's own death ends the fight anyway because every bot carries MinionPower. Note that the sim's filter is the RIGHT shape for the ordinary case -- dropping it would hand block to ordinary corpses -- so this is a missing third state, not a wrong one."
     },
     {
       "what": "GuardMove block amount and props",
@@ -58,7 +57,7 @@
       "rationale": "Guardbot has no encounter of its own: it exists only as a Fabricator spawn (Fabricator.cs:31-35 defenseSpawns, fabricator.py:115), and 'fabricator' is in Glory's normal_keys (rooms.py:189). Spawn mechanics (exactly-one roll, the zero-roll rows) are monster_state_machine steps 47-48 and are NOT re-verdicted here; only the spawn's CONTENT is, and that is monster/fabricator's guard."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-27",
   "extra_sources": [
     {
@@ -78,12 +77,12 @@
     },
     {
       "path": "sts2_rl\\creatures.py",
-      "sha256": "34e44031a337c75e1c2685e0521a075d95fa7a1478ca8594e6a138651c361078",
+      "sha256": "1c73063f3ca726775f0a121fe826933fe8a4dfdcbda18bb0e0d4dfacff69de7f",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {

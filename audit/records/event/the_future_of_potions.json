@@ -101,7 +101,7 @@
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "03b13195368f9b62ffdaef867883b236c1573dd14c05724c40c439ede14a6fbf",
+      "sha256": "0e7260041e0b6693c08bf4aa4ddbb8743311d7fd72d6212fdc7c7d358a7c5030",
       "side": "sim"
     },
     {
@@ -226,8 +226,15 @@
       "what": "the ChoiceTitle / ChoiceDescription LocStrings and their four var substitutions (TheFutureOfPotions.cs:30-32, :109-114), `.ThatHasDynamicTitle()` (TheFutureOfPotions.cs:118) and the potion hover tips",
       "verdict": "waiver",
       "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
+    },
+    {
+      "what": "G-new: Event.offer_card_reward skips Hook.ModifyRewards, and needs a reroll surface to fix",
+      "maps_to": "events/base.py::Event.offer_card_reward -- no apply_reward_modifiers, no reroll surface",
+      "verdict": "gap",
+      "live": true,
+      "issue": "G-new (found 2026-07-31, tier-2 campaign, Task 32 -- OPEN, deliberately not fixed): Event.offer_card_reward (events/base.py) never dispatches the reward modifiers, so this event's card reward cannot be rerolled with Driftwood held, where C#'s RewardsSet.GenerateWithoutOffering (RewardsSet.cs:136) applies Hook.ModifyRewards to every RewardsSet. UNLIKE the two sibling sites fixed in the same task, this one is NOT a missing call: events/base.py's protocol is a boolean take-or-skip screen with no reroll surface at all, so closing it needs new capability, not a dispatch. Sole caller: the_future_of_potions.py. LIVE by the same argument as its siblings (the event and Driftwood are both ported). Confirmed real by the Task 32 reviewer. SEPARATE, LARGER CONCERN recorded here for want of a better home: run.reward_offer_selector is never wired by driver.py (set only in test files, verified by repo-wide grep), so take-or-skip screens AUTO-ACCEPT in real play. That is pre-existing and out of Task 32's scope, but it is a bigger divergence than the reroll flag and needs its own task."
     }
   ],
-  "verdict": "waiver",
+  "verdict": "gap",
   "audited": "2026-07-26"
 }

@@ -36,9 +36,22 @@ class GuiltyCard(Card):
     MAX_COMBATS = 5
 
     def _init_vars(self) -> None:
-        self._energy_cost = 0
+        self._energy_cost = -1
         # `[SavedProperty] int CombatsSeen` (Guilty.cs:25-37).
         self.combats_seen = 0
+
+    @property
+    def magic_number(self) -> int:
+        """Guilty.cs:21+25-38 -- `DynamicVar("Combats", 5)` is not a static
+        printed number: the `[SavedProperty] CombatsSeen` setter keeps it live
+        (`Combats.BaseValue = 5 - CombatsSeen`), so the card face counts down
+        5, 4, 3... `combats_seen` already mirrors the C# backing field
+        (`_init_vars`); this overrides `Card.magic_number`'s `_MAGIC_ATTRS`
+        scan (Guilty sets none of those attrs) to reproduce the same formula
+        instead of storing a stale constant that would only be right on
+        combat 1.
+        """
+        return self.MAX_COMBATS - self.combats_seen
 
     def after_combat_end(self, run) -> None:
         """Guilty.cs:45-56. Reaching this method at all IS the

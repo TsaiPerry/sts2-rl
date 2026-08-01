@@ -21,13 +21,17 @@ hidden stochasticity from selection effects:
   candidates instead of taking ``count`` of them. Junk is worth
   exhausting/redrawing, everything else is kept.
 * ``"choose_a_card"``, ``"choose_a_card_optional"`` — the cheapest playable
-  card, junk last. These are the generator screens
-  (``CardSelectCmd.FromChooseACardScreen``): the four generator potions,
-  Toolbox and Choices Paradox all create fresh cards and offer three. The
-  card is free, so the only question is whether it can be played this turn —
-  cheapest wins, ties by offered order. ``*_optional`` is the ``canSkip:
-  true`` twin, so an all-junk screen is declined instead of taking dead
-  weight; the non-optional one has to take something.
+  card, junk last. These are the generator screens: the four generator
+  potions and Toolbox go through ``CardSelectCmd.FromChooseACardScreen``
+  (no auto-select shortcut at all — ``select_cards`` is called with
+  ``has_shortcut=False``); Choices Paradox actually goes through
+  ``CardSelectCmd.FromSimpleGrid`` instead (it DOES have the shortcut) but
+  shares the ``"choose_a_card"`` purpose label since the heuristic below
+  doesn't need to distinguish them. All three create fresh cards and offer
+  three-to-five. The card is free, so the only question is whether it can be
+  played this turn — cheapest wins, ties by offered order. ``*_optional`` is
+  the ``canSkip: true`` twin, so an all-junk screen is declined instead of
+  taking dead weight; the non-optional ones have to take something.
 * any other purpose — the first candidates, in offered order.
 
 Every branch is a stable sort over the candidate order, so ties resolve

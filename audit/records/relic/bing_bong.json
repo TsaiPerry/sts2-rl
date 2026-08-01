@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\bing_bong.py",
-    "sha256": "16432616467aff2cbd30eb4ca54ab0dfdd663256bcf3e3c63b714d6e423695c8"
+    "sha256": "23d7169f2d4dd04464de762f246f8a651158e38db21ac00f2d52f23641df125f"
   },
   "extra_sources": [
     {

@@ -21,27 +21,27 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
+      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
+      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     },
     {
@@ -64,8 +64,7 @@
     "TryModifyEnergyCostInCombat": {
       "maps_to": "modify_card_energy_cost (spiked_gauntlets.py:26-31), dispatched by HookSystem.modify_card_energy_cost (hooks.py:196-201) from combat.py:408 / :701 and previews.py:181",
       "verdict": "gap",
-      "live": false,
-      "issue": "RE-REGENERATED 2026-07-30 (the prior rollup of guards G1, G2 and G3 was stale: G1 was RECONCILED to `faithful` 2026-07-28 -- the listener-order fix that closed it landed and the record's per-guard entry was updated, but this hooks-level summary was not). WHAT REMAINS is G2 and G3, both still open and both still DORMANT AT THIS SITE (unchanged by anything ported since): G2 is the missing Early/Late phase split (this relic implements only the PLAIN pass; the divergence needs Brilliant Scarf's Late pass co-occurring, which is unexecuted here per the guard's own text) and G3 is the collapsed owner-guard/X-cost-bail/extra-clamp trio (needs a ported X-cost Power card, and none of the three ported X-cost cards -- cascade, volley, whirlwind -- is a Power). The arithmetic itself is right -- a Power card costs 1 more."
+      "issue": "Rollup of guards G1, G2 and G3 per binding rule 4. The arithmetic is right -- a Power card costs 1 more -- but the sim has no phase structure and no per-creature listener grouping, and this relic is the named ported witness for BOTH of audit/records/seam/hook_dispatch.json's gaps G2 and G3."
     }
   },
   "guards": [

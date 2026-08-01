@@ -26,13 +26,16 @@ class PactsEndCard(Card):
     def _init_vars(self) -> None:
         self._energy_cost = 0
         self._damage = 17
-        self._required_exhausted = 3
+        self._cards = 3     # CardsVar(3), PactsEnd.cs:18 — cards/base.py's
+        # `magic_number` scans `_cards` (a `_MAGIC_ATTRS` entry); the old name
+        # `_required_exhausted` was not in that tuple, so the printed 3 never
+        # surfaced. No upgrade, no ascension branch.
 
     def _on_upgrade(self) -> None:
         self._damage += 6
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cmds import DamageCmd
-        if len(ctx.player.exhaust_pile) < self._required_exhausted:
+        if len(ctx.player.exhaust_pile) < self._cards:
             return
         DamageCmd.deal(ctx.hooks, ctx.resolve_target(target_idx), self._damage, dealer=ctx.player, card=self)

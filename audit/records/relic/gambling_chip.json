@@ -16,17 +16,17 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
+      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
       "side": "sim"
     },
     {
@@ -48,8 +48,7 @@
     "AfterPlayerTurnStart": {
       "maps_to": "on_player_turn_started (gambling_chip.py:23-36), dispatched by HookSystem.on_player_turn_started (hooks.py:285-289) from PlayerCombatState.start_turn (player.py:183-186)",
       "verdict": "gap",
-      "live": false,
-      "issue": "Rollup of guards G1, G2 and G3 per binding rule 4. The hook SLOT is right and the turn gate matches, but CardCmd.DiscardAndDraw does two things the sim's inline loop does not: it routes each discard through CardPileCmd.Add (G2) and, after the draw, it AUTO-PLAYS every discarded card that was Sly this turn (G1). The selector's `min = 0` is also collapsed (G3). G3 is CLOSED (2026-07-27, below): 'discard nothing' is now expressible, `gambling_chip` is in driver.py's SKIPPABLE_PURPOSES. DORMANT overall (both remaining halves): G1 re-checked today with a stronger enumeration than the guard's own text -- the Sly PLUMBING has since been ported (`is_sly_this_turn` / `give_single_turn_sly` / `_has_single_turn_sly`, cards/base.py:461-472, mirroring CardModel.IsSlyThisTurn), so `git grep -n is_sly` no longer returns zero hits the way the guard text says, but `git grep -rn 'give_single_turn_sly\\|\\.sly *=' sts2_rl --include=*.py` outside cards/base.py returns ZERO hits -- no card or effect anywhere ever sets a card Sly, so `is_sly_this_turn` is unreachably False for every card in play and the missing auto-play branch fires on an empty set. G2 re-checked: `after_card_changed_piles` (sts2_rl/hooks.py:880-906) now EXISTS and dispatches for the combat-pile TRANSFORM site, but its own docstring says plainly 'Dispatched from the combat-pile transform only... the remaining C# sites -- Add, RemoveFromCombat and the manual play -- are seam/creature_card_cmds guard G8 and still dispatch nothing' -- and audit/records/seam/creature_card_cmds.json step 81 ('Add: ... Hook.AfterCardChangedPiles(...) AFTER every card has moved') is independently recorded there as `gap`, `live: false`. A discard is an Add, not a transform, so the sim still cannot fire the hook a Gambling Chip discard would need to reach. Consistent with binding rule 3 (same mechanism, same verdict, different record). Porting either the Sly keyword onto a real card or the Add-site AfterCardChangedPiles dispatch (seam/creature_card_cmds step 81) makes the corresponding half live."
+      "issue": "Rollup of guards G1, G2 and G3 per binding rule 4. The hook SLOT is right and the turn gate matches, but CardCmd.DiscardAndDraw does two things the sim's inline loop does not: it routes each discard through CardPileCmd.Add (G2) and, after the draw, it AUTO-PLAYS every discarded card that was Sly this turn (G1). The selector's `min = 0` is also collapsed (G3). [2026-07-26 fix pass: guard G3 is now also a gap -- the min-0 decline is unreachable in the sim.]"
     }
   },
   "guards": [

@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "03b13195368f9b62ffdaef867883b236c1573dd14c05724c40c439ede14a6fbf",
+      "sha256": "0e7260041e0b6693c08bf4aa4ddbb8743311d7fd72d6212fdc7c7d358a7c5030",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
@@ -76,10 +76,9 @@
       "rationale": "Matches HeftyTablet.cs:21; same is_tradable consequence recorded for relic/golden_pearl in this batch."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (hefty_tablet.py:17-54) -> reward_pool_card_ids() + PlayerRng.Rewards draws -> run.select_cards('obtain', ...) -> run.add_card, then run.add_card(make_card('injury'))",
+      "maps_to": "after_obtained (hefty_tablet.py:17-42) -> pool_card_ids() + PlayerRng.Rewards draws -> run.select_cards('obtain', ...) -> run.add_card, then run.add_card(make_card('injury'))",
       "verdict": "gap",
-      "live": false,
-      "issue": "NARROWED at round 11: two of this rollup's three named guards are closed. G1 (candidate pool: FilterForCombat vs GetUnlockedCards) was closed 2026-07-29 (round 7) -- EXECUTED (this pass): hefty_tablet.py:20, 34-37 now calls `reward_pool_card_ids(pool=run.card_pool)`, not `pool_card_ids()`. G3 (the canSkip screen) was re-derived faithful in the 2026-07-26 relic fix pass and hefty_tablet.py:52 still passes purpose='obtain', one of the three purposes the driver lets a player decline out of. Only G2 remains a gap, and it is DORMANT, enumerated: hefty_tablet.py's after_obtained (17-54) builds its three reward options directly and calls `run.select_cards` with no call anywhere to `Relic.modify_card_reward_options` (relics/base.py:259) or `..._late` (relics/base.py:274), where CardFactory.CreateForReward would run Hook.TryModifyCardRewardOptions over the run's other relics. EXECUTED: `grep -rn hefty_tablet sts2_rl/ --include=*.py` outside its own file and tests returns exactly two lines, both in events/neow.py (the CURSED-branch option list and its accompanying-relic map) -- Neow is the relic's ONLY grant path, at floor 0, before the player can hold any other relic, so no ported `modify_card_reward_options[_late]` implementer (silver_crucible, silken_tress, glitter, fresnel_lens, lasting_candy, lava_lamp, wing_charm -- 7 today, up from the 4 the guard's prior text enumerated) can ever be present when this hook fires. Porting any non-Neow grant path (an Event-rarity relic reward, a shrine, a shop slot) makes it live."
+      "issue": "Rollup of guards G1, G2 and G3 per binding rule 4. The skeleton is right -- three Rare candidates on the Rewards stream with prior picks excluded and no upgrade roll, a choose-one screen, then the chosen card and an Injury appended to the deck in that order -- and guards N1-N4 confirm each of those clauses individually. What diverges is the CANDIDATE POOL (G1: FilterForCombat instead of GetUnlockedCards, so Feed and Not Yet can never be offered), the dropped card-reward-options hook (G2) and the skip the sim cannot express (G3)."
     }
   },
   "guards": [

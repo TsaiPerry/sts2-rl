@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     }
   ],
@@ -56,7 +56,7 @@
     {
       "what": "the sim `continue`s rather than breaking when an enemy is gone in the damage pass, and re-checks `ctx.player.is_dead` between the passes (thunderclap.py:111-115)",
       "verdict": "gap",
-      "issue": "Two behaviours are bundled here and only one is the source's. C#'s AttackCommand does skip non-alive targets by re-deriving `validTargets` (AttackCommand.cs:544-546) and does bail on `Attacker.IsDead` (540-543), so the `continue` in the damage pass is faithful. THE MID-CARD `is_dead` RETURN IS NOT: it additionally skips the whole Vulnerable pass (thunderclap.py:113-115), which Thunderclap.cs does not do -- C# would still await the multi-target `PowerCmd.Apply` on a dying player's turn, firing its apply bracket on every hittable enemy. DORMANT: the sim's death-prevention path floors a saved creature at 1 HP (cmds.py:106-112), so `is_dead` here means genuinely dead and the combat is lost on both sides before any listener could read the result. TRIGGER: a ported listener that acts after the player's death. Same mechanism and same verdict at every site that has it (rule 3): card/blood_wall, card/bloodletting, card/brand, card/hemokinesis, card/offering -- all five carry `gap`, and the report files thunderclap inside that same family (\u00a73.5 family 1)."
+      "issue": "Two behaviours are bundled here and only one is the source's. C#'s AttackCommand does skip non-alive targets by re-deriving `validTargets` (AttackCommand.cs:544-546) and does bail on `Attacker.IsDead` (540-543), so the `continue` in the damage pass is faithful. THE MID-CARD `is_dead` RETURN IS NOT: it additionally skips the whole Vulnerable pass (thunderclap.py:113-115), which Thunderclap.cs does not do -- C# would still await the multi-target `PowerCmd.Apply` on a dying player's turn, firing its apply bracket on every hittable enemy. DORMANT: the sim's death-prevention path floors a saved creature at 1 HP (cmds.py:106-112), so `is_dead` here means genuinely dead and the combat is lost on both sides before any listener could read the result. TRIGGER: a ported listener that acts after the player's death. Same mechanism and same verdict at every site that has it (rule 3): card/blood_wall, card/bloodletting, card/brand, card/hemokinesis, card/offering -- all five carry `gap`, and the report files thunderclap inside that same family (§3.5 family 1)."
     }
   ],
   "verdict": "gap",

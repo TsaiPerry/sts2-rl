@@ -31,11 +31,15 @@ class SpoilsMapCard(Card):
     is_playable = False  # CardKeyword.Unplayable
     max_upgrade_level = 0
 
-    GOLD = 600
     # SpoilsMap.AfterCreated sets SpoilsActIndex = 1 (Act 2).
     SPOILS_ACT_INDEX = 1
 
     def _init_vars(self) -> None:
+        # SpoilsMap.cs:40 -- `base(-1, CardType.Quest, CardRarity.Quest,
+        # TargetType.Self)`. The base class default (0) happened to match by
+        # accident; this card never overrode it before.
+        self._energy_cost = -1
+        self._gold = 600    # GoldVar(600), SpoilsMap.cs:19
         self.spoils_act_index = self.SPOILS_ACT_INDEX
         # The treasure node coord recorded during the late map pass.
         self.spoils_coord: tuple[int, int] | None = None
@@ -114,11 +118,11 @@ class SpoilsMapCard(Card):
 
     def on_quest_complete(self, run) -> int:
         """SpoilsMap.OnQuestComplete: pay 600 gold and remove the card."""
-        run.gain_gold(self.GOLD)
+        run.gain_gold(self._gold)
         if run.map is not None and self.spoils_coord is not None:
             point = run.map.get_point(*self.spoils_coord)
             if point is not None:
                 point.remove_quest(self)
         if self in run.deck:
             run.remove_cards([self])   # CardPileCmd.RemoveFromDeck (:122)
-        return self.GOLD
+        return self._gold

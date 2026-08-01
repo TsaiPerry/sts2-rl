@@ -39,6 +39,10 @@ _PHASE_SUFFIXES = tuple(sorted((s for s in _PHASES if s), key=len, reverse=True)
 
 _PHASE_HOOKS_BY_CLASS: dict[type, frozenset[str]] = {}
 
+# Lazily-populated cache for `HookSystem.combat_is_over`'s `Phase` reference —
+# see that property's docstring for why this can't be a module-level import.
+_PHASE_CLS: type | None = None
+
 
 # ── Hook.IterateCombatHookListeners' combat-over gate ────────────────────
 #
@@ -92,12 +96,18 @@ _COMBAT_GATED_HOOKS: dict[str, str] = {
     "after_auto_post_play_phase_entered": "AfterAutoPostPlayPhaseEntered",
     "after_auto_pre_play_phase_entered": "AfterAutoPrePlayPhaseEntered",
     "after_enemy_side_start": "AfterSideTurnStart",
+    "after_modify_power_amount_given": "AfterModifyingPowerAmountGiven",
+    "after_modify_power_amount_received": "AfterModifyingPowerAmountReceived",
+    "after_modifying_hand_draw": "AfterModifyingHandDraw",
     "after_player_turn_end": "AfterTurnEnd",
     "after_side_turn_start": "AfterSideTurnStart",
     "before_attack": "BeforeAttack",
+    "before_block_gained": "BeforeBlockGained",
+    "before_card_auto_played": "BeforeCardAutoPlayed",
     "before_card_played": "BeforeCardPlayed",
     "before_enemy_side_end": "BeforeTurnEnd",
     "before_enemy_side_start": "BeforeSideTurnStart",
+    "before_flush": "BeforeFlush",
     "before_side_turn_start": "BeforeSideTurnStart",
     "modify_block_additive": "ModifyBlock",
     "modify_block_multiplicative": "ModifyBlock",
@@ -108,7 +118,9 @@ _COMBAT_GATED_HOOKS: dict[str, str] = {
     "modify_hand_draw": "ModifyHandDraw",
     "modify_max_energy": "ModifyMaxEnergy",
     "modify_orb_value": "ModifyOrbValue",
-    "modify_power_amount": "ModifyPowerAmountReceived",
+    "modify_power_amount_given_additive": "ModifyPowerAmountGiven",
+    "modify_power_amount_given_multiplicative": "ModifyPowerAmountGiven",
+    "modify_power_amount_received": "ModifyPowerAmountReceived",
     "modify_x_value": "ModifyXValue",
     "on_block_cleared": "AfterBlockCleared",
     "on_block_gained": "AfterBlockGained",
@@ -116,6 +128,7 @@ _COMBAT_GATED_HOOKS: dict[str, str] = {
     "on_card_drawn": "AfterCardDrawn",
     "on_card_entered_combat": "AfterCardEnteredCombat",
     "on_card_exhausted": "AfterCardExhausted",
+    "on_card_generated_for_combat": "AfterCardGeneratedForCombat",
     "on_energy_reset": "AfterEnergyReset",
     "on_energy_spent": "AfterEnergySpent",
     "on_enemy_side_end": "AfterTurnEnd",
@@ -125,6 +138,7 @@ _COMBAT_GATED_HOOKS: dict[str, str] = {
     "on_player_turn_started": "AfterPlayerTurnStart",
     "on_power_amount_changed": "AfterPowerAmountChanged",
     "on_shuffle": "AfterShuffle",
+    "should_afflict": "ShouldAfflict",
     "should_allow_hitting": "ShouldAllowHitting",
     "should_clear_block": "ShouldClearBlock",
     "should_draw": "ShouldDraw",
@@ -189,6 +203,15 @@ class HookSystem:
         # Base hook names for which some current listener declares a phase
         # variant; see _each().
         self._phased: frozenset[str] = frozenset()
+        # Per-hook "does any live listener implement this" cache, keyed by
+        # hook name to (epoch, bool); see _has_listener_for(). A dormant hook
+        # (creature_card_cmds/G8's after_card_changed_piles/
+        # on_card_generated_for_combat wiring, tier-2 Task 8) would otherwise
+        # pay a full _ordered() rebuild + one getattr MISS per listener on
+        # every dispatch even though the answer never changes between
+        # register()/unregister() calls -- measured at ~23-35% overhead on
+        # the sim's hottest loop (the per-card draw) before this cache.
+        self._presence_cache: dict[str, tuple[int, bool]] = {}
         # AttackCommand.Results for the attack currently being executed: a list
         # of (receiver, unblocked_damage) appended by DamageCmd.deal between
         # before_attack and after_attack, or None outside an attack. Suck and
@@ -267,17 +290,76 @@ class HookSystem:
         `Phase.COMBAT_OVER` in `_end_combat`, which is the moment the ending
         begins, so it covers both. Outside a combat (a bare HookSystem, or a
         run-level listener walk) there is no phase and the gate is inert.
+
+        Perf note (power_cmd/G3+G4, tier-2 Task 18): this property is read
+        once per `_each()` call — every combat-gated dispatch, i.e. most of
+        them — so splitting `modify_power_amount` into five separately-
+        dispatched phases quintupled its call count on `PowerCmd.apply`
+        alone. Profiling that regression found the DOMINANT cost was not the
+        `_has_listener_for` cache (working as designed) but THIS property's
+        own `from .combat import Phase` running as a fresh `import`
+        statement on every single call (~28% of a warm-cache PowerCmd.apply
+        microbenchmark's total time — `importlib._bootstrap.parent` alone).
+        `Phase` is cached at module scope after the first call instead — a
+        MODULE-level `from .combat import Phase` at the top of this file
+        would be a real circular import (`combat.py` does `from .hooks
+        import HookSystem` at ITS module level, so hooks.py importing
+        combat.py before `HookSystem` exists fails); caching lazily on first
+        USE (long after both modules have finished loading) is safe and
+        keeps the deferred-import shape.
         """
         combat = self.combat
         if combat is None:
             return False
-        from .combat import Phase
+        global _PHASE_CLS
+        if _PHASE_CLS is None:
+            from .combat import Phase
+            _PHASE_CLS = Phase
 
         # `getattr`, because CombatState back-references itself here early in
         # __init__ and only assigns `phase` further down — so combat SETUP
         # dispatches (encounter build, on_combat_start) find no phase at all.
         # That is `IsStarting`, the guard's own exemption, for free.
-        return getattr(combat, "phase", None) == Phase.COMBAT_OVER
+        return getattr(combat, "phase", None) == _PHASE_CLS.COMBAT_OVER
+
+    def _has_listener_for(self, hook: str) -> bool:
+        """True if some currently-LIVE listener implements `hook` (its plain
+        name or any phase-suffixed variant — `_each`'s phased branch would
+        find it under either).
+
+        Cached by `(hook, self._epoch)`: `register()`/`unregister()` are the
+        ONLY two places anywhere in the codebase that add or remove a
+        listener or change its liveness (grepped — no other file touches
+        `_listeners`/`_live` directly), and both already bump `_epoch`, so
+        the cache is exactly as fresh as `_ordered()`'s own order cache,
+        which uses the same signal. A listener's set of implemented hooks is
+        a property of its CLASS — ordinary Python methods, not per-instance
+        dynamic attributes — matching the assumption `_phase_hooks` already
+        makes (memoized per `type(l)`, never re-scanned for a still-registered
+        instance); this cache makes the same assumption at the instance
+        level, invalidated whenever the *set* of live instances changes
+        rather than per-instance.
+
+        This is the whole fix for creature_card_cmds/G8's cost concern: a
+        hook with zero implementors today (after_card_changed_piles,
+        on_card_generated_for_combat — the sim has no ported combat-pile or
+        seventh-Wither-source listener yet) collapses from "rebuild the
+        order cache + one getattr MISS per registered listener, every single
+        call" to "one dict lookup + one int compare", amortized across
+        however many calls happen before the next register/unregister.
+        """
+        cached = self._presence_cache.get(hook)
+        if cached is not None and cached[0] == self._epoch:
+            return cached[1]
+        live = self._live
+        names = tuple(hook + suffix for suffix in _PHASES)
+        present = any(
+            id(l) in live and any(getattr(l, name, None) is not None
+                                  for name in names)
+            for l in self._listeners
+        )
+        self._presence_cache[hook] = (self._epoch, present)
+        return present
 
     def _each(self, hook: str):
         """Yield (listener, bound method) for every listener implementing
@@ -299,8 +381,17 @@ class HookSystem:
         !IsStarting) yield break` (Hook.cs:55-58). Both are generators, so the
         test lands at enumeration start in both: a dispatch that began while the
         combat was live still reaches every listener even if one of them ends it.
+
+        Also yields NOTHING, cheaply, when no CURRENTLY LIVE listener
+        implements `hook` at all (`_has_listener_for`) — the fast path a
+        dormant hook (creature_card_cmds/G8) needs on a hot dispatch site
+        like the per-card draw. Same generator-laziness note applies: this
+        check runs at first `next()`, not at `_each()`-call time, exactly
+        like the combat-over check above it.
         """
         if hook in _COMBAT_GATED_HOOKS and self.combat_is_over:
+            return
+        if not self._has_listener_for(hook):
             return
         # `_phased` is refreshed as a side effect of `_ordered()`, so it has to
         # be current before the branch below reads it.
@@ -542,19 +633,142 @@ class HookSystem:
             amount = fn(target, amount, card)
         return amount
 
-    def modify_power_amount(
+    # ── Modifier hooks — power amount (power_cmd/G3, G4) ─────────────────
+    # C# runs THREE separately-sequenced phases per application
+    # (PowerCmd.cs:120,125,127 for Apply; :227,232,234 for ModifyAmount, the
+    # sim's one collapsed call site for both, power_cmd/step4): a raw-amount
+    # event (BeforePowerAmountChanged — no sim analogue, deliberate
+    # divergence, power_cmd/step10/step26), the GIVEN chain, then the
+    # RECEIVED chain. Given and received are two different shapes and two
+    # different C# hooks (`AbstractModel.ModifyPowerAmountGiven{Additive,
+    # Multiplicative}` vs `TryModifyPowerAmountReceived`), not one flat
+    # chain — Unsettling Lamp (given, UnsettlingLamp.cs:106-129) and Ruined
+    # Helmet / Artifact (received, RuinedHelmet.cs:32-53, ArtifactPower.cs:
+    # 17-36) turn out to be domain-disjoint on BOTH the target check the old
+    # record cited AND on living on different chains entirely.
+
+    def modify_power_amount_given_additive(
         self,
         power_cls: type,
         target: Creature,
         amount: int,
-        applier: Creature | None = None,
+        applier: Creature | None,
+        modifiers: list | None = None,
     ) -> int:
-        """Chain-modify the amount of a power as it is applied (mirrors
-        TryModifyPowerAmountReceived; e.g. Ruined Helmet doubles the first
-        Strength gain). Only runs on real applications, never previews."""
-        for l, fn in self._each("modify_power_amount"):
-            amount = fn(power_cls, target, amount, applier)
+        """AbstractModel.ModifyPowerAmountGivenAdditive, the FIRST of the two
+        passes `Hook.ModifyPowerAmountGiven` runs (Hook.cs:1892-1900) — a
+        chain over the running total, exactly like `modify_damage_additive`.
+        No current listener implements this (Lamp is multiplicative-only);
+        it exists for shape-parity with C#, which always runs both passes
+        together.
+
+        The CALLER gates whether to invoke this at all on `applier != null &&
+        combatState.ContainsCreature(applier)` (PowerCmd.cs:122-123) — that
+        gate is not here, mirroring where C# puts it: `Hook.
+        ModifyPowerAmountGiven` itself has no such gate.
+
+        `modifiers` mirrors the `out modifiers` list: every listener whose
+        delta was non-zero, for `after_modify_power_amount_given`.
+        """
+        for l, fn in self._each("modify_power_amount_given_additive"):
+            delta = fn(power_cls, target, amount, applier)
+            amount += delta
+            if modifiers is not None and delta != 0:
+                modifiers.append(l)
         return amount
+
+    def modify_power_amount_given_multiplicative(
+        self,
+        power_cls: type,
+        target: Creature,
+        amount: int,
+        applier: Creature | None,
+        modifiers: list | None = None,
+    ) -> int:
+        """AbstractModel.ModifyPowerAmountGivenMultiplicative, the SECOND
+        pass `Hook.ModifyPowerAmountGiven` runs (Hook.cs:1901-1909), over
+        whatever the additive pass produced — sum-THEN-product, not
+        commutative with a naive fold, exactly like
+        `modify_damage_multiplicative`. Unsettling Lamp's once-per-combat
+        doubling lives here (UnsettlingLamp.cs:106-129).
+        """
+        for l, fn in self._each("modify_power_amount_given_multiplicative"):
+            factor = fn(power_cls, target, amount, applier)
+            amount *= factor
+            if modifiers is not None and factor != 1:
+                modifiers.append(l)
+        return amount
+
+    def modify_power_amount_received(
+        self,
+        power_cls: type,
+        target: Creature,
+        amount: int,
+        applier: Creature | None,
+        modifiers: list | None = None,
+    ) -> int:
+        """AbstractModel.TryModifyPowerAmountReceived, dispatched by
+        `Hook.ModifyPowerAmountReceived` (Hook.cs:1917-1930) — UNCONDITIONAL,
+        unlike the given side: no applier gate exists anywhere for this one.
+
+        Shape is different too: a single pass, but each listener either
+        fully REPLACES the running amount or leaves it alone entirely (C#'s
+        `bool` return + `out modifiedAmount`), not an additive/multiplicative
+        fold. A listener returns the new amount to take effect, or `None`
+        for "did not apply". ArtifactPower (ArtifactPower.cs:17-36) and
+        RuinedHelmet (RuinedHelmet.cs:32-53) both live here now — this is
+        where Artifact actually intercepts a debuff (by returning 0), not a
+        hand-rolled block outside the hook loop.
+
+        `modifiers` mirrors the `out modifiers` list: every listener that
+        actually replaced the amount, for `after_modify_power_amount_received`.
+        """
+        for l, fn in self._each("modify_power_amount_received"):
+            result = fn(power_cls, target, amount, applier)
+            if result is not None:
+                amount = result
+                if modifiers is not None:
+                    modifiers.append(l)
+        return amount
+
+    def after_modify_power_amount_given(self, modifiers: list, power) -> None:
+        """Notify the given-side listeners that actually changed a power's
+        amount (mirrors Hook.AfterModifyingPowerAmountGiven, Hook.cs:
+        799-809). Called by `PowerCmd.apply` AFTER the power's state has
+        been mutated (PowerCmd.cs:148-150 for a fresh Apply, :238-240 for
+        the ModifyAmount/stacking branch) — `power` is that same real
+        instance C# passes (its own `power` local), required rather than
+        defaulted: passing `None` was a symptom of the dispatch firing
+        before the power existed, which is the bug this entry closes. No
+        current implementer of the companion hook reads it (there IS no
+        current implementer at all — SneckoSkull.cs:32-36 is the sole C#
+        override and is unported), but the mechanism now carries the right
+        value for a future listener that does."""
+        for l in modifiers:
+            fn = getattr(l, "after_modify_power_amount_given", None)
+            if fn is not None:
+                fn(power)
+
+    def after_modify_power_amount_received(self, modifiers: list, power) -> None:
+        """Notify the received-side listeners that actually changed a
+        power's amount (mirrors Hook.AfterModifyingPowerAmountReceived,
+        Hook.cs:811-824). Called by `PowerCmd.apply` AFTER the power's state
+        has been mutated (PowerCmd.cs:152 for a fresh Apply, :242 for the
+        ModifyAmount/stacking branch) — `power` is that same real instance
+        C# passes, required rather than defaulted for the same reason as
+        `after_modify_power_amount_given` above. ArtifactPower.
+        AfterModifyingPowerAmountReceived (ArtifactPower.cs:38-41) spends
+        its own charge here (`PowerCmd.Decrement(this)`); RuinedHelmet.
+        AfterModifyingPowerAmountReceived (RuinedHelmet.cs:55-60) marks
+        itself used. Neither reads the `power` argument — both act on
+        themselves (`this`) — and this still fires for a debuff Artifact
+        fully blocked: `power` is then the constructed-but-never-attached
+        instance (PowerModel.ApplyInternal's own zero-check only skips
+        SetAmount/registration, not these companion events), not None."""
+        for l in modifiers:
+            fn = getattr(l, "after_modify_power_amount_received", None)
+            if fn is not None:
+                fn(power)
 
     def modify_vulnerable_multiplier(
         self, dealer: Creature | None, mult: float
@@ -584,11 +798,46 @@ class HookSystem:
             amount = fn(player, amount)
         return max(0, amount)
 
-    def modify_hand_draw(self, player: PlayerCombatState, count: int) -> int:
-        """Chain-modify how many cards are drawn at turn start."""
+    def modify_hand_draw(self, player: PlayerCombatState, count: int,
+                         modifiers: list | None = None) -> int:
+        """Chain-modify how many cards are drawn at turn start.
+
+        `modifiers` mirrors `Hook.ModifyHandDraw`'s `out modifiers`
+        (Hook.cs:1684-1708): every listener whose delta actually changed the
+        count -- across BOTH the plain pass and the `_late` phase `_each`
+        already runs for a phased hook, exactly as C#'s two separate
+        `IterateCombatHookListeners` loops (plain then
+        `ModifyHandDrawLate`) build into the SAME `list` -- is appended, for
+        `after_modifying_hand_draw` (turn_structure/step20)."""
         for l, fn in self._each("modify_hand_draw"):
+            before = count
             count = fn(player, count)
+            if modifiers is not None and count != before:
+                modifiers.append(l)
         return max(0, count)
+
+    def after_modifying_hand_draw(self, modifiers: list) -> None:
+        """Notify the listeners that changed the hand-draw count (mirrors
+        `Hook.AfterModifyingHandDraw`, CombatManager.cs:655; Hook.cs:739-749).
+        C#'s `AfterModifyingHandDraw` takes no arguments -- turn_structure/
+        step20, dormant (C#'s two ported implementers, Pocketwatch and
+        PollinousCore, are both presentation-only `Flash()` calls).
+
+        C#'s dispatcher walks the FULL listener order and calls each one
+        `if (modifiers.Contains(modifier))` -- i.e. AT MOST ONCE per
+        listener, in combat walk order, not once per `modifiers` entry.
+        `modify_hand_draw` can append the SAME listener to `modifiers`
+        twice (once for the plain pass, once for `_late`), so iterating
+        `modifiers` directly would fire a both-phases listener's
+        after-hook twice; dedup by identity + a fresh walk is what stops
+        that (reviewed 2026-07-31, reproduced live)."""
+        seen = {id(l) for l in modifiers}
+        for l in self._ordered():
+            if id(l) not in seen:
+                continue
+            fn = getattr(l, "after_modifying_hand_draw", None)
+            if fn is not None:
+                fn()
 
     def modify_card_play_count(
         self,
@@ -842,6 +1091,22 @@ class HookSystem:
 
     # ── Event hooks — card lifecycle ─────────────────────────────────────
 
+    def before_card_auto_played(self, card: Card, target: Creature | None = None) -> None:
+        """`Hook.BeforeCardAutoPlayed` (CardCmd.cs:122, Hook.cs:155-162) --
+        fires in `CardCmd.AutoPlay`, right before `card.OnPlayWrapper` (:130)
+        -- i.e. strictly before the ordinary `BeforeCardPlayed` that wrapper
+        eventually fires. The sim's auto-play path already fires
+        `on_energy_spent(card, 0)` first (combat.py, `auto_play_card`); this
+        lands between that and `before_card_played`.
+
+        C#'s signature also carries an `AutoPlayType` (Default/SlyDiscard);
+        the sim omits it because the only implementer that reads it,
+        `SkillSilent1Achievement.cs`, is an achievement (not gameplay
+        content) and is not ported -- creature_card_cmds/step46, dormant.
+        """
+        for l, fn in self._each("before_card_auto_played"):
+            fn(card, target)
+
     def before_card_played(self, card: Card, target: Creature | None = None) -> None:
         """Fires before a card's on_play() resolves (mirrors BeforeCardPlayed).
         Used by relics that must act on the card before its effects (e.g. Pen
@@ -878,7 +1143,7 @@ class HookSystem:
         for l, fn in self._each("on_card_entered_combat"):
             fn(card)
 
-    def after_card_changed_piles(self, card: Card, pile: str,
+    def after_card_changed_piles(self, card: Card, pile: str | None,
                                  cloned_by: Any = None) -> None:
         """Hook.AfterCardChangedPiles (Hook.cs:167-179).
 
@@ -887,24 +1152,87 @@ class HookSystem:
         the game's only Late implementer.
 
         `pile` is the sim's pile name ("hand", "draw", "discard", "exhaust",
-        "deck", "play"). C# calls the parameter `oldPileType`, but that name is
-        only accurate at the Add site (CardPileCmd.cs:635 passes
-        `oldPile?.Type ?? None`): the transform site passes the pile the
-        replacement was just placed IN (CardCmd.cs:447 `pile2.Type`). No ported
-        listener reads the argument at all — all four read `card.Pile.Type`
-        instead (BingBong.cs:31, BookOfFiveRings.cs:84, DarkstonePeriapt.cs:19,
-        LuckyFysh.cs:27) — so the value is passed through as the game passes it
-        rather than reconciled.
+        "deck", "play") or `None`. C# calls the parameter `oldPileType`, and
+        it names the OLD pile at every site except the transform: the Add
+        site (CardPileCmd.cs:635) passes `oldPile?.Type ?? PileType.None` —
+        `None` for a freshly generated card, which has no old pile — and the
+        two mid-combat reshuffle helpers, which route discard-sourced cards
+        through the same Add, pass the pile those cards started in
+        ("discard", CardPileCmd.cs:892-912). The transform site is the one
+        exception: it passes the pile the replacement was just placed IN
+        (CardCmd.cs:447 `pile2.Type`), not an old pile at all. No ported
+        listener reads the argument regardless — all four read
+        `card.Pile.Type` instead (BingBong.cs:31, BookOfFiveRings.cs:84,
+        DarkstonePeriapt.cs:19, LuckyFysh.cs:27) — so the value is passed
+        through as the game passes it rather than reconciled, and `None` is
+        a safe stand-in for `PileType.None` for the same reason.
 
-        Dispatched from the combat-pile transform only. The DECK-pile leg lives
-        on the run, where `Relic.after_card_added_to_deck` is this same hook
-        filtered to `pile.Type == PileType.Deck` (the filter every ported
-        listener applies itself); the remaining C# sites — Add, RemoveFromCombat
-        and the manual play — are seam/creature_card_cmds guard G8 and still
-        dispatch nothing.
+        Dispatched from the combat-pile transform (CardCmd.cs:447); the Add
+        site, wired at its three sim entry points — `CardPileCmd.
+        add_to_hand`/`add_to_draw`/`add_to_discard` (`CardPileCmd.
+        _generated_for_combat`, pile=None) and the player's per-card Draw
+        (`PlayerCombatState._draw`, pile="draw"); the two mid-combat
+        reshuffle helpers (`reshuffle_discard_into_draw`/
+        `shuffle_draw_and_discard`, discard-sourced cards only, pile=
+        "discard" — mirroring CardPileCmd.cs:892-912's silent, hookless
+        re-seat of cards that were already in the draw pile before the
+        shuffle); and RemoveFromCombat (CardPileCmd.cs:188 — the sim's one
+        site is `monsters/hive/thieving_hopper.py`'s `_thievery`, which
+        dispatches with the pile the stolen card just left, "draw" or
+        "discard", and `cloned_by=None`, mirroring :188's `cardPile2.Type`
+        and its literal `null`). The DECK-pile leg lives on the run, where
+        `Relic.after_card_added_to_deck` is this same hook filtered to
+        `pile.Type == PileType.Deck` (the filter every ported listener
+        applies itself) — untouched by this round's wiring, which is entirely
+        combat-side.
+
+        One C# site remains unwired, outside this round's footprint: the
+        manual play (CardPileCmd.cs:683 — the sim's `combat.py` never models
+        the Play pile as a discrete move to dispatch from; a card goes
+        straight to its result pile). seam/creature_card_cmds guard G8.
         """
         for l, fn in self._each("after_card_changed_piles"):
             fn(card, pile, cloned_by)
+
+    def on_card_generated_for_combat(self, card: Card,
+                                     creator: Any = None) -> None:
+        """Hook.AfterCardGeneratedForCombat (Hook.cs:249-258).
+
+        The general interception point for "a card just finished entering a
+        combat pile because something GENERATED it" — as distinct from
+        `on_card_entered_combat`, which fires as part of the pile move itself
+        (AbstractModel.AfterCardEnteredCombat) for any newly created card and
+        lets active powers afflict it. This one fires strictly after that:
+        combat-gated (Hook.cs:253, `IterateCombatHookListeners` — see
+        `on_card_entered_combat`), so a dispatch that begins once the combat
+        is over or ending reaches nobody.
+
+        Two C# dispatch sites, both now wired:
+
+          CardPileCmd.cs:246, inside `AddGeneratedCardsToCombat`, once per
+          generated card, immediately AFTER that card's own `Add()` call has
+          already fired `AfterCardChangedPiles` — mirrored by
+          `CardPileCmd._generated_for_combat`, called from `add_to_hand`/
+          `add_to_draw`/`add_to_discard`. `creator` is the `Player?` the
+          caller passed to `AddGeneratedCardToCombat`; both currently
+          reachable callers (Aeonglass.cs:145, WitheringPresencePower.cs:55)
+          pass `null`.
+
+          CardCmd.cs:499-506, a THIRD pass over a combat-pile transform's
+          results — after `AfterCardChangedPiles`/`AfterTransformedFrom`/
+          `AfterTransformedTo` and a presentation-only VFX wait — gated on
+          `cardAdded.Pile.Type.IsCombatPile()` (always true for
+          `transform_to_random`, which only ever swaps into a combat pile).
+          `creator` here is `cardAdded.Owner`, the transforming player —
+          never null, unlike the Add site.
+
+        Aeonglass (`monsters/glory/aeonglass.py`'s `_AeonglassWitherListener`)
+        is the sim's first ported listener; C#'s other six
+        (Regalite/RocketPunch/ArsenalPower/PillarOfCreationPower/
+        SmokestackPower/TrashToTreasurePower) are unported.
+        """
+        for l, fn in self._each("on_card_generated_for_combat"):
+            fn(card, creator)
 
     def on_card_discarded(self, card: Card) -> None:
         """Fires when a card is discarded at end of turn (not when played)."""
@@ -1048,10 +1376,54 @@ class HookSystem:
         target: Creature,
         amount: int,
         card: Card | None = None,
+        props: ValueProp = ValueProp.NONE,
+        was_fully_blocked: bool = False,
     ) -> None:
-        """Fires after a creature deals damage (e.g. Thorns reflection, lifesteal)."""
+        """Hook.AfterDamageGiven (Hook.cs:389-396) — the DEALER-side after-
+        damage event, dispatched to EVERY listener (each self-filters on
+        `dealer is <its owner>`) for every hit, blocked or not.
+
+        `was_fully_blocked` mirrors `DamageResult.WasFullyBlocked`
+        (CreatureCmd.cs:268), which C# listeners are expected to read
+        (ImbalancedPower.cs:19) — the sim's caller (`cmds.py` DamageCmd.deal)
+        used to gate this whole dispatch on `hp_lost > 0`, making a
+        fully-blocked hit invisible to it (power/_after_damage_given_
+        substitution, tier-2 Task 26). `amount` is `hp_lost`, i.e.
+        `UnblockedDamage + OverkillDamage` (0 on a fully-blocked hit)."""
         for l, fn in self._each("on_damage_dealt"):
-            fn(dealer, target, amount, card)
+            fn(dealer, target, amount, card, props, was_fully_blocked)
+
+    def before_block_gained(
+        self, target: Creature, amount: int, card: Card | None = None,
+        props: ValueProp = ValueProp.NONE,
+    ) -> None:
+        """`Hook.BeforeBlockGained` (CreatureCmd.cs:642, Hook.cs:131-137) --
+        the unconditional pre-modifier event, fired with the RAW block amount
+        before the source card's enchantment fold and before
+        `modify_block_additive`/`modify_block_multiplicative` run.
+
+        Zero C# overrides game-wide today (`grep -rn "override.*
+        BeforeBlockGained" src/` returns nothing) -- creature_card_cmds/
+        step12, dormant. Kept as a real dispatch so a future override has
+        somewhere to attach (tier-2 Task 11, item A)."""
+        for l, fn in self._each("before_block_gained"):
+            fn(target, amount, card, props)
+
+    def before_block_gained(
+        self, target: Creature, amount: int, card: Card | None = None,
+        props: ValueProp = ValueProp.NONE,
+    ) -> None:
+        """`Hook.BeforeBlockGained` (CreatureCmd.cs:642, Hook.cs:131-137) --
+        the unconditional pre-modifier event, fired with the RAW block amount
+        before the source card's enchantment fold and before
+        `modify_block_additive`/`modify_block_multiplicative` run.
+
+        Zero C# overrides game-wide today (`grep -rn "override.*
+        BeforeBlockGained" src/` returns nothing) -- creature_card_cmds/
+        step12, dormant. Kept as a real dispatch so a future override has
+        somewhere to attach (tier-2 Task 11, item A)."""
+        for l, fn in self._each("before_block_gained"):
+            fn(target, amount, card, props)
 
     def on_block_gained(
         self, target: Creature, amount: int, card: Card | None = None
@@ -1259,17 +1631,60 @@ class HookSystem:
                 return False
         return True
 
-    def should_draw(self, player: PlayerCombatState, from_hand_draw: bool = False) -> bool:
-        """False from any listener prevents the next draw (e.g. No Draw status).
+    def should_draw(self, player: PlayerCombatState, from_hand_draw: bool = False,
+                     preventer: list | None = None) -> bool:
+        """False from any listener prevents the WHOLE draw (e.g. No Draw
+        status) -- CardPileCmd.Draw (CardPileCmd.cs:804-808) consults this
+        exactly ONCE, before the per-card loop even computes how many cards
+        fit in the hand, not once per card. A caller that re-evaluated this
+        per card would be asking a question C# never asks.
 
         from_hand_draw is True only for the initial hand draw at the start of
         the player's turn; False for all mid-turn draws (card effects, powers).
         Mirrors STS2's ShouldDraw fromHandDraw param.
+
+        `preventer` mirrors Hook.ShouldDraw's `out modifier`: the vetoing
+        listener is appended to it, so the caller can hand it to
+        `after_preventing_draw`.
         """
         for l, fn in self._each("should_draw"):
             if not fn(player, from_hand_draw):
+                if preventer is not None:
+                    preventer.append(l)
                 return False
         return True
+
+    def after_preventing_draw(self, preventer: list) -> None:
+        """Notify the listener that vetoed a draw (mirrors
+        Hook.AfterPreventingDraw, CardPileCmd.cs:806 -- targeted at the one
+        `modifier` ShouldDraw named, not a broadcast to every listener).
+        Fiddle.cs:41-45 is the sole C# implementer and is Flash()-only VFX."""
+        for l in preventer:
+            fn = getattr(l, "after_preventing_draw", None)
+            if fn is not None:
+                fn()
+
+    def before_flush(self, player: PlayerCombatState) -> None:
+        """`Hook.BeforeFlush` (CombatManager.cs:1200-1206, Hook.cs:532-538) --
+        fires per player, after the `DoTurnEnd` loop (turn-end-in-hand cards)
+        and before the `CheckWinCondition` that closes
+        `EndPlayerTurnPhaseOneInternal` -- so strictly before
+        `EndPlayerTurnPhaseTwoInternal`'s own `Hook.ShouldFlush` (which
+        `should_flush_hand` mirrors).
+
+        turn_structure/step55, dormant: C#'s three implementers
+        (SlumberingEssence.cs, WellLaidPlansPower.cs, a mock) are all
+        unported (tier-2 Task 11, item D). C# also gates this call on
+        `LocalContext.NetId.HasValue` (CombatManager.cs:1200) -- but that
+        is not a multiplayer flag: the sibling `DoTurnEnd` call three lines
+        above (:1188) is gated the same way and DoTurnEnd is what resolves
+        Burn and every other turn-end-in-hand card, single-player included.
+        It is a local-client-presence check (true throughout ordinary
+        single-player play; the sim models no "local client" concept at
+        all), corrected 2026-07-31 from an earlier "multiplayer-only, out
+        of scope" mischaracterization."""
+        for l, fn in self._each("before_flush"):
+            fn(player)
 
     def should_flush_hand(self) -> bool:
         """False from any listener keeps the hand instead of discarding it at
@@ -1322,5 +1737,18 @@ class HookSystem:
         """False from any listener prevents an ethereal card from being exhausted."""
         for l, fn in self._each("should_ethereal_trigger"):
             if not fn(card):
+                return False
+        return True
+
+    def should_afflict(self, card: Card, affliction) -> bool:
+        """False from any listener refuses the affliction entirely (Hook.
+        ShouldAfflict, Hook.cs:2101-2111 -- an AND-all veto over
+        IterateCombatHookListeners, same shape as should_allow_hitting).
+        creature_card_cmds/N2 + step64. Zero C# implementers game-wide
+        (`grep -rn "override.*ShouldAfflict" src/` returns nothing), so this
+        is currently a no-op; kept as a real dispatch so a future override
+        has somewhere to attach."""
+        for l, fn in self._each("should_afflict"):
+            if not fn(card, affliction):
                 return False
         return True

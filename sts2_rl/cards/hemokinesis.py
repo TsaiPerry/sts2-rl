@@ -35,6 +35,11 @@ class HemokinesisCard(Card):
         from ..cmds import DamageCmd
         from ..valueprops import DamageProps
         DamageCmd.deal(ctx.hooks, ctx.player, self._hp_loss, card=self, props=DamageProps.CARD_HP_LOSS)
-        if ctx.player.is_dead:
-            return
+        # Hemokinesis.cs has no is_dead guard here -- C# unconditionally
+        # awaits the attack next. No divergence to reproduce: DamageCmd.deal's
+        # own dealer.is_dead bail (mirroring AttackCommand.Execute's
+        # Attacker.IsDead / IsOverOrEnding bails, AttackCommand.cs:520,528)
+        # already makes the follow-up attack a no-op on a dying dealer -- see
+        # card/_is_dead_early_return (Task 27) and
+        # test/test_is_dead_early_returns.py.
         DamageCmd.deal(ctx.hooks, ctx.resolve_target(target_idx), self._damage, dealer=ctx.player, card=self)

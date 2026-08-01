@@ -113,6 +113,96 @@ class TestDamagePipelineOrder:
         assert "should_die" in calls
         assert "on_damage_received" not in calls
 
+    def test_killing_blow_skip_is_a_pre_death_prevention_snapshot(self):
+        """damage_pipeline/G4 + step17.5: CreatureCmd.cs:392 reads
+        `WasTargetKilled`/`IsDead` as a snapshot taken right after
+        LoseHpInternal (Creature.cs:445-457) -- BEFORE `Kill()`
+        (CreatureCmd.cs:409) runs, so a ShouldDieLate preventer's own
+        synchronous heal (LizardTail.AfterPreventingDeath, LizardTail.cs:53-59)
+        can never un-skip AfterDamageReceived. Witness: Lizard Tail +
+        Centennial Puzzle (relics/centennial_puzzle.py:24-35) -- C#'s
+        CentennialPuzzle.AfterDamageReceived is itself killing-blow guarded
+        and so correctly does not draw when the Tail saves the player."""
+        cs = CombatState(
+            rng=random.Random(0),
+            relics=[make_relic("lizard_tail"), make_relic("centennial_puzzle")],
+        )
+        cs.player.hp = 1
+        before = len(cs.player.hand)
+        DamageCmd.deal(cs.hooks, cs.player, 999, dealer=cs.enemy)
+        assert not cs.player.is_dead        # Lizard Tail prevented the death
+        assert cs.player.hp == cs.player.max_hp * 50 // 100  # healed off 0
+        assert len(cs.player.hand) == before, (
+            "Centennial Puzzle's on_damage_received must be skipped -- the "
+            "same killing-blow snapshot that gates it saw the hit as lethal "
+            "before the Tail's heal ever ran")
+        lizard_tail = next(r for r in cs.relics if r.id == "lizard_tail")
+        assert lizard_tail.is_used_up
+
+    def test_non_lethal_hit_still_fires_on_damage_received_with_lizard_tail(self):
+        """Regression guard for the fix above: a snapshot taken before death
+        resolution must not accidentally skip the non-lethal path too. Pins
+        the same ground test_non_lethal_hit_order already covers, with the
+        preventer relic present but never triggered."""
+        cs = CombatState(rng=random.Random(0), relics=[make_relic("lizard_tail")])
+        drew = []
+
+        class VictimListener:
+            def on_damage_received(self, target, amount, dealer, card, props):
+                drew.append(target)
+
+        cs.hooks.register(VictimListener())
+        DamageCmd.deal(cs.hooks, cs.player, 5, dealer=cs.enemy)
+        assert drew == [cs.player]
+
+    def test_dealer_side_event_fires_before_victim_side_event(self):
+        """damage_pipeline/G6 + step17.4: CreatureCmd.cs:388-395 fires
+        AfterDamageGiven (dealer side, unconditional) BEFORE the
+        killing-blow-guarded AfterDamageReceived (victim side). Test-local
+        listeners: two sim powers implement on_damage_dealt now (Imbalanced,
+        PaperCuts, tier-2 Task 26 / power/_after_damage_given_substitution),
+        but neither applies to this generic Fuzzy Wurm encounter, so the
+        ordering itself is still isolated here. `on_damage_dealt`'s signature
+        grew `props`/`was_fully_blocked` params under that task; the local
+        listener now takes `**_` rather than re-encoding the old 4-arg shape."""
+        order: list[str] = []
+
+        class DealerListener:
+            def on_damage_dealt(self, dealer, target, amount, card=None, *_, **__):
+                order.append("dealer")
+
+        class VictimListener:
+            def on_damage_received(self, target, amount, dealer, card, props):
+                order.append("victim")
+
+        cs = fresh()
+        cs.hooks.register(DealerListener())
+        cs.hooks.register(VictimListener())
+        DamageCmd.deal(cs.hooks, cs.enemy, 6, dealer=cs.player, card=StrikeCard())
+        assert order == ["dealer", "victim"]
+
+    def test_killing_blow_records_dealer_side_event_only(self):
+        """Same ordering fix, on the killing-blow path: AfterDamageGiven is
+        NOT killing-blow guarded (CreatureCmd.cs:388-391) so it still fires,
+        while AfterDamageReceived is skipped (CreatureCmd.cs:392). See the
+        note above on `on_damage_dealt`'s grown signature (tier-2 Task 26)."""
+        order: list[str] = []
+
+        class DealerListener:
+            def on_damage_dealt(self, dealer, target, amount, card=None, *_, **__):
+                order.append("dealer")
+
+        class VictimListener:
+            def on_damage_received(self, target, amount, dealer, card, props):
+                order.append("victim")
+
+        cs = fresh()
+        cs.enemy.hp = 1
+        cs.hooks.register(DealerListener())
+        cs.hooks.register(VictimListener())
+        DamageCmd.deal(cs.hooks, cs.enemy, 6, dealer=cs.player, card=StrikeCard())
+        assert order == ["dealer"]
+
     def test_unblockable_skips_block_absorption(self):
         """damage_pipeline audit, spec step 7 (CreatureCmd.cs:264-265,
         Creature.cs:430-435): ValueProp.Unblockable damage bypasses
@@ -141,25 +231,53 @@ class TestDamagePipelineOrder:
         assert cs.player.is_dead
         assert cs.enemy.hp == enemy_hp_before - 3  # C# still reflects
 
+    def test_dead_target_is_skipped_entirely_no_hooks_fire(self):
+        """damage_pipeline/G5 (target half, spec step 3): CreatureCmd.cs:
+        256-259 -- `originalTarget.IsDead -> continue` is the FIRST statement
+        of the per-target loop, before ModifyDamage or anything else. An
+        already-dead target (IsDead == !IsAlive == CurrentHp <= 0, mirrored
+        by the sim's `is_dead`) is skipped with zero hooks and zero HP
+        change, the same shape as the already-closed dealer-half guard
+        (test_a_dead_dealer_deals_nothing, test_tier1_residue.py)."""
+        cs = fresh()
+        cs.enemy.hp = 0
+        assert cs.enemy.is_dead
+        calls = trace(cs.hooks, PIPELINE)
+        dealt = DamageCmd.deal(cs.hooks, cs.enemy, 6, dealer=cs.player, card=StrikeCard())
+        assert dealt == 0
+        assert calls == []
+        assert cs.enemy.hp == 0
+
 
 class TestPowerCmdOrder:
     """power_cmd audit (audit/seams/power_cmd.md): pins the ordering
     the Unsettling Lamp fix depends on, plus the sign-aware-typing gap (G1)
     found auditing the rest of the seam."""
 
-    def test_modify_power_amount_runs_before_artifact_block(self):
+    def test_given_chain_runs_before_received_chain_and_artifact_still_blocks(self):
         """PowerCmd.cs:122-127: Hook.ModifyPowerAmountGiven (the sim's
-        modify_power_amount, which Unsettling Lamp's doubling hooks into)
-        runs BEFORE Hook.ModifyPowerAmountReceived (Artifact's veto) --
-        cmds.py:297-306 mirrors this ordering (`amount =
-        hooks.modify_power_amount(...)` precedes the Artifact block). A
-        debuff Artifact fully blocks still goes through modify_power_amount
-        first, and Artifact consumes exactly its one stack."""
+        `modify_power_amount_given_multiplicative`, which Unsettling Lamp's
+        doubling hooks into) runs BEFORE Hook.ModifyPowerAmountReceived
+        (`modify_power_amount_received`, where ArtifactPower's veto now
+        lives as a REAL listener, ArtifactPower.cs:17-41 -- power_cmd/G3,
+        G4 replaced the hard-coded block in PowerCmd.apply with this). A
+        debuff Artifact fully blocks still goes through both chains, and
+        Artifact consumes exactly its one stack via the
+        AfterModifyingPowerAmountReceived companion event, not a bespoke
+        early return."""
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.enemy, ArtifactPower, 1)
-        calls = trace(cs.hooks, ["modify_power_amount"])
+        calls = trace(cs.hooks, [
+            "modify_power_amount_given_multiplicative",
+            "modify_power_amount_received",
+            "after_modify_power_amount_received",
+        ])
         PowerCmd.apply(cs.hooks, cs.enemy, VulnerablePower, 2, applier=cs.player)
-        assert "modify_power_amount" in calls
+        assert calls == [
+            "modify_power_amount_given_multiplicative",
+            "modify_power_amount_received",
+            "after_modify_power_amount_received",
+        ]
         assert "vulnerable" not in cs.enemy.powers   # debuff blocked
         assert "artifact" not in cs.enemy.powers     # its one stack consumed
 
@@ -239,6 +357,143 @@ class TestCreatureCardCmdsOrder:
         p.reshuffle_discard_into_draw()
         assert held not in p.draw_pile
         assert p.discard_pile == [held]  # it lands in its result pile after OnPlay
+
+    def test_add_to_discard_refuses_a_duplicate_instance(self):
+        """CardPile.AddInternal (CardPile.cs:86-89): throws if the target
+        pile already holds this exact CardModel instance.
+        creature_card_cmds/N4 + step102c -- the sim's three pile-add
+        helpers had no such invariant."""
+        from sts2_rl.cmds import CardPileCmd
+        cs = fresh()
+        card = make_card("strike")
+        CardPileCmd.add_to_discard(cs.hooks, cs.player, card)
+        with pytest.raises(ValueError):
+            CardPileCmd.add_to_discard(cs.hooks, cs.player, card)
+
+    def test_add_to_draw_refuses_a_duplicate_instance(self):
+        from sts2_rl.cmds import CardPileCmd
+        cs = fresh()
+        card = make_card("strike")
+        CardPileCmd.add_to_draw(cs.hooks, cs.player, card)
+        with pytest.raises(ValueError):
+            CardPileCmd.add_to_draw(cs.hooks, cs.player, card)
+
+    def test_add_to_hand_refuses_a_duplicate_instance(self):
+        from sts2_rl.cmds import CardPileCmd
+        cs = fresh()
+        card = make_card("strike")
+        CardPileCmd.add_to_hand(cs.hooks, cs.player, card)
+        with pytest.raises(ValueError):
+            CardPileCmd.add_to_hand(cs.hooks, cs.player, card)
+
+    def test_energy_gain_does_not_apply_a_non_positive_modified_amount(self):
+        """creature_card_cmds/N5 + step31: PlayerCmd.cs:37-41 gates the
+        actual `player.Energy` write on `finalAmount > 0m`, AFTER
+        Hook.ModifyEnergyGain runs (Hook.cs:1606-1621, which does NOT clamp
+        the value it returns). STALE-CLOSE PIN, not a new guard: `EnergyCmd.
+        gain` (cmds.py) still does `player.energy += amount` with no
+        `if amount > 0` of its own, but `hooks.modify_energy_gain`
+        (hooks.py:581-585) already floors its return at `max(0, amount)`
+        BEFORE it reaches that `+=` -- a sim-only clamp with no direct C#
+        counterpart (Hook.ModifyEnergyGain does not clamp) that nonetheless
+        produces the identical `player.Energy` result for every listener
+        chain, since GainEnergy's own effect is `Energy = Clamp(Energy +
+        amount, 0, huge)` and adding 0 is a no-op exactly like C#'s guarded
+        skip. A listener returning a large NEGATIVE delta (not just zero,
+        which would pass either way) is the discriminating witness."""
+        from sts2_rl.cmds import EnergyCmd
+
+        cs = fresh()
+        cs.player.energy = 3
+
+        class NegatingListener:
+            def modify_energy_gain(self, player, amount):
+                return -100
+
+        cs.hooks.register(NegatingListener())
+        EnergyCmd.gain(cs.hooks, cs.player, 5)
+        assert cs.player.energy == 3          # unchanged, not subtracted to -97
+
+    def test_energy_gain_still_applies_a_positive_modified_amount(self):
+        from sts2_rl.cmds import EnergyCmd
+
+        cs = fresh()
+        cs.player.energy = 3
+        EnergyCmd.gain(cs.hooks, cs.player, 5)
+        assert cs.player.energy == 8
+
+    def test_should_afflict_veto_refuses_the_application(self):
+        """creature_card_cmds/N2 + step64: Hook.ShouldAfflict (CardCmd.cs:637)
+        is consulted before CanAfflict. Zero C# implementers game-wide, so
+        this exercises the dispatch with a test-local listener."""
+        from sts2_rl.afflictions import RingingAffliction
+        from sts2_rl.cmds import CardCmd
+
+        cs = fresh()
+        card = cs.player.hand[0]
+        assert card.combat is cs
+
+        class Veto:
+            def should_afflict(self, card, affliction):
+                return False
+
+        cs.hooks.register(Veto())
+        assert CardCmd.afflict(card, RingingAffliction, 1) is None
+        assert card.affliction is None
+
+    def test_can_afflict_refuses_a_non_stackable_reafflict(self):
+        """creature_card_cmds/N2 + step65: AfflictionModel.CanAfflict
+        (AfflictionModel.cs:190-205) refuses re-affliction of an
+        already-afflicted card unless `IsStackable` (default False) --
+        Ringing.cs has no override, so a second application is refused
+        entirely, not stacked. Supersedes the old (incorrect) assumption
+        pinned by test_overgrowth_powers.py's
+        test_same_affliction_reapplied_stacks_amount, fixed alongside this."""
+        from sts2_rl.afflictions import RingingAffliction
+        from sts2_rl.cmds import CardCmd
+
+        card = make_card("strike")
+        first = CardCmd.afflict(card, RingingAffliction, 1)
+        assert first is not None and first.amount == 1
+        assert CardCmd.afflict(card, RingingAffliction, 2) is None
+        assert card.affliction is first
+        assert card.affliction.amount == 1        # NOT 3
+
+    def test_can_afflict_allows_a_stackable_reafflict(self):
+        """Galvanized.cs:7 overrides IsStackable true, so the same-type
+        restack branch (CardCmd.cs:650-657, `Amount += amount`) is reached."""
+        from sts2_rl.afflictions import GalvanizedAffliction
+        from sts2_rl.cmds import CardCmd
+
+        card = make_card("strike")
+        CardCmd.afflict(card, GalvanizedAffliction, 1)
+        CardCmd.afflict(card, GalvanizedAffliction, 2)
+        assert isinstance(card.affliction, GalvanizedAffliction)
+        assert card.affliction.amount == 3
+
+    def test_can_afflict_refuses_the_wrong_card_type(self):
+        """Tainted.cs:17-19 overrides CanAfflictCardType to Skill only; a
+        Strike (Attack) must be refused."""
+        from sts2_rl.afflictions import TaintedAffliction
+        from sts2_rl.cmds import CardCmd
+
+        card = StrikeCard()
+        assert CardCmd.afflict(card, TaintedAffliction, 1) is None
+        assert card.affliction is None
+
+    def test_add_to_hand_overflow_refuses_a_duplicate_already_in_discard(self):
+        """The same invariant on `add_to_hand`'s overflow arm (a full hand
+        routes the card to the discard pile instead, CardPileCmd.cs's
+        AddGeneratedCardToCombat -- see add_to_hand's own docstring)."""
+        from sts2_rl.cmds import CardPileCmd
+        cs = fresh()
+        for _ in range(cs.player.MAX_HAND_SIZE):
+            cs.player.hand.append(make_card("strike"))
+        card = make_card("strike")
+        CardPileCmd.add_to_hand(cs.hooks, cs.player, card)   # overflows to discard
+        assert card in cs.player.discard_pile
+        with pytest.raises(ValueError):
+            CardPileCmd.add_to_hand(cs.hooks, cs.player, card)
 
     def test_deck_transform_appends_at_the_end_under_parity(self):
         """Seed fact 2 / spec step 58 (CardCmd.cs:436-439): a Deck-pile
@@ -413,17 +668,18 @@ class TestTurnStructureOrder:
           SwitchFromPlayerToEnemySide (spec step 65) -- it used to be tested
           first, which short-circuited this whole pipeline (gap G3, fixed);
         - Hook.BeforeTurnEnd (step 48) -> DoTurnEnd's ethereal pass (step 53,
-          Dazed) -> the turn-end-in-hand effect and its discard (step 54,
-          Burn) -> ShouldFlush (step 61) -> the flush (step 62) -> the
-          player-side Hook.AfterTurnEnd (step 64, the Parrying Shield slot,
-          AFTER the flush);
+          Dazed) -> the turn-end-in-hand effect (step 54, Burn, no discard
+          event -- see below) -> ShouldFlush (step 61) -> the flush (step 62)
+          -> the player-side Hook.AfterTurnEnd (step 64, the Parrying Shield
+          slot, AFTER the flush);
         - the enemy side (steps 30-39), now one side turn rather than N
           creature turns (gap G5): ONE BeforeSideTurnStart, the block-clear and
           AfterBlockCleared passes, ONE AfterSideTurnStart, the moves, then ONE
           BeforeTurnEnd and ONE AfterTurnEnd (where Vulnerable/Weak/Frail tick,
           step 39);
         - the next player turn's setup (steps 12-23): block clear -> energy
-          (modify_max_energy, ShouldPlayerResetEnergy, AfterEnergyReset) ->
+          (ShouldPlayerResetEnergy, ModifyMaxEnergy, AfterEnergyReset --
+          ShouldPlayerResetEnergy is evaluated FIRST, tier-2 Task 11 item E) ->
           BeforeHandDraw -> ModifyHandDraw -> the 5-card draw ->
           AfterPlayerTurnStart.
 
@@ -447,11 +703,22 @@ class TestTurnStructureOrder:
             "on_player_turn_end",         # step 48  Hook.BeforeTurnEnd
             "should_ethereal_trigger",    # step 52  hand partition (Dazed)
             "on_card_exhausted",          # step 53  ethereal pass
-            "on_card_discarded",          # step 54  Burn -> Discard
+            # No on_card_discarded for step 54's Burn -> Discard:
+            # CardModel.cs:1682-1698 (OnTurnEndInHandWrapper) calls
+            # CardPileCmd.Add(this, PileType.Discard...) directly in its
+            # non-Ethereal branch and fires no Hook.AfterCardDiscarded at
+            # all; CardCmd.cs:194 is its sole C# call site, inside
+            # DiscardAndDraw, not this path either (tier-2 Task 11, item G;
+            # Named-work filing 2026-07-30, no gap id -- same class as
+            # tier-2 Task 10's G11 premise reversal below).
             "should_flush_hand",          # step 61  Hook.ShouldFlush
-            "on_card_discarded",          # step 62  the flush (Strike)
-            # No on_hand_emptied: CombatManager.cs:880-883 excludes the flush
-            # from CheckForEmptyHand on purpose (G16, closed).
+            # No second on_card_discarded for step 62's flush (Strike):
+            # creature_card_cmds/G11's premise was reversed -- FlushPlayerHand
+            # (CombatManager.cs:1313-1347) fires no Hook.AfterCardDiscarded at
+            # all; CardCmd.cs:194 is its sole C# call site, inside
+            # DiscardAndDraw, not the flush (tier-2 Task 10).
+            # No on_hand_emptied either: CombatManager.cs:880-883 excludes the
+            # flush from CheckForEmptyHand on purpose (G16, closed).
             "after_player_turn_end",      # step 64  Hook.AfterTurnEnd
             "should_take_extra_turn",     # step 65  SwitchFromPlayerToEnemySide
             # --- the enemy side -----------------------------------------
@@ -465,16 +732,21 @@ class TestTurnStructureOrder:
             "before_side_turn_start",     # step 11  Hook.BeforeSideTurnStart
             "should_clear_block",         # step 13  the player's clear
             "on_block_cleared",           # step 14
-            "modify_max_energy",          # step 17  Hook.ModifyMaxEnergy
+            # ShouldPlayerResetEnergy is evaluated FIRST; MaxEnergy (==
+            # Hook.ModifyMaxEnergy) is read inside the chosen branch
+            # (CombatManager.cs:641-649) -- tier-2 Task 11, item E;
+            # turn_structure/step17. The sim used to call modify_max_energy
+            # first.
             "should_reset_energy",        # step 17  ShouldPlayerResetEnergy
+            "modify_max_energy",          # step 17  Hook.ModifyMaxEnergy
             "on_energy_reset",            # step 18  Hook.AfterEnergyReset
             "on_player_turn_start",       # step 19  Hook.BeforeHandDraw
             "modify_hand_draw",           # step 20  Hook.ModifyHandDraw
-            "should_draw", "on_card_drawn",
-            "should_draw", "on_card_drawn",
-            "should_draw", "on_card_drawn",
-            "should_draw", "on_card_drawn",
-            "should_draw", "on_card_drawn",   # step 22  the 5-card draw
+            # creature_card_cmds/G9: should_draw hoisted to ONE call per Draw
+            # (CardPileCmd.cs:804), not once per card (tier-2 Task 10).
+            "should_draw",                 # step 21  Hook.ShouldDraw, ONCE
+            "on_card_drawn", "on_card_drawn", "on_card_drawn",
+            "on_card_drawn", "on_card_drawn",   # step 22  the 5-card draw
             "on_player_turn_started",     # step 23  Hook.AfterPlayerTurnStart
             "after_side_turn_start",      # step 24  Hook.AfterSideTurnStart
         ]

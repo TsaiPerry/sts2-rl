@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_attacks.py",
-    "sha256": "c968f51d1badb64580afa265bb1e71b26b30cb4c0aeaf5f529cd437e445a1ce2"
+    "sha256": "4e07aed5520201820404958c2a90b9edd93871415c2a137d0b179719a2f06cf1"
   },
   "extra_sources": [
     {
@@ -21,27 +21,27 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/glory/fabricator.py",
-      "sha256": "0ff27ed874500a6003bf19d100d95848dae28c8afbc7b3ed38cc22891cffbddb",
+      "sha256": "789a1a3297f11e8b4097b8c315c4d63c2509d5e1d68a164d4d56ce40a4326284",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/glory/queen.py",
-      "sha256": "9ea33801e77b1b03811245b9d8d9f8921d4ed36b2c8d05beb66ae23b7d440cc0",
+      "sha256": "88e0a83e4b7b82a07a963bdfb687237be4639cff33e5c89b68a1702c6a821d2a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/hive/ovicopter.py",
-      "sha256": "c18cdfa7236818d59a50756da1adfc62939986b06f61854ec3bd231e9d0bc304",
+      "sha256": "96fadba9f8c2309a0902be7c87b9986f14178e6f7b35263945a55cfe38c54338",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     }
   ],

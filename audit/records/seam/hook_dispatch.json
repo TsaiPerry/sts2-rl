@@ -113,23 +113,23 @@
   "sim_sources": [
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef"
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f"
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461"
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0"
+      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
     },
     {
       "path": "sts2_rl/history.py",
@@ -141,11 +141,11 @@
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "b52d8d15ba11856c157ae544d7837db5c35df881260a0065cf1d2b97917bd392"
+      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f"
     },
     {
       "path": "sts2_rl/afflictions.py",
-      "sha256": "20981d821451eacedbcad5c7087fdafdbbb77755582a13a7a0dcac65e1054132"
+      "sha256": "f8c53bb835784d1241ad8ae24cf38827ae1677784874664914e02427de68abd1"
     },
     {
       "path": "sts2_rl/relics/spiked_gauntlets.py",
@@ -197,7 +197,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da"
+      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf"
     },
     {
       "path": "sts2_rl/relics/paels_eye.py",
@@ -225,7 +225,7 @@
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "06f9d38ecefba5bb61280da2dae7e92350e163a00481f23bfe8443b722327ad8"
+      "sha256": "63c0df752ca09e9de59285b0c9bc9be809da18e69b61b65424d75f37ee1ffc6b"
     },
     {
       "path": "sts2_rl/cards/whirlwind.py",
@@ -420,8 +420,8 @@
     },
     {
       "what": "37. Predicate family, OR with NO short-circuit -- `flag = flag || item.ShouldX(...)` calls every listener even after one returns true: ShouldForcePotionReward (2472-2480) and ShouldAllowFreeTravel (2485-2493). Complete: those are the only two in Hook.cs",
-      "verdict": "gap",
-      "issue": "The sim aggregates both with a short-circuiting `any(...)` generator (rewards.py:449: `any(relic.should_force_potion_reward(run, room_type) for relic in run.relics)`), so C# calls every listener where the sim stops at the first True and a later listener with a side effect would be skipped. DORMANT, evidence executed (`grep -rn 'ShouldForcePotionReward\\|ShouldAllowFreeTravel' --include=*.cs src/`): each hook has exactly ONE implementer in the decompiled game outside the run-modifier set -- src/Core/Models/Relics/WhiteBeastStatue.cs for ShouldForcePotionReward and src/Core/Models/Relics/WingedBoots.cs for ShouldAllowFreeTravel (src/Core/Models/Modifiers/Flight.cs is the second ShouldAllowFreeTravel implementer and run modifiers are note N4's waiver; the first pass mis-cited this file as src/Core/Modifiers/Flight.cs, a path that does not exist) -- so no second listener exists to be skipped, and both implementers' predicates are side-effect free. Concrete trigger: a second ported implementer of either hook, or one whose predicate has a side effect."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-31 (tier-2 campaign): (Task 11.) **THIS ENTRY'S PREMISE WAS FALSE; the sim was already faithful and NO code changed.** The entry claimed C#'s `flag = flag || item.ShouldX(...)` calls every listener without short-circuiting, and that the sim's short-circuiting `any(...)` therefore diverged. In fact C#'s `||` IS short-circuiting: the enclosing foreach keeps iterating (no break), but once `flag` is true the right operand -- the listener call -- is not evaluated, which is exactly what `any(...)` does. Verified three independent ways during review: (1) C# language semantics (ECMA-334 12.13); (2) a compiled and executed reproduction of the exact pattern, in which only the first listener was called; (3) same-file corroboration at Hook.cs:1451-1452, where the developers explicitly hoisted a listener call onto its own line (`bool flag2 = item.TryModifyCardRewardOptions(...); flag = flag || flag2;`) precisely to AVOID this skip -- proving the decompiled `||` here is genuine short-circuit IL, not a mis-rendered `|`. A first pass 'fixed' the sim to a full-visit loop and was REVERTED byte-identically once this was found; the correct behaviour is the original. The two hooks are the only members of this family (ShouldForcePotionReward, ShouldAllowFreeTravel; Hook.cs:2472-2493) and both ported implementers are side-effect free either way. Pins: test/test_tiny_dispatchers.py::TestPredicateShortCircuitsFaithfully asserts the second listener is NEVER called. Lesson for the queue: a record can be wrong about the C# itself, not merely stale.  The text it replaced read: The sim aggregates both with a short-circuiting `any(...)` generator (rewards.py:449: `any(relic.should_force_potion_reward(run, room_type) for relic in run.relics)`), so C# calls every listener where the sim stops at the first True and a later listener with a side effect would be skipped. DORMANT, evidence executed (`grep -rn 'ShouldForcePotionReward\\|ShouldAllowFreeTravel' --include=*.cs src/`): each hook has exactly ONE implementer in the decompiled game outside the run-modifier set -- src/Core/Models/Relics/WhiteBeastStatue.cs for ShouldForcePotionReward and src/Core/Models/Relics/WingedBoots.cs for ShouldAllowFreeTravel (src/Core/Models/Modifiers/Flight.cs is the second ShouldAllowFreeTravel implementer and run modifiers are note N4's waiver; the first pass mis-cited this file as src/Core/Modifiers/Flight.cs, a path that does not exist) -- so no second listener exists to be skipped, and both implementers' predicates are side-effect free. Concrete trigger: a second ported implementer of either hook, or one whose predicate has a side effect."
     },
     {
       "what": "38. Modifier-notification lists: chain/try-chain dispatchers with an `out modifiers` parameter (or, for two of them, an IEnumerable<AbstractModel> return) add a listener only when its call actually CHANGED the value. Complete list of the ones this record owns: ModifyEnergyGain (1610-1618) and ModifyGoldGained (1630-1638) compare with an INTEGER cast so a sub-1 decimal change does not count; ModifyCardPlayCount (1376-1384), ModifyCardPlayResultPileTypeAndPosition (1396-1405), ModifyCardBeingAddedToDeck (1350-1364) and ModifyOrbPassiveTriggerCount (1855-1869) track it exactly; TryModifyCardRewardOptions (1445-1467), ModifyRestSiteOptions (1949-1960), ModifyRestSiteHealRewards (1965-1976) and ModifyRewards (1981-2002) collect the listeners that returned true from a bool Try* and RETURN that list instead of using an out-param. The caller then fires the matching AfterModifying* event over exactly that subset. ModifyOrbPassiveTriggerCount, ModifyRestSiteOptions and ModifyRestSiteHealRewards were missing from the first pass's list.",

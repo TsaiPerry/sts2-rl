@@ -19,11 +19,11 @@ class Trial(Event):
       ACCEPT: roll one of three trials, each with a Guilty / Innocent verdict:
         Merchant  — Guilty: add Regret, 2 relics; Innocent: add Shame, upgrade 2
         Noble     — Guilty: heal 10;             Innocent: add Regret, +300 gold
-        Nondescript — Guilty: add Doubt, 2 card rewards (offers unmodelled);
+        Nondescript — Guilty: add Doubt, 2 card rewards;
                       Innocent: add Doubt, transform 2
       REJECT → ACCEPT (stand trial after all) or DOUBLE_DOWN (abandon the run)
     The Entrant Number is cosmetic (rolled from a separate Chaotic RNG in the
-    game) and is not modelled. Card-reward offers are not modelled."""
+    game) and is not modelled."""
 
     id = "trial"
     name = "Trial"
@@ -90,7 +90,7 @@ class Trial(Event):
 
     def _nondescript_guilty(self) -> None:
         from ..rewards import (CardRewardGroup, CombatRewards, RarityOddsType,
-                               create_reward_cards)
+                               apply_reward_modifiers, create_reward_cards)
         from ..rooms import RoomType
 
         self.run.add_card(make_card("doubt"))
@@ -108,8 +108,15 @@ class Trial(Event):
             cards = create_reward_cards(self.run, RarityOddsType.REGULAR, count=3)
             groups.append(CardRewardGroup(cards=cards, room_type=RoomType.MONSTER,
                                           count=3, populated=True))
-        self.pending_rewards = CombatRewards(room_type=RoomType.MONSTER,
-                                             card_rewards=groups)
+        rewards = CombatRewards(room_type=RoomType.MONSTER, card_rewards=groups)
+        # `RewardsCmd.OfferCustom` -> `RewardsSet.WithCustomRewards(rewards)
+        # .Offer()` -> `GenerateWithoutOffering` runs Hook.ModifyRewards
+        # (RewardsSet.cs:136) on BOTH CardReward entries the same pass —
+        # Driftwood.TryModifyRewardsLate iterates every CardReward on the set
+        # (Driftwood.cs:20-23) and doesn't check room (there is none here),
+        # so both of Nondescript Guilty's screens come back rerollable.
+        apply_reward_modifiers(self.run, rewards)
+        self.pending_rewards = rewards
         self._finish("NONDESCRIPT_GUILTY")
 
     def _nondescript_innocent(self) -> None:

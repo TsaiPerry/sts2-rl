@@ -79,10 +79,17 @@ class ToughEgg(MachineMonster):
                 self.HATCHLING_MIN_HP, self.HATCHLING_MAX_HP)
         else:
             hp = self._rng.randrange(self.HATCHLING_MIN_HP, self.HATCHLING_MAX_HP)
-        delta = hp - self.hp
-        self.max_hp = hp
-        self.hp = hp
-        ctx.hooks.on_hp_changed(self, delta)
+        # ToughEgg.cs:173 — `Creature.SetMaxAndCurrentHp(hp)`
+        # (creature_card_cmds/step26), routed through the real command
+        # instead of a hand-rolled `on_hp_changed` dispatch that bypassed
+        # SetMaxHpInternal's CurrentHp clamp and SetMaxHp's MaxHp<=0 Kill
+        # check — the divergence the record's monster-tier addendum names
+        # (this site already fired the event itself; it bypassed the
+        # *command*, not the event). `set_current_hp`'s own delta
+        # (`amount - old`) equals the old hand-rolled `hp - self.hp`
+        # computed before either assignment, so the dispatch is unchanged.
+        from ...cmds import CreatureCmd
+        CreatureCmd.set_max_and_current_hp(ctx.hooks, self, hp)
 
     def _nibble(self, ctx: CombatCtx) -> None:
         self._execute_attack(ctx, _NIBBLE_DMG, 1)

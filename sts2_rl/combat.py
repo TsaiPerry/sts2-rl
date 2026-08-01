@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, TYPE_CHECKING
 
-from .cards import Card, CardType, make_card, TargetType
+from .cards import Card, CardRarity, CardType, make_card, TargetType
 from .cmds import DamageCmd
 from .history import CombatHistory
 from .hooks import HookSystem
@@ -44,6 +44,48 @@ class Phase(Enum):
 class CombatResult:
     player_won: bool
     turns_taken: int
+
+
+# CardRarity.cs's declaration order (CardSelectCmd.cs:406 `orderby c.Rarity,
+# c.Id` sorts on this ordinal: None=0, Basic=1, Common=2, Uncommon=3, Rare=4,
+# Ancient=5, Event=6, Token=7, Status=8, Curse=9, Quest=10). The sim's
+# CardRarity enum (cards/base.py) lists members in a DIFFERENT order (EVENT
+# after CURSE, not before TOKEN), so this maps explicitly to C#'s ordinal
+# rather than reusing Python declaration order. CardRarity.None has no sim
+# analogue — every combat card is one of these ten.
+_CS_RARITY_ORDER = {
+    CardRarity.BASIC: 1,
+    CardRarity.COMMON: 2,
+    CardRarity.UNCOMMON: 3,
+    CardRarity.RARE: 4,
+    CardRarity.ANCIENT: 5,
+    CardRarity.EVENT: 6,
+    CardRarity.TOKEN: 7,
+    CardRarity.STATUS: 8,
+    CardRarity.CURSE: 9,
+    CardRarity.QUEST: 10,
+}
+
+
+def _sample_without_replacement(rng, population: list, k: int) -> list:
+    """Pick k distinct items from population via repeated `.choice()` draws.
+
+    No C# analogue: real `CardSelectCmd` never falls back to randomness when
+    no Selector is installed — it always shows a UI screen or waits on the
+    network (CardSelectCmd.cs). This whole branch is a sim-only
+    headless-completion path for a parity-mode combat that (unusually) has no
+    card_selector installed. `.choice()` is the one primitive both
+    `random.Random` (legacy) and `GameRandomAdapter` (parity) provide, so this
+    works for either — `random.Random.sample` is NOT used here because
+    `GameRandomAdapter` deliberately does not implement it (rng.py:276-296:
+    only methods that mirror a verified game primitive are added)."""
+    pool = list(population)
+    picked = []
+    for _ in range(k):
+        item = rng.choice(pool)
+        pool.remove(item)
+        picked.append(item)
+    return picked
 
 
 @dataclass
@@ -526,13 +568,36 @@ class CombatState:
         # SetPhaseForAllPlayers(PlayerTurnPhase.None) too; PlayerTurnPhase.cs:9
         # says in as many words that None is "used ... during the enemy's turn".
         self.player.turn_phase = PlayerTurnPhase.NONE
+
+        # `SwitchSides` (CombatManager.cs:1420-1424) -> `Creature.OnSideSwitch`
+        # -> `MonsterModel.OnSideSwitch` (MonsterModel.cs:479-483): every
+        # creature's SpawnedThisTurn is cleared on EVERY side switch, in BOTH
+        # directions. `SpawnedThisTurn` has exactly one C# reader —
+        # `Creature.TakeTurn`'s guard (Creature.cs:706-716), fired only from
+        # THIS side's own move loop below — so clearing it once here,
+        # immediately before that loop's snapshot is taken, reproduces the
+        # same observable result as the full bidirectional dispatch: a
+        # creature spawned later in this same pass (during the side-start
+        # hooks just below — e.g. Poison killing an InfestedPower/StockPower/
+        # SurprisePower owner, whose replacement joins mid-AfterSideTurnStart)
+        # still carries the True `SetUpForCombat` set when `CreatureCmd.add`
+        # added it, and correctly skips its move this turn; every creature
+        # already on the board is False by the time the move loop reads it,
+        # same as after a real `OnSideSwitch`. See monsters/base.py's
+        # `spawned_this_turn` for the setter side (construction == "added").
+        for enemy in self.enemies:
+            enemy.spawned_this_turn = False
+
         starting = self._side_participants()
 
         # Pass 1: Creature.BeforeTurnStart (CombatManager.cs:449-455) is the
-        # `power.AmountOnTurnStart = power.Amount` snapshot (Creature.cs:673-679);
-        # the sim does not model AmountOnTurnStart, and none of the three
-        # powers that read it (DrawCardsNextTurn, HelloWorld, SummonNextTurn)
-        # is enemy-side.
+        # `power.AmountOnTurnStart = power.Amount` snapshot (Creature.cs:
+        # 673-679) — see `Creature.snapshot_powers_on_turn_start`. None of the
+        # three C# readers (DrawCardsNextTurn, HelloWorld, SummonNextTurn) is
+        # enemy-side content, so this pass has no observable enemy-side effect
+        # today; it is still modelled for the same reason C# still runs it.
+        for enemy in starting:
+            enemy.snapshot_powers_on_turn_start()
 
         # Hook.BeforeSideTurnStart — ONCE for the side (:458).
         self.hooks.before_enemy_side_start()
@@ -583,17 +648,27 @@ class CombatState:
             # player-turn-start roll can transition STUNNED -> the deferred
             # move (and re-log it). Turn-start and turn-end effects like Poison
             # fire on a stunned turn either way.
-            if enemy.stunned:
+            if enemy.spawned_this_turn:
+                # Creature.TakeTurn's guard (Creature.cs:706-716): a creature
+                # that joined the fight THIS enemy turn (SpawnedThisTurn still
+                # True — see the clear at the top of this method) never
+                # reaches PerformMove at all, so MoveStateMachine.
+                # OnMovePerformed never fires either — `performed_first_move`
+                # stays False, keeping its telegraph (or UNSET_MOVE) sticky
+                # for the next player-turn-start roll.
+                pass
+            elif enemy.stunned:
                 enemy.stunned = False
                 move = getattr(enemy, "_current_move", None)
                 if move is not None and move.id == STUN_STATE_ID:
                     enemy.take_turn(self._ctx())
+                # MonsterModel.PerformMove -> MoveStateMachine.OnMovePerformed:
+                # from here on the monster's telegraphed move is no longer
+                # sticky, so the player-turn-start pass rolls it.
+                enemy.performed_first_move = True
             else:
                 enemy.take_turn(self._ctx())
-            # MonsterModel.PerformMove -> MoveStateMachine.OnMovePerformed:
-            # from here on the monster's telegraphed move is no longer sticky,
-            # so the player-turn-start pass rolls it.
-            enemy.performed_first_move = True
+                enemy.performed_first_move = True
             if self.player.is_dead:
                 self.phase = Phase.COMBAT_OVER
                 self.result = CombatResult(player_won=False, turns_taken=self.turn)
@@ -730,7 +805,15 @@ class CombatState:
                 self.hooks.on_card_exhausted(card, caused_by_ethereal=True)
             else:
                 self.player.discard_pile.append(card)
-                self.hooks.on_card_discarded(card)
+                # No Hook.AfterCardDiscarded here. CardModel.cs:1696
+                # (OnTurnEndInHandWrapper's non-Ethereal branch) calls
+                # `CardPileCmd.Add(this, PileType.Discard...)` directly; the
+                # hook's sole C# call site is CardCmd.cs:194, inside
+                # DiscardAndDraw (Concentrate/Sly/Gambler's Brew/Gambling
+                # Chip), which this method is not. Named-work filing
+                # 2026-07-30 (no gap id) -- same class as tier-2 Task 10's
+                # G11 premise reversal for discard_hand/FlushPlayerHand.
+                # Removed by tier-2 Task 11, item G.
 
     # ------------------------------------------------------------------
     # Public API
@@ -1031,6 +1114,17 @@ class CombatState:
         # BeforeCardPlayed fires for auto-plays too (0 energy SPENT) — powers
         # like Free Attack consume their stacks here.
         self.hooks.on_energy_spent(card, 0)
+        # CardCmd.cs:122 — Hook.BeforeCardAutoPlayed, right before
+        # card.OnPlayWrapper (:130), i.e. strictly before the
+        # before_card_played that _resolve_card_play fires below (tier-2
+        # Task 11, item B; creature_card_cmds/step46, dormant). Target
+        # resolution mirrors _resolve_card_play's played_target exactly:
+        # only ANY_ENEMY cards resolve to a single creature.
+        auto_play_target = (
+            self._ctx().resolve_target(target_idx)
+            if card.target_type == TargetType.ANY_ENEMY else None
+        )
+        self.hooks.before_card_auto_played(card, auto_play_target)
         self._resolve_card_play(card, target_idx, is_auto_play=True)
 
         # CheckWinCondition (CombatManager.cs:1046-1059) — the loss
@@ -1043,6 +1137,8 @@ class CombatState:
         candidates: list[Card],
         count: int = 1,
         min_select: int | None = None,
+        is_draw_pile: bool = False,
+        has_shortcut: bool = True,
     ) -> list[Card]:
         """In-combat card selection (mirrors CardSelectCmd's selection screens).
 
@@ -1061,6 +1157,39 @@ class CombatState:
         (CardSelectCmd.cs:708-711) — false for any non-empty hand at MinSelect
         0, so the screen is always shown and confirming NONE is a first-class
         outcome. Defaults to `count`, i.e. the old exactly-N behaviour.
+
+        This does NOT model a full CardSelectorPrefs/UI screen — MinSelect
+        only goes as far as expressing the shortcut condition below and the
+        selectorless range fallback already had. `RequireManualConfirmation`
+        itself is never a caller-visible flag; it is derived exactly the way
+        CardSelectorPrefs derives it (CardSelectorPrefs.cs:77): true whenever
+        a caller passes a genuine `min_select` different from `count` (a real
+        MinSelect..MaxSelect range), false when `min_select` is left at its
+        default (MinSelect == MaxSelect == count, matching the
+        `CardSelectorPrefs(prompt, exactCount)` constructor).
+
+        `is_draw_pile` marks a candidate list pulled from the draw pile
+        (`FromCombatPile(Draw, ...)` — SecretTechnique/SecretWeapon,
+        DropletOfPrecognition): C# re-sorts it `orderby Rarity, Id`
+        (CardSelectCmd.cs:403-408) before an installed Selector sees it, so an
+        automated selector gets a canonical view instead of the true draw
+        order. It affects only what `card_selector` is shown, not the
+        shortcut's pile-order return (C#'s shortcut runs BEFORE the sort) nor
+        the selectorless RNG fallback (C# has no selectorless path at all).
+
+        `has_shortcut` defaults to True because the auto-select shortcut is
+        shared by `FromSimpleGridForRewards`/`FromSimpleGrid`/`FromCombatPile`/
+        `FromHand` — every C# entry point this method otherwise mirrors
+        (Choices Paradox is `FromSimpleGrid`, so it keeps the default). It is
+        NOT shared by `FromChooseACardScreen` (CardSelectCmd.cs:216-261 —
+        Discovery/Splash/Quasar, the four generator potions, Toolbox,
+        Knowledge Demon's curse pick): that method has no
+        `CardSelectorPrefs`/shortcut at all — with a Selector installed it
+        ALWAYS calls `Selector.GetSelectedCards(cards, 0, 1)` (hardcoded
+        MinSelect 0, MaxSelect 1) regardless of candidate count, and with none
+        installed it always shows the UI or waits on the network. Callers
+        whose C# citation is `FromChooseACardScreen` must pass
+        `has_shortcut=False`.
         """
         # CardSelectCmd's first guard: every C# selection screen returns an
         # empty list once the combat is over or ending (CardSelectCmd.cs:194-199,
@@ -1070,20 +1199,51 @@ class CombatState:
             return []
         if not candidates:
             return []
+        # C#'s auto-select shortcut (CardSelectCmd.cs:287-290, 396-399,
+        # 708-711): `!RequireManualConfirmation && candidateCount <=
+        # MinSelect` -> every candidate, in PILE ORDER, calling neither the
+        # Selector nor drawing from any RNG. Checked BEFORE the Selector
+        # branch below — C# short-circuits ahead of any UI/manual selection,
+        # and this mirrors that placement exactly. Gated on `has_shortcut`:
+        # `FromChooseACardScreen` (CardSelectCmd.cs:216-261) has no such
+        # shortcut at all — see the has_shortcut docstring note above.
+        require_manual_confirmation = min_select is not None and min_select != count
+        shortcut_floor = count if min_select is None else min_select
+        if (has_shortcut and not require_manual_confirmation
+                and len(candidates) <= shortcut_floor):
+            return list(candidates)
         count = min(count, len(candidates))
         floor = count if min_select is None else min(min_select, len(candidates))
         if count <= 0 and floor <= 0:
             return []
         if self.card_selector is not None:
-            chosen = list(self.card_selector(purpose, list(candidates), count))[:count]
+            pool = list(candidates)
+            if is_draw_pile:
+                # CardSelectCmd.cs:403-408 — see the is_draw_pile docstring
+                # note above. Stable sort: the only cards that can tie on
+                # (rarity, id) are literal duplicates, indistinguishable to a
+                # selector either way.
+                pool.sort(key=lambda c: (_CS_RARITY_ORDER[c.rarity], c.id))
+            chosen = list(self.card_selector(purpose, pool, count))[:count]
             return [c for c in chosen if c in candidates]
+        # No C# path reaches here selectorless (CardSelectCmd always shows a
+        # UI screen or waits on the network) — this is a sim-only headless
+        # completion fallback. Parity mode moves it onto the named
+        # `combat_rng.card_selection` stream; legacy keeps drawing from the
+        # shared `self._rng` exactly as before (byte-for-byte unchanged —
+        # `combat_rng.card_selection` in legacy mode is not used here on
+        # purpose, to keep this an explicit branch rather than an incidental
+        # alias).
+        rng = self.combat_rng.card_selection if self.combat_rng.is_parity else self._rng
         if floor < count:
             # With a real minimum below the maximum the selectorless path must
             # be able to return fewer than `count` — including none at all.
-            count = self._rng.randint(floor, count)
+            count = rng.randint(floor, count)
         if count <= 0:
             return []
-        return self._rng.sample(candidates, count)
+        if self.combat_rng.is_parity:
+            return _sample_without_replacement(rng, candidates, count)
+        return rng.sample(candidates, count)
 
     def use_potion(self, slot: int, target_idx: int | None = None) -> bool:
         """Use the potion in the given slot. The slot is nulled, not removed
@@ -1166,6 +1326,14 @@ class CombatState:
         start_turn is synchronous, so without this an end_turn re-entered from
         inside it would recurse (turn_structure N1).
         """
+        # Creature.BeforeTurnStart (Creature.cs:673-679), from StartTurn's own
+        # per-creature loop (CombatManager.cs:447-450) — strictly BEFORE
+        # `_inPlayerTurnSetup` is engaged and before Hook.BeforeSideTurnStart,
+        # so it runs here rather than inside `player.start_turn()`. Covers
+        # every player-side StartTurn call, extra turns included, since this
+        # method is their one shared entry point. See
+        # `Creature.snapshot_powers_on_turn_start`.
+        self.player.snapshot_powers_on_turn_start()
         self._in_player_turn_setup = True
         try:
             self.player.start_turn()
@@ -1258,6 +1426,11 @@ class CombatState:
         if self.phase == Phase.COMBAT_OVER:
             return
         self._process_turn_end_cards()
+        # CombatManager.cs:1200-1206 — Hook.BeforeFlush fires per player,
+        # after the DoTurnEnd loop above and before the CheckWinCondition
+        # that closes EndPlayerTurnPhaseOneInternal below (tier-2 Task 11,
+        # item D; turn_structure/step55, dormant).
+        self.hooks.before_flush(self.player)
         # CombatManager.cs:1207-1208 — the check that closes
         # EndPlayerTurnPhaseOneInternal, so phase two (the flush) never runs.
         self._check_win_condition()

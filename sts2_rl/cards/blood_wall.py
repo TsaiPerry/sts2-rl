@@ -36,6 +36,10 @@ class BloodWallCard(Card):
         from ..cmds import BlockCmd, DamageCmd
         from ..valueprops import DamageProps
         DamageCmd.deal(ctx.hooks, ctx.player, self._hp_loss, card=self, props=DamageProps.CARD_HP_LOSS)
-        if ctx.player.is_dead:
-            return
+        # BloodWall.cs has no is_dead guard here -- C# unconditionally awaits
+        # CreatureCmd.GainBlock next. No divergence to reproduce: GainBlock's
+        # own IsOverOrEnding bail (CreatureCmd.cs:637-640), mirrored by
+        # BlockCmd.apply, already makes this a no-op on a dying player -- see
+        # card/_is_dead_early_return (Task 27) and
+        # test/test_is_dead_early_returns.py.
         BlockCmd.apply(ctx.hooks, ctx.player, self._block, card=self)

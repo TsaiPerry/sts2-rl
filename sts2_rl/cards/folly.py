@@ -31,7 +31,7 @@ class FollyCard(Card):
     can_be_generated_by_modifiers = False
 
     def _init_vars(self) -> None:
-        self._energy_cost = 0
+        self._energy_cost = -1
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         pass

@@ -43,10 +43,15 @@ class ChoicesParadox(Relic):
             return
         for card in options:
             card.retain = True
-        # ChoicesParadox.cs:46 is `CardSelectorPrefs(prompt, 1)` — the 2-arg
-        # ctor (CardSelectorPrefs.cs:63-67 -> `this(prompt, n, n)`), so
-        # MinSelect == MaxSelect == 1 and the screen cannot be left empty.
-        # A purpose in driver.SKIPPABLE_PURPOSES would offer a decline the
-        # game forbids.
+        # ChoicesParadox.cs:46 is `CardSelectCmd.FromSimpleGrid(context, list,
+        # player, new CardSelectorPrefs(prompt, 1))` — the 2-arg
+        # CardSelectorPrefs ctor (CardSelectorPrefs.cs:63-67 -> `this(prompt,
+        # n, n)`), so MinSelect == MaxSelect == 1 and RequireManualConfirmation
+        # is False. Unlike Toolbox (FromChooseACardScreen), FromSimpleGrid DOES
+        # have the auto-select shortcut (CardSelectCmd.cs:343-346) — with the
+        # normal 5 options it never fires (5 > MinSelect 1), but a
+        # pool-exhausted 1-option draw legitimately auto-resolves in C# too,
+        # so this call keeps the default has_shortcut=True. A purpose in
+        # driver.SKIPPABLE_PURPOSES would offer a decline the game forbids.
         for card in self.combat.select_cards("choose_a_card", options, 1):
             CardPileCmd.add_to_hand(self.hooks, player, card)

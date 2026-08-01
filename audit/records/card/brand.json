@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\brand.py",
-    "sha256": "961213836047f408c905c811d7a23de67a16bc1d572605bec6828dce80007d1c"
+    "sha256": "e4aa8091518471439165a7d139f2d3fac573799aff21d69b17881dbd4d8f430e"
   },
   "extra_sources": [
     {
@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     }
   ],
@@ -50,8 +50,8 @@
   "guards": [
     {
       "what": "the sim returns early on `if ctx.player.is_dead` after the 1 HP loss, skipping BOTH the exhaust and the Strength (brand.py:44-45)",
-      "verdict": "gap",
-      "issue": "Brand.cs has no such early return. C# has no such early return: if the HP loss is lethal it still awaits the next command on the dying player. DORMANT: the sim's death-prevention path floors a saved creature at 1 HP (cmds.py:106-112), so `is_dead` here means genuinely dead and the combat is lost on both sides before any listener could read the result. Same mechanism and same verdict at every site that has it (rule 3): card/blood_wall, card/bloodletting, card/brand."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-31 (tier-2 campaign): (Task 27.) The early return is DELETED. C# genuinely continues past the self-damage with no IsDead check (BloodWall.cs:36-40, Brand.cs:41-49, Hemokinesis.cs:28-31), and the sim now matches because every command the continued effect reaches ALREADY self-gates exactly as its C# counterpart does: BlockCmd.apply <-> CreatureCmd.GainBlock (CreatureCmd.cs:637-640, both IsOverOrEnding -> return 0); combat.select_cards <-> CardSelectCmd.FromHand (CardSelectCmd.cs:694-696, both -> []); PowerCmd.apply <-> PowerCmd.Apply<T> (PowerCmd.cs:69-72, both IsEnding -> null, already closed as power_cmd guard 1); DamageCmd.deal's dealer-dead bail <-> AttackCommand.Execute's IsOverOrEnding + Attacker.IsDead checks (AttackCommand.cs:520,528), both preceding Hook.BeforeAttack (:536). Death is synchronous on both sides -- C#'s Kill -> LoseCombat sets _pendingLoss before Damage() returns (CreatureCmd.cs:409,454; CombatManager.cs:945-950,180-220), which the sim's is_over_or_ending mirrors -- so the guard was provably redundant, not load-bearing. NOTE the recorded dependency was wrong: this did NOT need power/_death_prevention_branch (its remaining open sites are per-power revival paths; the generic _resolve_death arm no longer floors HP at 1). Pins: test/test_is_dead_early_returns.py (11).  The text it replaced read: Brand.cs has no such early return. C# has no such early return: if the HP loss is lethal it still awaits the next command on the dying player. DORMANT: the sim's death-prevention path floors a saved creature at 1 HP (cmds.py:106-112), so `is_dead` here means genuinely dead and the combat is lost on both sides before any listener could read the result. Same mechanism and same verdict at every site that has it (rule 3): card/blood_wall, card/bloodletting, card/brand."
     },
     {
       "what": "CardSelectCmd.FromHand is called with `filter: null`, i.e. ANY hand card is exhaustable (Brand.cs:42)",
@@ -59,6 +59,6 @@
       "rationale": "The sim passes no `predicate` to `CardSelectCmd.from_hand` (brand.py:46), so the candidate set is the whole hand on both sides."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

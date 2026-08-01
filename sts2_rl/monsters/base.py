@@ -31,6 +31,20 @@ class MoveType(Enum):
     CARD_DEBUFF = "card_debuff"      # afflicts the player's cards
     DEATH_BLOW = "death_blow"
     UNKNOWN = "unknown"
+    # `MoveState`'s empty `params AbstractIntent[]` (BattleFriendV1/2/3.cs:28's
+    # NOTHING_MOVE) — a move that telegraphs literally NOTHING. Distinct from
+    # both of the sim's other two placeholder values: UNKNOWN mirrors C#'s
+    # real `UnknownIntent` (a displayed "?" glyph — used here only by
+    # `monsters/state_machine.py`'s transient UNSET_MOVE sentinel, which is a
+    # different concept: "no move has been rolled yet"), and HIDDEN mirrors
+    # C#'s real `HiddenIntent` (a real, registered intent entry with no
+    # sprite/tip — DecimillipedeSegment's DEAD_MOVE). NONE mirrors neither
+    # class: C# never constructs an intent object for it at all (`params
+    # AbstractIntent[] intents` receives zero arguments). No `Intent.has()`
+    # check anywhere ever tests for it and no `also` tuple ever holds it, so
+    # every encoder flag reads False for it — the same "nothing lit up" the
+    # empty C# array produces — without the encoder needing a special case.
+    NONE = "none"
 
 
 @dataclass
@@ -43,12 +57,27 @@ class Intent:
 
     For ATTACK: damage is per-hit, hits is the number of hits.
     For BUFF:   buffs is a list of (PowerClass, amount) to apply to self.
+    For a StatusIntent (move_type or a member of `also` is STATUS_CARD):
+        status_count carries the C# `StatusIntent.CardCount` — how many
+        status cards are about to land. Every StatusIntent site now sets it;
+        every other Intent construction leaves it at its default (None), and
+        the observation encoder (full_env.py:571) still reads only the
+        STATUS_CARD flag bit, not this value — the count is carried but
+        unencoded (a checkpoint-tier concern, not this mechanism's).
     """
     move_type: MoveType
     damage: int = 0
     hits: int = 1
     buffs: list[tuple[type[Power], int]] = field(default_factory=list)
     also: tuple[MoveType, ...] = ()
+    status_count: int | None = None
+
+    @classmethod
+    def none(cls) -> "Intent":
+        """A `MoveState` built with C#'s empty `params AbstractIntent[]` — no
+        telegraph at all (BattleFriendV1/2/3.cs:28's NOTHING_MOVE). See
+        `MoveType.NONE` for why this is not `UNKNOWN` or `HIDDEN`."""
+        return cls(MoveType.NONE)
 
     @property
     def total_damage(self) -> int:
@@ -94,6 +123,34 @@ class Monster(Creature):
         # spawn). Set by CombatState._run_enemy_turns, which is where
         # MonsterModel.PerformMove calls OnMovePerformed.
         self.performed_first_move = False
+        # `MonsterModel.SpawnedThisTurn` (MonsterModel.cs:247-258). Every
+        # creature addition — the initial roster (SetUpCombat's AddCreature
+        # loop) and every mid-combat spawn (CreatureCmd.Add ->
+        # CombatManager.AddCreature) alike — calls `SetUpForCombat()`
+        # (MonsterModel.cs:409-413), which sets this True; there is no gap
+        # between "constructed" and "added to combat" in the sim's own
+        # architecture (a Monster is built and appended to `combat.enemies`
+        # in the same step, for both paths), so defaulting True here at
+        # construction reproduces both call sites without a separate
+        # registration hook. Cleared once per enemy turn — see
+        # `CombatState._run_enemy_turns` (`OnSideSwitch`,
+        # MonsterModel.cs:479-483) — and read by `CombatState._run_enemy_
+        # turns`' move loop (`Creature.TakeTurn`'s guard, Creature.cs:706-716)
+        # to skip PerformMove for a creature that joined the fight this same
+        # enemy turn (e.g. InfestedPower/StockPower/SurprisePower spawning a
+        # replacement while Poison is still resolving in AfterSideTurnStart,
+        # before the move loop's own snapshot is taken).
+        self.spawned_this_turn = True
+
+    @property
+    def has_rolled_a_move(self) -> bool:
+        """False only while the creature still holds `MonsterModel.NextMove`'s
+        initial `new MoveState()` — UNSET_MOVE (MonsterModel.cs:239,
+        MoveState.cs:42-45), i.e. an enemy-side spawn that
+        `CombatManager.AfterCreatureAdded`'s `CurrentSide == Player` gate
+        declined to roll. Hand-rolled monsters pick their move in __init__ and
+        have no such window, so the default is True."""
+        return True
 
     @property
     def has_rolled_a_move(self) -> bool:

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\slimed.py",
-    "sha256": "e74f448e425d27c500272b62f588ffbc574d21d6a796cc6ad30d2bf482212765"
+    "sha256": "e0a63bbb54a73148a1a85a45e47ee8dc94e0be0130d36090fbd99f0989d837c2"
   },
   "extra_sources": [
     {
@@ -33,8 +33,8 @@
     },
     "CanonicalVars": {
       "maps_to": "nothing -- the sim passes the literal 1 (slimed.py:198)",
-      "verdict": "gap",
-      "issue": "`new CardsVar(1)` (Slimed.cs:17) is a printed var with no `_cards` in `_init_vars`, so `magic_number` returns None where the game prints 1. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed number the sim's `magic_number` cannot surface, so `full_env.card_features` (full_env.py:455-489) encodes the card without it. DORMANT for game fidelity, LIVE for the observation encoder."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 24.) All 23 cards now store their printed C# var under a `_`-attribute (or, for 3 cards whose C# var is a live/computed value at display time -- guilty, normality, expect_a_fight -- a `magic_number` property override; wither similarly overrides `base_damage`) so `Card.base_damage`/`base_block`/`base_hp_loss`/`magic_number` report the C# value instead of the 0/None default. Two additive base.py changes: `_frail` added to `_MAGIC_ATTRS` (shame) and a new `base_gold` property (debt, spoils_map -- GoldVar had no base property at all). feel_no_pain's `_block` was renamed to `_power_amount` (fixing a WRONG value, not just a missing one -- `base_block` no longer misreports it as block-granting; matches Rage/Corruption/Stampede's DynamicVar('Power', ...) convention). Combat behavior / dealt numbers are byte-identical in every case -- a printed-number / observation-encoder fix only. 3 of the 23 (debt, spoils_map, rolling_boulder's secondary IncrementAmount) have NO obs-vector change despite the API fix (full_env.py has no base_gold read site; magic_number carries one number per card and _power_amount dominates rolling_boulder's scan) -- documented, not closed further. CHECKPOINT NOTE for training: encoded VALUES changed for the other 20 cards in feature slots f[17]/f[18] damage, f[20]/f[21] block, f[22] hp_loss, f[23] magic_number; obs LAYOUT unchanged. Pins: test/test_printed_vars.py (48 tests).  The text it replaced read: `new CardsVar(1)` (Slimed.cs:17) is a printed var with no `_cards` in `_init_vars`, so `magic_number` returns None where the game prints 1. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed number the sim's `magic_number` cannot surface, so `full_env.card_features` (full_env.py:455-489) encodes the card without it. DORMANT for game fidelity, LIVE for the observation encoder."
     },
     "OnPlay": {
       "maps_to": "SlimedCard.on_play (slimed.py:196-198)",
@@ -43,6 +43,6 @@
     }
   },
   "guards": [],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

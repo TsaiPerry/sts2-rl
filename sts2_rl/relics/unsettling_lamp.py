@@ -42,13 +42,39 @@ class UnsettlingLamp(Relic):
             self._finished = True
         self._in_flight = None
 
-    def modify_power_amount(self, power_cls, target, amount, applier) -> int:
-        if self._finished or self._in_flight is None or amount <= 0:
-            return amount
+    def modify_power_amount_given_multiplicative(
+        self, power_cls, target, amount, applier
+    ) -> int:
+        """UnsettlingLamp.cs:106-129 (`ModifyPowerAmountGivenMultiplicative`)
+        — a GIVEN-side listener (power_cmd/G3, G4): dispatched by
+        `hooks.modify_power_amount_given_multiplicative`, only ever called
+        when `applier is not None and _combat_contains_creature(hooks,
+        applier)` (PowerCmd.apply's own gate, mirroring PowerCmd.cs:122-123).
+        Returns a FACTOR (1 = unchanged, 2 = double), not the multiplied
+        amount — the dispatcher folds it in, matching C#'s own return shape
+        (`return 2m;`) and `modify_damage_multiplicative`'s chain contract.
+
+        UnsettlingLamp.cs has no `amount <= 0` bail anywhere (read in full):
+        BeforePowerAmountChanged (:71-104) and
+        ModifyPowerAmountGivenMultiplicative (:106-129) both gate purely on
+        `power.GetTypeForAmount(amount) != PowerType.Debuff` below. A sim-only
+        `amount <= 0` bail here would reject Malaise/Resonance's negative
+        Strength steal before the sign-aware check ever ran (power_cmd/G2,
+        closed).
+        """
+        if self._finished or self._in_flight is None:
+            return 1
         if applier is not self.player or target is self.player:
-            return amount
+            return 1
         from ..powers import PowerType
-        if power_cls.power_type != PowerType.DEBUFF:
-            return amount
+        # UnsettlingLamp.cs:97,124 test `power.GetTypeForAmount(amount)`, not
+        # the static Type: a negative-amount application of a Buff-typed
+        # allow_negative power (Malaise/Resonance stealing Strength) is a
+        # Debuff by C#'s rule and doubles here. This also self-protects a
+        # duration tick (a negative offset on a non-allow_negative Debuff like
+        # Weak/Vulnerable) without any extra bail: GetTypeForAmount flips that
+        # case to Buff, so the `!= DEBUFF` check below already skips it.
+        if power_cls.type_for_amount(amount) != PowerType.DEBUFF:
+            return 1
         self._triggering = self._in_flight
-        return amount * 2
+        return 2

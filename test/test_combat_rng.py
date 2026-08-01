@@ -67,6 +67,58 @@ def test_legacy_shuffle_sequence_unchanged():
     assert c.combat_rng.shuffle is c._rng  # still the shared Random
 
 
+def test_parity_select_cards_shortcut_draws_nothing():
+    """creature_card_cmds/N10/step104: the C# auto-select shortcut
+    (`candidateCount <= MinSelect`) consumes zero draws from ANY stream, in
+    parity mode too — not just legacy."""
+    from sts2_rl.combat import CombatState
+    from sts2_rl.rng import RunRngSet
+    rs = RunRngSet("89U21BV1TZ")
+    c = CombatState(rng_set=rs)
+    candidates = list(c.player.hand)
+    before = rs.combat_card_selection.counter
+    chosen = c.select_cards("exhaust", candidates, len(candidates))
+    assert rs.combat_card_selection.counter == before
+    assert chosen == candidates
+
+
+def test_parity_selectorless_fallback_draws_from_card_selection_not_shuffle():
+    """creature_card_cmds/N10/step105: the selectorless fallback (no
+    card_selector installed) moves onto `combat_rng.card_selection` in parity
+    mode — previously it fell through to the plain shared `self._rng`, which
+    is not any of the run's named parity streams."""
+    from sts2_rl.combat import CombatState
+    from sts2_rl.rng import RunRngSet
+    rs = RunRngSet("89U21BV1TZ")
+    c = CombatState(rng_set=rs)
+    candidates = list(c.player.hand)  # 5 candidates, below-threshold count=1
+    before_selection = rs.combat_card_selection.counter
+    before_shuffle = rs.shuffle.counter
+    chosen = c.select_cards("exhaust", candidates, 1)
+    assert len(chosen) == 1
+    assert rs.combat_card_selection.counter > before_selection
+    assert rs.shuffle.counter == before_shuffle
+
+
+def test_parity_selectorless_min_select_range_draws_only_from_card_selection():
+    """A real MinSelect..MaxSelect range (min_select=0, the Ashwater/Gambler's
+    Brew/Gambling Chip shape) in parity mode with no card_selector installed
+    exercises BOTH the `randint(floor, count)` and the sample-without-
+    replacement draws — both must land on `combat_card_selection`, none on
+    `shuffle`/the plain legacy `random.Random`."""
+    from sts2_rl.combat import CombatState
+    from sts2_rl.rng import RunRngSet
+    rs = RunRngSet("89U21BV1TZ")
+    c = CombatState(rng_set=rs)
+    candidates = list(c.player.hand)
+    before_selection = rs.combat_card_selection.counter
+    before_shuffle = rs.shuffle.counter
+    chosen = c.select_cards("exhaust_any", candidates, len(candidates), min_select=0)
+    assert 0 <= len(chosen) <= len(candidates)
+    assert rs.combat_card_selection.counter > before_selection
+    assert rs.shuffle.counter == before_shuffle
+
+
 def test_confused_cost_draws_from_the_energy_cost_stream():
     """relic/snecko_eye/g1. ConfusedPower.NextEnergyCost (ConfusedPower.cs:47-54)
     ends in `RunState.Rng.CombatEnergyCosts.NextInt(4)`, not the shuffle stream

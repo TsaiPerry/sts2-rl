@@ -973,3 +973,227 @@ class TestPotionPowers:
         cs.hooks.on_enemy_side_end()
         assert "strength" not in cs.enemy.powers
         assert "shackling_potion" not in cs.enemy.powers
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# PowerInstanceType (power_cmd/G5)
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestPowerInstanceType:
+    """PowerCmd.apply's stacking dispatch on PowerInstanceType (power_cmd/G5,
+    PowerCmd.cs:165-174 FindExistingInstanceForStacking; PowerModel.cs:144).
+
+    NONE (the default) keeps finding the existing instance by id and
+    stacking onto it. INSTANCED never finds one, so a second application
+    starts its own independently-ticking instance. INSTANCED_PER_APPLIER
+    finds one only when the applier matches."""
+
+    def test_none_type_power_still_merges_into_one_instance(self):
+        # Regression guard: PowerInstanceType.NONE is untouched by G5's fix.
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.player, StrengthPower, 3)
+        first = cs.player.powers["strength"]
+        PowerCmd.apply(cs.hooks, cs.player, StrengthPower, 2)
+        assert cs.player.powers["strength"] is first
+        assert first.amount == 5
+
+    def test_instanced_power_applied_twice_yields_two_independently_ticking_instances(self):
+        # AutomationPower.cs:27 InstanceType.Instanced. Two applications 6
+        # draws apart used to merge into one instance and fire a single
+        # GainEnergy(2) at draw #10; each now keeps its own cards_left and
+        # fires its own GainEnergy(1), at draw #10 (instance 1) and draw #16
+        # (instance 2, whose own fresh 10-counter starts at its draw-#6
+        # creation).
+        from sts2_rl.cmds import EnergyCmd
+        from sts2_rl.powers import AutomationPower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.player, AutomationPower, 1)
+        inst1 = cs.player.powers["automation"]
+        for _ in range(6):
+            cs.hooks.on_card_drawn(None)
+        PowerCmd.apply(cs.hooks, cs.player, AutomationPower, 1)
+        inst2 = cs.player.powers["automation"]
+        assert inst2 is not inst1
+        assert inst1.cards_left == 4      # inst1 kept its own progress...
+        assert inst2.cards_left == 10     # ...inst2 starts its own, fresh
+
+        energy_events: list[int] = []
+        orig_gain = EnergyCmd.gain
+
+        def spy_gain(hooks, target, amount):
+            energy_events.append(amount)
+            return orig_gain(hooks, target, amount)
+
+        EnergyCmd.gain = staticmethod(spy_gain)
+        try:
+            for _ in range(4):                      # draw #10 since 1st apply
+                cs.hooks.on_card_drawn(None)
+            assert energy_events == [1]              # inst1 fires alone
+            for _ in range(6):                       # draw #16 since 1st apply
+                cs.hooks.on_card_drawn(None)
+            assert energy_events == [1, 1]           # inst2 fires alone
+        finally:
+            EnergyCmd.gain = orig_gain
+
+    def test_instanced_per_applier_same_applier_stacks_different_applier_splits(self):
+        # StranglePower.cs:29 InstanceType.InstancedPerApplier.
+        from sts2_rl import Creature
+        from sts2_rl.powers import StranglePower
+        cs = fresh()
+        other_applier = Creature(max_hp=40)
+
+        PowerCmd.apply(cs.hooks, cs.enemy, StranglePower, 3, applier=cs.player)
+        first = cs.enemy.powers["strangle"]
+
+        # Same applier -> finds and stacks the existing instance.
+        PowerCmd.apply(cs.hooks, cs.enemy, StranglePower, 2, applier=cs.player)
+        assert cs.enemy.powers["strangle"] is first
+        assert first.amount == 5
+
+        # A different applier -> a separate instance; the first is left
+        # untouched, ticking on its own.
+        PowerCmd.apply(cs.hooks, cs.enemy, StranglePower, 4, applier=other_applier)
+        second = cs.enemy.powers["strangle"]
+        assert second is not first
+        assert second.applier is other_applier
+        assert second.amount == 4
+        assert first.amount == 5
+
+    def test_rolling_boulder_two_applications_deal_independent_growing_damage(self):
+        # RollingBoulderPower.cs:24 InstanceType.Instanced. Two C# instances
+        # deal 5+5=10 on the next turn and 10+10=20 on the one after (each
+        # grows by its own +5); the pre-fix sim held one merged instance
+        # (10, then 15, then 20).
+        from sts2_rl.powers import RollingBoulderPower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.player, RollingBoulderPower, 5)
+        inst1 = cs.player.powers["rolling_boulder"]
+        PowerCmd.apply(cs.hooks, cs.player, RollingBoulderPower, 5)
+        inst2 = cs.player.powers["rolling_boulder"]
+        assert inst2 is not inst1
+
+        before = cs.enemy.hp
+        cs.hooks.on_player_turn_started(cs.player)
+        assert before - cs.enemy.hp == 10       # 5 + 5, not a merged 10
+        before = cs.enemy.hp
+        cs.hooks.on_player_turn_started(cs.player)
+        assert before - cs.enemy.hp == 20       # 10 + 10
+
+    def test_toric_toughness_two_applications_track_independent_block_and_duration(self):
+        # ToricToughnessPower.cs InstanceType.Instanced. Two C# instances
+        # (2 turns @ block 5, 3 turns @ block 9) gain 5+9=14 block for two
+        # turns then 9 alone for a third; the pre-fix sim held one merged
+        # instance (turn counter 4, block overwritten to 9).
+        from sts2_rl.powers import ToricToughnessPower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.player, ToricToughnessPower, 2, applier=cs.player)
+        cs.player.powers["toric_toughness"].set_block(5)
+        inst1 = cs.player.powers["toric_toughness"]
+        PowerCmd.apply(cs.hooks, cs.player, ToricToughnessPower, 3, applier=cs.player)
+        cs.player.powers["toric_toughness"].set_block(9)
+        inst2 = cs.player.powers["toric_toughness"]
+        assert inst2 is not inst1
+
+        cs.player.block = 0
+        cs.hooks.on_block_cleared(cs.player)
+        assert cs.player.block == 14            # 5 + 9, both still alive
+        cs.player.block = 0
+        cs.hooks.on_block_cleared(cs.player)
+        assert cs.player.block == 14            # inst1 -> 0 turns left AFTER this grant
+        cs.player.block = 0
+        cs.hooks.on_block_cleared(cs.player)
+        assert cs.player.block == 9             # only inst2 remains
+        cs.player.block = 0
+        cs.hooks.on_block_cleared(cs.player)
+        assert cs.player.block == 0
+        assert "toric_toughness" not in cs.player.powers
+
+    def test_panache_two_applications_have_independent_cards_left_counters(self):
+        # PanachePower.cs:35 InstanceType.Instanced.
+        from sts2_rl.powers import PanachePower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.player, PanachePower, 4)
+        inst1 = cs.player.powers["panache"]
+        strike = make_card("strike")
+        for _ in range(4):                      # 1 skipped (self) + 3 counted
+            cs.hooks.on_card_played(strike)
+        PowerCmd.apply(cs.hooks, cs.player, PanachePower, 4)
+        inst2 = cs.player.powers["panache"]
+        assert inst2 is not inst1
+        assert inst1.cards_left == 2            # 5 - 3
+        assert inst2.cards_left == 5            # fresh, its own play not yet skipped
+
+    def test_sandpit_two_applications_are_independent_devour_timers(self):
+        # SandpitPower.cs:37 InstanceType.Instanced: either of two
+        # independent timers eats the player when IT runs out.
+        from sts2_rl.powers import SandpitPower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.enemy, SandpitPower, 4, applier=cs.enemy)
+        inst1 = cs.enemy.powers["sandpit"]
+        PowerCmd.apply(cs.hooks, cs.enemy, SandpitPower, 2, applier=cs.enemy)
+        inst2 = cs.enemy.powers["sandpit"]
+        assert inst2 is not inst1
+        assert inst1.amount == 4 and inst2.amount == 2
+
+        cs.hooks.after_enemy_side_start()       # tick 1: 4->3, 2->1
+        assert not cs.player.is_dead
+        cs.hooks.after_enemy_side_start()       # tick 2: 3->2, 1->0 -> eaten
+        assert cs.player.is_dead
+
+    def test_frantic_escape_modifies_the_existing_sandpit_instance_directly(self):
+        # FranticEscape.cs:38-42 bypasses Apply/FindExistingInstanceForStacking
+        # entirely (ModifyAmount straight on the found instance), which is
+        # what keeps it correct now that Sandpit is Instanced.
+        from sts2_rl.powers import SandpitPower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.enemy, SandpitPower, 4, applier=cs.enemy)
+        inst = cs.enemy.powers["sandpit"]
+        cs.player.hand = [make_card("frantic_escape")]
+        cs.player.energy = 3
+        assert cs.play_card(0)
+        assert cs.enemy.powers["sandpit"] is inst   # same instance, not a new one
+        assert inst.amount == 5                      # +1, not a fresh amount=1
+
+    def test_thievery_two_applications_are_independent_gold_counters(self):
+        # ThieveryPower.cs:17 InstanceType.Instanced.
+        from sts2_rl.powers import ThieveryPower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.enemy, ThieveryPower, 20, applier=cs.enemy)
+        inst1 = cs.enemy.powers["thievery"]
+        PowerCmd.apply(cs.hooks, cs.enemy, ThieveryPower, 10, applier=cs.enemy)
+        inst2 = cs.enemy.powers["thievery"]
+        assert inst2 is not inst1
+        assert inst1.amount == 20 and inst2.amount == 10
+
+    def test_heist_two_applications_are_independent_amounts(self):
+        # HeistPower.cs:15 InstanceType.Instanced.
+        from sts2_rl.powers import HeistPower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.enemy, HeistPower, 15, applier=cs.enemy)
+        inst1 = cs.enemy.powers["heist"]
+        PowerCmd.apply(cs.hooks, cs.enemy, HeistPower, 25, applier=cs.enemy)
+        inst2 = cs.enemy.powers["heist"]
+        assert inst2 is not inst1
+        assert inst1.amount == 15 and inst2.amount == 25
+
+    def test_withering_presence_two_applications_have_independent_card_counters(self):
+        # WitheringPresencePower.cs:26 InstanceType.Instanced.
+        from sts2_rl.powers import WitheringPresencePower
+        cs = fresh()
+        PowerCmd.apply(cs.hooks, cs.enemy, WitheringPresencePower, 6, applier=cs.enemy)
+        inst1 = cs.enemy.powers["withering_presence"]
+        PowerCmd.apply(cs.hooks, cs.enemy, WitheringPresencePower, 3, applier=cs.enemy)
+        inst2 = cs.enemy.powers["withering_presence"]
+        assert inst2 is not inst1
+        assert inst1._cards_left == 6 and inst2._cards_left == 3
+
+    def test_the_bomb_and_swipe_are_not_migrated_to_instance_type(self):
+        # power/the_bomb and power/swipe keep PowerInstanceType.NONE
+        # deliberately: each already reproduces the observable behaviour
+        # that matters (damage, deck reconciliation) via its own hand-rolled
+        # workaround, and routing them through the generic Instanced
+        # dispatch would silently break that workaround (see their
+        # docstrings). This pins the deliberate non-migration.
+        from sts2_rl.powers import PowerInstanceType, SwipePower, TheBombPower
+        assert TheBombPower.instance_type is PowerInstanceType.NONE
+        assert SwipePower.instance_type is PowerInstanceType.NONE

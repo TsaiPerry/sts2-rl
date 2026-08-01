@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -41,12 +41,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
@@ -67,8 +67,8 @@
     },
     "InstanceType": {
       "maps_to": "cmds.py:308 `if power_cls.id in target.powers`",
-      "verdict": "gap",
-      "issue": "PowerInstanceType.InstancedPerApplier (StranglePower.cs:29) -- and per power_cmd gap G5's corrected census this is the ONLY ported InstancedPerApplier power in the game (the other is OblivionPower, unported). The sim keys stacking on the power id alone (cmds.py:308), so two appliers' Strangles on one target merge into a single instance with a single `_amounts` dict and a single amount, where C# keeps one instance per applier -- each of which deals its own damage per card play. Mechanism owned by power_cmd G5; not re-verdicted (rule 3). DORMANT in Ironclad scope: the only ported applier is the player, via Mad Science's Choking rider (cards/mad_science.py:128-130, `applier=ctx.player`), and there is exactly one player, so a second applier needs multiplayer or a monster-applied Strangle -- neither of which exists. This is the cleanest available statement of G5's InstancedPerApplier half: it is dormant *by scope*, not by content, so it will not become live by porting more Ironclad content. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): StranglePower.instance_type = PowerInstanceType.INSTANCED_PER_APPLIER (sts2_rl/powers.py), mirroring StranglePower.cs:29. PowerCmd.apply's dispatch (sts2_rl/cmds.py) now finds an existing instance only when its applier matches this application's applier (mirroring FindExistingInstanceForStacking's InstancedPerApplier branch, PowerCmd.cs:170: `target.GetPowerInstances(id).FirstOrDefault(p => p.Applier == applier)`) -- a same-applier re-application still stacks via on_stack (unchanged), a different-applier one starts its own instance instead of merging. Verified by test/test_powers.py::TestPowerInstanceType::test_instanced_per_applier_same_applier_stacks_different_applier_splits. DORMANT stands: the only ported applier is the player (cards/mad_science.py), so a second applier is unreachable in current content. NOT closed by this fix: StranglePower's own before_card_played / on_card_played hooks have no applier filter at all (they fire for ANY card play, not just the applier's) -- a separate, pre-existing shape outside this guard's scope (instance dispatch, not the damage trigger's own filtering).  The text it replaced read: PowerInstanceType.InstancedPerApplier (StranglePower.cs:29) -- and per power_cmd gap G5's corrected census this is the ONLY ported InstancedPerApplier power in the game (the other is OblivionPower, unported). The sim keys stacking on the power id alone (cmds.py:308), so two appliers' Strangles on one target merge into a single instance with a single `_amounts` dict and a single amount, where C# keeps one instance per applier -- each of which deals its own damage per card play. Mechanism owned by power_cmd G5; not re-verdicted (rule 3). DORMANT in Ironclad scope: the only ported applier is the player, via Mad Science's Choking rider (cards/mad_science.py:128-130, `applier=ctx.player`), and there is exactly one player, so a second applier needs multiplayer or a monster-applied Strangle -- neither of which exists. This is the cleanest available statement of G5's InstancedPerApplier half: it is dormant *by scope*, not by content, so it will not become live by porting more Ironclad content. Third-file citations, not hashed here."
     },
     "BeforeCardPlayed": {
       "maps_to": "powers.py:2855-2856 before_card_played (combat.py:466)",
@@ -113,6 +113,6 @@
       "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

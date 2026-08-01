@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
+      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
       "side": "sim"
     }
   ],
@@ -51,10 +51,9 @@
       "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
     },
     "AfterApplied": {
-      "maps_to": "powers.py:1769-1782 TangledPower.__init__",
+      "maps_to": "powers.py:1464-1477 TangledPower.__init__",
       "verdict": "gap",
-      "live": false,
-      "issue": "The sim adds a guard C# does not have, and it changes the outcome. TangledPower.cs:23-30 afflicts EVERY Attack card with Entangled unconditionally -- there is no `Affliction == null` test, unlike its own AfterCardEnteredCombat at :34 and unlike Ringing's and Smoggy's AfterApplied -- so in the game Tangled OVERWRITES an existing affliction on Attack cards. powers.py:1781 adds `card.affliction is None`, so the sim skips already-afflicted Attacks and they cost nothing extra. DORMANT, RE-EXECUTED 2026-07-30: the record's own proposed trigger ('two ported enemy powers in one combat: Ringing... after which the game's Tangled re-afflicts') is UNREACHABLE with today's content, not merely unexercised -- checked by enumeration, not assumed. RingingPower's sole ported applier is `CeremonialBeast.take_turn` (monsters/overgrowth/ceremonial_beast.py:74-76); TangledPower's sole ported applier is `VineShambler.take_turn` (monsters/overgrowth/vine_shambler.py:44-45). `sts2_rl/rooms.py`'s Overgrowth act table lists `ceremonial_beast` only under `boss_keys` (:107) -- a solo, once-per-act, no-other-monster encounter (`CEREMONIAL_BEAST_BOSS = Encounter(monster_classes=[CeremonialBeast])`) -- and `vine_shambler` only under `normal_keys` (:104), itself a solo encounter (`VINE_SHAMBLER_NORMAL = Encounter(monster_classes=[VineShambler])`). A boss fight and a regular fight are never the same combat, so Ringing and Tangled cannot land on the same player's cards in the same fight. No other ported power widens this: enumerating every `CardCmd.afflict(` call site in powers.py (RingingAffliction, EntangledAffliction, SmogAffliction, TaintedAffliction, GalvanizedAffliction, HexedAffliction, BoundAffliction) finds no OTHER Overgrowth-act-1 applier that could co-occur inside VineShambler's own solo fight, which has no other monster in it to apply anything else. This is the exact shape the batch's calibration note warns about: a `live` claim drafted from the divergence's SHAPE rather than an enumeration of its real callers. Also note the sim's __init__ walk misses the Play pile for the same reason recorded on power/ringing and power/smoggy (player.py:100-103 vs PlayerCombatState.cs:70-80) -- unchanged, still dormant for the same reasons those records give."
+      "issue": "The sim adds a guard C# does not have, and it changes the outcome. TangledPower.cs:23-30 afflicts EVERY Attack card with Entangled unconditionally -- there is no `Affliction == null` test, unlike its own AfterCardEnteredCombat at :34 and unlike Ringing's and Smoggy's AfterApplied -- so in the game Tangled OVERWRITES an existing affliction on Attack cards. powers.py:1476 adds `card.affliction is None`, so the sim skips already-afflicted Attacks and they cost nothing extra. Reachable with two ported enemy powers in one combat: Ringing (powers.py:1319-1332) afflicts every unafflicted card, after which the game's Tangled re-afflicts the Attacks as Entangled and the sim leaves them Ringing. Also note the sim's __init__ walk misses the Play pile for the same reason recorded on power/ringing and power/smoggy (player.py:100-103 vs PlayerCombatState.cs:70-80). Third-file citations, not hashed here."
     },
     "AfterCardEnteredCombat": {
       "maps_to": "powers.py:1479-1484 TangledPower.on_card_entered_combat",

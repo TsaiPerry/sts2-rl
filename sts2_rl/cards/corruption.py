@@ -25,6 +25,7 @@ class CorruptionCard(Card):
 
     def _init_vars(self) -> None:
         self._energy_cost = 3
+        self._power_amount = 1  # DynamicVar("Power", 1m), Corruption.cs:17
 
     def _on_upgrade(self) -> None:
         self._energy_cost = max(0, self._energy_cost - 1)
@@ -32,4 +33,7 @@ class CorruptionCard(Card):
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cmds import PowerCmd
         from ..powers import CorruptionPower
-        PowerCmd.apply(ctx.hooks, ctx.player, CorruptionPower, 1, applier=ctx.player)
+        PowerCmd.apply(
+            ctx.hooks, ctx.player, CorruptionPower, self._power_amount,
+            applier=ctx.player,
+        )

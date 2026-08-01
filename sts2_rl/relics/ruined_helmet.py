@@ -24,20 +24,39 @@ class RuinedHelmet(Relic):
         # RuinedHelmet.AfterCombatEnd (:57-61).
         self._used = False
 
-    def modify_power_amount(
+    def modify_power_amount_received(
         self,
         power_cls: type,
         target: Creature,
         amount: int,
-        applier: Creature | None = None,
-    ) -> int:
+        applier: Creature | None,
+    ) -> int | None:
+        """RuinedHelmet.cs:32-53 (`TryModifyPowerAmountReceived`) — a
+        RECEIVED-side listener (power_cmd/G3, G4): dispatched by
+        `hooks.modify_power_amount_received`, unconditionally (no applier
+        gate exists for the received side at all). Returns the new amount to
+        take effect, or `None` for "did not apply" (C#'s `bool` return +
+        `out modifiedAmount`) — not the unchanged amount, which is how the
+        given-side chain signals "no effect" instead.
+
+        `self._used` is NOT set here — see `after_modify_power_amount_received`.
+        C#'s own `TryModifyPowerAmountReceived` is a pure decision + value
+        read; `UsedThisCombat = true` happens in the companion event
+        (RuinedHelmet.cs:55-60), a real second phase, not a side effect
+        folded into the modifier check itself.
+        """
         from ..powers import StrengthPower
-        if (
-            not self._used
-            and power_cls is StrengthPower
-            and target is self.player
-            and amount > 0
-        ):
-            self._used = True
-            return amount * 2
-        return amount
+        if self._used:
+            return None
+        if power_cls is not StrengthPower:
+            return None
+        if target is not self.player:
+            return None
+        if amount <= 0:
+            return None
+        return amount * 2
+
+    def after_modify_power_amount_received(self, power) -> None:
+        """RuinedHelmet.cs:55-60 — `Flash()` has no sim counterpart (VFX
+        only); `UsedThisCombat = true` is `self._used = True`."""
+        self._used = True

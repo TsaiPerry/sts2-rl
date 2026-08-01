@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\glory\\fabricator.py",
-    "sha256": "0ff27ed874500a6003bf19d100d95848dae28c8afbc7b3ed38cc22891cffbddb"
+    "sha256": "789a1a3297f11e8b4097b8c315c4d63c2509d5e1d68a164d4d56ce40a4326284"
   },
   "hooks": {
     "MinInitialHp": {
@@ -62,7 +62,7 @@
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
@@ -72,7 +72,7 @@
     },
     {
       "path": "sts2_rl\\powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     }
   ]

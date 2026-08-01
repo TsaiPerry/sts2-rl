@@ -6,12 +6,12 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\toxic.py",
-    "sha256": "75212c36f990f4b80b315b604088e7678d3bb3a4a62a0b6e2196c006f266dde2"
+    "sha256": "4a38caff2c0ec4e7aa172b4a157e539dffc79554f0923b79d8eafe47bb51fe5a"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
@@ -43,8 +43,8 @@
     },
     "CanonicalVars": {
       "maps_to": "nothing -- the sim inlines 5 at the damage site (toxic.py:157)",
-      "verdict": "gap",
-      "issue": "`new DamageVar(5m, ValueProp.Unpowered | ValueProp.Move)` (Toxic.cs:17) is a printed var with no `_damage` in `_init_vars`, so `Card.base_damage` returns None. The PROP SET is right: the sim passes no explicit props and `DamageCmd.deal` infers `DamageProps.CARD_UNPOWERED` (UNPOWERED | MOVE) from `is_unpowered = True` (cmds.py:44-50, toxic.py:145), so the 5 damage is not Strength-scaled and IS blockable on both sides -- identical to card/burn, card/decay and card/infection. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed number the sim's `magic_number` cannot surface, so `full_env.card_features` (full_env.py:455-489) encodes the card without it. DORMANT for game fidelity, LIVE for the observation encoder."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 24.) All 23 cards now store their printed C# var under a `_`-attribute (or, for 3 cards whose C# var is a live/computed value at display time -- guilty, normality, expect_a_fight -- a `magic_number` property override; wither similarly overrides `base_damage`) so `Card.base_damage`/`base_block`/`base_hp_loss`/`magic_number` report the C# value instead of the 0/None default. Two additive base.py changes: `_frail` added to `_MAGIC_ATTRS` (shame) and a new `base_gold` property (debt, spoils_map -- GoldVar had no base property at all). feel_no_pain's `_block` was renamed to `_power_amount` (fixing a WRONG value, not just a missing one -- `base_block` no longer misreports it as block-granting; matches Rage/Corruption/Stampede's DynamicVar('Power', ...) convention). Combat behavior / dealt numbers are byte-identical in every case -- a printed-number / observation-encoder fix only. 3 of the 23 (debt, spoils_map, rolling_boulder's secondary IncrementAmount) have NO obs-vector change despite the API fix (full_env.py has no base_gold read site; magic_number carries one number per card and _power_amount dominates rolling_boulder's scan) -- documented, not closed further. CHECKPOINT NOTE for training: encoded VALUES changed for the other 20 cards in feature slots f[17]/f[18] damage, f[20]/f[21] block, f[22] hp_loss, f[23] magic_number; obs LAYOUT unchanged. Pins: test/test_printed_vars.py (48 tests).  The text it replaced read: `new DamageVar(5m, ValueProp.Unpowered | ValueProp.Move)` (Toxic.cs:17) is a printed var with no `_damage` in `_init_vars`, so `Card.base_damage` returns None. The PROP SET is right: the sim passes no explicit props and `DamageCmd.deal` infers `DamageProps.CARD_UNPOWERED` (UNPOWERED | MOVE) from `is_unpowered = True` (cmds.py:44-50, toxic.py:145), so the 5 damage is not Strength-scaled and IS blockable on both sides -- identical to card/burn, card/decay and card/infection. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed number the sim's `magic_number` cannot surface, so `full_env.card_features` (full_env.py:455-489) encodes the card without it. DORMANT for game fidelity, LIVE for the observation encoder."
     },
     "OnTurnEndInHand": {
       "maps_to": "ToxicCard.on_turn_end_in_hand (toxic.py:155-157)",
@@ -58,6 +58,6 @@
     }
   },
   "guards": [],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

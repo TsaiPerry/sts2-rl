@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -71,22 +71,22 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/glory/test_subject.py",
-      "sha256": "ee82a7b8118e90eceac29b7e899cd29ec2efb9a4337aebe6f44e38e725150ba1",
+      "sha256": "800eed5a3cd3bb1471be6533ce6035049a0b185d8cf2662e0019126b77840fa7",
       "side": "sim"
     },
     {
@@ -121,10 +121,9 @@
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:3887-3888 on_stack -> pass",
-      "verdict": "gap",
-      "live": false,
-      "issue": "PowerStackType.Single with the sim's on_stack overridden to `pass` citing it -- the settled census's 15-unit wrong-reasoning class (`py audit/tools/power_census.py stack`). Single means \"Amount is hidden and is always 1\" (PowerStackType.cs:10-13); PowerCmd.ModifyAmount (PowerCmd.cs:236) adds unconditionally with no StackType branch, so C# really reaches Amount 2. DORMANT, RE-EXECUTED 2026-07-30: read AdaptablePower.cs (71 lines) end to end -- base.Amount/base.DynamicVars is referenced nowhere; the only state is the private Data.isReviving flag. Read the current AdaptablePower class in powers.py (lines 3862-3911) end to end -- self.amount is referenced nowhere in the class body; it carries only self.is_reviving. So the C#-reaches-Amount-2/sim-holds-Amount-1 divergence this entry names is real but genuinely unread on both sides, not merely asserted from third files. Applier: monsters/glory/test_subject.py applies it once at combat start (a single application per combat, so even a naive stacking read would only diverge on a double-apply that never happens)."
+      "maps_to": "powers.py:3362-3363 on_stack -> pass",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 25.) The 15 `on_stack` no-op overrides are DELETED; the base `Power.on_stack` adds, matching PowerCmd.ModifyAmount (PowerCmd.cs:236), which adds unconditionally with no StackType branch -- PowerStackType.Single means 'Amount is hidden and displayed as 1' (PowerStackType.cs:10-13), not 'does not stack'. All 16 units re-verified against their own C#: 15 are StackType.Single, and NONE overrides InstanceType (PowerModel.cs:144 default None), so none needs T1's instance machinery instead of amount-adding. Two per-site exceptions, both verified: (1) DAMPEN's C# StackType is actually `None`, not Single (DampenPower.cs:22) -- the queue's 16-unit list was wrong about it; its only applier, MagiKnight, dedupes caller-side (MagiKnight.cs:78-96: re-application calls AddCaster only and never reaches PowerCmd.Apply), so the deletion is inert through the real caller and T28's caster-set machinery is untouched and re-pinned. (2) HEX genuinely reads Amount (HexPower.cs:79 feeds CardCmd.Afflict<Hexed>(card, Amount)), so this deletion closes a real divergence that remains DORMANT only because SpectralKnight's move machine never loops back to HEX and KnightsElite fields exactly one -- a second Hex applier makes it live. ILLUSION needed no override and is unchanged (the opposite-sign case the record notes). No reachable re-application among the other 13: Burrowed and Soar re-apply only after their own expire/remove, always onto a fresh instance. Pins: test/test_stack_type_single.py (39 tests).  The text it replaced read: PowerStackType.Single with the sim's on_stack overridden to `pass` citing it -- the settled census's 15-unit wrong-reasoning class (`py audit/tools/power_census.py stack`). Single means \"Amount is hidden and is always 1\" (PowerStackType.cs:10-13); PowerCmd.ModifyAmount (PowerCmd.cs:236) adds unconditionally with no StackType branch, so C# really reaches Amount 2. Dormant: nothing reads Adaptable's Amount on either side -- the revive machinery is driven by the private `isReviving` / `is_reviving` flag (AdaptablePower.cs:13, powers.py:3360) -- and monsters/glory/test_subject.py applies it once at combat start. Third-file citations, not hashed here."
     },
     "AfterDeath": {
       "maps_to": "powers.py:3896-3903 AdaptablePower.on_death, fired from the DEATH (real) arm of cmds._resolve_death (cmds.py:114-122)",
@@ -176,8 +175,7 @@
     {
       "what": "The prevention branch's HP contract: sim `hp = 1` vs C# leaving the creature at 0 and re-entering KillWithoutCheckingWinCondition",
       "verdict": "gap",
-      "live": false,
-      "issue": "NARROWED 2026-07-27. THE FLOOR IS GONE: `_resolve_death`'s prevention (else) arm (cmds.py:123-136) no longer writes `target.hp = 1`; it leaves the creature dead at 0 HP, sets `retained_after_death = True`, fires `on_death(..., True)` and then `after_preventing_death` -- CreatureCmd.cs:560-571's shape. WHAT REMAINS is C#'s RE-ENTRY: CreatureCmd.cs:562-565 re-enters `KillWithoutCheckingWinCondition(creature, force, recursion + 1)` while `creature.IsDead`, up to 10 times before throwing `InvalidOperationException`; `_resolve_death`'s else-arm (cmds.py:123-136) simply returns with no re-check and no recursion cap. RE-VERDICTED DORMANT 2026-07-30, sharper than before: mechanism `power/_death_prevention_branch` is NOT reached via power/adaptable at all any more -- AdaptablePower has no `should_die` override (grep -rn \"def should_die\\b\" sts2_rl/ finds it nowhere in powers.py; see the AfterDeath entry above), so a Test Subject kill never enters this else-arm through Adaptable. The branch is reached only through the sim's two ported `should_die`-family listeners, enumerated: (1) Fairy in a Bottle (potions.py:1337 `should_die`, `after_preventing_death` at :1340 heals `max(MaxHp * 0.30, 1)` -- always > 0), and (2) Lizard Tail (relics/lizard_tail.py:32 `should_die_late`, dispatched through the same `hooks.should_die(` call per its own 2026-07-29 comment -- exactly one caller, `cmds._resolve_death` -- `after_preventing_death` heals 50% of Max HP, also always > 0). Both unconditionally heal the creature back above 0 before `_resolve_death` returns, so `creature.IsDead` is always False by the time C# would check whether to recurse -- the recursion/re-entry path this entry describes has no reachable trigger among ported content: no preventer that heals nothing, and no power (Adaptable included) that reaches the else-arm without a preventer already having healed. VERIFIED by reading cmds.py:102-155, potions.py:1300-1345 and relics/lizard_tail.py:1-60 in full. HANDOFF: mechanism `power/_death_prevention_branch` is shared with power-2/power-4's own sites; this finding is scoped to power/adaptable's site only (Adaptable does not reach the branch) and does not by itself settle the mechanism's liveness elsewhere -- see report HANDOFF section."
+      "issue": "NARROWED 2026-07-27. THE FLOOR IS GONE: `_resolve_death`'s prevention arm (cmds.py:51-64) no longer writes `target.hp = 1`; it leaves the creature dead at 0 HP, sets `retained_after_death = True`, fires `on_death(..., True)` and then `after_preventing_death` -- CreatureCmd.cs:560-571's shape. The 1-vs-0 HP number conformance asserts on now matches, and the downstream consequences this entry listed go with it (Feed's `if target.is_dead` scores, and steam_eruption's HP restore no longer depends on the floor -- it moved to `on_death`, powers.py:2144-2151). WHAT REMAINS: the sim still does not model C#'s RE-ENTRY. CreatureCmd.cs:562-565 re-enters `KillWithoutCheckingWinCondition(creature, force, recursion + 1)` while `creature.IsDead`, up to 10 times before throwing InvalidOperationException; `_resolve_death`'s else-arm simply returns. So a prevention that heals nothing is permanent in the sim and re-kills in the game, and the sim still cannot express a prevention that fails. VERIFIED by reading cmds.py:30-64."
     },
     {
       "what": "The non-damage kill path: CreatureCmd.kill reproduces both arms but fires no on_damage_received",

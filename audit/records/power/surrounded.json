@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
@@ -66,7 +66,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
@@ -76,7 +76,7 @@
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "06f9d38ecefba5bb61280da2dae7e92350e163a00481f23bfe8443b722327ad8",
+      "sha256": "63c0df752ca09e9de59285b0c9bc9be809da18e69b61b65424d75f37ee1ffc6b",
       "side": "sim"
     }
   ],
@@ -87,8 +87,8 @@
     },
     "StackType": {
       "maps_to": "powers.py:2549-2550 on_stack -> pass",
-      "verdict": "gap",
-      "issue": "PowerStackType.Single with the sim's on_stack overridden to `pass` -- the settled census's 15-unit wrong-reasoning class (`py audit/tools/power_census.py stack`); PowerCmd.ModifyAmount (PowerCmd.cs:236) adds unconditionally. DORMANT: Surrounded's behaviour is driven entirely by the private `_facing`/`self.facing` state (SurroundedPower.cs:27, powers.py:2547) and NOTHING reads Amount on either side; and the only ported applier, monsters/hive/kaiser_crab.py:112-114, applies it exactly once, guarded by `if combat is not None`, when the Rocket arm is constructed (Rocket.cs:93). Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 25.) The 15 `on_stack` no-op overrides are DELETED; the base `Power.on_stack` adds, matching PowerCmd.ModifyAmount (PowerCmd.cs:236), which adds unconditionally with no StackType branch -- PowerStackType.Single means 'Amount is hidden and displayed as 1' (PowerStackType.cs:10-13), not 'does not stack'. All 16 units re-verified against their own C#: 15 are StackType.Single, and NONE overrides InstanceType (PowerModel.cs:144 default None), so none needs T1's instance machinery instead of amount-adding. Two per-site exceptions, both verified: (1) DAMPEN's C# StackType is actually `None`, not Single (DampenPower.cs:22) -- the queue's 16-unit list was wrong about it; its only applier, MagiKnight, dedupes caller-side (MagiKnight.cs:78-96: re-application calls AddCaster only and never reaches PowerCmd.Apply), so the deletion is inert through the real caller and T28's caster-set machinery is untouched and re-pinned. (2) HEX genuinely reads Amount (HexPower.cs:79 feeds CardCmd.Afflict<Hexed>(card, Amount)), so this deletion closes a real divergence that remains DORMANT only because SpectralKnight's move machine never loops back to HEX and KnightsElite fields exactly one -- a second Hex applier makes it live. ILLUSION needed no override and is unchanged (the opposite-sign case the record notes). No reachable re-application among the other 13: Burrowed and Soar re-apply only after their own expire/remove, always onto a fresh instance. Pins: test/test_stack_type_single.py (39 tests).  The text it replaced read: PowerStackType.Single with the sim's on_stack overridden to `pass` -- the settled census's 15-unit wrong-reasoning class (`py audit/tools/power_census.py stack`); PowerCmd.ModifyAmount (PowerCmd.cs:236) adds unconditionally. DORMANT: Surrounded's behaviour is driven entirely by the private `_facing`/`self.facing` state (SurroundedPower.cs:27, powers.py:2547) and NOTHING reads Amount on either side; and the only ported applier, monsters/hive/kaiser_crab.py:112-114, applies it exactly once, guarded by `if combat is not None`, when the Rocket arm is constructed (Rocket.cs:93). Third-file citations, not hashed here."
     },
     "ModifyDamageMultiplicative": {
       "maps_to": "powers.py:2552-2565 modify_damage_multiplicative",

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\scroll_boxes.py",
-    "sha256": "72e1b0646b8dce7002a134751b6e473ea449ccc218a24102dd01e22b421325a3"
+    "sha256": "2965bda855100593a43416cf894e649fb86a8355784db1ab8db528b41a3acb9b"
   },
   "extra_sources": [
     {

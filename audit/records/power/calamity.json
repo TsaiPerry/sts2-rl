@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "03b13195368f9b62ffdaef867883b236c1573dd14c05724c40c439ede14a6fbf",
+      "sha256": "0e7260041e0b6693c08bf4aa4ddbb8743311d7fd72d6212fdc7c7d358a7c5030",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
@@ -51,7 +51,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
@@ -76,10 +76,9 @@
       "issue": "C# uses a TWO-HOOK LATCH the sim collapses into one. CalamityPower.cs:28-40 records amountsForPlayedCards[card] = base.Amount at BeforeCardPlayed and :44 removes it at AfterCardPlayed, so (a) the Amount is SNAPSHOTTED at the start of the play and (b) the after-hook only fires for a card the before-hook admitted. The sim reads self.amount at the end of the play (powers.py:3493) and re-tests the card type there. Consequence: if the Attack's own resolution stacks Calamity, the game generates the OLD amount and the sim the NEW one; and if the Attack's resolution somehow changed its type the sim would disagree about whether to fire at all. DORMANT: no ported Attack applies Calamity (its only applier is the Calamity card itself, a Power) and card types are immutable in the sim. Named trigger: any Attack that grants Calamity. The latch is also what makes the C# side safe against Dictionary.Add throwing on a repeat key, since BeforeCardPlayed and AfterCardPlayed are both inside the per-CardPlay loop and pair up -- see the AfterCardPlayed entry."
     },
     "AfterCardPlayed": {
-      "maps_to": "powers.py:4021-4034 CalamityPower.on_card_played",
+      "maps_to": "powers.py:3484-3494 CalamityPower.on_card_played (hooks.py:385-389, combat.py:514)",
       "verdict": "gap",
-      "live": true,
-      "issue": "RE-EXECUTED 2026-07-30, still open at the same line-for-line shape (source has grown; content unchanged). GAP (1), THE COUNT, remains closed: combat.py fires `before_card_played`/`on_card_played` once per resolved play inside the play-count loop, per CardModel.cs:1904-1965 -- not re-verdicted here. WHAT REMAINS is GAP (2), THE RNG STREAM (the algorithm itself is right): powers.py:4031-4033 still calls `random_pool_cards(combat._rng, self.amount, CardType.ATTACK, pool=combat.card_pool)` -- the legacy shared unseeded `random.Random` -- where CalamityPower.cs:48-50 is `CardFactory.GetForCombat(..., Rng.CombatCardGeneration)`. `random_pool_cards`'s WITH-REPLACEMENT branch (`cards/pool.py:153-178`, the non-`distinct` arm: `[rng.choice(options) for _ in range(count)]`) already matches C#'s per-card `rng.NextItem` draw shape one-for-one -- confirmed by comparing it to `cards/pool.py:204-219 get_for_combat_parity`, the already-written parity port, whose body is textually the same `[make_card(rng.choice(options)) for _ in range(count)]` loop, differing only in which `rng` it is handed. So this is a PURE wrong-stream gap, not a wrong-algorithm one: same draws, same count, wrong source. Consequence: the shared `combat._rng` absorbs `self.amount` `.choice()` draws that CombatCardGeneration should have absorbed instead, desyncing every later draw on both streams for the rest of the run -- conformance-visible on any string-seeded replay that plays Calamity. TRIGGER, EXECUTED: `grep -n Calamity sts2_rl/cards/colorless_powers.py` -> `CalamityCard` (colorless_powers.py:45-66), `@register_card`, cost-reducible on upgrade, `PowerCmd.apply(ctx.hooks, ctx.player, CalamityPower, 1, applier=ctx.player)` on play -- a normal colorless Power card reachable from any card reward, so this fires on any seed where the player plays and keeps Calamity and then plays an Attack. FIX: swap `random_pool_cards(combat._rng, ...)` for `cards.pool.get_for_combat_parity(combat.combat_rng.card_gen, self.amount, CardType.ATTACK, pool=combat.card_pool)`. RADIUS: `random_pool_cards` is the legacy (non-parity) helper; re-verified 2026-07-30 that `combat.combat_rng` still has exactly one caller elsewhere in powers.py (StampedePower) -- any other power still calling `random_pool_cards(combat._rng, ...)` for an in-combat generation effect carries the same gap and is not enumerated here."
+      "issue": "NARROWED 2026-07-27. GAP (1), THE COUNT, IS CLOSED: combat.py:574-600 fires `before_card_played` and `on_card_played` inside the playCount loop, per CardModel.cs:1904-1965. WHAT REMAINS is gap (2), THE RNG AND THE POOL HELPER: powers.py:3681 still calls `random_pool_cards(combat._rng, self.amount, CardType.ATTACK)` -- the legacy shared unseeded random.Random -- where CalamityPower.cs:48-50 is `CardFactory.GetForCombat(..., Rng.CombatCardGeneration)` and `cards.pool.get_for_combat_parity` is the already-written parity port taking the card_gen accessor. VERIFIED by grep: `combat.combat_rng` has exactly one user in powers.py (StampedePower, :1111) and this is not it."
     }
   },
   "guards": [

@@ -21,27 +21,27 @@
     },
     {
       "path": "sts2_rl/cards/colorless_skills.py",
-      "sha256": "a94c279e15e166c280c399871da2c21a4ed6c4bf2b827bcf3cf4d1bb9c22b4ca",
+      "sha256": "1cdf31a3bd59e95b239df163b0724e4f99ef299bd67256cc94fcc683e1ed1840",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "06f9d38ecefba5bb61280da2dae7e92350e163a00481f23bfe8443b722327ad8",
+      "sha256": "63c0df752ca09e9de59285b0c9bc9be809da18e69b61b65424d75f37ee1ffc6b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     },
     {
@@ -61,16 +61,14 @@
       "rationale": "LizardTail.cs:18 is `IsUsedUp => _wasUsed`; lizard_tail.py:31-33 is `return self._used`. Correct and load-bearing: Relic.is_tradable (relics/base.py:126-136) refuses a used-up relic, so a spent Lizard Tail stops being offerable to the trade events on both sides, and Rare rarity does not otherwise exclude it. The Status = RelicStatus.Disabled the C# setter also performs (LizardTail.cs:33-37) is presentation (N4). The LIFETIME is per-RUN, not per-combat, on both sides -- [SavedProperty] on WasUsed (LizardTail.cs:22) means it survives a save, and `self._used` is set in __init__ and never reset. `py audit/tools/relic_probes.py sweep-reset` lists lizard_tail among the never-reset candidates whose C# relic has NO combat-boundary reset, which is exactly the evidence that per-run is intended; the sim's own docstring (lizard_tail.py:15) says 'once per combat' and is WRONG, but the code is right. Note that means the port's docstring is the only thing to fix in this member. Rule 7: relics/base.py are not hashed by this record."
     },
     "ShouldDieLate": {
-      "maps_to": "should_die_late (lizard_tail.py:32-52), dispatched by HookSystem.should_die (hooks.py:153-180, 843-854) from DamageCmd.deal (cmds.py:102-136, 287) and CreatureCmd.kill (cmds.py:410)",
+      "maps_to": "should_die (lizard_tail.py:35-40), dispatched by HookSystem.should_die (hooks.py:582-594) from DamageCmd.deal (cmds.py:90-113) and CreatureCmd.kill (cmds.py:192-207)",
       "verdict": "gap",
-      "live": true,
-      "issue": "RE-DERIVED 2026-07-30 (round 11), NOT the guard the record's own prose named. The record's stated premise (\"WHAT REMAINS is guard G3: the port still sets `self._used = True` ... inside `should_die_late`\") is STALE -- guard G3 in this same record was independently CLOSED 2026-07-29 (round 8) and today's `sts2_rl/relics/lizard_tail.py` confirms it end to end: `should_die_late` (lines 32-52) is a pure predicate that only READS `self._used`, and `after_preventing_death` (lines 54-71) is the sole writer of `self._used` -- matching LizardTail.cs:40-51/53-59 exactly, with the `_heal_pending` shim gone entirely. So this hook's own guards (G1, G2, G3, G4, N1) are ALL faithful/closed. BUT per this batch's explicit instruction, Lizard Tail is bound to a DIFFERENT, freshly-discovered LIVE mechanism at this same site: `audit/records/seam/damage_pipeline.json` guard G4 / step17.5, settled LIVE 2026-07-29 by the concurrent `seam-damage-turn` batch using Lizard Tail as its executed witness (binding rule 3 -- cited, not re-derived). MECHANISM: `DamageCmd.deal` resolves death/prevention (`_resolve_death`, which now correctly runs `should_die_late` then `after_preventing_death`'s SYNCHRONOUS heal) at cmds.py step 8, BEFORE it reads `target.is_dead` to gate `on_damage_received` at step 9 (cmds.py:296) -- so Lizard Tail's own fixed, faithful heal un-deads the target before the killing-blow skip is evaluated. C# locks that skip decision to a snapshot taken BEFORE `Kill()` runs (CreatureCmd.cs:392, `WasTargetKilled`/`IsDead`) and never revisits it, so C# skips `AfterDamageReceived` on the killing blow regardless of a later heal. RE-EXECUTED 2026-07-30: `py .superpowers/sdd/unlabelled/probes/seam-damage-turn-g4.py` (a probe from the sibling batch, re-run unchanged) -- player at 1/80 HP with `[lizard_tail, centennial_puzzle]` takes 999 damage: `lizard tail used: True`, hand grows 5 -> 8 (Centennial Puzzle's `on_damage_received` fired and drew 3 where C# would have skipped it). OBSERVABLE: a Tail-prevented lethal hit draws 3 extra cards in the sim and 0 in the game whenever another on_damage_received listener (Centennial Puzzle) is also held. TRIGGER: both relics are real, independently-obtainable, low-rarity ported content (Lizard Tail RARE, Centennial Puzzle -- see relics/centennial_puzzle.py). FIX: snapshot `target.is_dead` right after the HP write (cmds.py step 7), before `_resolve_death` runs, and gate the `on_damage_received` dispatch on that snapshot rather than the live value -- owned by `damage_pipeline/G4`, not independently fixable at this relic's site. RADIUS: also gates Fairy in a Bottle via `should_die` (damage_pipeline/G4's own text)."
+      "issue": "NARROWED 2026-07-27. Guards G1, G2, G4 and N1 are CLOSED -- see those guards: the port now uses `should_die_late` and `after_preventing_death` (sts2_rl/relics/lizard_tail.py), HookSystem runs the ShouldDie/ShouldDieLate passes separately (sts2_rl/hooks.py:153-180, 843-854), CreatureCmd.kill routes through _resolve_death (sts2_rl/cmds.py:285-292) and the prevented death is no longer floored at 1 HP (sts2_rl/cmds.py:51-64). WHAT REMAINS is guard G3: the port still sets `self._used = True` and `self._heal_pending = True` INSIDE `should_die_late`, where LizardTail.ShouldDieLate (LizardTail.cs:40-51) is pure and WasUsed is written in AfterPreventingDeath (:56). Any caller that uses should_die as a bare predicate -- cards/breakthrough.py's `if p.hp <= 0 and ctx.hooks.should_die(p)` -- still burns the relic for nothing."
     },
     "AfterPreventingDeath": {
-      "maps_to": "after_preventing_death (lizard_tail.py:54-71), dispatched by DamageCmd.deal's `_resolve_death` else-arm (cmds.py:123-136) to the vetoing listener",
+      "maps_to": "NOT after_preventing_death; the port instead latches `_heal_pending` in should_die and heals from on_damage_received (lizard_tail.py:42-53)",
       "verdict": "gap",
-      "live": true,
-      "issue": "RE-DERIVED 2026-07-30 (round 11), same finding and same mechanism as this record's `ShouldDieLate` hook entry above -- see that entry for the full derivation, not repeated here per binding rule 3 (one mechanism, `damage_pipeline/G4`, at one relic with two hook sites). The record's own former premise (a live `_heal_pending`/G3 shim) is STALE: guard G3 is closed, `after_preventing_death` is the sole, correctly-placed writer of `self._used` and the sole site of the heal (`lizard_tail.py:68-71`, `CreatureCmd.heal(..., max(1, max_hp * 50 // 100))`, matching LizardTail.cs:53-59's `Math.Max(1m, ...)` exactly per this record's own guard N2). What remains live is that THIS heal -- run synchronously inside `after_preventing_death`, itself called from `_resolve_death` before the `on_damage_received` gate is read -- is exactly the un-dead-before-the-snapshot mechanism `damage_pipeline/G4`/`step17.5` names, LIVE, with the Lizard-Tail-plus-Centennial-Puzzle witness re-executed above. FIX/RADIUS: owned by `damage_pipeline/G4` (snapshot `is_dead` before `_resolve_death`, not at the point `on_damage_received` is dispatched); not independently fixable by editing this relic alone, since the relic's own heal timing (synchronous, inside the vetoing listener's `AfterPreventingDeath`) is exactly what the source does too (LizardTail.cs:53-59) -- the bug is the SNAPSHOT TIMING in `DamageCmd.deal`, not the heal."
+      "issue": "NARROWED 2026-07-27. Guards G1, G2, G4 and N1 are CLOSED -- see those guards: the port now uses `should_die_late` and `after_preventing_death` (sts2_rl/relics/lizard_tail.py), HookSystem runs the ShouldDie/ShouldDieLate passes separately (sts2_rl/hooks.py:153-180, 843-854), CreatureCmd.kill routes through _resolve_death (sts2_rl/cmds.py:285-292) and the prevented death is no longer floored at 1 HP (sts2_rl/cmds.py:51-64). WHAT REMAINS is guard G3: the port still sets `self._used = True` and `self._heal_pending = True` INSIDE `should_die_late`, where LizardTail.ShouldDieLate (LizardTail.cs:40-51) is pure and WasUsed is written in AfterPreventingDeath (:56). Any caller that uses should_die as a bare predicate -- cards/breakthrough.py's `if p.hp <= 0 and ctx.hooks.should_die(p)` -- still burns the relic for nothing."
     }
   },
   "guards": [

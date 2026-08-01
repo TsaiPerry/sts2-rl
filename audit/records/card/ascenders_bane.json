@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\ascenders_bane.py",
-    "sha256": "3900e893c3ab5dcf69bf14829cc272d80a127991640e5cf09744e26a44e14bdd"
+    "sha256": "39337247ab7350aabde483692954c8ad739ca0871b34f9bb68ecc34c81278da5"
   },
   "extra_sources": [
     {
@@ -21,17 +21,17 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
+      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/event_cards.py",
-      "sha256": "57208afe6ae70f9dd177e57aee53a7f5b5624a5ba5d830a46de5263c8732e691",
+      "sha256": "dfd78fff2c2a36323033d8c74d986f9211a6cff57920b7380b731bb6cf9d3a5a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
@@ -41,12 +41,12 @@
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "06f9d38ecefba5bb61280da2dae7e92350e163a00481f23bfe8443b722327ad8",
+      "sha256": "63c0df752ca09e9de59285b0c9bc9be809da18e69b61b65424d75f37ee1ffc6b",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     },
     {
@@ -83,8 +83,8 @@
     },
     "ctor": {
       "maps_to": "class attrs (ascenders_bane.py:21-30) + _init_vars (32-33)",
-      "verdict": "gap",
-      "issue": "`base(-1, CardType.Curse, CardRarity.Curse, TargetType.None)` (AscendersBane.cs:19-22): the type, rarity and target type map exactly (CURSE / CURSE / NONE), but the canonical energy cost is **-1** in C# and **0** in the sim (`_init_vars`: `self._energy_cost = 0`, ascenders_bane.py:33). -1 is not a cosmetic 'no cost' marker: `CardEnergyCost.GetWithModifiers` short-circuits on `if (_base < 0) return num;` (CardEnergyCost.cs:100-103) BEFORE any local or global cost modifier is applied, so in the game an unplayable curse is immune to every cost modifier and keeps reporting -1, while the sim's `Card.energy_cost` property (cards/base.py:222-232) runs the full `_free_this_turn` / `_cost_this_turn` / `_cost_this_combat` / `_cost_delta_this_turn` chain over a base of 0. `GetAmountToSpend()` clamps to `Math.Max(0, ...)` (CardEnergyCost.cs:134-139), so the two agree on what is SPENT -- the divergence is confined to what is READ. DORMANT: no ported reader distinguishes them today. The three ported cost readers were checked -- `relics/mummified_hand.py:25` and `potions.py:168` filter on `energy_cost > 0` (both sides exclude it), `cards/event_cards.py:328` (Enlightenment) `continue`s at `<= 1` (both sides skip it), and `events/infested_automaton.py:35` filters `pool_card_ids()`, which contains no curses. It goes LIVE the moment any effect reads the cost of an unplayable card without a `> 0` filter, or applies a cost modifier to one and displays the result. The same -1 -> 0 mapping is used by every other unplayable curse/status in the sim (bad_luck, burn, clumsy, dazed, ...), so this is a POOL-WIDE finding recorded once per unit."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): `Card.energy_cost` (`sts2_rl/cards/base.py`) now short-circuits on `self._energy_cost < 0` as its first check, returning the raw canonical value before consulting `_free_this_turn` / `_cost_this_turn` / `_cost_this_combat` / `_cost_delta_this_turn` -- mirrors `CardEnergyCost.GetWithModifiers`'s `if (_base < 0) return num;` short-circuit (`CardEnergyCost.cs:101-104`; the record's `:100-103` cite is one line of decompiler drift), which runs before any local or global modifier. All 29 unplayable curse/status/quest cards now set `self._energy_cost = -1` in `_init_vars` (previously 0), each verified individually against its own C# `base(-1, CardType.X, ...)` constructor -- no exceptions, no ascension-gated cost variant. Readers audit (every non-cards/ `energy_cost` hit read in context): combat play/auto-play/valid_actions/action-mask sites gate on `is_playable` first and never see -1; every global-modifier site routes through `hooks.modify_card_energy_cost`, whose dispatcher ends `return max(0, cost)` -- the sim's analogue of C#'s `Math.Max(0, GetWithModifiers(...))` in `GetAmountToSpend`/`GetResolved` (`CardEnergyCost.cs:134-141`) -- so what is SPENT and what the observation encoder reads (`full_env.py` card_features via `previews.py` preview_card_energy_cost) are byte-for-byte unchanged. The three previously-known readers (`relics/mummified_hand.py`, `potions.py` TouchOfInsanity, `cards/event_cards.py` Enlightenment) remain correct, confirmed by unit tests. NOT closed here: `selectors.py`'s `scripted_card_selector` 'to_draw_top' purpose (Headbutt/Thinking Ahead) ranks by raw `card.energy_cost` unclamped -- a sim-only heuristic with no C# analogue; a curse in a Headbutt-eligible discard pile now ranks below-cost instead of tying at 0. No test exercises it; filed in GAP-QUEUE.md's 'Named work with no entry of its own'. New pins: test/test_unplayable_cost.py (15 tests).  The text it replaced read: `base(-1, CardType.Curse, CardRarity.Curse, TargetType.None)` (AscendersBane.cs:19-22): the type, rarity and target type map exactly (CURSE / CURSE / NONE), but the canonical energy cost is **-1** in C# and **0** in the sim (`_init_vars`: `self._energy_cost = 0`, ascenders_bane.py:33). -1 is not a cosmetic 'no cost' marker: `CardEnergyCost.GetWithModifiers` short-circuits on `if (_base < 0) return num;` (CardEnergyCost.cs:100-103) BEFORE any local or global cost modifier is applied, so in the game an unplayable curse is immune to every cost modifier and keeps reporting -1, while the sim's `Card.energy_cost` property (cards/base.py:222-232) runs the full `_free_this_turn` / `_cost_this_turn` / `_cost_this_combat` / `_cost_delta_this_turn` chain over a base of 0. `GetAmountToSpend()` clamps to `Math.Max(0, ...)` (CardEnergyCost.cs:134-139), so the two agree on what is SPENT -- the divergence is confined to what is READ. DORMANT: no ported reader distinguishes them today. The three ported cost readers were checked -- `relics/mummified_hand.py:25` and `potions.py:168` filter on `energy_cost > 0` (both sides exclude it), `cards/event_cards.py:328` (Enlightenment) `continue`s at `<= 1` (both sides skip it), and `events/infested_automaton.py:35` filters `pool_card_ids()`, which contains no curses. It goes LIVE the moment any effect reads the cost of an unplayable card without a `> 0` filter, or applies a cost modifier to one and displays the result. The same -1 -> 0 mapping is used by every other unplayable curse/status in the sim (bad_luck, burn, clumsy, dazed, ...), so this is a POOL-WIDE finding recorded once per unit."
     },
     "OnPlay": {
       "maps_to": "AscendersBaneCard.on_play -> pass (ascenders_bane.py:35-36)",
@@ -104,6 +104,6 @@
       "rationale": "No subclass exists in src/Core/Models/Cards. Nothing to mirror."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

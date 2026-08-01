@@ -472,7 +472,11 @@ class SeekerStrikeCard(Card):
             ctx.combat.combat_rng,
             stream=ctx.combat.combat_rng.card_selection,
         )[:self._cards]
-        chosen = ctx.combat.select_cards("from_draw", options, 1)
+        # SeekerStrike.cs:37 hands these off to `CardSelectCmd.FromCombatPile`
+        # against the DRAW pile (filtered to `cardOptions.Contains`), so an
+        # installed Selector sees the `orderby Rarity, Id` pre-sort
+        # (CardSelectCmd.cs:403-408), not the shuffled order above.
+        chosen = ctx.combat.select_cards("from_draw", options, 1, is_draw_pile=True)
         for card in chosen:
             if len(player.hand) >= player.MAX_HAND_SIZE:
                 break

@@ -75,3 +75,25 @@ class Creature:
         creatures can still have powers applied to them".
         """
         return self.is_gone and not self.retained_after_death
+
+    def snapshot_powers_on_turn_start(self) -> None:
+        """`Creature.BeforeTurnStart` (Creature.cs:673-679) —
+
+            foreach (PowerModel power in _powers)
+                power.AmountOnTurnStart = power.Amount;
+
+        Called from `CombatManager.StartTurn`'s own per-creature loop
+        (CombatManager.cs:447-450), which runs before ANYTHING else in the
+        turn — before `Hook.BeforeSideTurnStart`, before the block clear,
+        before the enemy move-roll pass. Every power gets snapshotted, not
+        just the ones that read it (DrawCardsNextTurnPower, HelloWorldPower).
+
+        The attribute is set here via plain assignment rather than declared
+        on `Power.__init__` — `power_cmd/G5`-adjacent code elsewhere in
+        `powers.py` is owned by a concurrent task this wave, so readers use
+        `getattr(power, "amount_on_turn_start", 0)`, which is exactly what an
+        un-snapshotted (freshly-applied-this-turn) power's C# field would
+        read: the type's zero default.
+        """
+        for power in self.powers.values():
+            power.amount_on_turn_start = power.amount

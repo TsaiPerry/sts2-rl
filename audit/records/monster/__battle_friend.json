@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\glory\\battle_friend.py",
-    "sha256": "521cd32dc29456e0d4baf9fd3fd0501641cc443806482e446fb3750bf86f83a4"
+    "sha256": "65ebe3c274a31866d9c9d35280b855482773389b30067c099d70a22dff73b4e4"
   },
   "extra_sources": [
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "b52d8d15ba11856c157ae544d7837db5c35df881260a0065cf1d2b97917bd392",
+      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     }
   ],
@@ -80,9 +80,8 @@
     },
     {
       "what": "NOTHING_MOVE carries no intents in C#",
-      "verdict": "gap",
-      "issue": "BattleFriendV1/2/3.cs:28 constructs the MoveState with NO intents at all -- the `AbstractIntent[] intents` params array is empty, so the dummy telegraphs nothing. The sim substitutes `Intent(MoveType.UNKNOWN)` (battle_friend.py:32-34). Same mechanism as the StatusIntent-count loss on the_insatiable and aeonglass: the sim's Intent (monsters/base.py:36-59) collapses a C# AbstractIntent[] and cannot express 'no intent'. monster_state_machine's scope boundary item 2 records the whole mapping as audited by no seam. NOT LIVE: nothing in the sim distinguishes UNKNOWN from absent (there is no empty Intent), so no ported consumer can observe it. Named trigger: an observation or replay consumer that renders the intent list, or any content gating on `MonsterModel.IntendsToAttack` (MonsterModel.cs:241-245), which reads the intent list and has no sim counterpart.",
-      "live": false
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 28.) 'No intent' is now expressible: monsters/base.py gained MoveType.NONE and Intent.none(); all 4 Battle Friend dummy sites construct it, mirroring the empty `params AbstractIntent[]` in BattleFriendV1/V2/V3.cs:28. No consumer tests MoveType.NONE (full_env.py's ten flag checks exclude it, so the dummies encode all-zero flags; test/run.py renders 'None' safely); every other monster's constructed intents are byte-identical (defaulted fields only, verified by a 321-site grep). MoveType.UNKNOWN stays reserved for state_machine.py's UNSET_MOVE sentinel. Witness: test/test_monster_tier_families.py::TestNoIntentUnrepresentable.  The text it replaced read: BattleFriendV1/2/3.cs:28 constructs the MoveState with NO intents at all -- the `AbstractIntent[] intents` params array is empty, so the dummy telegraphs nothing. The sim substitutes `Intent(MoveType.UNKNOWN)` (battle_friend.py:32-34). Same mechanism as the StatusIntent-count loss on the_insatiable and aeonglass: the sim's Intent (monsters/base.py:36-59) collapses a C# AbstractIntent[] and cannot express 'no intent'. monster_state_machine's scope boundary item 2 records the whole mapping as audited by no seam. NOT LIVE: nothing in the sim distinguishes UNKNOWN from absent (there is no empty Intent), so no ported consumer can observe it. Named trigger: an observation or replay consumer that renders the intent list, or any content gating on `MonsterModel.IntendsToAttack` (MonsterModel.cs:241-245), which reads the intent list and has no sim counterpart."
     },
     {
       "what": "The base applies the starting power, so all three variants get it",
@@ -95,6 +94,6 @@
       "rationale": "The Battleworn Dummy event is ported: `battleworn_dummy` is the first entry in GLORY_EVENTS (events/__init__.py:100-108) and the three difficulty settings export BATTLEWORN_DUMMY_SETTING_1/2/3 (battle_friend.py:67-78, re-exported at events/__init__.py:166). `should_give_rewards=False` mirrors the encounter's own ShouldGiveRewards. Both sides reachable with ported content."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-27"
 }

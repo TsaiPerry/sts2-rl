@@ -36,17 +36,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
+      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
       "side": "sim"
     },
     {
@@ -64,8 +64,7 @@
     "AfterPlayerTurnStart": {
       "maps_to": "on_player_turn_started (festive_popper.py:21-28)",
       "verdict": "gap",
-      "live": false,
-      "issue": "LABELLED (round 11): DORMANT overall -- both open guards are dormant, and neither has flipped since the round-3 narrowing. G1, the slot, is CLOSED: FestivePopper.cs declares AfterPlayerTurnStart and `on_player_turn_started` is now that hook alone -- the AfterSideTurnStart listeners it used to share a registration-ordered walk with are on the new `after_side_turn_start`, fired strictly later. WHAT REMAINS, both DORMANT and re-checked rather than inherited: G2 (the enemy set built from `living_enemies()` instead of `HittableEnemies`) is covered downstream by `DamageCmd.deal`'s own `should_allow_hitting` guard (cmds.py:51-52), so the HP outcome is identical and only a residual on_attacked/history entry differs, unreached because the only ported `should_allow_hitting` implementer gates on a mid-revival Decimillipede state that cannot be true on turn 1; G3 (the hand-rolled inline `_check_win()` instead of C#'s CheckWinCondition after the whole turn-start sequence) is dormant because the Popper can only end combat EARLY relative to C#, never leave it running, and no ported listener registered after the relic in the same dispatch reads post-victory state. Porting a turn-1 untargetable enemy (G2) or a reward/on-victory counter that runs later in the same dispatch (G3) makes the corresponding half live.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: STILL OPEN at G2 and G3. G1, the slot, is CLOSED: FestivePopper.cs declares AfterPlayerTurnStart and `on_player_turn_started` is now that hook alone -- the AfterSideTurnStart listeners it used to share a registration-ordered walk with are on the new `after_side_turn_start`, fired strictly later. WHAT REMAINS: G2, the enemy set built from a weaker predicate, and G3, the hand-rolled inline win check."
+      "issue": "STILL OPEN at G2 and G3. G1, the slot, is CLOSED: FestivePopper.cs declares AfterPlayerTurnStart and `on_player_turn_started` is now that hook alone -- the AfterSideTurnStart listeners it used to share a registration-ordered walk with are on the new `after_side_turn_start`, fired strictly later. WHAT REMAINS: G2, the enemy set built from a weaker predicate, and G3, the hand-rolled inline win check.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: Rollup of guards G1, G2 and G3 per binding rule 4. The effect's numbers are right -- DamageVar(9m, ValueProp.Unpowered) (FestivePopper.cs:17) vs DAMAGE = 9 at DamageProps.NON_CARD_UNPOWERED (festive_popper.py:19, :27), no AscensionHelper branch in the file, dealer = the player on both sides, turn 1 only -- but the hook slot is a step late (G1), the enemy set is built from a weaker predicate (G2), and the win check the source performs after the whole turn-start sequence is hand-rolled inline instead (G3)."
     }
   },
   "guards": [

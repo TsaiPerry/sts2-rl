@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
@@ -78,8 +78,7 @@
     "ModifyDamageAdditive": {
       "maps_to": "modify_damage_additive (fake_strike_dummy.py:24-33), dispatched by hooks.py:52-64 from DamageCmd.deal (cmds.py:56-57)",
       "verdict": "gap",
-      "live": false,
-      "issue": "RE-EXECUTED 2026-07-30 (round 11); NARROWED 2026-07-27. The hoisted-props half (N1) is CLOSED: the hook carries `props`, DamageCmd.deal runs the chain unconditionally (sts2_rl/hooks.py:185-208, sts2_rl/cmds.py:120-133) and sts2_rl/relics/fake_strike_dummy.py self-gates on `is_powered_attack(props)`, which is FakeStrikeDummy.cs:23-26. WHAT REMAINS is guard G1, still DORMANT today: FakeStrikeDummy.cs:35-38's fourth clause is an AND of two negatives -- decline only when the dealer is not the owner's creature AND the card is not the owner's -- and the port still narrows it to `dealer is self.player` (sts2_rl/relics/fake_strike_dummy.py:35), so the same Strike with dealer=None lands for 6 where C# gives 7. RE-CENSUSED (`.superpowers/sdd/unlabelled/probes/relic-5-checks.py fake-strike-census`): the 8 ported Strike-tagged cards (ashen_strike, perfected_strike, pommel_strike, seeker_strike, setup_strike, strike, twin_strike, ultimate_strike) all still deal their damage with `dealer=ctx.player`, and the 13 `DamageCmd.deal(card=..., dealer=None)` sites are unchanged and still all non-Strike (bad_luck, beckon, blood_wall, bloodletting, burn, decay, hemokinesis, infection, offering, regret, toxic, wither, enchantments.py:616 -- 8 of the 13 omit the `dealer` kwarg entirely and 5, burn/decay/infection/toxic/wither, pass `dealer=None` explicitly; both shapes are the same 'no dealer' case this guard's `dealer is self.player` test needs to see). No ported path today reaches G1; disposition unchanged."
+      "issue": "NARROWED 2026-07-27. The hoisted-props half (N1) is CLOSED: the hook carries `props`, DamageCmd.deal runs the chain unconditionally (sts2_rl/hooks.py:185-208, sts2_rl/cmds.py:120-133) and sts2_rl/relics/fake_strike_dummy.py self-gates on `is_powered_attack(props)`, which is FakeStrikeDummy.cs:23-26. WHAT REMAINS is guard G1: FakeStrikeDummy.cs:35-38's fourth clause is an AND of two negatives -- decline only when the dealer is not the owner's creature AND the card is not the owner's -- and the port still narrows it to `dealer is self.player`, so the same Strike with dealer=None lands for 6 where C# gives 7."
     }
   },
   "guards": [

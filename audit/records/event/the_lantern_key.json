@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/cards/event_cards.py",
-      "sha256": "57208afe6ae70f9dd177e57aee53a7f5b5624a5ba5d830a46de5263c8732e691",
+      "sha256": "dfd78fff2c2a36323033d8c74d986f9211a6cff57920b7380b731bb6cf9d3a5a",
       "side": "sim"
     },
     {
@@ -61,12 +61,12 @@
     },
     {
       "path": "sts2_rl/events/_combat_layout.py",
-      "sha256": "4b2190746fc742403921d3501e555664123f495b8895b71a3cb5c9a41dbdba27",
+      "sha256": "46e08c08742756fb9c5370bae20783b875884031376fee3cf09db11a1179802a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/punch_off.py",
-      "sha256": "6bcf771f0d6a512a39ce3ca96105cb9fe783a15fa905c92f7b3afda838224741",
+      "sha256": "24b2fb04109a53f3edb9fc1bc7381925c12b6ebf38dedc276d97d2f078dc6673",
       "side": "sim"
     }
   ],

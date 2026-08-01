@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -21,17 +21,17 @@
     },
     {
       "path": "sts2_rl/cards/colorless_powers.py",
-      "sha256": "781659d4e8cf5baa55bb1bf61572843ad9180a5bef5de881817c0bf97aadf0de",
+      "sha256": "c2cde0318957b1906d487ec7de4988642829637ed94602ca4f3e4c4d7af298ec",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     }
   ],
@@ -52,9 +52,8 @@
     },
     "InstanceType": {
       "maps_to": "no sim counterpart; cmds.py:308 keys stacking on power id alone",
-      "verdict": "gap",
-      "issue": "PowerInstanceType.Instanced: in C# every application is an independently tracked instance with its own Amount and its own internal state, where the sim's PowerCmd.apply merges by power id via on_stack (cmds.py:308-311). This is audit/records/seam/power_cmd.json's gap G5, which lists this power among its 11 ported InstanceType units; the mechanism is not re-verdicted here per binding rule 3. What is per-unit is REACHABILITY of two simultaneous instances and what diverges when they exist. REACHABLE AND DIVERGENT for this power, because the per-instance state is a COUNTER, not just an Amount. Automation is a ported Colorless power card (cards/colorless_powers.py:37-39) that can be drawn and played twice in one combat. In C# each play gets its own Data.cardsLeft = 10 (AutomationPower.cs:12-15, :31-34), so two Automations each fire once per 10 cards drawn -- two separate energy grants of Amount each, on the same draw. In the sim the second play calls Power.on_stack, which adds the amounts into ONE power with ONE cards_left counter (powers.py:3465 is only run from __init__), so the player gets a single grant of the summed amount every 10 cards -- the same total energy but at half the frequency, and delivered on different draws. Worse, the merged counter is not reset by the second application, so the second Automation's first trigger arrives up to 9 draws early. Together with power/rolling_boulder this is the second reachable, arithmetically divergent witness half A has found for G5, whose text still says 'no currently-demonstrated collision'. LIVE 2026-07-29 (round 11): binding to seam-power-cmd's own re-verdict of G5, done concurrently in this round -- audit/records/seam/power_cmd.json's G5 guard now carries `\"live\": true` with an EXECUTED probe naming this exact power as its divergence example (`.superpowers/sdd/unlabelled/probes/seam-power-cmd-g5-automation2.py`: two AutomationPower(1) applications 6 draws apart merge into one instance and fire a single GainEnergy(2) at draw #10 instead of C#'s two independent GainEnergy(1) events at draws #10 and #16). This site's own reachability argument (duplicate colorless-card draw, no uniqueness gate in sts2_rl/rewards.py) matches G5's TRIGGER clause verbatim, so there is no per-site divergence to flag -- Automation is LIVE at both the mechanism level and this site.",
-      "live": true
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): AutomationPower.instance_type = PowerInstanceType.INSTANCED (sts2_rl/powers.py), mirroring AutomationPower.cs:27. PowerCmd.apply's dispatch (sts2_rl/cmds.py, power_cmd/G5) now gives a second application its own instance with its own fresh cards_left rather than merging into the first's, so two Automation plays fire two independent GainEnergy(1) events at their own 10-draw marks instead of one merged GainEnergy(2). Verified by an executed test reproducing the record's own probe shape (two applications 6 draws apart): test/test_powers.py::TestPowerInstanceType::test_instanced_power_applied_twice_yields_two_independently_ticking_instances asserts the corrected draw-#10/#16 timing. Does NOT close anything about full_env.py's observation encoding, which still exposes only the newest instance via `target.powers` -- a pre-existing, separate limitation this fix does not touch.  The text it replaced read: PowerInstanceType.Instanced: in C# every application is an independently tracked instance with its own Amount and its own internal state, where the sim's PowerCmd.apply merges by power id via on_stack (cmds.py:308-311). This is audit/records/seam/power_cmd.json's gap G5, which lists this power among its 11 ported InstanceType units; the mechanism is not re-verdicted here per binding rule 3. What is per-unit is REACHABILITY of two simultaneous instances and what diverges when they exist. REACHABLE AND DIVERGENT for this power, because the per-instance state is a COUNTER, not just an Amount. Automation is a ported Colorless power card (cards/colorless_powers.py:37-39) that can be drawn and played twice in one combat. In C# each play gets its own Data.cardsLeft = 10 (AutomationPower.cs:12-15, :31-34), so two Automations each fire once per 10 cards drawn -- two separate energy grants of Amount each, on the same draw. In the sim the second play calls Power.on_stack, which adds the amounts into ONE power with ONE cards_left counter (powers.py:3465 is only run from __init__), so the player gets a single grant of the summed amount every 10 cards -- the same total energy but at half the frequency, and delivered on different draws. Worse, the merged counter is not reset by the second application, so the second Automation's first trigger arrives up to 9 draws early. Together with power/rolling_boulder this is the second reachable, arithmetically divergent witness half A has found for G5, whose text still says 'no currently-demonstrated collision'. LIVE 2026-07-29 (round 11): binding to seam-power-cmd's own re-verdict of G5, done concurrently in this round -- audit/records/seam/power_cmd.json's G5 guard now carries `\"live\": true` with an EXECUTED probe naming this exact power as its divergence example (`.superpowers/sdd/unlabelled/probes/seam-power-cmd-g5-automation2.py`: two AutomationPower(1) applications 6 draws apart merge into one instance and fire a single GainEnergy(2) at draw #10 instead of C#'s two independent GainEnergy(1) events at draws #10 and #16). This site's own reachability argument (duplicate colorless-card draw, no uniqueness gate in sts2_rl/rewards.py) matches G5's TRIGGER clause verbatim, so there is no per-site divergence to flag -- Automation is LIVE at both the mechanism level and this site."
     },
     "AfterCardDrawn": {
       "maps_to": "powers.py:3467-3472 AutomationPower.on_card_drawn (hooks.py:391-400)",
@@ -79,6 +78,6 @@
       "rationale": "Neither side ticks or removes it; it runs for the rest of the combat. Both agree."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -26,17 +26,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/hive/the_insatiable.py",
-      "sha256": "836167dc5df3271c3baadd759fcb697ecc3fc1280b8421847d1b66178c1fdf42",
+      "sha256": "c69438d60834cfdfc6793f3bd44fe83d4392373b5c7ff4a56687c14e53374b38",
       "side": "sim"
     }
   ],
@@ -52,8 +52,8 @@
     },
     "InstanceType": {
       "maps_to": "cmds.py:308 `if power_cls.id in target.powers`",
-      "verdict": "gap",
-      "issue": "PowerInstanceType.Instanced (SandpitPower.cs:37). The sim's stacking check (cmds.py:308) always behaves as PowerInstanceType.None -- one shared instance per power id per owner -- so two simultaneous Sandpits on the same Insatiable would merge into one 8-count timer where C# would track two independent 4-count timers, either of which eats the player when it runs out. power_cmd gap G5 owns the mechanism and this unit is one of its 11 named ported instances; not re-verdicted (rule 3), and this power is one of the seven that \"do not acknowledge the distinction at all\" (unlike toric_toughness and the_bomb). DORMANT, and proven by enumerating the owner's move machine rather than asserted: LIQUIFY_GROUND_MOVE is the Insatiable's OPENING move and is never any state's follow_up (monsters/hive/the_insatiable.py:34-56 -- liquify -> thrash -> bite -> salivate -> thrash2 -> thrash, a closed loop that never re-enters liquify), so it applies Sandpit exactly once per combat. C# would also create one instance per target (TheInsatiable.cs:121-126 loops `targets`), which is one in single-player. Trigger: a second LIQUIFY, or a second player. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): SandpitPower.instance_type = PowerInstanceType.INSTANCED (sts2_rl/powers.py), mirroring SandpitPower.cs:37. A second LIQUIFY would now start its own independent countdown instead of merging into the first's (either one reaching 0 still kills the player), matching FindExistingInstanceForStacking's Instanced branch (PowerCmd.cs:169). Frantic Escape's own re-application (FranticEscape.cs:38-42) bypasses Apply/FindExistingInstanceForStacking entirely and calls PowerCmd.ModifyAmount straight on the found instance -- sts2_rl/cards/frantic_escape.py's on_play was changed to match (PowerCmd.modify_amount on the looked-up instance, not PowerCmd.apply): left calling PowerCmd.apply, the now-Instanced dispatch would have started a stray second, short-fused instance instead of extending the real one -- a regression this fix would otherwise have introduced, not a pre-existing one. Verified by test/test_powers.py::TestPowerInstanceType::test_sandpit_two_applications_are_independent_devour_timers and ::test_frantic_escape_modifies_the_existing_sandpit_instance_directly. DORMANT stands for the monster's own re-application: LIQUIFY_GROUND is the opening move and never repeats in the Insatiable's move machine.  The text it replaced read: PowerInstanceType.Instanced (SandpitPower.cs:37). The sim's stacking check (cmds.py:308) always behaves as PowerInstanceType.None -- one shared instance per power id per owner -- so two simultaneous Sandpits on the same Insatiable would merge into one 8-count timer where C# would track two independent 4-count timers, either of which eats the player when it runs out. power_cmd gap G5 owns the mechanism and this unit is one of its 11 named ported instances; not re-verdicted (rule 3), and this power is one of the seven that \"do not acknowledge the distinction at all\" (unlike toric_toughness and the_bomb). DORMANT, and proven by enumerating the owner's move machine rather than asserted: LIQUIFY_GROUND_MOVE is the Insatiable's OPENING move and is never any state's follow_up (monsters/hive/the_insatiable.py:34-56 -- liquify -> thrash -> bite -> salivate -> thrash2 -> thrash, a closed loop that never re-enters liquify), so it applies Sandpit exactly once per combat. C# would also create one instance per target (TheInsatiable.cs:121-126 loops `targets`), which is one in single-player. Trigger: a second LIQUIFY, or a second player. Third-file citations, not hashed here."
     },
     "AfterApplied": {
       "maps_to": "no sim counterpart",

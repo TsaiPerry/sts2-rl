@@ -56,12 +56,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     },
     {
@@ -71,7 +71,7 @@
     },
     {
       "path": "sts2_rl/relics/ruined_helmet.py",
-      "sha256": "379bd9ed7f301d2bf5b9aa011e275661326b0ae133805956c699150610542f0c",
+      "sha256": "55ff84a9f9bd2ae1fc0430d9c5b18b2720e662458b66c8338fd30b361d9df3c8",
       "side": "sim"
     },
     {
@@ -81,7 +81,7 @@
     },
     {
       "path": "sts2_rl/relics/unsettling_lamp.py",
-      "sha256": "7f3e9b4f005331480d2b9dc6c824be57a12abf91bc638639b8d5714e1b5f5b87",
+      "sha256": "fc3c134fc62f28d8c30b2ac40a1ece7bbd914dd9b2766fbca402a96c939bba82",
       "side": "sim"
     }
   ],
@@ -94,8 +94,7 @@
     "AfterRoomEntered": {
       "maps_to": "on_combat_start (sword_of_jade.py:22-29)",
       "verdict": "gap",
-      "live": false,
-      "issue": "Rollup of guards G1 and N1 per binding rule 4. The power, the amount and the target are right and executed; the hook SITE is one dispatch later than C#'s and the applier identity differs. N1 (applier identity) is `faithful`, not an open gap -- the only live-relevant guard here is G1. LIVENESS: DORMANT, RE-EXECUTED 2026-07-30 (round 11) with a REFRESHED census, since the 2026-07-26 census undercounts today's `on_combat_start` population. EXECUTED: `grep -rl 'def on_combat_start' sts2_rl/relics sts2_rl/powers.py` now returns 22 files (belt_buckle, bronze_scales, delicate_frond, ember_tea, fake_snecko_eye, fur_coat, ghost_seed, girya, gorget, kusarigama, oddly_smooth_stone, pantograph, petrified_toad [really `on_combat_start_late`], philosophers_stone, red_skull, sling_of_courage, snecko_eye, stone_cracker, sword_of_jade, tea_of_discourtesy, throwing_axe, unsettling_lamp, vajra), up from the original 14 (12 AfterRoomEntered-side + the snecko pair). Read every new file's `on_combat_start` body: `belt_buckle` (Dexterity re-arm check), `delicate_frond` (potion generation), `pantograph` (boss-room heal), `petrified_toad` (potion procurement, and its own docstring confirms its real C# hook is `BeforeCombatStartLate` -- an even LATER pass than plain `BeforeCombatStart`, so strictly after Sword of Jade regardless), `tea_of_discourtesy` (Dazed shuffle), `unsettling_lamp` (flag reset only -- its power-doubling logic lives on a different hook, `modify_power_amount`), `fur_coat` (enemy HP set), `kusarigama` (attack counter reset) -- NONE reads or is order-sensitive to the player's Strength. `philosophers_stone` grants Strength to ENEMIES only (`for enemy in self.living_enemies()`), not the player, so it cannot race Sword of Jade's self-targeted grant. The remaining Strength-granting `on_combat_start` listeners (`ember_tea`, `girya`, `vajra`, alongside `sword_of_jade` itself) are ALL on the SAME side of the C# phase split (AfterRoomEntered, per the original census, unchanged), so their mutual order is preserved on both sides and Strength addition is commutative regardless. `ruined_helmet` (the one relic that doubles the FIRST Strength gain each combat, via `modify_power_amount`, a different hook entirely) is unaffected by which of the AfterRoomEntered-side granters goes first, and still has no competing turn-start Strength source to race against. No two combat-start relics on opposite sides of the C#-phase collapse touch a shared RNG stream either. Porting a genuine C#-`BeforeCombatStart` (not `AfterRoomEntered`) relic or power that reads or scales with the player's Strength, or a wrong-stream RNG collision across the collapsed phases, would make this live; none exists today. The same guard on `relic/stone_cracker` in an earlier batch carries the same verdict for the same (now-refreshed) census, per binding rule 3."
+      "issue": "Rollup of guards G1 and N1 per binding rule 4. The power, the amount and the target are right and executed; the hook SITE is one dispatch later than C#'s and the applier identity differs."
     }
   },
   "guards": [

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/glory/aeonglass.py",
-      "sha256": "122f47b88b1d87fd6dec7dbe7f575fa92aa176adb2b1e3d1d03f70f04a4c4dd8",
+      "sha256": "4106f8d25cd8c5d3aa6f86faf884907896a10605fc1250c8dc5d8f66cbb0d39e",
       "side": "sim"
     }
   ],
@@ -52,8 +52,8 @@
     },
     "InstanceType": {
       "maps_to": "cmds.py:308 `if power_cls.id in target.powers`",
-      "verdict": "gap",
-      "issue": "PowerInstanceType.Instanced (WitheringPresencePower.cs:26): C# creates one instance per OPPONENT, each with its own `Target` (Aeonglass.cs:78-83 loops `GetOpponentsOf(base.Creature)`), and the counter is per-instance. The sim's stacking check always behaves as PowerInstanceType.None. power_cmd gap G5 owns the mechanism and this is one of its 11 named ported instances -- and one of the seven that do not acknowledge the distinction at all. DORMANT by scope: one player means one opponent means one instance, so like power/strangle this is dormant BY SCOPE rather than by content and will not become live by porting more Ironclad content. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): WitheringPresencePower.instance_type = PowerInstanceType.INSTANCED (sts2_rl/powers.py), mirroring WitheringPresencePower.cs:26 (the game creates one instance per opponent, Aeonglass.cs:78-83). Verified directly by test/test_powers.py::TestPowerInstanceType::test_withering_presence_two_applications_have_independent_card_counters. DORMANT stands: one player means one opponent means one instance.  The text it replaced read: PowerInstanceType.Instanced (WitheringPresencePower.cs:26): C# creates one instance per OPPONENT, each with its own `Target` (Aeonglass.cs:78-83 loops `GetOpponentsOf(base.Creature)`), and the counter is per-instance. The sim's stacking check always behaves as PowerInstanceType.None. power_cmd gap G5 owns the mechanism and this is one of its 11 named ported instances -- and one of the seven that do not acknowledge the distinction at all. DORMANT by scope: one player means one opponent means one instance, so like power/strangle this is dormant BY SCOPE rather than by content and will not become live by porting more Ironclad content. Third-file citations, not hashed here."
     },
     "AfterCardPlayed": {
       "maps_to": "powers.py:3276-3289 on_card_played",

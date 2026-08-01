@@ -27,7 +27,8 @@ class SlimedCard(Card):
 
     def _init_vars(self) -> None:
         self._energy_cost = 1
+        self._cards = 1     # CardsVar(1), Slimed.cs:17
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cmds import DrawCmd
-        DrawCmd.draw(ctx.player, 1)
+        DrawCmd.draw(ctx.player, self._cards)

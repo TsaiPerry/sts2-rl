@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\potions.py",
-    "sha256": "06f9d38ecefba5bb61280da2dae7e92350e163a00481f23bfe8443b722327ad8"
+    "sha256": "63c0df752ca09e9de59285b0c9bc9be809da18e69b61b65424d75f37ee1ffc6b"
   },
   "extra_sources": [
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
+      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
       "side": "sim"
     },
     {
@@ -56,22 +56,22 @@
     },
     {
       "path": "sts2_rl/cards/colorless_skills.py",
-      "sha256": "a94c279e15e166c280c399871da2c21a4ed6c4bf2b827bcf3cf4d1bb9c22b4ca",
+      "sha256": "1cdf31a3bd59e95b239df163b0724e4f99ef299bd67256cc94fcc683e1ed1840",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "03b13195368f9b62ffdaef867883b236c1573dd14c05724c40c439ede14a6fbf",
+      "sha256": "0e7260041e0b6693c08bf4aa4ddbb8743311d7fd72d6212fdc7c7d358a7c5030",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
@@ -86,12 +86,12 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
+      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
       "side": "sim"
     },
     {
@@ -101,7 +101,7 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     }
   ],
@@ -123,9 +123,8 @@
     },
     "OnUse (protected override, PowerPotion.cs:21-32)": {
       "maps_to": "PowerPotion.use (potions.py:1126-1140)",
-      "verdict": "gap",
-      "live": false,
-      "issue": "Rollup per binding rule 4, NARROWED 2026-07-27. The generation half was already right, and guard G1 -- the screen the legacy arm used to skip -- is now CLOSED: potions.py:1332-1349 offers the screen on both arms and resolves the legacy one through select_cards, skip included (executed). What remains of this rollup is only guard N, the shared FilterForCombat port missing its Event-rarity clause (cards/pool.py:108-117), which is dormant and belongs to the card tier."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-31 (tier-2 campaign): The shared FilterForCombat port was missing its Event-rarity clause; cards/pool.py's pool_card_ids now excludes CardRarity.EVENT alongside Basic and Ancient plus CanBeGeneratedInCombat=False, matching CardFactory.FilterForCombat (CardFactory.cs:159-162) -- the record's 'three rarities' claim was independently verified correct against the C#, and the actual bug source was pool.py's OWN docstring, which claimed only two. Dormancy-preserving: both pools re-enumerated unchanged (IRONCLAD_POOL 78/78, COLORLESS_POOL 50/50, no Event card in either). This rollup's OnUse half closes with its guard. Pinned in test/test_card_generation_pool.py.  The text it replaced read: Rollup per binding rule 4, NARROWED 2026-07-27. The generation half was already right, and guard G1 -- the screen the legacy arm used to skip -- is now CLOSED: potions.py:1332-1349 offers the screen on both arms and resolves the legacy one through select_cards, skip included (executed). What remains of this rollup is only guard N, the shared FilterForCombat port missing its Event-rarity clause (cards/pool.py:108-117), which is dormant and belongs to the card tier."
     }
   },
   "guards": [
@@ -141,9 +140,8 @@
     },
     {
       "what": "N: CardFactory.FilterForCombat drops three rarities and the sim's pool_card_ids drops only two",
-      "verdict": "gap",
-      "live": false,
-      "issue": "CardFactory.FilterForCombat is `c.CanBeGeneratedInCombat && c.Rarity != Basic && c.Rarity != Ancient && c.Rarity != Event` then `.Distinct()` (CardFactory.cs:159-162). cards/pool.py:108-117's pool_card_ids checks BASIC and ANCIENT and `can_be_generated_in_combat`, and has no EVENT clause. DORMANT, executed: over both pools the sim reaches through this potion family, no card carries a non-Common/Uncommon/Rare rarity at all -- IRONCLAD_POOL 85 ids -> 78 after the filter, COLORLESS_POOL 53 -> 50, and the EVENT bucket is empty in each. What would make it live: porting any Event-rarity card into IRONCLAD_POOL or COLORLESS_POOL, at which point it becomes an offerable candidate in the sim and is not one in the game, changing both the offer AND the UnstableShuffle draw the parity path takes over the filtered list. CROSS-STREAM: pool.py is shared with the card tier; reported rather than fixed."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-31 (tier-2 campaign): The shared FilterForCombat port was missing its Event-rarity clause; cards/pool.py's pool_card_ids now excludes CardRarity.EVENT alongside Basic and Ancient plus CanBeGeneratedInCombat=False, matching CardFactory.FilterForCombat (CardFactory.cs:159-162) -- the record's 'three rarities' claim was independently verified correct against the C#, and the actual bug source was pool.py's OWN docstring, which claimed only two. Dormancy-preserving: both pools re-enumerated unchanged (IRONCLAD_POOL 78/78, COLORLESS_POOL 50/50, no Event card in either). This rollup's OnUse half closes with its guard. Pinned in test/test_card_generation_pool.py.  The text it replaced read: CardFactory.FilterForCombat is `c.CanBeGeneratedInCombat && c.Rarity != Basic && c.Rarity != Ancient && c.Rarity != Event` then `.Distinct()` (CardFactory.cs:159-162). cards/pool.py:108-117's pool_card_ids checks BASIC and ANCIENT and `can_be_generated_in_combat`, and has no EVENT clause. DORMANT, executed: over both pools the sim reaches through this potion family, no card carries a non-Common/Uncommon/Rare rarity at all -- IRONCLAD_POOL 85 ids -> 78 after the filter, COLORLESS_POOL 53 -> 50, and the EVENT bucket is empty in each. What would make it live: porting any Event-rarity card into IRONCLAD_POOL or COLORLESS_POOL, at which point it becomes an offerable candidate in the sim and is not one in the game, changing both the offer AND the UnstableShuffle draw the parity path takes over the filtered list. CROSS-STREAM: pool.py is shared with the card tier; reported rather than fixed."
     },
     {
       "what": "N2: `SetToFreeThisTurn()` then `CardPileCmd.AddGeneratedCardToCombat(card, PileType.Hand, Owner)`",
@@ -161,6 +159,6 @@
       "issue": "Closed 2026-07-29 (round 6): the bracket exists. CombatManager.cs:889's `!IsExecutingCardOrPotionEffect(player)` is ported as `CombatState._card_or_potion_effect` (combat.py), a nesting DEPTH released in a `finally`, and PotionModel.cs:324-331 puts the potion body inside it (combat.py:945-946) exactly as CardModel.cs:1901/:1969 puts a card play inside it. Shipped by turn_structure/G16. This entry was recorded DORMANT because no ported unit could reach it; it is closed on the machinery, not on the dormancy. test/test_potions.py::TestOnUseWrapper::test_the_effect_bracket_defers_the_empty_hand_check is the executed witness: inside the bracket an empty hand does NOT draw, and the same call outside it does.  The text it replaced read: CombatManager.cs:889's `!IsExecutingCardOrPotionEffect(player)` is what stops a nested effect from triggering the empty-hand check early, and PotionModel.cs:324-331 is what puts a potion inside that bracket. The sim has no counterpart anywhere. DORMANT for the same reason audit/records/relic/unceasing_top.json G2 is dormant -- the ported cards that auto-play another card mid-resolution (cards/cascade.py:58, cards/colorless_skills.py:117) do not touch the draw pile between the inner and outer ends -- but recorded separately because the OUTER frame here is a potion, so a fix that brackets only card plays would leave this half open. What would make it live: any ported potion or card that empties the hand and then moves the draw pile from inside a nested auto-play."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-27"
 }

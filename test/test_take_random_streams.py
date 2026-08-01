@@ -8,7 +8,8 @@ else even on the runs where the cards happen to agree.
 
 Queue entries: card/anointed/OnPlay, card/beat_down/OnPlay,
 card/discovery/OnPlay, card/distraction/OnPlay, card/splash/OnPlay,
-relic/crossbow/AfterSideTurnStart.
+relic/crossbow/AfterSideTurnStart, creature_card_cmds/step55 (Entropy's
+in-combat transform, `CardCmd.TransformToRandom`).
 """
 from __future__ import annotations
 
@@ -18,7 +19,9 @@ import pytest
 
 from sts2_rl import CombatState, make_relic
 from sts2_rl.cards import make_card
+from sts2_rl.cmds import CardCmd
 from sts2_rl.combat_rng import _PARITY_STREAMS
+from sts2_rl.rng import RunRngSet
 
 
 class _Counter(random.Random):
@@ -108,6 +111,75 @@ def test_crossbow_draws_on_combat_card_generation():
     counters = _split_streams(cs)
     relic.after_side_turn_start(cs.player)
     _only(counters, "card_gen")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# creature_card_cmds/step55 — Entropy's in-combat transform
+# ══════════════════════════════════════════════════════════════════════════
+#
+# EntropyPower.cs:31 — `await CardCmd.TransformToRandom(item,
+# player.RunState.Rng.CombatCardSelection)`. `CardCmd.TransformToRandom` is
+# also called by six out-of-combat Events (AromaOfChaos, EndlessConveyor,
+# MorphicGrove, Symbiote, Trial, WhisperingHollow, all on `base.Rng`) and by
+# the New Leaf relic's `AfterObtained` (`RunState.Rng.Niche`) — all of those
+# are run-level pickups/events that route through `RunState.transform_card`
+# in the sim (run.py), not `CardCmd.transform_to_random` (cmds.py); they are
+# out of this seam's scope. Entropy is the only PORTED caller that resolves
+# inside a live combat.
+
+def test_entropy_draws_transform_and_selection_on_combat_card_selection():
+    """Two draws land on the named stream for one Entropy tick, in PARITY
+    mode: which hand card `CardSelectCmd.from_hand`'s selectorless fallback
+    picks (wired onto this stream in T3 — combat.py:1185) and what
+    `CardCmd.transform_to_random` (cmds.py) turns it into
+    (`hooks.combat.combat_rng.card_selection.choice(options)`). Neither draw
+    touches the shared legacy `_rng`."""
+    cs = CombatState(rng_set=RunRngSet("89U21BV1TZ"))
+    cs.player.energy = 10
+    cs.player.hand.append(make_card("entropy"))
+    assert cs.play_card(len(cs.player.hand) - 1)
+    counters = _split_streams(cs)
+    cs.end_turn()  # ends the player turn, runs the enemy, starts the next —
+    # EntropyPower.on_player_turn_started fires there and does the transform.
+    _only(counters, "card_selection")
+
+
+def test_entropy_legacy_transform_uses_the_identical_shared_rng_object():
+    """Legacy mode never touches a game stream at all: `CombatRng.legacy
+    (self._rng)` (combat_rng.py:39) aliases EVERY named accessor — including
+    card_selection — to the exact object `combat._rng` already was
+    (combat.py:158). `transform_to_random`'s roll therefore draws on the
+    identical stream a legacy run always used, byte-for-byte, even though the
+    call now goes through the named accessor rather than `hooks.combat._rng`
+    directly. Regression pin: this identity is what keeps legacy RL
+    training/eval sequences unchanged by the step55 fix."""
+    cs = _fresh()
+    assert cs.combat_rng.card_selection is cs._rng
+    cs.player.energy = 10
+    cs.player.hand.append(make_card("entropy"))
+    assert cs.play_card(len(cs.player.hand) - 1)
+    cs.end_turn()  # runs the transform
+    assert cs.combat_rng.card_selection is cs._rng  # identity survives it
+
+
+def test_transform_finds_a_card_that_is_mid_play():
+    """CardCmd.cs:391 reads `item.Original.Pile` — whatever pile currently
+    holds the card, not a fixed list — so during OnPlay, when that property
+    genuinely IS Play, C# transforms a mid-play card exactly like any other.
+    The sim's Play-limbo stand-in physically parks a resolving card in
+    `discard_pile` and marks it with `player._playing_card` (player.py:99-104,
+    guard N9), so `transform_to_random`'s existing discard-pile branch
+    (cmds.py) already finds and swaps it — there was no Play-pile gap here.
+    Re-verified 2026-07-30: the queue's "returns None for a card mid-play"
+    premise does not hold against today's code."""
+    cs = _fresh()
+    card = make_card("strike")
+    cs.player.discard_pile.append(card)
+    cs.player._playing_card = card
+    replacement = CardCmd.transform_to_random(cs.hooks, cs.player, card)
+    assert replacement is not None
+    assert replacement in cs.player.discard_pile
+    assert card not in cs.player.discard_pile
 
 
 # ══════════════════════════════════════════════════════════════════════════

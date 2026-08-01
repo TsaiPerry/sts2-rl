@@ -340,13 +340,21 @@ class TestAfflictionExclusivity:
         card = next(c for c in cs.player.all_cards if isinstance(c, StrikeCard))
         assert cs.hooks.modify_card_energy_cost(card, card.energy_cost) == card.energy_cost
 
-    def test_same_affliction_reapplied_stacks_amount(self):
-        from sts2_rl.afflictions import RingingAffliction
+    def test_same_stackable_affliction_reapplied_stacks_amount(self):
+        """Only an `IsStackable` affliction restacks (AfflictionModel.
+        CanAfflict, AfflictionModel.cs:190-205) -- Galvanized.cs:7 overrides
+        it true. Was RingingAffliction, which does NOT override IsStackable
+        (default False) and so is actually REFUSED on a second application,
+        not stacked; fixed alongside creature_card_cmds/N2's CanAfflict
+        guard (test_hook_order.py::TestCreatureCardCmdsOrder::
+        test_can_afflict_refuses_a_non_stackable_reafflict pins the
+        corrected Ringing behavior this test used to assert wrongly)."""
+        from sts2_rl.afflictions import GalvanizedAffliction
         from sts2_rl.cmds import CardCmd
         card = SlimedCard()
-        CardCmd.afflict(card, RingingAffliction, 1)
-        CardCmd.afflict(card, RingingAffliction, 2)
-        assert isinstance(card.affliction, RingingAffliction)
+        CardCmd.afflict(card, GalvanizedAffliction, 1)
+        CardCmd.afflict(card, GalvanizedAffliction, 2)
+        assert isinstance(card.affliction, GalvanizedAffliction)
         assert card.affliction.amount == 3
 
     def test_attack_card_entering_combat_while_tangled_gets_entangled(self):

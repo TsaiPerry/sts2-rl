@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\knowledge_curses.py",
-    "sha256": "d29aca1c34977dec78a38306040848d832018f4f0144e0703b77eb663e8ae57a"
+    "sha256": "09f51499eed684e6c6d5d196308ac7d25107b90b860321c0e313a0d2e223fa46"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
+      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
       "side": "sim"
     },
     {
@@ -38,13 +38,13 @@
     },
     "CanBeGeneratedInCombat": {
       "maps_to": "NOT PORTED -- the sim sets `can_be_generated_by_modifiers = False` instead (knowledge_curses.py:26)",
-      "verdict": "gap",
-      "issue": "`public override bool CanBeGeneratedInCombat => false` has no counterpart: the sim's shared `_ChoosableCurse` base leaves `can_be_generated_in_combat` True and instead turns off `can_be_generated_by_modifiers` (knowledge_curses.py:26), which the C# card does not override (it stays `=> true`, CardModel.cs:648). Two mismatched flags in one card. Same mechanism and same verdict as card/disintegration's and card/mind_rot's entries (rule 3). DORMANT both ways: `pool_card_ids()` (IRONCLAD_POOL) holds no Status cards and the random-CURSE pool holds no Status-rarity cards."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-31 (tier-2 campaign): Flag pair corrected against the C#, read line-by-line for all six cards: none overrides CanBeGeneratedByModifiers or CanonicalKeywords, so the sim's is_playable=False AND can_be_generated_by_modifiers=False were BOTH wrong and can_be_generated_in_combat=False was missing. These Statuses are playable no-effect cards in the game (the shape the sim already models for card/beckon). LIVENESS CORRECTION: the recorded dormancy checked only pool_card_ids and curse_pool_ids, but a THIRD consumer exists -- transform_options_in_combat's STATUS branch, reached by ported Entropy. Pre-fix this genuinely leaked all four bad cards as transform options for every reachable Status card, including frantic_escape, which The Insatiable really does put in piles (test_hive.py::TestTheInsatiable). Reproduced by execution by both the implementer and the task reviewer, and closed by the same fix -- the STATUS branch's filter is the correct mirror of GetFilteredTransformationOptions (CardFactory.cs:189-203). So this mechanism was recorded DORMANT but was reachable; it is fixed, not merely re-argued. Pinned in test/test_card_generation_pool.py.  The text it replaced read: `public override bool CanBeGeneratedInCombat => false` has no counterpart: the sim's shared `_ChoosableCurse` base leaves `can_be_generated_in_combat` True and instead turns off `can_be_generated_by_modifiers` (knowledge_curses.py:26), which the C# card does not override (it stays `=> true`, CardModel.cs:648). Two mismatched flags in one card. Same mechanism and same verdict as card/disintegration's and card/mind_rot's entries (rule 3). DORMANT both ways: `pool_card_ids()` (IRONCLAD_POOL) holds no Status cards and the random-CURSE pool holds no Status-rarity cards."
     },
     "ctor": {
       "maps_to": "class attrs on _ChoosableCurse (knowledge_curses.py:20-26) + _init_vars (32-35)",
-      "verdict": "gap",
-      "issue": "STATUS / STATUS / NONE map exactly. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier; the sim runs a base of 0 through the full modifier chain (cards/base.py:222-232). Only what is READ diverges. Same mechanism and same verdict as card/ascenders_bane's ctor entry (rule 3). DORMANT: every ported cost reader filters `> 0` or skips `<= 1`, and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses, statuses or quests."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): `Card.energy_cost` (`sts2_rl/cards/base.py`) now short-circuits on `self._energy_cost < 0` as its first check, returning the raw canonical value before consulting `_free_this_turn` / `_cost_this_turn` / `_cost_this_combat` / `_cost_delta_this_turn` -- mirrors `CardEnergyCost.GetWithModifiers`'s `if (_base < 0) return num;` short-circuit (`CardEnergyCost.cs:101-104`; the record's `:100-103` cite is one line of decompiler drift), which runs before any local or global modifier. All 29 unplayable curse/status/quest cards now set `self._energy_cost = -1` in `_init_vars` (previously 0), each verified individually against its own C# `base(-1, CardType.X, ...)` constructor -- no exceptions, no ascension-gated cost variant. Readers audit (every non-cards/ `energy_cost` hit read in context): combat play/auto-play/valid_actions/action-mask sites gate on `is_playable` first and never see -1; every global-modifier site routes through `hooks.modify_card_energy_cost`, whose dispatcher ends `return max(0, cost)` -- the sim's analogue of C#'s `Math.Max(0, GetWithModifiers(...))` in `GetAmountToSpend`/`GetResolved` (`CardEnergyCost.cs:134-141`) -- so what is SPENT and what the observation encoder reads (`full_env.py` card_features via `previews.py` preview_card_energy_cost) are byte-for-byte unchanged. The three previously-known readers (`relics/mummified_hand.py`, `potions.py` TouchOfInsanity, `cards/event_cards.py` Enlightenment) remain correct, confirmed by unit tests. NOT closed here: `selectors.py`'s `scripted_card_selector` 'to_draw_top' purpose (Headbutt/Thinking Ahead) ranks by raw `card.energy_cost` unclamped -- a sim-only heuristic with no C# analogue; a curse in a Headbutt-eligible discard pile now ranks below-cost instead of tying at 0. No test exercises it; filed in GAP-QUEUE.md's 'Named work with no entry of its own'. New pins: test/test_unplayable_cost.py (15 tests).  The text it replaced read: STATUS / STATUS / NONE map exactly. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier; the sim runs a base of 0 through the full modifier chain (cards/base.py:222-232). Only what is READ diverges. Same mechanism and same verdict as card/ascenders_bane's ctor entry (rule 3). DORMANT: every ported cost reader filters `> 0` or skips `<= 1`, and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses, statuses or quests."
     },
     "CanonicalVars": {
       "maps_to": "SlothCard.default_power_amount = 3 (knowledge_curses.py:73)",
@@ -65,10 +65,10 @@
   "guards": [
     {
       "what": "the sim marks the card `is_playable = False` (knowledge_curses.py:23); Sloth.cs declares NO Unplayable keyword",
-      "verdict": "gap",
-      "issue": "C# gives this Status no CanonicalKeywords at all, so in the game it is a PLAYABLE no-effect Status. Same mechanism and same verdict as card/disintegration's and card/mind_rot's guards (rule 3). DORMANT: the four Knowledge-Demon cards never reach a combat pile on either side."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-31 (tier-2 campaign): Flag pair corrected against the C#, read line-by-line for all six cards: none overrides CanBeGeneratedByModifiers or CanonicalKeywords, so the sim's is_playable=False AND can_be_generated_by_modifiers=False were BOTH wrong and can_be_generated_in_combat=False was missing. These Statuses are playable no-effect cards in the game (the shape the sim already models for card/beckon). LIVENESS CORRECTION: the recorded dormancy checked only pool_card_ids and curse_pool_ids, but a THIRD consumer exists -- transform_options_in_combat's STATUS branch, reached by ported Entropy. Pre-fix this genuinely leaked all four bad cards as transform options for every reachable Status card, including frantic_escape, which The Insatiable really does put in piles (test_hive.py::TestTheInsatiable). Reproduced by execution by both the implementer and the task reviewer, and closed by the same fix -- the STATUS branch's filter is the correct mirror of GetFilteredTransformationOptions (CardFactory.cs:189-203). So this mechanism was recorded DORMANT but was reachable; it is fixed, not merely re-argued. Pinned in test/test_card_generation_pool.py.  The text it replaced read: C# gives this Status no CanonicalKeywords at all, so in the game it is a PLAYABLE no-effect Status. Same mechanism and same verdict as card/disintegration's and card/mind_rot's guards (rule 3). DORMANT: the four Knowledge-Demon cards never reach a combat pile on either side."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

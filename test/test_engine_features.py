@@ -144,6 +144,168 @@ class TestCardSelection:
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# CardSelectCmd's auto-select shortcut (creature_card_cmds/N10, step104,
+# step105): `!RequireManualConfirmation && candidateCount <= MinSelect` ->
+# every candidate, pile order, ZERO draws from any stream
+# (CardSelectCmd.cs:287-290, 396-399, 708-711). C# checks this BEFORE
+# consulting an installed Selector or the manual UI.
+# ══════════════════════════════════════════════════════════════════════════
+
+class TestCardSelectionAutoSelectShortcut:
+    def test_full_candidate_selection_draws_nothing_from_either_rng(self):
+        cs = fresh()
+        candidates = list(cs.player.hand)  # 5 cards, requesting exactly 5
+        legacy_state_before = cs._rng.getstate()
+        parity_state_before = cs.combat_rng.card_selection.getstate()
+        chosen = cs.select_cards("exhaust", candidates, len(candidates))
+        assert cs._rng.getstate() == legacy_state_before
+        assert cs.combat_rng.card_selection.getstate() == parity_state_before
+        # Pile order preserved, not `random.sample`'s scrambled permutation.
+        assert chosen == candidates
+
+    def test_shortcut_also_fires_when_fewer_candidates_than_requested(self):
+        # C#: `candidateCount <= MinSelect` — MinSelect defaults to the
+        # requested count, so asking for 3 with only 2 candidates available
+        # still auto-resolves (takes both, no screen).
+        cs = fresh()
+        candidates = [cs.player.hand[0], cs.player.hand[1]]
+        state_before = cs._rng.getstate()
+        chosen = cs.select_cards("exhaust", candidates, 3)
+        assert cs._rng.getstate() == state_before
+        assert chosen == candidates
+
+    def test_shortcut_bypasses_an_installed_selector(self):
+        # C#'s shortcut is checked BEFORE `else if (Selector != null)` — an
+        # automated selector never even sees a full-candidate selection.
+        cs = fresh()
+        candidates = list(cs.player.hand)
+        called = []
+        cs.card_selector = lambda purpose, c, n: called.append(1) or list(c)[:n]
+        chosen = cs.select_cards("exhaust", candidates, len(candidates))
+        assert called == []
+        assert chosen == candidates
+
+    def test_below_threshold_selection_still_uses_the_selector(self):
+        cs = fresh()
+        candidates = list(cs.player.hand)
+        target = candidates[0]
+        cs.card_selector = lambda purpose, c, n: [target]
+        chosen = cs.select_cards("exhaust", candidates, 1)
+        assert chosen == [target]
+
+    def test_below_threshold_selection_still_draws_from_the_legacy_rng(self):
+        cs = fresh()
+        candidates = list(cs.player.hand)
+        state_before = cs._rng.getstate()
+        cs.select_cards("exhaust", candidates, 1)
+        assert cs._rng.getstate() != state_before
+
+    def test_min_select_range_never_shortcuts_even_at_full_count(self):
+        # A genuine MinSelect < MaxSelect range (RequireManualConfirmation =
+        # true) never auto-resolves, however many candidates there are —
+        # Ashwater/Gambler's Brew/Gambling Chip's `min_select=0` screens.
+        cs = fresh()
+        candidates = list(cs.player.hand)
+        called = []
+        cs.card_selector = lambda purpose, c, n: called.append(1) or list(c)
+        cs.select_cards("exhaust_any", candidates, len(candidates), min_select=0)
+        assert called == [1]
+
+    def test_neows_fury_shaped_selection_does_not_shortcut_with_a_selector(self):
+        # NeowsFury.cs:39 -- `new CardSelectorPrefs(prompt, 0, num)`, a
+        # genuine 0..num RANGE (RequireManualConfirmation derives true,
+        # CardSelectorPrefs.cs:77). With exactly `count` candidates in the
+        # discard pile (the shape that used to coincide with the shortcut's
+        # firing condition), the installed selector must still be consulted.
+        cs = fresh()
+        candidates = [cs.player.hand[0], cs.player.hand[1]]
+        called = []
+        cs.card_selector = lambda purpose, c, n: called.append(1) or list(c)
+        chosen = cs.select_cards(
+            "from_discard", candidates, len(candidates), min_select=0)
+        assert called == [1]
+        assert chosen == candidates
+
+    def test_neows_fury_shaped_selection_without_a_selector_still_draws(self):
+        cs = fresh()
+        candidates = [cs.player.hand[0], cs.player.hand[1]]
+        state_before = cs._rng.getstate()
+        cs.select_cards("from_discard", candidates, len(candidates), min_select=0)
+        assert cs._rng.getstate() != state_before
+
+    def test_choose_a_card_shaped_selection_never_shortcuts(self):
+        # CardSelectCmd.FromChooseACardScreen (CardSelectCmd.cs:216-261 --
+        # Discovery/Splash, the four generator potions, Toolbox, Knowledge
+        # Demon's curse pick) has NO CardSelectorPrefs/shortcut at all: with a
+        # Selector installed it ALWAYS calls
+        # `Selector.GetSelectedCards(cards, 0, 1)`, regardless of candidate
+        # count. `has_shortcut=False` is how the sim callers for that C#
+        # method opt out of the shortcut every other entry point shares.
+        cs = fresh()
+        candidates = [cs.player.hand[0]]  # exactly `count` candidates
+        called = []
+        cs.card_selector = lambda purpose, c, n: called.append(1) or list(c)[:n]
+        chosen = cs.select_cards(
+            "choose_a_card", candidates, 1, has_shortcut=False)
+        assert called == [1]
+        assert chosen == candidates
+
+    def test_choose_a_card_shaped_selection_without_a_selector_still_draws(self):
+        cs = fresh()
+        candidates = [cs.player.hand[0]]
+        state_before = cs._rng.getstate()
+        cs.select_cards("choose_a_card", candidates, 1, has_shortcut=False)
+        assert cs._rng.getstate() != state_before
+
+
+class TestCardSelectionDrawPilePreSort:
+    """CardSelectCmd.cs:403-408 — a DRAW pile is re-sorted `orderby c.Rarity,
+    c.Id` before an installed Selector sees it (the manual UI screen sorts on
+    its own, frontend side). `is_draw_pile=True` is the sim's opt-in — only
+    FromCombatPile(Draw, ...) call sites (SecretTechnique/SecretWeapon,
+    DropletOfPrecognition) pass it."""
+
+    def _candidates(self):
+        from sts2_rl.cards import make_card
+        # BASIC(1): bash, defend, strike (id order); UNCOMMON(3): bludgeon;
+        # EVENT(6): clash; STATUS(8): wound; CURSE(9): clumsy. Built
+        # out-of-order on purpose so a passing test can't be a no-op.
+        return [make_card(cid) for cid in
+                ("clumsy", "wound", "clash", "bludgeon", "strike", "defend", "bash")]
+
+    def test_draw_pile_candidates_are_sorted_for_the_selector(self):
+        cs = fresh()
+        seen = []
+        cs.card_selector = lambda purpose, c, n: seen.append(list(c)) or list(c)[:n]
+        candidates = self._candidates()
+        cs.select_cards("from_draw", candidates, 1, is_draw_pile=True)
+        assert [c.id for c in seen[0]] == [
+            "bash", "defend", "strike", "bludgeon", "clash", "wound", "clumsy"]
+        # The caller's own list is untouched.
+        assert [c.id for c in candidates] == [
+            "clumsy", "wound", "clash", "bludgeon", "strike", "defend", "bash"]
+
+    def test_non_draw_pile_candidates_keep_pile_order(self):
+        cs = fresh()
+        seen = []
+        cs.card_selector = lambda purpose, c, n: seen.append(list(c)) or list(c)[:n]
+        candidates = self._candidates()
+        cs.select_cards("from_discard", candidates, 1)  # is_draw_pile defaults False
+        assert [c.id for c in seen[0]] == [c.id for c in candidates]
+
+    def test_draw_pile_shortcut_returns_unsorted_pile_order(self):
+        # C#'s shortcut (CardSelectCmd.cs:396-399) runs BEFORE the
+        # `orderby Rarity, Id` pre-sort (:403-408), which sits inside the
+        # `else if (Selector != null)` branch below it — a full-candidate
+        # draw-pile selection never reaches the sort at all.
+        cs = fresh()
+        candidates = self._candidates()  # unsorted; count == len(candidates)
+        chosen = cs.select_cards(
+            "from_draw", candidates, len(candidates), is_draw_pile=True)
+        assert [c.id for c in chosen] == [c.id for c in candidates]
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # X-cost
 # ══════════════════════════════════════════════════════════════════════════
 

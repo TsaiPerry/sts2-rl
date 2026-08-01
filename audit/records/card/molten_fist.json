@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/creatures.py",
-      "sha256": "34e44031a337c75e1c2685e0521a075d95fa7a1478ca8594e6a138651c361078",
+      "sha256": "1c73063f3ca726775f0a121fe826933fe8a4dfdcbda18bb0e0d4dfacff69de7f",
       "side": "sim"
     }
   ],

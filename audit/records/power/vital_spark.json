@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
+      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
       "side": "sim"
     }
   ],
@@ -46,10 +46,9 @@
       "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "BeforeCombatStart": {
-      "maps_to": "powers.py:2852-2855 on_combat_start",
+      "maps_to": "powers.py:2426-2429 on_combat_start",
       "verdict": "gap",
-      "live": false,
-      "issue": "SETTLED 2026-07-30 (round 11), by execution -- the inherited framing ('C#'s CardCmd.Afflict overwrites') is IMPRECISE and corrected here, not merely re-cited (CardCmd.cs:645-657 does NOT overwrite): `card.Affliction == null` applies fresh; if the card already carries the SAME affliction TYPE, it INCREMENTS (`card.Affliction.Amount += (int)amount`, CardCmd.cs:656); if it carries a DIFFERENT affliction type, it THROWS `InvalidOperationException` (CardCmd.cs:652-655) rather than overwriting. VitalSparkPower.cs:27-38's BeforeCombatStart calls this with no `Affliction == null` guard of its own (unlike AfterCardEnteredCombat, VitalSparkPower.cs:41-46, which DOES guard), so C#'s real behaviour on an already-Tainted Skill at combat start is 'add my Amount to the existing Tainted', not 'overwrite'. The sim's `on_combat_start` (powers.py:2852-2855) skips entirely on `card.affliction is None` being false, so the divergence, if reachable, would be an under-counted Tainted amount (sim keeps the FIRST application's amount; C# would sum multiple). REACHABILITY, worked through rather than assumed: this requires TWO OR MORE VitalSparkPower-bearing creatures in the SAME fight (only then could a second BeforeCombatStart see a Skill already Tainted by the first). EXECUTED: `grep -rn VitalSparkPower --include=*.py sts2_rl/ | grep -v powers.py` finds exactly one applier, `monsters/hive/infested_prism.py:38-39,78-80`, and its only encounter, `INFESTED_PRISMS_ELITE` (monsters/hive/infested_prism.py:83-86), declares `monster_classes=[InfestedPrism]` -- a ONE-element list despite the plural encounter name. Cross-checked the sim's own convention for intentional multi-copies of one monster class (`construct_menagerie.py:11`'s `[PunchConstruct, CubexConstruct, CubexConstruct]` proves repeated classes ARE how the codebase spawns duplicates), so a one-element list is genuinely a SOLO Infested Prism, not shorthand for more than one. With only one VitalSparkPower instance ever in a ported fight, and GalvanicPower (the only other combat-start affliction source) afflicting the disjoint Power-card set (unchanged from the inherited finding), no Skill can ever already carry an affliction when `on_combat_start`'s guard runs -- the C#/sim disagreement about WHAT HAPPENS to an already-afflicted card is real but its precondition is unreachable. Third-file citations, not hashed here."
+      "issue": "Identical shape to GalvanicPower's, one card type over (Skills rather than Powers, Tainted rather than Galvanized): the sim adds a `card.affliction is None` test that VitalSparkPower.cs:33-38 does not have, where C#'s CardCmd.Afflict overwrites. Same mechanism, same verdict (rule 3), same dormancy -- GalvanicPower afflicts the disjoint Power-card set and nothing else afflicts at combat start. Third-file citations, not hashed here."
     },
     "AfterCardEnteredCombat": {
       "maps_to": "powers.py:2431-2433 on_card_entered_combat",

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\glory\\queen.py",
-    "sha256": "9ea33801e77b1b03811245b9d8d9f8921d4ed36b2c8d05beb66ae23b7d440cc0"
+    "sha256": "88e0a83e4b7b82a07a963bdfb687237be4639cff33e5c89b68a1702c6a821d2a"
   },
   "hooks": {
     "MinInitialHp": {
@@ -77,12 +77,12 @@
     },
     {
       "path": "sts2_rl\\monsters\\state_machine.py",
-      "sha256": "bcec29d18fdbd56453de4872aad26b727a9eb3afe1a1961d802713b5e7efe68e",
+      "sha256": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {

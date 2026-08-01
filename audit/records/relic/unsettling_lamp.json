@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\unsettling_lamp.py",
-    "sha256": "7f3e9b4f005331480d2b9dc6c824be57a12abf91bc638639b8d5714e1b5f5b87"
+    "sha256": "fc3c134fc62f28d8c30b2ac40a1ece7bbd914dd9b2766fbca402a96c939bba82"
   },
   "extra_sources": [
     {
@@ -56,7 +56,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
+      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
       "side": "sim"
     },
     {
@@ -66,17 +66,17 @@
     },
     {
       "path": "sts2_rl/cards/colorless_skills.py",
-      "sha256": "a94c279e15e166c280c399871da2c21a4ed6c4bf2b827bcf3cf4d1bb9c22b4ca",
+      "sha256": "1cdf31a3bd59e95b239df163b0724e4f99ef299bd67256cc94fcc683e1ed1840",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
@@ -86,12 +86,12 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/ruined_helmet.py",
-      "sha256": "379bd9ed7f301d2bf5b9aa011e275661326b0ae133805956c699150610542f0c",
+      "sha256": "55ff84a9f9bd2ae1fc0430d9c5b18b2720e662458b66c8338fd30b361d9df3c8",
       "side": "sim"
     },
     {
@@ -113,8 +113,7 @@
     "BeforePowerAmountChanged": {
       "maps_to": "modify_power_amount (unsettling_lamp.py:44-53) -- the sim COLLAPSES C#'s two-phase latch-then-double into one method: the `self._triggering = self._in_flight` assignment at line 52 is the latch, and `return amount * 2` on the same line is the multiplicative. C#'s cardSource parameter is modelled as the before_card_played/on_card_played bracket (lines 36-42).",
       "verdict": "gap",
-      "live": false,
-      "issue": "LABELLED (round 11): DORMANT overall -- every guard this rollup cites is dormant, re-checked rather than inherited, and none has flipped since its own last audit. The latch is not separable from the double in the sim: C# runs seven latch guards (UnsettlingLamp.cs:73-100) and a DIFFERENT five-guard set on the multiplicative (lines 108-127), and the two sets are not the same -- the C# multiplicative has NO target-side check and NO applier check, while the sim applies `applier is not self.player or target is self.player` (unsettling_lamp.py:47) to both roles at once. G2 (sign-aware `GetTypeForAmount` vs the sim's static typing + amount<=0 bail) is dormant: the only two C# sources of a negative-amount Debuff-classified Buff are Malaise.cs:40 and Resonance.cs:33, neither ported. G3 (the multiplicative's missing target-side/giver guard, plus side-vs-identity) is dormant: no ported card both debuffs the player and an enemy in one play (6 ported player-self-debuff cards checked, none also touches an enemy), and the sim models no player-side non-player creature for the side-vs-identity half. G4 (cardSource as an ambient bracket instead of a per-application argument) is dormant: three ported cards auto-play a nested card from their own on_play (cascade.py:58, colorless_skills.py:117/164), but none debuffs an enemy both before and after the nested play, which the demonstration needs. NOTE per PROMPT.md's stale-census warning: the rollup's own text names 'G2, G3, G4, G5', but this record's `guards` array has no G5 -- re-read in full and confirmed there is no fourth guard beyond G2/G3/G4 anywhere in this file; the reference is either a leftover from an earlier numbering pass or a loose pointer to the sibling `ModifyPowerAmountGivenMultiplicative` hooks entry (itself independently verdicted `gap`, dormant, citing audit/records/seam/power_cmd.json G3) rather than a guard within this hooks entry. Flagged rather than silently corrected (HANDOFF-adjacent, but this is this record's own file). COHERENCE CHECK against audit/records/seam/damage_pipeline.json guard G2 (per the batch brief): that record's dormant finding is about ArtifactPower.AfterModifyingPowerAmountReceived's self-reentrant PowerCmd.Decrement call, a DIFFERENT mechanism (power/artifact, not relic/unsettling_lamp) at a DIFFERENT hook (AfterModifyingPowerAmountReceived, not BeforePowerAmountChanged/ModifyPowerAmountGivenMultiplicative) -- it cites 'the Unsettling Lamp' only because an earlier round's argument leaned on this relic's guard N2 (the ITemporaryPower double-dip equivalence) as supporting evidence for a claim about Artifact, and damage_pipeline G2 records that specific borrowed citation as disproven for the Artifact edge. It does not touch this relic's own hooks/guards, and nothing here needs to change to stay coherent with it. The issue it replaced read: The latch is not separable from the double in the sim, which is what makes guards G2 and G3 possible: C# runs seven latch guards (UnsettlingLamp.cs:73-100) and a DIFFERENT five-guard set on the multiplicative (lines 108-127), and the two sets are not the same. Specifically the C# multiplicative has NO target-side check and NO applier check, while the sim applies `applier is not self.player or target is self.player` (unsettling_lamp.py:47) to both roles at once. Each resulting divergence is verdicted at its own guard (G2, G3, G4, G5); this hook entry carries their rollup per binding rule 4."
+      "issue": "The latch is not separable from the double in the sim, which is what makes guards G2 and G3 possible: C# runs seven latch guards (UnsettlingLamp.cs:73-100) and a DIFFERENT five-guard set on the multiplicative (lines 108-127), and the two sets are not the same. Specifically the C# multiplicative has NO target-side check and NO applier check, while the sim applies `applier is not self.player or target is self.player` (unsettling_lamp.py:47) to both roles at once. Each resulting divergence is verdicted at its own guard (G2, G3, G4, G5); this hook entry carries their rollup per binding rule 4."
     },
     "ModifyPowerAmountGivenMultiplicative": {
       "maps_to": "modify_power_amount's `return amount * 2` (unsettling_lamp.py:53), dispatched by HookSystem.modify_power_amount (hooks.py:170-183) from PowerCmd.apply (cmds.py:294)",

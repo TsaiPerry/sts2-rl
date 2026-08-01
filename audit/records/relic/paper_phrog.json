@@ -26,22 +26,22 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "b52d8d15ba11856c157ae544d7837db5c35df881260a0065cf1d2b97917bd392",
+      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     },
     {
@@ -63,16 +63,14 @@
     "ModifyVulnerableMultiplier": {
       "maps_to": "modify_vulnerable_multiplier (paper_phrog.py:21-24), dispatched by HookSystem.modify_vulnerable_multiplier (hooks.py:185-194) from VulnerablePower.modify_damage_multiplicative (powers.py:417)",
       "verdict": "gap",
-      "live": false,
-      "issue": "DORMANT (round 11 re-settle, both guards re-executed against today's content rather than trusted). Rollup of guards G1 and N2 per binding rule 4. NOT a Hook override: PaperPhrog.cs:16 is a plain public method, and its ONE caller is VulnerablePower.ModifyDamageMultiplicative, which looks the relic up directly on the dealer (`dealer.Player?.GetRelic<PaperPhrog>()`, VulnerablePower.cs:40-44). The sim turns that direct lookup into a real hook chain, which is where G1's divergence in the DISPATCH SET comes from; the +0.25 itself (PaperPhrog.cs:26 vs paper_phrog.py:23) and the 1.5 base it modifies (VulnerablePower.cs:22's `DamageIncrease` 1.5m vs powers.py:411) match, with no AscensionHelper.GetValueIfAscension in either file. G1 (duplicate-relic dispatch): `sts2_rl/relics/toy_box.py` is now ported (it was an open question at G1's last pass) and its `after_obtained` pulls wax copies via `run.pull_relic_from_front()`, which draws from `run.relic_grab_bag` -- a list built with each relic id ONCE (run.py:207-243) and `.remove()`d from the bag on every pull (run.py:854-859), including Toy Box's own pulls. So a relic already held (pulled by an earlier reward) cannot be pulled again by Toy Box, and a Toy-Box-pulled wax copy cannot later be pulled again by a normal reward -- two Paper Phrogs in one run is not reachable through the sim's only duplication mechanism. EXECUTED: `grep -n relic_grab_bag sts2_rl/run.py` shows the single shared list with no per-id repeat entries. N2 (self-hit direction): re-executed `py audit/tools/relic_probes_b11.py phrog-selfhit`, which now enumerates 18 sites dealing damage to the player (one more than at G1/N2's last pass) and still reports 0 that are both POWERED and player-dealt -- the newest site (`sts2_rl/enchantments.py:616`) is unpowered. Porting any duplication path that is NOT grab-bag-uniqueness-gated, or any card/power dealing POWERED Move-flagged damage from the player to the player, makes this live."
+      "issue": "Rollup of guards G1 and N2 per binding rule 4. NOT a Hook override: PaperPhrog.cs:16 is a plain public method, and its ONE caller is VulnerablePower.ModifyDamageMultiplicative, which looks the relic up directly on the dealer (`dealer.Player?.GetRelic<PaperPhrog>()`, VulnerablePower.cs:40-44). The sim turns that direct lookup into a real hook chain, which is where G1's divergence in the DISPATCH SET comes from; the +0.25 itself (PaperPhrog.cs:26 vs paper_phrog.py:23) and the 1.5 base it modifies (VulnerablePower.cs:22's `DamageIncrease` 1.5m vs powers.py:411) match, with no AscensionHelper.GetValueIfAscension in either file."
     }
   },
   "guards": [
     {
       "what": "G1 (DORMANT): C# consults the dealer's phrog ONCE by direct lookup; the sim runs a hook chain over every combat listener, so N copies of the relic would each add 0.25",
       "verdict": "gap",
-      "live": false,
-      "issue": "RE-SETTLED round 11: the open question this guard left ('whether Toy Box can produce a wax copy of an already-held relic') is now answerable, because relics/toy_box.py is ported. MECHANISM: VulnerablePower.cs:40-44 does `dealer.Player?.GetRelic<PaperPhrog>()` and calls the method on that single instance, so the bonus is applied at most once no matter what. hooks.py:190-193 folds `mult` through EVERY listener that defines modify_vulnerable_multiplier, so two instances of the relic in run.relics would give +0.50. REACHABILITY (DORMANT, EXECUTED via source read of the now-ported mechanism rather than filed on an unanswered question): ToyBox.after_obtained (relics/toy_box.py:26-35) pulls its 4 wax copies with `run.pull_relic_from_front()`, which draws from `run.relic_grab_bag`. That bag is built with each relic id exactly ONCE (run.py:207-243, `populate_relic_grab_bags` / the shuffled per-run list) and `pull_relic_from_front` `.remove()`s the id it returns (run.py:854-859) -- there is no path back in. So a relic already held (from an earlier reward) is no longer in the bag for Toy Box to pull as a wax copy, and a relic Toy Box already pulled as a wax copy is no longer in the bag for a later reward to hand out again. Two Paper Phrogs in one run is unreachable through the sim's only duplicate-relic mechanism. Porting a SECOND duplication path that is not grab-bag-uniqueness-gated (e.g. a direct relic-clone effect) makes it live."
+      "issue": "MECHANISM: VulnerablePower.cs:40-44 does `dealer.Player?.GetRelic<PaperPhrog>()` and calls the method on that single instance, so the bonus is applied at most once no matter what. hooks.py:190-193 folds `mult` through EVERY listener that defines modify_vulnerable_multiplier, so two instances of the relic in run.relics would give +0.50. REACHABILITY (DORMANT, and the concrete unported thing is named): the sim's only duplicate-relic mechanism is Toy Box's wax copies (Relic.is_wax, relics/base.py:102-104), and a wax Paper Phrog in the same run as the real one would double the bonus. Whether Toy Box can produce a wax copy of an already-held relic is a question about relic/toy_box, which is not audited on this branch, so this is filed dormant rather than live -- porting or confirming any path that puts two Paper Phrogs in one run makes it live. Ordering is NOT part of this divergence: C# applies phrog, then CrueltyPower, then DebilitatePower (VulnerablePower.cs:43-55) and the sim applies cruelty inline before the hook (powers.py:413-417), but every contribution is additive so the sum is order-independent; DebilitatePower has no sim counterpart and is a separate unit's concern."
     },
     {
       "what": "N1: `if (!props.IsPoweredAttack()) return amount;` (PaperPhrog.cs:22-25) -- the sim's port has no props parameter at all",
@@ -82,8 +80,7 @@
     {
       "what": "N2 (DORMANT): `if (target == base.Owner.Creature) return amount;` (PaperPhrog.cs:18-21) -- no bonus when the phrog's own owner is the Vulnerable creature; the sim checks only the dealer",
       "verdict": "gap",
-      "live": false,
-      "issue": "RE-EXECUTED round 11: MECHANISM: paper_phrog.py:22 is `if dealer is self.player`, with no target check. Combined with the caller's requirement that the dealer be the phrog's owner (VulnerablePower.cs:40) and the power's requirement that the target be the Vulnerable holder (:29-32, mirrored at powers.py:407-408), the guard can only matter when the PLAYER is simultaneously the dealer, the Vulnerable creature, and dealing a POWERED attack -- i.e. a powered self-attack. REACHABILITY (DORMANT, re-executed -- `py audit/tools/relic_probes_b11.py phrog-selfhit`): the probe now enumerates 18 ported sites that deal damage TO the player (one more than at this guard's last pass) and classifies each by props and dealer; the count that are both POWERED and player-dealt is still ZERO. Every card that hurts its own player uses CARD_HP_LOSS or an unpowered variant (bad_luck, beckon, blood_wall, bloodletting, brand, breakthrough, bloodletting, hemokinesis, offering, regret, and the new sts2_rl/enchantments.py:616 self-damage enchantment), the POWERED sites (burn, decay, infection, toxic, wither) all pass `dealer=None`, and the one POWERED site with a real dealer is a MONSTER attack (monsters/base.py:135, `dealer=self`). Porting any card or power that deals POWERED, Move-flagged damage from the player to the player makes it live -- and it would then be live in the SILENT direction: the sim would over-multiply the player's self-damage by 1.75 instead of 1.5. Recorded as a gap, not a waiver: 'no ported card does this' is today's content, not the divergence's shape (binding rule 1)."
+      "issue": "MECHANISM: paper_phrog.py:22 is `if dealer is self.player`, with no target check. Combined with the caller's requirement that the dealer be the phrog's owner (VulnerablePower.cs:40) and the power's requirement that the target be the Vulnerable holder (:29-32, mirrored at powers.py:407-408), the guard can only matter when the PLAYER is simultaneously the dealer, the Vulnerable creature, and dealing a POWERED attack -- i.e. a powered self-attack. REACHABILITY (DORMANT, executed -- `py audit/tools/relic_probes_b11.py phrog-selfhit`): the probe enumerates all 17 ported sites that deal damage TO the player and classifies each by props and dealer; the count that are both POWERED and player-dealt is ZERO. Every card that hurts its own player uses CARD_HP_LOSS or an unpowered variant (bad_luck, beckon, blood_wall, bloodletting, brand, burn, decay, hemokinesis, infection, offering, regret, toxic, wither), and the one powered site aimed at the player is a MONSTER attack (monsters/base.py:115, `dealer=self`). Porting any card or power that deals POWERED, Move-flagged damage from the player to the player makes it live -- and it would then be live in the SILENT direction: the sim would over-multiply the player's self-damage by 1.75 instead of 1.5. Recorded as a gap, not a waiver: 'no ported card does this' is today's content, not the divergence's shape (binding rule 1)."
     },
     {
       "what": "N3: the sim's modify_vulnerable_multiplier hook takes only (dealer, mult), dropping C#'s target, props and cardSource parameters",

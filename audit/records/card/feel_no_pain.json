@@ -6,12 +6,12 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\feel_no_pain_card.py",
-    "sha256": "dd07317bd59ddc9173d2cae3c7ddb4e978aaffcf1daceab6f4060a4e9dde18bf"
+    "sha256": "cb394c10d5d08347ad72a4116f320124aa4c4b79802b5c74b4b96e26753eecf9"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
+      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
       "side": "sim"
     },
     {
@@ -38,8 +38,8 @@
     },
     "CanonicalVars": {
       "maps_to": "FeelNoPainCard._block = 3 (feel_no_pain_card.py:27)",
-      "verdict": "gap",
-      "issue": "`new DynamicVar(\"Power\", 3m)` (FeelNoPain.cs:16) is a generic power var, and the sim stores it in **`_block`** -- the attribute `Card.base_block` reads (cards/base.py:202-205). So the sim reports Feel No Pain as a card that itself grants 3 block, which is exactly the confusion cards/base.py:65-69 warns about when it explains why `gains_block` cannot be derived from `base_block`. The card grants NO block; FeelNoPainPower does, on exhaust. This is worse than the ordinary inlined-var finding: it is not a missing number but a WRONG one. `full_env.card_features` writes both `base_block` and `preview_card_block(s, card)` into the observation (full_env.py:483-485), so a policy is told Feel No Pain gives 3 (later 4) block on play. DORMANT for game fidelity -- `on_play` passes the same value to the power, so combat behaviour is identical, and no gameplay code reads `base_block` -- but LIVE for the observation encoder. The correct storage is `_plating`-style: card/eternal_armor stores the same shape of number in `_plating` and reports it through `magic_number` instead. REGRESSION TESTS: `test/test_shared_enchantments.py:52-61` (`test_nimble_requires_gains_block`) already asserts `not make_card(\"feel_no_pain\").gains_block` under the comment \"Feel No Pain's block belongs to its power, not the card\", and `test/test_ironclad_cards.py:666-669` (`test_feel_no_pain`) pins the APPLIED amount at `powers[\"feel_no_pain\"].amount == 3`. Moving the 3 out of `_block` into a power-amount slot must keep both green -- they bracket the fix without pinning the wrong `base_block` itself."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 24.) All 23 cards now store their printed C# var under a `_`-attribute (or, for 3 cards whose C# var is a live/computed value at display time -- guilty, normality, expect_a_fight -- a `magic_number` property override; wither similarly overrides `base_damage`) so `Card.base_damage`/`base_block`/`base_hp_loss`/`magic_number` report the C# value instead of the 0/None default. Two additive base.py changes: `_frail` added to `_MAGIC_ATTRS` (shame) and a new `base_gold` property (debt, spoils_map -- GoldVar had no base property at all). feel_no_pain's `_block` was renamed to `_power_amount` (fixing a WRONG value, not just a missing one -- `base_block` no longer misreports it as block-granting; matches Rage/Corruption/Stampede's DynamicVar('Power', ...) convention). Combat behavior / dealt numbers are byte-identical in every case -- a printed-number / observation-encoder fix only. 3 of the 23 (debt, spoils_map, rolling_boulder's secondary IncrementAmount) have NO obs-vector change despite the API fix (full_env.py has no base_gold read site; magic_number carries one number per card and _power_amount dominates rolling_boulder's scan) -- documented, not closed further. CHECKPOINT NOTE for training: encoded VALUES changed for the other 20 cards in feature slots f[17]/f[18] damage, f[20]/f[21] block, f[22] hp_loss, f[23] magic_number; obs LAYOUT unchanged. Pins: test/test_printed_vars.py (48 tests).  The text it replaced read: `new DynamicVar(\"Power\", 3m)` (FeelNoPain.cs:16) is a generic power var, and the sim stores it in **`_block`** -- the attribute `Card.base_block` reads (cards/base.py:202-205). So the sim reports Feel No Pain as a card that itself grants 3 block, which is exactly the confusion cards/base.py:65-69 warns about when it explains why `gains_block` cannot be derived from `base_block`. The card grants NO block; FeelNoPainPower does, on exhaust. This is worse than the ordinary inlined-var finding: it is not a missing number but a WRONG one. `full_env.card_features` writes both `base_block` and `preview_card_block(s, card)` into the observation (full_env.py:483-485), so a policy is told Feel No Pain gives 3 (later 4) block on play. DORMANT for game fidelity -- `on_play` passes the same value to the power, so combat behaviour is identical, and no gameplay code reads `base_block` -- but LIVE for the observation encoder. The correct storage is `_plating`-style: card/eternal_armor stores the same shape of number in `_plating` and reports it through `magic_number` instead. REGRESSION TESTS: `test/test_shared_enchantments.py:52-61` (`test_nimble_requires_gains_block`) already asserts `not make_card(\"feel_no_pain\").gains_block` under the comment \"Feel No Pain's block belongs to its power, not the card\", and `test/test_ironclad_cards.py:666-669` (`test_feel_no_pain`) pins the APPLIED amount at `powers[\"feel_no_pain\"].amount == 3`. Moving the 3 out of `_block` into a power-amount slot must keep both green -- they bracket the fix without pinning the wrong `base_block` itself."
     },
     "OnPlay": {
       "maps_to": "FeelNoPainCard.on_play (feel_no_pain_card.py:32-35)",
@@ -53,6 +53,6 @@
     }
   },
   "guards": [],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

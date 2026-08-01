@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\underdocks\\punch_construct.py",
-    "sha256": "5322f0c737027825e883bb5852961eccb38cf7425a57414bcddf497ff045f64e"
+    "sha256": "82840ff876f059ef797bb67e570de379b1527f5fbebdcc1db74730d286fb8e2f"
   },
   "hooks": {
     "MinInitialHp": {
@@ -77,7 +77,7 @@
     },
     {
       "path": "sts2_rl\\events\\punch_off.py",
-      "sha256": "6bcf771f0d6a512a39ce3ca96105cb9fe783a15fa905c92f7b3afda838224741",
+      "sha256": "24b2fb04109a53f3edb9fc1bc7381925c12b6ebf38dedc276d97d2f078dc6673",
       "side": "sim"
     },
     {

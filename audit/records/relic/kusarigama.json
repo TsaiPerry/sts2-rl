@@ -36,17 +36,17 @@
     },
     {
       "path": "sts2_rl/cards/stampede.py",
-      "sha256": "93dc487d8ffdaee6da147e8e5973ce3320af7c730019ff805075c6d2c7589647",
+      "sha256": "142c379113cbfb59e41f8d635c98b262176eb1d3f36b3b195098c0b9ce751069",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
@@ -61,12 +61,12 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     },
     {
@@ -123,8 +123,7 @@
     "AfterCardPlayed": {
       "maps_to": "on_card_played (kusarigama.py:35-50)",
       "verdict": "gap",
-      "live": false,
-      "issue": "DORMANT, re-settled round 11 (guard G2 re-derived from today's callers, not trusted from prior prose). NARROWED 2026-07-27. The per-Replay half (G1) is CLOSED: CombatState._resolve_card_play fires on_card_played inside the play-count loop (sts2_rl/combat.py:858-903). WHAT REMAINS is guard G2, the candidate list: Kusarigama.cs picks with `RunState.Rng.CombatTargets.NextItem(HittableEnemies)` and sts2_rl/relics/kusarigama.py:40 still passes `self.living_enemies()` -- and `sts2_rl/relics/base.py` has since grown a dedicated `hittable_enemies()` helper (base.py:449-451, `self.combat.hittable_enemies`) for exactly this C# distinction, which this relic was not updated to use. `living_enemies()` filters on `not e.is_gone` alone (base.py:440-447) -- no Hook.should_allow_hitting term -- so an alive-but-unhittable enemy is still eligible to be drawn. RE-VERIFIED DORMANT: `should_allow_hitting` now has THREE sim implementers (`grep -n 'def should_allow_hitting' sts2_rl/`: powers.py:1908 IllusionPower, powers.py:2780 ReattachPower, powers.py:3905 AdaptablePower -- ReattachPower is new since this guard was first written), and all three gate on `target is self.owner and self.is_reviving`, with `is_reviving` set only from each power's own `on_death` (i.e. after `hp <= 0`). `Creature.is_dead` is a bare `hp <= 0` (creatures.py:47-48) and `is_gone` is `is_dead or escaped` (creatures.py:51-53) with NO carve-out for `retained_after_death` -- so every creature any of the three implementers would refuse to hit is ALREADY `is_gone` and therefore already excluded by `living_enemies()`'s own filter, before `should_allow_hitting` is ever consulted. The mechanism G2 describes (a creature `should_allow_hitting` refuses that is NOT `is_gone`) has no ported instance. Porting a `should_allow_hitting` override that can return False for a creature with `hp > 0` makes it live."
+      "issue": "NARROWED 2026-07-27. The per-Replay half (G1) is CLOSED: CombatState._resolve_card_play fires on_card_played inside the play-count loop (sts2_rl/combat.py:574, 597-600). WHAT REMAINS is guard G2, the candidate list: Kusarigama.cs picks with `RunState.Rng.CombatTargets.NextItem(HittableEnemies)` and sts2_rl/relics/kusarigama.py still passes `self.living_enemies()`, which sts2_rl/relics/base.py:386-389 filters on `not e.is_gone` alone -- no Hook.ShouldAllowHitting term -- so an alive-but-unhittable enemy is still eligible to be drawn."
     },
     "AfterCombatEnd": {
       "maps_to": "no counterpart",
@@ -141,8 +140,7 @@
     {
       "what": "G2 (DORMANT): `Owner.Creature.CombatState.HittableEnemies` (Kusarigama.cs:115) vs the sim's living_enemies() (kusarigama.py:40)",
       "verdict": "gap",
-      "live": false,
-      "issue": "RE-VERIFIED round 11 (the entry was not re-derived, only trusted, at the last pass -- and its cited line numbers had drifted): C# picks the random target from `Enemies.Where(e => e.IsHittable)` (CombatState.cs:142), and IsHittable is `!IsDead && Hook.ShouldAllowHitting(CombatState, this)` (Creature.cs:285-299). Relic.living_enemies() (relics/base.py:440-447) filters on `not e.is_gone` only, and base.py has since grown a dedicated `hittable_enemies()` (base.py:449-451) that kusarigama.py was never switched to. This is the SAME divergence audit/records/relic/bag_of_marbles.json guard G2 records at its own call site, and it carries the same verdict per binding rule 3 -- but it bites harder here, because the set is not just the damage target list, it is the population of an RNG DRAW: `combat_rng.targets.choice(living)` is Rng.NextItem, whose index is scaled by len(seq) (rng.py:248-252), so an unhittable-but-alive enemy changes WHICH enemy is picked even when the pick itself would have been legal, and can also waste the trigger on a target DamageCmd.deal then no-ops on (`should_allow_hitting` returns 0 -- cmds.py:50-51). DORMANT, RE-EXECUTED: `grep -n 'def should_allow_hitting' sts2_rl/` now finds THREE implementers (powers.py:1908 IllusionPower, powers.py:2780 ReattachPower -- new since this guard was first written, powers.py:3905 AdaptablePower), all gating on `target is self.owner and self.is_reviving`, and `is_reviving` is set only from each one's own `on_death`, i.e. after `hp <= 0`. `Creature.is_dead` is `hp <= 0` with no `retained_after_death` carve-out (creatures.py:47-53), so a creature any of the three would refuse to hit is already `is_gone` and already excluded by `living_enemies()` before `should_allow_hitting` is ever asked -- the DORMANT conclusion holds against today's three implementers, not just the original two. Porting any effect that makes a LIVING (hp>0) enemy untargetable makes it live, and in an RNG-visible way (the CombatTargets stream position stays equal but the chosen index diverges). Rule 7: src/Core/Combat/CombatState.cs, src/Core/Entities/Creatures/Creature.cs, relics/base.py, rng.py, cmds.py, creatures.py and powers.py are not hashed by this record."
+      "issue": "C# picks the random target from `Enemies.Where(e => e.IsHittable)` (CombatState.cs:142), and IsHittable is `!IsDead && Hook.ShouldAllowHitting(CombatState, this)` (Creature.cs:285-299). Relic.living_enemies() (relics/base.py:294-297) filters on `not e.is_gone` only. This is the SAME divergence audit/records/relic/bag_of_marbles.json guard G2 records at its own call site, and it carries the same verdict per binding rule 3 -- but it bites harder here, because the set is not just the damage target list, it is the population of an RNG DRAW: `combat_rng.targets.choice(living)` is Rng.NextItem, whose index is scaled by len(seq) (rng.py:248-252), so an unhittable-but-alive enemy changes WHICH enemy is picked even when the pick itself would have been legal, and can also waste the trigger on a target DamageCmd.deal then no-ops on (`should_allow_hitting` returns 0 -- cmds.py:50-51). DORMANT for the same reason bag_of_marbles G2 is: the only ported should_allow_hitting implementers gate on a mid-revival state (IllusionPower powers.py:1572-1575, AdaptablePower powers.py:3372-3375), which cannot coexist with the enemy being alive and un-gone here. Porting any effect that makes a LIVING enemy untargetable makes it live, and in an RNG-visible way (the CombatTargets stream position stays equal but the chosen index diverges). Rule 7: src/Core/Combat/CombatState.cs, src/Core/Entities/Creatures/Creature.cs, relics/base.py, rng.py, cmds.py and powers.py are not hashed by this record."
     },
     {
       "what": "N1: `IsActivating` / `DoActivateVisuals` / `UpdateDisplay` / `InvokeDisplayAmountChanged` / `Flash` / `Cmd.Wait(1f)` / `TaskHelper.RunSafely` and the Status writes in BeforeCombatStart, AfterSideTurnEnd and AfterCombatEnd",

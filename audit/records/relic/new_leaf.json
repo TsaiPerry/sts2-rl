@@ -66,7 +66,7 @@
     },
     {
       "path": "sts2_rl/events/trial.py",
-      "sha256": "81126ff12472dfa21a12eab6624e70cc3dad89e5bad426e03d7a27af88867209",
+      "sha256": "8f46160beb6bafaeba5f3881cf62af0b6ad2ac435db461cf5770d7ea23145d31",
       "side": "sim"
     },
     {

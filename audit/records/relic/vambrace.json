@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
@@ -114,10 +114,9 @@
       "rationale": "No CanonicalVars, no DynamicVars and no AscensionHelper.GetValueIfAscension anywhere in Vambrace.cs, so 2 is unconditional. Checked because PROMPT.md bug class 19 shows a wrong constant hiding behind a plausible-looking citation; here there is no var indirection at all."
     },
     {
-      "what": "N3 / g6: the port's docstring claims 'The multiplier hook stays stateless (safe for previews); the one-shot flag is set from the real on_block_gained event' (vambrace.py:14-17)",
+      "what": "N3: the port's docstring claims 'The multiplier hook stays stateless (safe for previews)' (vambrace.py:14-16)",
       "verdict": "gap",
-      "live": false,
-      "issue": "DORMANT, settled by execution 2026-07-30 (round 11) -- RE-VERIFIED, not stale, and now WORSE than when filed. The docstring at vambrace.py:14-17 is unchanged and still literally false on both clauses: (a) `modify_block_multiplicative` (vambrace.py:36-54) is NOT stateless -- it reads `self._used` at line 52; (b) there is no `on_block_gained` method anywhere in today's file at all (the class was rewritten around after_modify_block_amount/on_card_played, per this record's own hooks entries), so the docstring now names a method that does not exist, which is a second, independent staleness on top of the first. What has changed since this entry was filed is its STAKES: the note was originally filed because the misdescription 'reads as a justification for ... making G3 look intentional' -- i.e. it risked talking a future auditor OUT of a real, then-live bug. G3 is now CLOSED (this record's own G3 guard, faithful since 2026-07-29), so the justification the docstring offered no longer shields any live divergence; there is nothing left for it to hide. PERMANENTLY NON-OBSERVABLE, not merely unreachable on today's content: by this entry's own original admission ('this entry adds no new observable'), a docstring/code mismatch has no runtime behaviour of its own to diverge on -- there is no execution that could ever make this entry LIVE, which is why it is filed dormant rather than re-checked for liveness each round. Recorded as a gap (not corrected to faithful) because the divergence -- code comment vs. code -- genuinely still exists; PROMPT.md bug class 24 is about exactly this shape."
+      "issue": "PROMPT.md bug class 24 -- a docstring that misdescribes the PORT. The multiplier hook is NOT stateless: vambrace.py:32 reads `self._used`, which is exactly the per-combat state. The claim reads as a justification for putting the latch in on_block_gained, and it is the sentence that makes G3 look intentional. Filed as a gap entry rather than a note because the misdescription is load-bearing for a reader deciding whether the port is correct -- but the verdict-carrying divergence is G3's, not this entry's; this entry adds no new observable."
     },
     {
       "what": "N4: Flash(), base.Status = RelicStatus.Active/Normal, ExtraHoverTips, AssertMutable() on the two property setters (Vambrace.cs:29, 42, 47, 53, 92-93, 120)",

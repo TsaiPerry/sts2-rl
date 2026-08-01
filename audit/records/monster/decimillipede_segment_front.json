@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\hive\\decimillipede.py",
-    "sha256": "9c831062dc870136ea0a7a1224119f0a3a1ef9fbe20b299e7e85e219f5e32bcc"
+    "sha256": "244ffa9562b7b0ede9c2fc54332f3d74755a86379cf079447e9ce1bbf24fc788"
   },
   "hooks": {
     "MinInitialHp": {
@@ -93,9 +93,8 @@
     },
     {
       "what": "creature_card_cmds step 26 (SetMaxAndCurrentHp raw-assigned) -- does Decimillipede make it LIVE?",
-      "verdict": "gap",
-      "live": false,
-      "issue": "DORMANT through this monster -- determined by execution, as the stream prompt required, and the answer agrees with the seam's own (creature_card_cmds step 26 records the same call sites as dormant; this entry records the monster-level consequence and does NOT re-verdict the seam). C# uses CreatureCmd.SetMaxAndCurrentHp (DecimillipedeSegment.cs:142), which is SetMaxHp then SetCurrentHp (CreatureCmd.cs:856-860) and therefore carries three things the sim's raw `self.max_hp = self.hp = hp` (decimillipede.py:68, and the duplicate pass at :159-167) skips: SetMaxHpInternal's `CurrentHp = Math.Min(CurrentHp, MaxHp)` clamp (Creature.cs:493-501), SetMaxHp's `if (MaxHp <= 0) await Kill` (CreatureCmd.cs:841-848), and SetCurrentHp's Hook.AfterCurrentHpChanged dispatch plus its trailing `if (IsDead) await Kill` (CreatureCmd.cs:762-778). Executed (monster_probes_b04.py deci-hp), legacy and parity: the assigned values are 40/46/44 and 46/42/44 -- every one even, strictly positive, distinct, and with hp == max_hp -- so the clamp cannot differ and neither Kill arm is reachable; the third clause was checked with a live on_hp_changed spy, which recorded 0 calls, and the ONLY on_hp_changed listener in the whole sim is relics/red_skull.py:45, which early-returns unless the creature is the player (enumerated in the same probe run). The named unported thing that would make this live: any monster or effect that routes a max-HP SET through this path with a value that could land at or below 0, or a non-player on_hp_changed listener -- the game already has three AfterCurrentHpChanged implementers the sim lacks (Crusher.cs:122, Rocket.cs:99, NecroMasteryPower.cs:17), and Crusher and Rocket are monsters, so porting either into a shared encounter with a Decimillipede would flip this."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-31 (tier-2 campaign): The seam gap this entry mirrors is fixed: CreatureCmd.set_max_and_current_hp now exists and decimillipede.py routes BOTH sites through it (:79 and :201), so SetMaxHpInternal's CurrentHp clamp, SetMaxHp's MaxHp<=0 Kill and SetCurrentHp's AfterCurrentHpChanged + trailing Kill all run in the C#-mandated order (CreatureCmd.cs:856-860). The executed dormancy finding below stands unchanged -- the assigned values still make every one of those clauses a no-op -- but the sim no longer relies on that to be correct.  The text it replaced read: DORMANT through this monster -- determined by execution, as the stream prompt required, and the answer agrees with the seam's own (creature_card_cmds step 26 records the same call sites as dormant; this entry records the monster-level consequence and does NOT re-verdict the seam). C# uses CreatureCmd.SetMaxAndCurrentHp (DecimillipedeSegment.cs:142), which is SetMaxHp then SetCurrentHp (CreatureCmd.cs:856-860) and therefore carries three things the sim's raw `self.max_hp = self.hp = hp` (decimillipede.py:68, and the duplicate pass at :159-167) skips: SetMaxHpInternal's `CurrentHp = Math.Min(CurrentHp, MaxHp)` clamp (Creature.cs:493-501), SetMaxHp's `if (MaxHp <= 0) await Kill` (CreatureCmd.cs:841-848), and SetCurrentHp's Hook.AfterCurrentHpChanged dispatch plus its trailing `if (IsDead) await Kill` (CreatureCmd.cs:762-778). Executed (monster_probes_b04.py deci-hp), legacy and parity: the assigned values are 40/46/44 and 46/42/44 -- every one even, strictly positive, distinct, and with hp == max_hp -- so the clamp cannot differ and neither Kill arm is reachable; the third clause was checked with a live on_hp_changed spy, which recorded 0 calls, and the ONLY on_hp_changed listener in the whole sim is relics/red_skull.py:45, which early-returns unless the creature is the player (enumerated in the same probe run). The named unported thing that would make this live: any monster or effect that routes a max-HP SET through this path with a value that could land at or below 0, or a non-player on_hp_changed listener -- the game already has three AfterCurrentHpChanged implementers the sim lacks (Crusher.cs:122, Rocket.cs:99, NecroMasteryPower.cs:17), and Crusher and Rocket are monsters, so porting either into a shared encounter with a Decimillipede would flip this."
     },
     {
       "what": "the HP pass is implemented TWICE in the sim",
@@ -133,7 +132,7 @@
       "rationale": "DecimillipedeSegmentFront/Middle/Back.cs is 15 lines whose XML doc says \"Monster class exists to connect this to the correct monster visual scene. All logic lives in the DecimillipedeSegment\", and the only member is SegmentAttack. Every mechanical member -- HP, moves, the AfterAddedToRoom HP pass, AfterDeath, the flags -- is inherited, so this record verdicts the inherited surface as well as the declared one (harness `enumeration_gaps` / `validate --strict-inherited`). The sim's counterpart (decimillipede.py:132-141) is likewise an empty subclass of the shared DecimillipedeSegment; it exists so DecimillipedeEncounter can build [Front, Middle, Back] in the order DecimillipedeElite.GenerateMonsters does (DecimillipedeElite.cs:35-49), with StarterMoveIdx = n, n+1, n+2 mod 3 -- which the sim reproduces at decimillipede.py:152-158."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-27",
   "extra_sources": [
     {
@@ -183,22 +182,22 @@
     },
     {
       "path": "sts2_rl\\powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
@@ -208,7 +207,7 @@
     },
     {
       "path": "sts2_rl\\monsters\\hive\\decimillipede.py",
-      "sha256": "9c831062dc870136ea0a7a1224119f0a3a1ef9fbe20b299e7e85e219f5e32bcc",
+      "sha256": "244ffa9562b7b0ede9c2fc54332f3d74755a86379cf079447e9ce1bbf24fc788",
       "side": "sim"
     }
   ]

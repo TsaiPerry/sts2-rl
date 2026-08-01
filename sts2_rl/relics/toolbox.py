@@ -41,6 +41,8 @@ class Toolbox(Relic):
         # .cs:216) — the player must take one of the three. The sim models a
         # decline exactly when the purpose is in driver.SKIPPABLE_PURPOSES, so
         # this screen must NOT use one that is ("obtain" is).
-        chosen = combat.select_cards("choose_a_card", options, 1)
+        # `FromChooseACardScreen` (CardSelectCmd.cs:216-261) has no auto-select
+        # shortcut at all — has_shortcut=False.
+        chosen = combat.select_cards("choose_a_card", options, 1, has_shortcut=False)
         for card in chosen:
             CardPileCmd.add_to_hand(combat.hooks, player, card)

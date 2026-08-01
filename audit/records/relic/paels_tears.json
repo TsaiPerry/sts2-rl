@@ -26,17 +26,17 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
+      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
       "side": "sim"
     },
     {
@@ -75,7 +75,7 @@
     {
       "what": "G2 (LIVE, mechanism owned by relic/paels_eye G3): on a Pael's Eye extra turn the sim skips on_player_turn_end entirely, so the flag is never refreshed before the extra turn reads it",
       "verdict": "faithful",
-      "rationale": "The mechanism this entry rolls up (paels_eye G3) is closed: sts2_rl/combat.py:793 fires `on_player_turn_end` before the extra-turn test at :823, exactly as CombatManager.cs:1179's Hook.BeforeTurnEnd precedes :1366's Hook.ShouldTakeExtraTurn. Consequently relics/paels_tears.py:32-33 latches `had_leftover_energy` from the just-ended turn's unspent energy (PaelsTears.cs:38-46), and the extra turn's `on_player_turn_started` at relics/paels_tears.py:35-38 reads a freshly-set flag rather than the previous turn's stale one \u2014 so the +2 Energy on a Pael's-Eye extra turn now matches PaelsTears.cs:48-54.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: MECHANISM: the sim's CombatState.end_turn consults should_take_extra_turn FIRST and returns (combat.py:648-652), so on_player_turn_end (combat.py:654) never runs on that turn; C# runs the whole turn-end pass and only then asks (CombatManager.cs:1179 vs :1366). The consequence for THIS relic is that the extra turn's on_player_turn_started reads a stale had_leftover_energy: C# would have just set it from the (necessarily unspent, since no card was played) energy pool and granted +2, whereas the sim grants +2 only if the PREVIOUS turn happened to leave the flag set. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b11.py eye-turnend` shows the on_player_turn_end slot firing without Pael's Eye and not firing with it, on the same end_turn call). Both relics are Ancient and co-obtainable: the ported Pael shrine offers one option from each of three pools per visit (Pael.cs:154-172; events/pael.py) and repeats across acts, with Tears in pool 1 and Eye in pool 3. Per binding rule 3 this is ONE mechanism with ONE verdict: it is recorded in full at audit/records/relic/paels_eye.json guard G3, which owns the extra-turn machinery, and reproduced here because the observable (2 energy) is this relic's."
+      "rationale": "The mechanism this entry rolls up (paels_eye G3) is closed: sts2_rl/combat.py:793 fires `on_player_turn_end` before the extra-turn test at :823, exactly as CombatManager.cs:1179's Hook.BeforeTurnEnd precedes :1366's Hook.ShouldTakeExtraTurn. Consequently relics/paels_tears.py:32-33 latches `had_leftover_energy` from the just-ended turn's unspent energy (PaelsTears.cs:38-46), and the extra turn's `on_player_turn_started` at relics/paels_tears.py:35-38 reads a freshly-set flag rather than the previous turn's stale one — so the +2 Energy on a Pael's-Eye extra turn now matches PaelsTears.cs:48-54.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: MECHANISM: the sim's CombatState.end_turn consults should_take_extra_turn FIRST and returns (combat.py:648-652), so on_player_turn_end (combat.py:654) never runs on that turn; C# runs the whole turn-end pass and only then asks (CombatManager.cs:1179 vs :1366). The consequence for THIS relic is that the extra turn's on_player_turn_started reads a stale had_leftover_energy: C# would have just set it from the (necessarily unspent, since no card was played) energy pool and granted +2, whereas the sim grants +2 only if the PREVIOUS turn happened to leave the flag set. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b11.py eye-turnend` shows the on_player_turn_end slot firing without Pael's Eye and not firing with it, on the same end_turn call). Both relics are Ancient and co-obtainable: the ported Pael shrine offers one option from each of three pools per visit (Pael.cs:154-172; events/pael.py) and repeats across acts, with Tears in pool 1 and Eye in pool 3. Per binding rule 3 this is ONE mechanism with ONE verdict: it is recorded in full at audit/records/relic/paels_eye.json guard G3, which owns the extra-turn machinery, and reproduced here because the observable (2 energy) is this relic's."
     },
     {
       "what": "N1: `participants.Contains(base.Owner.Creature)` on both hooks (PaelsTears.cs:40, :50)",

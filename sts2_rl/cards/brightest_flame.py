@@ -34,4 +34,5 @@ class BrightestFlameCard(Card):
 
         EnergyCmd.gain(ctx.hooks, ctx.player, self._energy)
         DrawCmd.draw(ctx.player, self._cards)
-        CreatureCmd.lose_max_hp(ctx.hooks, ctx.player, self._max_hp)
+        # BrightestFlame.cs:31 — `isFromCard: true`.
+        CreatureCmd.lose_max_hp(ctx.hooks, ctx.player, self._max_hp, from_card=True)

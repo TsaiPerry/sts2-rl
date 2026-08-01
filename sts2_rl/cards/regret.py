@@ -31,7 +31,7 @@ class RegretCard(Card):
     has_turn_end_in_hand_effect = True
 
     def _init_vars(self) -> None:
-        self._energy_cost = 0
+        self._energy_cost = -1
         self._cards_in_hand = 0
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:

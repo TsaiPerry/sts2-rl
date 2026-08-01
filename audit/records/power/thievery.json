@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
@@ -43,8 +43,8 @@
     },
     "InstanceType": {
       "maps_to": "no sim counterpart",
-      "verdict": "gap",
-      "issue": "ThieveryPower.cs:17 PowerInstanceType.Instanced, which the sim's single-slot target.powers dict (cmds.py:310-326, keyed on power_cls.id) cannot represent -- the mechanism owned by audit/records/seam/power_cmd.json G5, cross-referenced not re-verdicted. DORMANT for this unit: the only applier is GremlinMerc.AfterAddedToRoom applying it once to itself (monsters/underdocks/gremlin_merc.py:37-39, one Merc per encounter), so a second simultaneous instance is not reachable. NOTE FOR THE STREAM REPORT: this is a TENTH PowerInstanceType unit, absent from section 10 item 3's list of nine purely because it was absent from the roster."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): ThieveryPower.instance_type = PowerInstanceType.INSTANCED (sts2_rl/powers.py), mirroring ThieveryPower.cs:17. Verified directly by test/test_powers.py::TestPowerInstanceType::test_thievery_two_applications_are_independent_gold_counters. DORMANT stands: the only applier (GremlinMerc.AfterAddedToRoom) applies it once per Merc.  The text it replaced read: ThieveryPower.cs:17 PowerInstanceType.Instanced, which the sim's single-slot target.powers dict (cmds.py:310-326, keyed on power_cls.id) cannot represent -- the mechanism owned by audit/records/seam/power_cmd.json G5, cross-referenced not re-verdicted. DORMANT for this unit: the only applier is GremlinMerc.AfterAddedToRoom applying it once to itself (monsters/underdocks/gremlin_merc.py:37-39, one Merc per encounter), so a second simultaneous instance is not reachable. NOTE FOR THE STREAM REPORT: this is a TENTH PowerInstanceType unit, absent from section 10 item 3's list of nine purely because it was absent from the roster."
     },
     "Steal() -- public, NOT public override": {
       "maps_to": "powers.py:1655-1665 ThieveryPower.steal",
@@ -69,6 +69,6 @@
       "rationale": "C# accumulates the running total into a DynamicVar so the power's description can render it; the sim keeps the same total in a plain attribute (powers.py:1653, :1665) which SurprisePower then reads to size the Fat Gremlin's HeistPower. Same value, and the DynamicVar machinery itself is presentation. Waiver."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

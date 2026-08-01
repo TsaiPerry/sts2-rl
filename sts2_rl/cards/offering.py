@@ -38,7 +38,14 @@ class OfferingCard(Card):
         from ..cmds import DamageCmd, DrawCmd, EnergyCmd
         from ..valueprops import DamageProps
         DamageCmd.deal(ctx.hooks, ctx.player, self._hp_loss, card=self, props=DamageProps.CARD_HP_LOSS)
-        if ctx.player.is_dead:
-            return
+        # Offering.cs has no is_dead guard here -- C# unconditionally awaits
+        # PlayerCmd.GainEnergy then CardPileCmd.Draw next. No divergence to
+        # reproduce: DrawCmd.draw (-> player._draw) already bails on
+        # `is_over_or_ending`, matching CardPileCmd.Draw's own IsOverOrEnding
+        # bail (CardPileCmd.cs:800), and EnergyCmd.gain's own is_ending bail
+        # (cmds.py, mirroring PlayerCmd.GainEnergy's IsEnding bail,
+        # PlayerCmd.cs:31) makes the energy gain a no-op too -- see
+        # card/_is_dead_early_return (Task 20) and
+        # test/test_is_dead_early_returns.py.
         EnergyCmd.gain(ctx.hooks, ctx.player, self._energy)
         DrawCmd.draw(ctx.player, self._cards)

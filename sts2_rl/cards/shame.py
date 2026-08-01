@@ -31,7 +31,8 @@ class ShameCard(Card):
     has_turn_end_in_hand_effect = True
 
     def _init_vars(self) -> None:
-        self._energy_cost = 0
+        self._energy_cost = -1
+        self._frail = 1     # DynamicVar("Frail", 1m), Shame.cs:22
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         pass
@@ -39,4 +40,4 @@ class ShameCard(Card):
     def on_turn_end_in_hand(self, ctx: CombatCtx) -> None:
         from ..cmds import PowerCmd
         from ..powers import FrailPower
-        PowerCmd.apply(ctx.hooks, ctx.player, FrailPower, 1)
+        PowerCmd.apply(ctx.hooks, ctx.player, FrailPower, self._frail)

@@ -51,7 +51,7 @@
     },
     {
       "path": "sts2_rl/events/brain_leech.py",
-      "sha256": "dcccfa7348ca10d72727a0cd03772b29e60af4e2ca752f457456339ed022e5cf",
+      "sha256": "220a635f96c3938d07bb172ecd05641c9808d471f8a5c32575712e33b0188f30",
       "side": "sim"
     },
     {

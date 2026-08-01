@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     },
     {
@@ -93,8 +93,7 @@
     "AfterCardPlayed": {
       "maps_to": "on_card_played (letter_opener.py:33-44)",
       "verdict": "gap",
-      "live": false,
-      "issue": "NARROWED 2026-07-27. The per-Replay half (G1) is CLOSED: CombatState._resolve_card_play fires on_card_played inside the play-count loop (sts2_rl/combat.py:574, 597-600). WHAT REMAINS is guard G2, the target set: LetterOpener.cs damages HittableEnemies and sts2_rl/relics/letter_opener.py:39 still loops `self.living_enemies()` (relics/base.py:439-446, `not e.is_gone` alone) rather than the now-separately-defined `self.hittable_enemies()` (relics/base.py:447-449, `CombatState.HittableEnemies`'s own dead+ShouldAllowHitting test) that exists in the base class specifically so callers CAN ask for the stricter set. DORMANT, re-enumerated today (the guard's own count is now stale by one): `git grep -n 'def should_allow_hitting' sts2_rl/*.py sts2_rl/**/*.py` returns THREE ported implementers, not the two the guard names -- IllusionPower (powers.py:1908), ReattachPower (powers.py:2780, new since the guard was written) and AdaptablePower (powers.py:3905) -- and all three gate on the SAME shape, a creature's own mid-revival flag (`target is self.owner and self.is_reviving`/equivalent), never a blanket refusal. The reason the wrong target SET still cannot diverge in the observable damage: DamageCmd.deal re-applies the same predicate as its own backstop regardless of the caller's set -- `if not hooks.should_allow_hitting(target): return 0` (sts2_rl/cmds.py:213-214) -- so a mid-revival creature in letter_opener's `living_enemies()` loop takes 0 either way; the only thing the wrong set could change is HOOK TRAFFIC (an extra no-op ModifyDamageAdditive dispatch to a creature that should have been skipped entirely), which no ported listener on that hook currently reads a call-happened-at-all bit from. Live the moment (a) any of the three revival powers is in the same combat as Letter Opener AND some listener distinguishes 'was asked to hit' from 'was allowed to hit', or (b) the should_allow_hitting backstop at cmds.py:213-214 is ever removed."
+      "issue": "NARROWED 2026-07-27. The per-Replay half (G1) is CLOSED: CombatState._resolve_card_play fires on_card_played inside the play-count loop (sts2_rl/combat.py:574, 597-600). WHAT REMAINS is guard G2, the target set: LetterOpener.cs damages HittableEnemies and sts2_rl/relics/letter_opener.py still loops `self.living_enemies()`, which sts2_rl/relics/base.py:386-389 filters on `not e.is_gone` alone, with no Hook.ShouldAllowHitting term."
     },
     "AfterCombatEnd": {
       "maps_to": "no counterpart",

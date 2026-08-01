@@ -28,6 +28,7 @@ class ColossusCard(Card):
     def _init_vars(self) -> None:
         self._energy_cost = 1
         self._block = 5
+        self._power_amount = 1  # DynamicVar("Colossus", 1m), Colossus.cs:24 — no upgrade
 
     def _on_upgrade(self) -> None:
         self._block += 3
@@ -36,4 +37,7 @@ class ColossusCard(Card):
         from ..cmds import BlockCmd, PowerCmd
         from ..powers import ColossusPower
         BlockCmd.apply(ctx.hooks, ctx.player, self._block, card=self)
-        PowerCmd.apply(ctx.hooks, ctx.player, ColossusPower, 1, applier=ctx.player)
+        PowerCmd.apply(
+            ctx.hooks, ctx.player, ColossusPower, self._power_amount,
+            applier=ctx.player,
+        )

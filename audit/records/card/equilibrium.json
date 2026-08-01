@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_skills.py",
-    "sha256": "a94c279e15e166c280c399871da2c21a4ed6c4bf2b827bcf3cf4d1bb9c22b4ca"
+    "sha256": "1cdf31a3bd59e95b239df163b0724e4f99ef299bd67256cc94fcc683e1ed1840"
   },
   "extra_sources": [
     {
@@ -28,8 +28,8 @@
     },
     "CanonicalVars": {
       "maps_to": "_block = 13 declared; the RetainHandPower amount is inlined as 1 (colorless_skills.py:246, 253)",
-      "verdict": "gap",
-      "issue": "`new BlockVar(13m, ValueProp.Move)` maps to `_block = 13`, but the second var `new DynamicVar(\"Equilibrium\", 1m)` (Equilibrium.cs:19-23) has no `_`-attribute -- the sim passes the literal 1. `base_block` is right; `magic_number` returns None where the game prints a second var. The BlockVar is Move WITHOUT Unpowered -> POWERED block, so this card is NOT in gap G1's blast radius. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the applied number is identical), LIVE for the observation encoder."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 24.) All 23 cards now store their printed C# var under a `_`-attribute (or, for 3 cards whose C# var is a live/computed value at display time -- guilty, normality, expect_a_fight -- a `magic_number` property override; wither similarly overrides `base_damage`) so `Card.base_damage`/`base_block`/`base_hp_loss`/`magic_number` report the C# value instead of the 0/None default. Two additive base.py changes: `_frail` added to `_MAGIC_ATTRS` (shame) and a new `base_gold` property (debt, spoils_map -- GoldVar had no base property at all). feel_no_pain's `_block` was renamed to `_power_amount` (fixing a WRONG value, not just a missing one -- `base_block` no longer misreports it as block-granting; matches Rage/Corruption/Stampede's DynamicVar('Power', ...) convention). Combat behavior / dealt numbers are byte-identical in every case -- a printed-number / observation-encoder fix only. 3 of the 23 (debt, spoils_map, rolling_boulder's secondary IncrementAmount) have NO obs-vector change despite the API fix (full_env.py has no base_gold read site; magic_number carries one number per card and _power_amount dominates rolling_boulder's scan) -- documented, not closed further. CHECKPOINT NOTE for training: encoded VALUES changed for the other 20 cards in feature slots f[17]/f[18] damage, f[20]/f[21] block, f[22] hp_loss, f[23] magic_number; obs LAYOUT unchanged. Pins: test/test_printed_vars.py (48 tests).  The text it replaced read: `new BlockVar(13m, ValueProp.Move)` maps to `_block = 13`, but the second var `new DynamicVar(\"Equilibrium\", 1m)` (Equilibrium.cs:19-23) has no `_`-attribute -- the sim passes the literal 1. `base_block` is right; `magic_number` returns None where the game prints a second var. The BlockVar is Move WITHOUT Unpowered -> POWERED block, so this card is NOT in gap G1's blast radius. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the applied number is identical), LIVE for the observation encoder."
     },
     "OnPlay": {
       "maps_to": "EquilibriumCard.on_play (colorless_skills.py:248-253)",
@@ -43,6 +43,6 @@
     }
   },
   "guards": [],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

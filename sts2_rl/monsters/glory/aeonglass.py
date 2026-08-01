@@ -3,10 +3,12 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
+from ...hooks import CAT_POWER
 from ..base import Encounter, Intent, MoveType
 from ..state_machine import MachineMonster, MonsterMoveStateMachine, MoveState
 
 if TYPE_CHECKING:
+    from ...cards import Card
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
@@ -18,6 +20,33 @@ _INTENSITY_BASE_STR = 3
 _WITHER_AMOUNT = 1
 _WITHERING_PRESENCE = 6
 _ARTIFACT = 3
+
+
+class _AeonglassWitherListener:
+    """Stand-in for Aeonglass.AfterCardGeneratedForCombat (Aeonglass.cs:
+    150-166). Same slot problem as Queen's `_AmalgamDeathListener`
+    (hook_dispatch G5, no MonsterModel listener category): registers in the
+    Powers+1 dispatch slot on Aeonglass's behalf.
+
+    For EVERY card generated for combat, from ANY source, that is a Wither,
+    fake-upgrade it `WitherUpgradeCount` times (`MatchWitherToUpgradeCount`,
+    Aeonglass.cs:160-166) -- registered once for the boss's whole combat
+    lifetime, so it catches both the boss's own Increasing Intensity Wither
+    (`_intensity` below) and WitheringPresencePower's punish Wither
+    (powers.py) without either site open-coding the upgrade itself."""
+
+    hook_category = CAT_POWER + 1
+
+    def __init__(self, aeonglass: "Aeonglass") -> None:
+        self.aeonglass = aeonglass
+        self.owner = aeonglass  # dispatch-order slot: the Aeonglass's own creature
+
+    def on_card_generated_for_combat(self, card: "Card", creator=None) -> None:
+        from ...cards import WitherCard
+        if not isinstance(card, WitherCard):
+            return
+        for _ in range(self.aeonglass.wither_upgrade_count):
+            card.fake_upgrade()
 
 
 class Aeonglass(MachineMonster):
@@ -39,6 +68,7 @@ class Aeonglass(MachineMonster):
         from ...powers import ArtifactPower, WitheringPresencePower
         PowerCmd.apply(hooks, self, WitheringPresencePower, _WITHERING_PRESENCE)
         PowerCmd.apply(hooks, self, ArtifactPower, _ARTIFACT)
+        hooks.register(_AeonglassWitherListener(self))
 
     def build_machine(self) -> MonsterMoveStateMachine:
         ebb = MoveState(
@@ -51,7 +81,10 @@ class Aeonglass(MachineMonster):
         )
         intensity = MoveState(
             "INCREASING_INTENSITY_MOVE", self._intensity,
-            Intent(MoveType.STATUS_CARD, also=(MoveType.BUFF,)),
+            # Aeonglass.cs:102 `new StatusIntent(WitherAmount)` -- non-ascension
+            # WitherAmount = 1 (Aeonglass.cs:44), same value as _WITHER_AMOUNT.
+            Intent(MoveType.STATUS_CARD, also=(MoveType.BUFF,),
+                   status_count=_WITHER_AMOUNT),
         )
         ebb.follow_up = lasers
         lasers.follow_up = intensity
@@ -77,8 +110,11 @@ class Aeonglass(MachineMonster):
         self.wither_upgrade_count += 1
         for _ in range(_WITHER_AMOUNT):
             wither = WitherCard()
-            for _ in range(self.wither_upgrade_count):
-                wither.fake_upgrade()
+            # Fake-upgraded by `_AeonglassWitherListener.
+            # on_card_generated_for_combat` (registered in __init__), fired
+            # from `add_to_discard`'s new AfterCardGeneratedForCombat
+            # dispatch -- not open-coded here (Aeonglass.cs:150-166 routes
+            # through the same hook for a Wither from ANY source).
             CardPileCmd.add_to_discard(ctx.hooks, ctx.player, wither)
         PowerCmd.apply(
             ctx.hooks, self, StrengthPower,

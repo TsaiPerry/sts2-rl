@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/unsettling_lamp.py",
-      "sha256": "7f3e9b4f005331480d2b9dc6c824be57a12abf91bc638639b8d5714e1b5f5b87",
+      "sha256": "fc3c134fc62f28d8c30b2ac40a1ece7bbd914dd9b2766fbca402a96c939bba82",
       "side": "sim"
     }
   ],
@@ -41,10 +41,9 @@
       "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "AfterDeath": {
-      "maps_to": "powers.py:1929-1939 RavenousPower.on_death",
+      "maps_to": "powers.py:1593-1602 RavenousPower.on_death",
       "verdict": "gap",
-      "live": false,
-      "issue": "RE-EXECUTED 2026-07-30. The guards are exact -- `target != base.Owner && target.Side == base.Owner.Side && !base.Owner.IsDead` (RavenousPower.cs:26) maps line-for-line to powers.py:1931-1935 -- and the effect order matches (stun the owner, then grant Strength). Two divergences named, both now settled dormant. (1) MISSING `applier=` on the Strength grant (RavenousPower.cs:33 passes `base.Owner`, powers.py:1939 omits it) is the SAME site as this record's own `power/ravenous/g1` guard, already verdicted `gap`/dormant with an executed enumeration of every `applier`-reader in the sim (RitualPower, `_PossessPower._track`, UnsettlingLamp, the shrink/constrict/dampen/hex on_death applier tests) -- none matches an enemy self-buff with a positive delta, per `py audit/tools/gap_queue.py list | grep ravenous` (`power/ravenous/g1 ... dormant`). Not re-verdicted here; cited for rule-3 consistency, not re-derived. (2) The `((CorpseSlug)base.Owner.Monster).IsRavenous` flag (RavenousPower.cs:31, cleared in StunnedMove at :41) is settled here, EXECUTED: `grep -rln IsRavenous \"Slay the Spire 2/src\"` returns exactly two files, `CorpseSlug.cs` (the declaration, `_isRavenous`/`IsRavenous` at lines 35/57-66) and `RavenousPower.cs` (the two writes at :31/:41) -- no third file reads it. Within `CorpseSlug.cs` itself the only READS of `_isRavenous` are five `creatureAnimator.AddAnyState(...)` predicates (lines 169-175) selecting which Hit/Dead/DevourStart animation clip plays -- pure presentation, the same class already waived on this very record as the 'TriggerAnim DevourStart/DevourEnd' guard ('Presentation only'). No move-selection branch, no intent, no combat-state read consults it. So the sim's omission of an IsRavenous-equivalent flag is DORMANT: the flag is provably unobservable outside animation in the decompiled source itself, not merely unread by ported content. VERIFIED by reading RavenousPower.cs, CorpseSlug.cs in full and re-grepping the whole C# source tree for the symbol."
+      "issue": "The guards are exact -- `target != base.Owner && target.Side == base.Owner.Side && !base.Owner.IsDead` (RavenousPower.cs:26) maps line-for-line to powers.py:1594-1599 -- and the effect order matches (stun the owner, then grant Strength). Two divergences. (1) MISSING `applier=` on the Strength grant: RavenousPower.cs:33 passes `base.Owner` and powers.py:1602 omits it; same shape and same dormancy as power/high_voltage's, carried as its own guard below. (2) The `((CorpseSlug)base.Owner.Monster).IsRavenous` flag (RavenousPower.cs:31, cleared in StunnedMove at :41) has no sim counterpart at all -- the sim stuns and buffs but never marks the Corpse Slug as devouring. Whether that is observable depends on what reads IsRavenous on the monster; it is the Corpse Slug's own record to settle, and it is flagged here rather than waived because a monster-state flag set and cleared across a stun is the kind of thing an intent or a move branch reads. Third-file citations, not hashed here."
     }
   },
   "guards": [

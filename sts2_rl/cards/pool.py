@@ -118,13 +118,16 @@ def pool_card_ids(
     card_type: CardType | None = None,
     pool: tuple[str, ...] | None = None,
 ) -> list[str]:
-    """Ids eligible for in-combat card generation (mirrors FilterForCombat:
-    Basic and Ancient cards and CanBeGeneratedInCombat=False cards are
-    excluded), optionally filtered by card type."""
+    """Ids eligible for in-combat card generation (mirrors
+    ``CardFactory.FilterForCombat``, CardFactory.cs:159-162: ``cards.Where(c
+    => c.CanBeGeneratedInCombat && c.Rarity != Basic && c.Rarity != Ancient
+    && c.Rarity != Event).Distinct()`` — Basic, Ancient AND Event cards, plus
+    CanBeGeneratedInCombat=False cards, are excluded), optionally filtered by
+    card type."""
     ids = []
     for card_id in _require_pool(pool):
         cls = _CARD_CLASSES[card_id]
-        if cls.rarity in (CardRarity.BASIC, CardRarity.ANCIENT):
+        if cls.rarity in (CardRarity.BASIC, CardRarity.ANCIENT, CardRarity.EVENT):
             continue
         if not cls.can_be_generated_in_combat:
             continue

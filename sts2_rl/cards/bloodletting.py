@@ -35,6 +35,10 @@ class BloodlettingCard(Card):
         from ..cmds import DamageCmd, EnergyCmd
         from ..valueprops import DamageProps
         DamageCmd.deal(ctx.hooks, ctx.player, self._hp_loss, card=self, props=DamageProps.CARD_HP_LOSS)
-        if ctx.player.is_dead:
-            return
+        # Bloodletting.cs has no is_dead guard here -- C# unconditionally
+        # awaits PlayerCmd.GainEnergy next. No divergence to reproduce:
+        # EnergyCmd.gain's own is_ending bail (cmds.py, mirroring
+        # PlayerCmd.GainEnergy's IsEnding bail, PlayerCmd.cs:31) already makes
+        # this a no-op on a dying player -- see card/_is_dead_early_return
+        # (Task 20) and test/test_is_dead_early_returns.py.
         EnergyCmd.gain(ctx.hooks, ctx.player, self._energy)

@@ -148,6 +148,21 @@ class TestCreatureAndCardCommands:
         assert cs.player.hand == []
         assert cs.player.discard_pile == []
 
+    def test_a_generated_card_is_dropped_from_draw_and_discard_when_the_owner_is_dead(self):
+        """creature_card_cmds/N3: CardPileCmd.cs:329-340 is per-card and
+        pile-agnostic, not a Hand-only special case -- `add_to_draw` and
+        `add_to_discard` refuse a dead owner exactly like `add_to_hand` above,
+        because all three route through the shared `_refuses_combat_add`
+        (cmds.py). One guard, exercised on its other two piles."""
+        cs = CombatState(rng=random.Random(0))
+        cs.player.hp = 0
+        cs.player.draw_pile.clear()
+        cs.player.discard_pile.clear()
+        CardPileCmd.add_to_draw(cs.hooks, cs.player, make_card("strike"))
+        CardPileCmd.add_to_discard(cs.hooks, cs.player, make_card("strike"))
+        assert cs.player.draw_pile == []
+        assert cs.player.discard_pile == []
+
     def test_transform_is_refused(self):
         """CardCmd.cs:371-374 — `IsEnding -> empty`. Note this one is IsEnding,
         not IsOverOrEnding: the out-of-combat deck transformers are unaffected
@@ -204,14 +219,18 @@ class TestPowerCmd:
 
         class Flipper:
             """Hittable at the entry check, not by the time the amount is
-            settled -- `modify_power_amount` is the last chain before :133."""
+            settled -- `modify_power_amount_received` is the last chain
+            before :133 (power_cmd/G3, G4: the sim used to run one flat
+            `modify_power_amount` chain here; the received side is now the
+            one that always runs, unconditionally, right before the
+            mid-pipeline recheck)."""
 
             def __init__(self):
                 self.armed = False
 
-            def modify_power_amount(self, name, tgt, amount, applier=None):
+            def modify_power_amount_received(self, name, tgt, amount, applier):
                 self.armed = True
-                return amount
+                return None  # unchanged -- just observing that the chain ran
 
             def should_allow_hitting(self, tgt):
                 return not self.armed

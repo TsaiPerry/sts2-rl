@@ -28,6 +28,7 @@ class BeckonCard(Card):
 
     def _init_vars(self) -> None:
         self._energy_cost = 1
+        self._hp_loss = 6       # HpLossVar(6m), Beckon.cs:17
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         pass
@@ -36,5 +37,6 @@ class BeckonCard(Card):
         from ..cmds import DamageCmd
         from ..valueprops import DamageProps
         DamageCmd.deal(
-            ctx.hooks, ctx.player, 6, card=self, props=DamageProps.CARD_HP_LOSS
+            ctx.hooks, ctx.player, self._hp_loss, card=self,
+            props=DamageProps.CARD_HP_LOSS,
         )

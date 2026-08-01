@@ -30,6 +30,21 @@ class PowerType(Enum):
     DEBUFF = "debuff"
 
 
+class PowerInstanceType(Enum):
+    """Mirrors PowerInstanceType (PowerInstanceType.cs), consulted by
+    PowerCmd.apply's stacking dispatch (power_cmd/G5, PowerCmd.cs:165-174).
+
+    NONE (the default): re-applying finds the target's existing instance by
+    id and stacks onto it via `on_stack`.
+    INSTANCED: re-applying never finds an existing instance — every
+    application starts its own, independently ticking/expiring one.
+    INSTANCED_PER_APPLIER: re-applying finds an existing instance only if it
+    shares the SAME applier; a different applier starts its own instance."""
+    NONE = "none"
+    INSTANCED = "instanced"
+    INSTANCED_PER_APPLIER = "instanced_per_applier"
+
+
 class Power:
     """
     Base class for all powers/buffs/debuffs, mirroring STS2's PowerModel.
@@ -49,6 +64,9 @@ class Power:
     # for powers that don't allow negatives) the power is removed, mirroring
     # PowerCmd.ModifyAmount → ShouldRemoveDueToAmount.
     allow_negative = False
+    # Mirrors PowerModel.InstanceType (PowerModel.cs:144); see
+    # PowerInstanceType above. Consulted by PowerCmd.apply (power_cmd/G5).
+    instance_type = PowerInstanceType.NONE
 
     @classmethod
     def type_for_amount(cls, amount: int) -> PowerType:
@@ -58,7 +76,7 @@ class Power:
         (`canonicalPower.GetTypeForAmount(amount) != PowerType.Debuff`,
         ArtifactPower.cs:24), not the static `Type` — so a negative-amount
         application of a Buff-typed `allow_negative` power (Malaise stealing
-        Strength, Resonance stealing Dexterity) is a Debuff by C#'s rule and
+        Strength, Resonance stealing Strength) is a Debuff by C#'s rule and
         Artifact blocks it.
 
         C#'s first clause is `StackType == Counter && AllowNegative`. The sim
@@ -143,8 +161,18 @@ class Power:
         self._tick()
 
     def _expire(self) -> None:
-        """Remove this power from owner.powers and unregister from the hook system."""
-        self.owner.powers.pop(self.id, None)
+        """Remove this power from owner.powers and unregister from the hook system.
+
+        Identity-checked rather than a bare pop-by-id: a second application
+        of an Instanced/InstancedPerApplier power (power_cmd/G5) overwrites
+        the dict slot with a NEW instance while the one it replaced stays
+        independently hook-registered, still ticking toward its own expiry.
+        If THAT orphaned instance is the one expiring, a bare
+        `owner.powers.pop(self.id)` would delete the other, still-live
+        instance's dict entry instead of a no-op.
+        """
+        if self.owner.powers.get(self.id) is self:
+            del self.owner.powers[self.id]
         try:
             self.hooks.unregister(self)
         except ValueError:
@@ -474,13 +502,47 @@ class ArtifactPower(Power):
     """
     Blocks the next N debuffs applied to the owner.
 
-    This power has no active hook methods; it is intercepted by PowerCmd.apply
-    before a debuff can be registered.
+    A real `modify_power_amount_received` / `after_modify_power_amount_received`
+    listener pair now (power_cmd/G3, G4 — was hard-coded as a direct block in
+    `PowerCmd.apply`, outside the hook-listener system entirely).
+    `TryModifyPowerAmountReceived` (ArtifactPower.cs:17-36) is where the
+    interception decision lives — it zeroes the incoming amount when it
+    intercepts, it does not short-circuit the caller — and
+    `AfterModifyingPowerAmountReceived` (ArtifactPower.cs:38-41) is where the
+    charge is actually spent (`PowerCmd.Decrement(this)`), not inline in the
+    command.
     """
 
     id = "artifact"
     name = "Artifact"
     power_type = PowerType.BUFF
+
+    def modify_power_amount_received(
+        self,
+        power_cls: type[Power],
+        target: Creature,
+        amount: int,
+        applier: Creature | None,
+    ) -> int | None:
+        """ArtifactPower.cs:17-36. `self.owner` is Artifact's OWN owner —
+        this only ever intercepts a debuff aimed at the creature that holds
+        it; C#'s own `target` parameter is likewise the recipient of the
+        power being applied, not `applier`."""
+        if target is not self.owner:
+            return None
+        # ArtifactPower.cs:24 — sign-aware: `type_for_amount(amount)`, not
+        # the static `Type` (power_cmd/G1, already fixed).
+        if power_cls.type_for_amount(amount) != PowerType.DEBUFF:
+            return None
+        # ArtifactPower.cs:29-33 tests `canonicalPower.IsVisible` here too.
+        # IsVisible is provably always true for every power in the current
+        # game (power_cmd/N1, waived) — omitted.
+        return 0
+
+    def after_modify_power_amount_received(self, power) -> None:
+        """ArtifactPower.cs:38-41 — decrements ITSELF, ignoring the `power`
+        argument entirely (C#: `await PowerCmd.Decrement(this);`)."""
+        self._tick()
 
 
 class ThornsPower(Power):
@@ -711,14 +773,13 @@ class AggressionPower(Power):
 
 class NoDrawPower(Power):
     """Blocks all mid-turn card draws (start-of-turn hand draws are exempt).
-    Removed at the end of the owner's turn. Does not stack."""
+    Removed at the end of the owner's turn. StackType.Single only hides the
+    Amount display (PowerCmd.ModifyAmount adds unconditionally); Amount still
+    accumulates on re-application, but nothing reads it here."""
 
     id = "no_draw"
     name = "No Draw"
     power_type = PowerType.DEBUFF
-
-    def on_stack(self, amount: int) -> None:
-        pass  # PowerStackType.Single
 
     def should_draw(self, player: Creature, from_hand_draw: bool = False) -> bool:
         if from_hand_draw or player is not self.owner:
@@ -732,14 +793,13 @@ class NoDrawPower(Power):
 
 class NoEnergyGainPower(Power):
     """Mid-turn energy gains are reduced to 0 (turn-start energy is unaffected).
-    Removed at the end of the owner's turn. Does not stack."""
+    Removed at the end of the owner's turn. StackType.Single only hides the
+    Amount display; Amount still accumulates on re-application, but nothing
+    reads it here."""
 
     id = "no_energy_gain"
     name = "No Energy Gain"
     power_type = PowerType.DEBUFF
-
-    def on_stack(self, amount: int) -> None:
-        pass  # PowerStackType.Single
 
     def modify_energy_gain(self, player: Creature, amount: int) -> int:
         if player is self.owner:
@@ -778,14 +838,13 @@ class ColossusPower(Power):
 
 
 class CorruptionPower(Power):
-    """Skill cards cost 0 and are exhausted when played. Does not stack."""
+    """Skill cards cost 0 and are exhausted when played. StackType.Single only
+    hides the Amount display; Amount still accumulates on re-application, but
+    nothing reads it here."""
 
     id = "corruption"
     name = "Corruption"
     power_type = PowerType.BUFF
-
-    def on_stack(self, amount: int) -> None:
-        pass  # PowerStackType.Single
 
     def modify_card_energy_cost_late(self, card: Card, cost: int) -> int:
         # CorruptionPower.cs:16 is TryModifyEnergyCostInCombatLate: the Late
@@ -889,7 +948,8 @@ class FlameBarrierPower(Power):
 
 class HellraiserPower(Power):
     """Whenever a Strike card is drawn, auto-play it (for free, at a random
-    target). Does not stack.
+    target). StackType.Single only hides the Amount display; Amount still
+    accumulates on re-application, but nothing reads it here.
 
     The game caps consecutive auto-plays at 9 only against infinite-HP
     enemies, which the sim does not have."""
@@ -897,9 +957,6 @@ class HellraiserPower(Power):
     id = "hellraiser"
     name = "Hellraiser"
     power_type = PowerType.BUFF
-
-    def on_stack(self, amount: int) -> None:
-        pass  # PowerStackType.Single
 
     def on_card_drawn_early(self, card: Card, from_hand_draw: bool = False) -> None:
         # HellraiserPower.cs:37 is AfterCardDrawnEarly -- the Early pass runs
@@ -1466,14 +1523,15 @@ class ToricToughnessPower(Power):
 
     Source: ToricToughnessPower.cs — AfterBlockCleared: GainBlock(Block,
     Unpowered), then Decrement. The game makes each application a separate
-    instance (PowerInstanceType.Instanced); the sim keeps one instance per
-    power id, so re-applying stacks the turn counter and overwrites the block
-    value (an approximation that only matters with multiple copies active).
+    instance (PowerInstanceType.Instanced, power_cmd/G5): re-applying now
+    starts its own instance with its own turn counter and block value,
+    rather than stacking the counter and overwriting the block on this one.
     """
 
     id = "toric_toughness"
     name = "Toric Toughness"
     power_type = PowerType.BUFF
+    instance_type = PowerInstanceType.INSTANCED
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -1971,11 +2029,17 @@ class ThieveryPower(Power):
     (PlayerCmd.LoseGold with GoldLossType.Stolen) and accumulating the total
     on the power. The combat tracks the debit (CombatState.gold_stolen);
     RunState.finish_combat settles the run's ledger. SurprisePower moves the
-    accumulated total onto the Fat Gremlin's HeistPower when the Merc dies."""
+    accumulated total onto the Fat Gremlin's HeistPower when the Merc dies.
+
+    InstanceType.Instanced (ThieveryPower.cs:17, power_cmd/G5): a second
+    application would start its own instance with its own gold_stolen
+    total. The only applier (GremlinMerc.AfterAddedToRoom) applies it once
+    per Merc, so this never observably matters today."""
 
     id = "thievery"
     name = "Thievery"
     power_type = PowerType.BUFF
+    instance_type = PowerInstanceType.INSTANCED
 
     def __init__(
         self,
@@ -2004,11 +2068,17 @@ class HeistPower(Power):
     """Held by the Fat Gremlin that flees with the Merc's stolen gold
     (mirrors HeistPower.cs): when the owner dies, the stolen amount is queued
     as a reward-screen gold return (GoldReward with wasGoldStolenBack).
-    Escape never fires BeforeDeath — the gold stays lost."""
+    Escape never fires BeforeDeath — the gold stays lost.
+
+    InstanceType.Instanced (HeistPower.cs:15, power_cmd/G5): a second
+    application would start its own instance with its own amount. The only
+    applier (SurprisePower) applies it once per Fat Gremlin, so this never
+    observably matters today."""
 
     id = "heist"
     name = "Heist"
     power_type = PowerType.BUFF
+    instance_type = PowerInstanceType.INSTANCED
 
     def on_death(self, creature: Creature,
                  was_removal_prevented: bool = False) -> None:
@@ -2023,13 +2093,28 @@ class HeistPower(Power):
 
 class SurprisePower(Power):
     """When the owner dies, a Sneaky Gremlin and a Fat Gremlin jump out of the
-    crate and join the fight (Gremlin Merc; mirrors SurprisePower.AfterDeath),
-    and the Merc's ThieveryPower total moves onto the Fat Gremlin as a
-    HeistPower — kill it before it flees to get the stolen gold back."""
+    crate and join the fight (Gremlin Merc; mirrors SurprisePower.AfterDeath
+    + ShouldStopCombatFromEnding), and the Merc's ThieveryPower total moves
+    onto the Fat Gremlin as a HeistPower — kill it before it flees to get the
+    stolen gold back."""
 
     id = "surprise"
     name = "Surprise"
     power_type = PowerType.BUFF
+
+    def should_stop_combat_from_ending(self) -> bool:
+        """SurprisePower.cs:40-43 — an unconditional `return true`, the same
+        shape as Adaptable/Infested/SteamEruption/Stock's overrides
+        (creature_card_cmds/step8c, tier-2 Task 26). The sim had not ported
+        it. Dormant in Ironclad scope: the two gremlins this power's own
+        `on_death` spawns are appended to `combat.enemies` (CreatureCmd.add)
+        before either of their constructors or the later HeistPower.apply
+        call could read `is_ending`, and neither gremlin is a minion, so
+        `_all_enemies_dead`'s primaries check already goes False on its own
+        as soon as the first one joins — the veto never gets a chance to
+        matter for this power's own encounter, unlike Stock's (which
+        constructs its replacement's own power BEFORE adding it to combat)."""
+        return True
 
     def on_death(self, creature: Creature,
                  was_removal_prevented: bool = False) -> None:
@@ -2064,9 +2149,6 @@ class SmoggyPower(Power):
     ) -> None:
         super().__init__(owner, amount, hooks, applier)
         self._skill_played_this_turn = False
-
-    def on_stack(self, amount: int) -> None:
-        pass  # single-stack (PowerStackType.Single)
 
     @staticmethod
     def _is_skill(card: Card) -> bool:
@@ -2401,23 +2483,27 @@ class ImbalancedPower(Power):
     name = "Imbalanced"
     power_type = PowerType.DEBUFF
 
-    def on_stack(self, amount: int) -> None:
-        pass  # PowerStackType.Single
-
-    def on_damage_received(
+    def on_damage_dealt(
         self,
+        dealer: Creature,
         target: Creature,
         amount: int,
-        dealer: Creature | None,
-        card: Card | None,
+        card: Card | None = None,
         props: ValueProp = ValueProp.NONE,
+        was_fully_blocked: bool = False,
     ) -> None:
-        if (
-            dealer is self.owner
-            and target is not self.owner
-            and amount == 0
-            and ValueProp.MOVE in props
-        ):
+        """ImbalancedPower.AfterDamageGiven (ImbalancedPower.cs:17-30):
+        `dealer == base.Owner && result.WasFullyBlocked` — nothing else.
+        Moved off `on_damage_received` (power/_after_damage_given_
+        substitution, tier-2 Task 26): that hook is the WRONG side (victim,
+        not dealer) and is killing-blow guarded, where AfterDamageGiven is
+        neither. The substitution's `target is not self.owner` guard and its
+        `amount == 0 and ValueProp.MOVE in props` predicate are both dropped
+        here — C# has no target check (it gets one dispatch per hit and self-
+        filters on `dealer`, not `target`), and `WasFullyBlocked` is broader
+        than a plain `amount == 0` (it also requires block to have been in
+        play) and does not gate on MOVE at all."""
+        if dealer is self.owner and was_fully_blocked:
             if hasattr(self.owner, "is_off_balance"):
                 self.owner.is_off_balance = True
             else:
@@ -2613,7 +2699,18 @@ class SwipePower(Power):
     (CombatRoom.AddExtraReward). Here: on_death appends a RewardExtra card
     entry to the combat's pending_reward_extras, carrying the run-deck origin
     of the stolen combat copy (the DeckVersion analogue); cards with no deck
-    origin never come back (BeforeDeath's DeckVersion == null early-out)."""
+    origin never come back (BeforeDeath's DeckVersion == null early-out).
+
+    NOT switched to `instance_type = PowerInstanceType.INSTANCED`
+    (PowerInstanceType.Instanced, SwipePower.cs:23; power_cmd/G5): each
+    steal bundles into this SAME instance's `stolen_cards` today because
+    `PowerCmd.apply`'s default (None) dispatch keeps finding it. Under the
+    generic Instanced dispatch each steal would instead start a fresh
+    instance with an empty `stolen_cards`, orphaning the earlier one(s) from
+    `target.powers` — and `RunState.finish_combat` (run.py) walks an escaped
+    hopper's deck-removal reconciliation through `enemy.powers.get("swipe")`
+    alone, so any steal but the last would silently stay in the run deck.
+    The current one-bucket approximation is what that walk depends on."""
 
     id = "swipe"
     name = "Swipe"
@@ -2642,17 +2739,21 @@ class SwipePower(Power):
             if origin is not None:
                 combat.pending_reward_extras.append(RewardExtra.of_card(origin))
 
-    def on_removed(self, owner: Creature) -> None:
-        """Hand the stolen deck origins to the combat before this power is
-        stripped.
+    def hand_off_stolen_origins(self) -> None:
+        """Record this power's stolen cards' deck origins on the combat, so
+        RunState.finish_combat can remove them from the run deck once this
+        power is gone — the sim's own reconciliation-at-combat-end substitute
+        for C#'s immediate `CardPileCmd.RemoveFromDeck` at steal time
+        (SwipePower.cs:75). `SwipePower` does not override
+        ShouldPowerBeRemovedAfterOwnerDeath, so the game strips it like any
+        other power on death or escape; C# needs no hand-off because the deck
+        removal already happened at steal time.
 
-        `SwipePower` does not override ShouldPowerBeRemovedAfterOwnerDeath, so
-        the game strips it on death like any other power — and C# does not need
-        it afterwards, because `Steal()` already removed the deck version at
-        steal time (SwipePower.cs:75). The sim reconciles at combat end
-        instead, from `deck_card_origins`, so the origins have to survive the
-        strip. An ESCAPED hopper keeps the power and is handled by
-        RunState.finish_combat's own walk.
+        Shared by the two paths that make this power disappear: death
+        (`on_removed`, below — CreatureCmd.cs:533-537's AfterRemoved) and
+        escape (`ThievingHopper._escape`, called BEFORE `CreatureCmd.escape`'s
+        silent strip — creature_card_cmds/G13 — removes the power with no
+        `on_removed` call).
         """
         combat = self.hooks.combat
         if combat is None:
@@ -2661,6 +2762,11 @@ class SwipePower(Power):
             origin = combat.deck_card_origins.get(id(card))
             if origin is not None:
                 combat.stolen_deck_origins.append(origin)
+
+    def on_removed(self, owner: Creature) -> None:
+        """AfterRemoved, awaited for each power a DEATH strips
+        (CreatureCmd.cs:533-537). Hands off before this power is gone."""
+        self.hand_off_stolen_origins()
 
 
 class BurrowedPower(Power):
@@ -2671,9 +2777,6 @@ class BurrowedPower(Power):
     id = "burrowed"
     name = "Burrowed"
     power_type = PowerType.BUFF
-
-    def on_stack(self, amount: int) -> None:
-        pass  # PowerStackType.Single
 
     def should_clear_block(self, creature: Creature) -> bool:
         if creature is self.owner:
@@ -2707,14 +2810,21 @@ class BurrowedPower(Power):
         # Note the registered DIZZY_MOVE state has NO incoming edge in the
         # source's own machine (BITE -> BURROW -> BELOW -> BELOW is the whole
         # graph, Tunneler.cs:69-85), so the synthetic state is the only way in.
-        from .cmds import CreatureCmd
+        from .cmds import BlockCmd, CreatureCmd
 
         get_stunned = getattr(self.owner, "get_stunned", None)
         if get_stunned is not None:
             get_stunned()
         CreatureCmd.stun(self.hooks, self.owner, next_move_key="BITE_MOVE")
         self._expire()
-        self.owner.block = 0  # AfterRemoved: LoseBlock(all)
+        # BurrowedPower.cs:38-41 — AfterRemoved:
+        # `CreatureCmd.LoseBlock(oldOwner, 999999999m)` (creature_card_cmds/
+        # step18). Dormant on today's only ported caller: block is already 0
+        # by the time this handler runs (it fires FROM the break), so the
+        # re-fire this verb adds over the old raw `block = 0` assignment
+        # never triggers here — but it is what a second, non-self-zeroing
+        # LoseBlock(all) caller would need.
+        BlockCmd.lose_block(self.hooks, self.owner, 999999999)
 
 
 class ReattachPower(Power):
@@ -2978,9 +3088,6 @@ class SurroundedPower(Power):
         super().__init__(owner, amount, hooks, applier)
         self.facing = "right"
 
-    def on_stack(self, amount: int) -> None:
-        pass  # PowerStackType.Single
-
     def modify_damage_multiplicative(
         self,
         target: Creature,
@@ -3032,11 +3139,20 @@ class SurroundedPower(Power):
 class SandpitPower(Power):
     """The Insatiable's devour timer: counts down at the start of the owner's
     turn; when it runs out the player is eaten — killed outright (mirrors
-    SandpitPower.AfterRemoved). Frantic Escape adds a stack, delaying it."""
+    SandpitPower.AfterRemoved). Frantic Escape adds a stack, delaying it.
+
+    InstanceType.Instanced (SandpitPower.cs:37, power_cmd/G5): a second
+    LIQUIFY would start its own independent countdown rather than merging
+    into this one's — either one reaching 0 still eats the player. Frantic
+    Escape's own re-application bypasses this entirely and goes straight to
+    ModifyAmount on the found instance (FranticEscape.cs:38-42, mirrored by
+    FranticEscapeCard.on_play calling PowerCmd.modify_amount directly), so
+    it is unaffected."""
 
     id = "sandpit"
     name = "Sandpit"
     power_type = PowerType.BUFF
+    instance_type = PowerInstanceType.INSTANCED
 
     def after_enemy_side_start_late(self) -> None:
         # SandpitPower.cs:70 — AfterSideTurnStartLATE, gated on
@@ -3192,11 +3308,25 @@ class DrawCardsNextTurnPower(Power):
     def modify_hand_draw(self, player: Creature, count: int) -> int:
         if player is not self.owner:
             return count
+        # DrawCardsNextTurnPower.cs:28 — `AmountOnTurnStart == 0` means this
+        # stack was applied DURING the current turn's own setup window (a
+        # power that did not exist yet at Creature.BeforeTurnStart snapshots
+        # at the type's zero default, Creature.cs:673-679) rather than one
+        # already sitting on the owner when the turn began — so it neither
+        # draws nor expires (see after_side_turn_start below) this turn, only
+        # the next one. `getattr` because the snapshot lives on the instance,
+        # not declared on Power.__init__ — see `Creature.
+        # snapshot_powers_on_turn_start`.
+        if getattr(self, "amount_on_turn_start", 0) == 0:
+            return count
         return count + self.amount
 
     def after_side_turn_start(self, player: Creature) -> None:
-        # Post-draw turn start: the bonus has been drawn — expire.
-        if player is self.owner:
+        # DrawCardsNextTurnPower.cs:35-38 — the SAME AmountOnTurnStart guard
+        # on the removal side, so a stack applied this turn's own setup
+        # window is never drawn AND never expires this turn; it survives to
+        # actually take effect (and then expire) next turn instead.
+        if player is self.owner and getattr(self, "amount_on_turn_start", 0) != 0:
             self._expire()
 
 
@@ -3255,7 +3385,16 @@ class HelloWorldPower(Power):
     power_type = PowerType.BUFF
 
     def on_player_turn_start(self, player: Creature) -> None:
-        if player is not self.owner or self.amount < 1:
+        # HelloWorldPower.cs:19-27 gates AND counts on `base.AmountOnTurnStart`
+        # — NOT `base.Amount` — so a stack applied during this turn's own
+        # setup window (never snapshotted; the type's zero default,
+        # Creature.cs:673-679) grants nothing this turn, and an amount that
+        # somehow changed after the snapshot still generates the SNAPSHOTTED
+        # count. `getattr` because the snapshot lives on the instance, not
+        # declared on Power.__init__ — see `Creature.
+        # snapshot_powers_on_turn_start`.
+        snapshot = getattr(self, "amount_on_turn_start", 0)
+        if player is not self.owner or snapshot < 1:
             return
         from .cards import CardRarity, make_card
         from .cards.pool import pool_card_ids
@@ -3269,7 +3408,7 @@ class HelloWorldPower(Power):
         ]
         if not commons:
             return
-        n = min(self.amount, len(commons))
+        n = min(snapshot, len(commons))
         # `CardFactory.GetDistinctForCombat(..., Rng.CombatCardGeneration)`
         # (HelloWorldPower.cs:23-27) ends in `TakeRandom(count, rng)`, which is
         # `collection.ToList().UnstableShuffle(rng).Take(count)`
@@ -3294,11 +3433,18 @@ class StranglePower(Power):
     Source: StranglePower.cs — BeforeCardPlayed records the amount for each card
     the applier plays (so it never triggers on the card that applied it), and
     AfterCardPlayed deals that amount to the owner. Applied to a target by the
-    Mad Science card's Choking rider (Tinker Time event)."""
+    Mad Science card's Choking rider (Tinker Time event).
+
+    InstanceType.InstancedPerApplier (StranglePower.cs:29, power_cmd/G5): a
+    second application from the SAME applier still stacks onto this
+    instance (unchanged); one from a DIFFERENT applier starts its own
+    instance instead of merging. The only ported applier is the player, so
+    a second applier never observably matters today."""
 
     id = "strangle"
     name = "Strangle"
     power_type = PowerType.DEBUFF
+    instance_type = PowerInstanceType.INSTANCED_PER_APPLIER
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -3431,14 +3577,25 @@ class PaperCutsPower(Power):
     name = "Paper Cuts"
     power_type = PowerType.BUFF
 
-    def on_damage_received(
+    def on_damage_dealt(
         self,
+        dealer: Creature,
         target: Creature,
         amount: int,
-        dealer: Creature | None,
-        card: Card | None,
+        card: Card | None = None,
         props: ValueProp = ValueProp.NONE,
+        was_fully_blocked: bool = False,
     ) -> None:
+        """PaperCutsPower.AfterDamageGiven (PaperCutsPower.cs:16-23):
+        `dealer == base.Owner && target.IsPlayer && props.IsPoweredAttack() &&
+        result.UnblockedDamage > 0` — all four guards were already faithful
+        on the substitution (power/_after_damage_given_substitution, tier-2
+        Task 26); `amount` here is `hp_lost`, the same value
+        `UnblockedDamage` is. Only the hook was wrong: `on_damage_received`
+        is the victim-side event and is killing-blow guarded, so a lethal
+        Scroll of Biting hit never cost the player max HP in the sim though
+        it does in the game. `on_damage_dealt` is dealer-side and not
+        killing-blow guarded, matching AfterDamageGiven."""
         from .valueprops import is_powered_attack
         if (
             dealer is self.owner
@@ -3447,7 +3604,8 @@ class PaperCutsPower(Power):
             and is_powered_attack(props)
         ):
             from .cmds import CreatureCmd
-            CreatureCmd.lose_max_hp(self.hooks, target, self.amount)
+            # PaperCutsPower.cs:20 — `isFromCard: false`.
+            CreatureCmd.lose_max_hp(self.hooks, target, self.amount, from_card=False)
 
 
 class StockPower(Power):
@@ -3565,9 +3723,6 @@ class SoarPower(Power):
     name = "Soar"
     power_type = PowerType.BUFF
 
-    def on_stack(self, amount: int) -> None:
-        pass  # PowerStackType.Single
-
     def modify_damage_multiplicative(
         self,
         target: Creature,
@@ -3661,8 +3816,14 @@ class PossessSpeedPower(_PossessPower):
 
 class DampenPower(Power):
     """When applied, downgrades every upgraded card the player owns by one
-    level; the upgrades are restored when the applier dies (Magi Knight;
-    mirrors DampenPower). Does not stack."""
+    level; the upgrades are restored once every caster who applied this
+    instance has died (Magi Knight; mirrors DampenPower). StackType.None (not
+    Single); a caster re-applying Dampen to an existing instance never reaches
+    PowerCmd.Apply at all -- the applier itself dedupes by checking for an
+    existing instance first and calling `add_caster` directly instead
+    (MagiKnight.DampenMove; mirrored by MagiKnight._dampen in knights.py) --
+    so the default additive on_stack is unreachable through the only known
+    applier, and Amount is unread elsewhere."""
 
     id = "dampen"
     name = "Dampen"
@@ -3677,6 +3838,12 @@ class DampenPower(Power):
     ) -> None:
         super().__init__(owner, amount, hooks, applier)
         self._downgraded: dict[Card, int] = {}
+        # DampenPower.cs:15 `casters` HashSet<Creature> -- every creature
+        # that has cast Dampen onto this owner while THIS instance has been
+        # active, populated through `add_caster` (mirrors the public,
+        # non-override `AddCaster`, DampenPower.cs:73-76). The power only
+        # expires once the set is empty (see on_death) -- monster/magi_knight/g1.
+        self._casters: set[Creature] = set()
         for card in getattr(owner, "all_cards", ()):
             if card.upgrade_level > 0 and card not in self._downgraded:
                 self._downgraded[card] = card.upgrade_level
@@ -3685,14 +3852,27 @@ class DampenPower(Power):
                 from .cmds import CardCmd
                 CardCmd.downgrade(hooks, card)
 
-    def on_stack(self, amount: int) -> None:
-        pass  # PowerStackType.None
+    def add_caster(self, creature: Creature) -> None:
+        """DampenPower.cs:73-76 `AddCaster` -- public, not an override, so the
+        harness would not otherwise see it called. `MagiKnight.DampenMove`
+        calls this for every Dampen cast, whether or not that particular
+        application is the one that created the power (MagiKnight.cs:82-92,
+        mirrored by `MagiKnight._dampen`)."""
+        self._casters.add(creature)
 
     def on_death(self, creature: Creature,
                  was_removal_prevented: bool = False) -> None:
-        if creature is not self.applier:
+        # DampenPower.cs:41-56: a `wasRemovalPrevented` death does not touch
+        # the caster set at all. Otherwise remove the dying creature from
+        # `casters`; only once the set is EMPTY does the power expire
+        # (`PowerCmd.Remove(this)`) -- a second live caster keeps the
+        # downgrade in place after the first caster dies.
+        if was_removal_prevented:
             return
-        self._expire()
+        if creature in self._casters:
+            self._casters.discard(creature)
+            if not self._casters:
+                self._expire()
 
     def _expire(self) -> None:
         for card, level in self._downgraded.items():
@@ -3715,9 +3895,6 @@ class HexPower(Power):
     id = "hex"
     name = "Hex"
     power_type = PowerType.DEBUFF
-
-    def on_stack(self, amount: int) -> None:
-        pass  # PowerStackType.Single
 
     def _afflict(self, card: Card) -> None:
         from .afflictions import HexedAffliction
@@ -3774,11 +3951,18 @@ class HighVoltagePower(Power):
 class WitheringPresencePower(Power):
     """Every N cards the player plays, a Wither status card is added to their
     hand — matched to the Aeonglass's Increasing-Intensity upgrade count
-    (mirrors WitheringPresencePower). The display counter starts at N (6)."""
+    (mirrors WitheringPresencePower). The display counter starts at N (6).
+
+    InstanceType.Instanced (WitheringPresencePower.cs:26, power_cmd/G5): the
+    game creates one instance per opponent (Aeonglass.cs:78-83), each with
+    its own counter. A second application here would start its own instance
+    too; with one player there is only ever one opponent, so this never
+    observably matters today."""
 
     id = "withering_presence"
     name = "Withering Presence"
     power_type = PowerType.BUFF
+    instance_type = PowerInstanceType.INSTANCED
 
     def __init__(
         self,
@@ -3802,8 +3986,15 @@ class WitheringPresencePower(Power):
         from .cards import WitherCard
         from .cmds import CardPileCmd
         wither = WitherCard()
-        for _ in range(getattr(self.owner, "wither_upgrade_count", 0)):
-            wither.fake_upgrade()
+        # Fake-upgraded by the Aeonglass's own
+        # `_AeonglassWitherListener.on_card_generated_for_combat` (monsters/
+        # glory/aeonglass.py), fired from `add_to_hand`'s
+        # AfterCardGeneratedForCombat dispatch -- WitheringPresencePower.cs:
+        # 55's real Wither is matched only via that hook (the hover-tip at
+        # WitheringPresencePower.cs:37 is a separate, preview-only site with
+        # no sim analogue here). Not open-coded: the Aeonglass's registered
+        # `_AeonglassWitherListener` must still be live for this to fire,
+        # exactly as in C#.
         CardPileCmd.add_to_hand(self.hooks, combat.player, wither)
 
 
@@ -3884,9 +4075,6 @@ class AdaptablePower(Power):
         super().__init__(owner, amount, hooks, applier)
         self.is_reviving = False
 
-    def on_stack(self, amount: int) -> None:
-        pass  # PowerStackType.Single
-
     def should_remove_from_combat_after_death(self, creature: Creature) -> bool:
         # AdaptablePower.cs:58-66 — the only death-side predicate the power
         # implements. There is no ShouldDie override, so the Test Subject
@@ -3965,9 +4153,6 @@ class NemesisPower(Power):
         super().__init__(owner, amount, hooks, applier)
         self._should_apply = False
 
-    def on_stack(self, amount: int) -> None:
-        pass  # PowerStackType.Single
-
     def on_enemy_side_end(self) -> None:
         if self.owner.is_dead:
             return
@@ -3984,11 +4169,16 @@ class NemesisPower(Power):
 
 class AutomationPower(Power):
     """Every 10 cards drawn, gain N energy (mirrors AutomationPower's
-    internal cards-left counter; the counter resets to 10 after firing)."""
+    internal cards-left counter; the counter resets to 10 after firing).
+
+    InstanceType.Instanced (AutomationPower.cs:27, power_cmd/G5): a second
+    play starts its own instance with its own fresh cards_left, rather than
+    merging into this one's."""
 
     id = "automation"
     name = "Automation"
     power_type = PowerType.BUFF
+    instance_type = PowerInstanceType.INSTANCED
     CARDS_PER_TRIGGER = 10
 
     def __init__(
@@ -4166,11 +4356,16 @@ class NostalgiaPower(Power):
 class PanachePower(Power):
     """Every 5 cards played after this power, deal N unpowered damage to ALL
     enemies; the 5-count resets when it fires and at the end of the turn
-    (mirrors PanachePower — the Panache play itself is not counted)."""
+    (mirrors PanachePower — the Panache play itself is not counted).
+
+    InstanceType.Instanced (PanachePower.cs:35, power_cmd/G5): a second play
+    starts its own instance with its own fresh cards_left, rather than
+    merging into this one's."""
 
     id = "panache"
     name = "Panache"
     power_type = PowerType.BUFF
+    instance_type = PowerInstanceType.INSTANCED
     CARDS_PER_TRIGGER = 5
 
     def __init__(
@@ -4253,11 +4448,16 @@ class PrepTimePower(Power):
 class RollingBoulderPower(Power):
     """At the start of each of the owner's turns, deal N unpowered damage to
     ALL enemies, then N grows by 5 (mirrors RollingBoulderPower's
-    AfterPlayerTurnStart damage + SetAmount)."""
+    AfterPlayerTurnStart damage + SetAmount).
+
+    InstanceType.Instanced (RollingBoulderPower.cs:24, power_cmd/G5): a
+    second play starts its own instance with its own growing amount, rather
+    than merging into this one's."""
 
     id = "rolling_boulder"
     name = "Rolling Boulder"
     power_type = PowerType.BUFF
+    instance_type = PowerInstanceType.INSTANCED
     INCREMENT = 5
 
     def on_player_turn_started(self, player: Creature) -> None:
@@ -4305,7 +4505,17 @@ class TheBombPower(Power):
     TheBombPower). The game instances the power (PowerInstanceType.Instanced)
     so several bombs tick independently; the sim keeps a list of
     (turns_left, damage) fuses inside one power, with `amount` showing the
-    shortest fuse."""
+    shortest fuse.
+
+    NOT switched to `instance_type = PowerInstanceType.INSTANCED`
+    (power_cmd/G5): that dispatch skips `on_stack` entirely on a second
+    application, which is exactly the method this class's own bombs-list
+    already uses to reproduce independent-fuse damage correctly (below).
+    Routing it through the generic path would silence `on_stack` and lose
+    that workaround for no gain — the per-instance STATE that workaround
+    doesn't reproduce (one power_list entry where the game has two) is a
+    full_env.py observation-encoding limit the generic path doesn't fix
+    either, since it also only ever exposes the newest instance."""
 
     id = "the_bomb"
     name = "The Bomb"
@@ -4359,14 +4569,13 @@ class TheBombPower(Power):
 
 class TheGambitPower(Power):
     """If the owner takes unblocked attack damage, they die (The Gambit's
-    drawback; mirrors TheGambitPower.AfterDamageReceived). Single stack."""
+    drawback; mirrors TheGambitPower.AfterDamageReceived). StackType.Single
+    only hides the Amount display; Amount still accumulates on
+    re-application, but nothing reads it here."""
 
     id = "the_gambit"
     name = "The Gambit"
     power_type = PowerType.DEBUFF
-
-    def on_stack(self, amount: int) -> None:
-        pass  # PowerStackType.Single
 
     def on_damage_received(
         self,
@@ -4405,7 +4614,9 @@ class BlockNextTurnPower(Power):
 
 class ConfusedPower(Power):
     """Whenever the owner draws a card, that card's cost becomes a random
-    0-3 for the rest of the combat. Does not stack.
+    0-3 for the rest of the combat. StackType.Single only hides the Amount
+    display; Amount still accumulates on re-application, but nothing reads
+    it here.
 
     Source: ConfusedPower.cs — AfterCardDrawn sets EnergyCost.SetThisCombat
     (NextInt(4)), skipping X-cost cards (EnergyCost.Canonical < 0). Applied
@@ -4420,9 +4631,6 @@ class ConfusedPower(Power):
     id = "confused"
     name = "Confused"
     power_type = PowerType.DEBUFF
-
-    def on_stack(self, amount: int) -> None:
-        pass  # PowerStackType.Single
 
     def on_card_drawn(self, card: Card, from_hand_draw: bool = False) -> None:
         if card.energy_cost_x:      # EnergyCost.Canonical < 0

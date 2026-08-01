@@ -93,7 +93,11 @@ class TestSubject(MachineMonster):
         )
         growl = MoveState(
             "BURNING_GROWL_MOVE", self._growl,
-            Intent(MoveType.STATUS_CARD, also=(MoveType.BUFF,)),
+            # TestSubject.cs:201 `new StatusIntent(BurningGrowlBurnCount)` --
+            # non-ascension BurningGrowlBurnCount = 3 (TestSubject.cs:101),
+            # same value as _GROWL_BURN.
+            Intent(MoveType.STATUS_CARD, also=(MoveType.BUFF,),
+                   status_count=_GROWL_BURN),
         )
         revive_branch = ConditionalBranchState("REVIVE_BRANCH")
         bite.follow_up = skull_bash

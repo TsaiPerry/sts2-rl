@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -36,17 +36,17 @@
     },
     {
       "path": "sts2_rl/cards/colorless_skills.py",
-      "sha256": "a94c279e15e166c280c399871da2c21a4ed6c4bf2b827bcf3cf4d1bb9c22b4ca",
+      "sha256": "1cdf31a3bd59e95b239df163b0724e4f99ef299bd67256cc94fcc683e1ed1840",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
@@ -73,8 +73,7 @@
     "InstanceType": {
       "maps_to": "powers.py:3768-3772 the self.bombs fuse list",
       "verdict": "gap",
-      "live": true,
-      "issue": "RE-VERDICTED 2026-07-26 (review fix pass): `deliberate-divergence` -> `gap`. LIVE 2026-07-30, bound to `power_cmd/G5` per this batch's brief rather than re-derived: `audit/records/seam/power_cmd.json` guard G5 (\"No PowerInstanceType (Instanced / InstancedPerApplier) distinction in FindExistingInstanceForStacking\") was settled LIVE in round 11 with its own executed witness (Automation/Panache, `.superpowers/sdd/unlabelled/probes/seam-power-cmd-g5-automation2.py`) and explicitly names The Bomb among its 11 ported Instanced/InstancedPerApplier sites. Per binding rule 3 this entry inherits that liveness rather than re-arguing the mechanism; what this record adds is that the_bomb's OWN reachability was independently demonstrated (see below) and matches G5's finding. PowerInstanceType.Instanced (TheBombPower.cs:23) means every application is an independently tracked instance with its own Amount and its own DynamicVars.Damage, where the sim's PowerCmd.apply merges by power id via on_stack (cmds.py:567-570, current line numbers). **REACHABILITY: two live fuses are plainly reachable.** The Bomb is a ported Uncommon Colorless Skill with NO Exhaust keyword (cards/colorless_skills.py:750-778, re-verified 2026-07-30, mirroring TheBomb.cs:23-26 whose CanonicalKeywords is empty), so it can simply be played on two consecutive turns. EXECUTED 2026-07-26: play it, end the turn, play it again -- the sim holds ONE `the_bomb` power whose fuse list is [[2, 40], [3, 40]] and whose `amount` is `min(turns for turns, _ in self.bombs)` == 2 (powers.py:3770-3772), where C# holds TWO TheBombPower instances with Amount 2 and Amount 3. **WHAT IS AND IS NOT REPRODUCED.** The DAMAGE is exact, and this unit is one of only two of G5's eleven ported units that acknowledges the distinction at all: each fuse carries its own turns_left and its own damage (powers.py:3768, :3771, set_damage at :3774-3777), the turn-end pass explodes every fuse at <= 1 independently and decrements the rest (:3785-3788), and the power only expires when the list empties (:3799-3800). The STATE is not reproduced, and that is why this is a gap rather than a divergence with the same observable outcome (binding rule 2). A different power list (one entry where the game has two) and a different amount (2 where the game shows 2 and 3) is not an internal detail: full_env.py:412 encodes EVERY ALL_POWERS id as a presence bit plus a signed amount at two scales, so the game's two-instance state cannot even be represented in the sim's observation, and any power-list comparison sees one entry for two. The second residue was already named on this entry before it was graded dd, and stands: an effect that removed 'a' Bomb would remove all of them in the sim, and set_damage always writes the NEWEST fuse (:3777), which is correct only because TheBomb.cs:30 calls SetDamage immediately after applying. **RULE 3:** the identical G5 mechanism is `gap` on power/rolling_boulder, whose two-instance case is reachable exactly the same way (a non-exhausting ported Colorless card played twice). Grading it `deliberate-divergence` here and `gap` there was a rule-3 break, and this is the site that moves: a good workaround makes the gap SMALLER -- the damage is right where rolling_boulder's is arithmetically 5 short on two consecutive turns -- not absent."
+      "issue": "RE-VERDICTED 2026-07-26 (review fix pass): `deliberate-divergence` -> `gap`. PowerInstanceType.Instanced (TheBombPower.cs:23) means every application is an independently tracked instance with its own Amount and its own DynamicVars.Damage, where the sim's PowerCmd.apply merges by power id via on_stack (cmds.py:308-311). That MECHANISM is audit/records/seam/power_cmd.json's gap G5, which lists this power among its 11 ported InstanceType units, and it is not re-argued here (binding rule 3); what is per-unit is REACHABILITY of two simultaneous instances and what diverges once they exist. **REACHABILITY: two live fuses are plainly reachable.** The Bomb is a ported Uncommon Colorless Skill with NO Exhaust keyword (cards/colorless_skills.py:715-743, mirroring TheBomb.cs:23-26 whose CanonicalKeywords is empty), so it can simply be played on two consecutive turns. EXECUTED 2026-07-26: play it, end the turn, play it again -- the sim holds ONE `the_bomb` power whose fuse list is [[2, 40], [3, 40]] and whose `amount` is `min(turns for turns, _ in self.bombs)` == 2 (powers.py:3770-3772), where C# holds TWO TheBombPower instances with Amount 2 and Amount 3. **WHAT IS AND IS NOT REPRODUCED.** The DAMAGE is exact, and this unit is one of only two of G5's eleven ported units that acknowledges the distinction at all: each fuse carries its own turns_left and its own damage (powers.py:3768, :3771, set_damage at :3774-3777), the turn-end pass explodes every fuse at <= 1 independently and decrements the rest (:3785-3788), and the power only expires when the list empties (:3799-3800). The STATE is not reproduced, and that is why this is a gap rather than a divergence with the same observable outcome (binding rule 2). A different power list (one entry where the game has two) and a different amount (2 where the game shows 2 and 3) is not an internal detail: full_env.py:412 encodes EVERY ALL_POWERS id as a presence bit plus a signed amount at two scales, so the game's two-instance state cannot even be represented in the sim's observation, and any power-list comparison sees one entry for two. The second residue was already named on this entry before it was graded dd, and stands: an effect that removed 'a' Bomb would remove all of them in the sim, and set_damage always writes the NEWEST fuse (:3777), which is correct only because TheBomb.cs:30 calls SetDamage immediately after applying. **RULE 3:** the identical G5 mechanism is `gap` on power/rolling_boulder, whose two-instance case is reachable exactly the same way (a non-exhausting ported Colorless card played twice). Grading it `deliberate-divergence` here and `gap` there was a rule-3 break, and this is the site that moves: a good workaround makes the gap SMALLER -- the damage is right where rolling_boulder's is arithmetically 5 short on two consecutive turns -- not absent."
     },
     "BeforeSideTurnEnd": {
       "maps_to": "powers.py:3779-3802 TheBombPower.on_player_turn_end (combat.py:654)",

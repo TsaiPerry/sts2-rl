@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
+      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
       "side": "sim"
     }
   ],
@@ -47,18 +47,17 @@
     },
     "StackType": {
       "maps_to": "powers.py:1731-1732 on_stack -> pass",
-      "verdict": "gap",
-      "issue": "The sim drops a re-application's offset citing PowerStackType.Single, which only means 'Amount is hidden' (PowerStackType.cs:10-13) -- PowerCmd.ModifyAmount:236 adds regardless. DORMANT: Smoggy reads Amount nowhere (it afflicts with the literal 1). One of the 15 units making this misreading (`py audit/tools/power_census.py stack`)."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 25.) The 15 `on_stack` no-op overrides are DELETED; the base `Power.on_stack` adds, matching PowerCmd.ModifyAmount (PowerCmd.cs:236), which adds unconditionally with no StackType branch -- PowerStackType.Single means 'Amount is hidden and displayed as 1' (PowerStackType.cs:10-13), not 'does not stack'. All 16 units re-verified against their own C#: 15 are StackType.Single, and NONE overrides InstanceType (PowerModel.cs:144 default None), so none needs T1's instance machinery instead of amount-adding. Two per-site exceptions, both verified: (1) DAMPEN's C# StackType is actually `None`, not Single (DampenPower.cs:22) -- the queue's 16-unit list was wrong about it; its only applier, MagiKnight, dedupes caller-side (MagiKnight.cs:78-96: re-application calls AddCaster only and never reaches PowerCmd.Apply), so the deletion is inert through the real caller and T28's caster-set machinery is untouched and re-pinned. (2) HEX genuinely reads Amount (HexPower.cs:79 feeds CardCmd.Afflict<Hexed>(card, Amount)), so this deletion closes a real divergence that remains DORMANT only because SpectralKnight's move machine never loops back to HEX and KnightsElite fields exactly one -- a second Hex applier makes it live. ILLUSION needed no override and is unchanged (the opposite-sign case the record notes). No reachable re-application among the other 13: Burrowed and Soar re-apply only after their own expire/remove, always onto a fresh instance. Pins: test/test_stack_type_single.py (39 tests).  The text it replaced read: The sim drops a re-application's offset citing PowerStackType.Single, which only means 'Amount is hidden' (PowerStackType.cs:10-13) -- PowerCmd.ModifyAmount:236 adds regardless. DORMANT: Smoggy reads Amount nowhere (it afflicts with the literal 1). One of the 15 units making this misreading (`py audit/tools/power_census.py stack`)."
     },
     "AfterCardPlayed": {
       "maps_to": "powers.py:1744-1750 SmoggyPower.on_card_played",
       "verdict": "faithful"
     },
     "AfterCardEnteredCombat": {
-      "maps_to": "powers.py:2090-2096 SmoggyPower.on_card_entered_combat",
+      "maps_to": "powers.py:1752-1758 SmoggyPower.on_card_entered_combat",
       "verdict": "gap",
-      "live": true,
-      "issue": "RE-EXECUTED 2026-07-30: the record's filed rationale no longer matches the code and was corrected by re-reading SmoggyPower.cs and the current powers.py directly, rather than re-derived from the stale prose. The stale claim was that this hook walks `getattr(self.owner, 'all_cards', ())` -- it does not, and never plausibly could: `on_card_entered_combat` (powers.py:2090-2096) receives a single `card` argument and reads only `self._skill_played_this_turn`, `card.affliction` and `self._is_skill(card)`. The all_cards/Play-pile-limbo shape described belongs to a DIFFERENT hook on this same power, `AfterCardPlayed`'s sweep (powers.py:2081-2088), which this record already carries as a separate, unqualified `faithful` entry -- so that theory does not support a gap on THIS key. RE-DERIVED FROM SmoggyPower.cs:39-45 (`AfterCardEnteredCombat`) directly: C# guards on `CombatManager.Instance.History.CardPlaysStarted.Any(e => e.HappenedThisTurn(...) && e.CardPlay.Card.Type == Skill && e.CardPlay.Card.Owner.Creature == base.Owner)` -- a HISTORY query, seeded the moment a play STARTS (CardModel.cs:1930, before `OnPlay` runs). The sim instead reads `self._skill_played_this_turn`, a private flag set at powers.py:2085 INSIDE `on_card_played`/AfterCardPlayed -- i.e. AFTER the triggering Skill's own `on_play` has already returned (combat.py:904 dispatches `on_card_played` post-resolution). This is the same HISTORY-vs-FLAG shape already named on this batch's sibling `power/ringing`'s `ShouldPlay` entry (`combat.history` vs a boolean set post-resolution) -- not the pile-limbo class, PROMPT.md bug class 7's cousin instead. OBSERVABLE: if the FIRST Skill a Smog'd player plays this turn generates a new Skill mid-resolution (before its own AfterCardPlayed fires), C# afflicts the new Skill with Smog (its own play-started row already exists in History) and the sim does not (`_skill_played_this_turn` is still False), so the sim's freshly-generated Skill is playable this turn where the game's is blocked. TRIGGER, EXECUTED: `DiscoveryCard` (cards/colorless_skills.py:221-249) is a registered, ported Ironclad Skill (Uncommon, 1E, `card_type = CardType.SKILL`) whose `on_play` synchronously calls `CardPileCmd.add_to_hand(ctx.hooks, ctx.player, card)` (:249) for a card chosen from a 3-option pool draw that can itself be a Skill; `CardPileCmd.add_to_hand` (cmds.py:978-992) calls `_enter_combat` (:992), which fires `hooks.on_card_entered_combat(card)` (cmds.py:878) -- all synchronously inside Discovery's own `on_play`, strictly before Discovery's own `on_card_played` sets the flag. So: Living Fog applies Smoggy to the player, the player's first Skill play this turn is Discovery, and Discovery's 3-option draw offers (and the player picks) a Skill -- a normal, reachable in-run sequence. FIX: replace the `self._skill_played_this_turn` read in `on_card_entered_combat` with a `combat.history.of_type(CardPlayStartedEntry, this_turn=True)` query filtered to `CardType.SKILL` and this power's owner, mirroring `NostalgiaPower.modify_card_play_result_pile`'s already-ported use of the identical API (powers.py:4148-4159, `combat.history.of_type(CardPlayStartedEntry, this_turn=True)`). RADIUS: the private `_skill_played_this_turn` flag is also read by `before_side_turn_start` (reset) and `after_player_turn_end` (reset) -- both are turn-boundary resets, unaffected by this fix -- and by nothing else, so swapping only the `on_card_entered_combat` read to the history query does not disturb `AfterCardPlayed`'s sweep or `ShouldPlay`."
+      "issue": "Same pile-limbo shape as power/ringing's matching entry: the sim walks `getattr(self.owner, 'all_cards', ())`, and PlayerCombatState.all_cards (player.py:100-103) is hand + draw + discard + exhaust with NO Play pile, where C#'s PlayerCombatState.AllCards includes Play (PlayerCombatState.cs:70-80). Sharper here than for Ringing, because Smoggy's AfterCardPlayed sweep (powers.py:1748-1750) runs while the triggering Skill is itself mid-resolution: in C# that Skill is in the Play pile and IS afflicted with Smog, in the sim it is in neither all_cards nor the discard pile yet and is skipped -- so it can be replayed by an effect that returns it to hand, where the game would block it. PROMPT.md bug class 7. Reachable with any ported return-to-hand effect plus Living Fog. Third-file citations, not hashed here."
     },
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:1768-1776 on_player_turn_end clears Smog and resets the flag",

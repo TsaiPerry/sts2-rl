@@ -56,7 +56,17 @@ class DecimillipedeSegment(MachineMonster):
         to even, then keep adding 2 — wrapping MaxInitialHp back to
         MinInitialHp — while a teammate already has that HP, and set current HP
         to match. Runs after the creature's Niche HP roll, so in the parity path
-        it is what turns a raw roll into the game's even, distinct segment HP."""
+        it is what turns a raw roll into the game's even, distinct segment HP.
+
+        The line's own `Creature.SetMaxAndCurrentHp(hp)` call
+        (creature_card_cmds/step26) is routed through the real command
+        rather than a raw `max_hp = hp = hp` assignment, which used to skip
+        `SetMaxHpInternal`'s CurrentHp clamp, `SetMaxHp`'s MaxHp<=0 Kill
+        check and `SetCurrentHp`'s own AfterCurrentHpChanged dispatch —
+        dormant here (every rolled `hp` is strictly positive and this method
+        never runs on a creature already holding a different HP), but no
+        longer silently bypassed.
+        """
         hp = self.max_hp
         if hp % 2 == 1:
             hp += 1
@@ -65,7 +75,8 @@ class DecimillipedeSegment(MachineMonster):
             hp += 2
             if hp > DecimillipedeSegment.max_hp:
                 hp = DecimillipedeSegment.min_hp
-        self.max_hp = self.hp = hp
+        from ...cmds import CreatureCmd
+        CreatureCmd.set_max_and_current_hp(self._hooks, self, hp)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         writhe = MoveState(
@@ -162,6 +173,23 @@ class DecimillipedeEncounter(Encounter):
             DecimillipedeSegmentMiddle(hooks, rng, starter_move_idx=(start + 1) % 3),
             DecimillipedeSegmentBack(hooks, rng, starter_move_idx=(start + 2) % 3),
         ]
+        # This is the SAME even-and-unique pass `adjust_hp_after_added` (the
+        # real, hook-driven mirror of DecimillipedeSegment.AfterAddedToRoom)
+        # runs unconditionally on every one of these segments right after
+        # combat setup (combat.py's per-enemy `after_creature_added` loop) —
+        # its result here is provably inert: in parity mode
+        # `_assign_parity_monster_hp` overwrites max_hp/hp for every enemy
+        # (including these) before `adjust_hp_after_added` ever runs, and in
+        # legacy mode the value computed here is already even and unique, so
+        # `adjust_hp_after_added`'s later pass recomputes the identical
+        # number. Routed through `set_max_and_current_hp`
+        # (creature_card_cmds/step26) rather than a raw assignment anyway,
+        # for the same reason as `adjust_hp_after_added` — and safe to: no
+        # relic/potion hook listener is registered yet at this point in
+        # `CombatState.__init__` (relics attach after `create_monsters`
+        # returns), so the AfterCurrentHpChanged this now fires reaches
+        # nobody.
+        from ...cmds import CreatureCmd
         for seg in segments:
             hp = seg.max_hp
             if hp % 2 == 1:
@@ -170,7 +198,7 @@ class DecimillipedeEncounter(Encounter):
                 hp += 2
                 if hp > DecimillipedeSegment.max_hp:
                     hp = DecimillipedeSegment.min_hp
-            seg.max_hp = seg.hp = hp
+            CreatureCmd.set_max_and_current_hp(hooks, seg, hp)
         return segments
 
 

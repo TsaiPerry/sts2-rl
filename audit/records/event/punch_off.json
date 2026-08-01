@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\punch_off.py",
-    "sha256": "6bcf771f0d6a512a39ce3ca96105cb9fe783a15fa905c92f7b3afda838224741"
+    "sha256": "24b2fb04109a53f3edb9fc1bc7381925c12b6ebf38dedc276d97d2f078dc6673"
   },
   "extra_sources": [
     {
@@ -61,7 +61,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
@@ -71,7 +71,7 @@
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "b52d8d15ba11856c157ae544d7837db5c35df881260a0065cf1d2b97917bd392",
+      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
       "side": "sim"
     },
     {
@@ -86,7 +86,7 @@
     },
     {
       "path": "sts2_rl/events/_combat_layout.py",
-      "sha256": "4b2190746fc742403921d3501e555664123f495b8895b71a3cb5c9a41dbdba27",
+      "sha256": "46e08c08742756fb9c5370bae20783b875884031376fee3cf09db11a1179802a",
       "side": "sim"
     }
   ],

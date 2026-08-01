@@ -35,10 +35,10 @@ class DebtCard(Card):
     is_unpowered = True
 
     has_turn_end_in_hand_effect = True
-    GOLD = 10       # GoldVar(10), Debt.cs:18 — no upgrade, no ascension branch
 
     def _init_vars(self) -> None:
-        self._energy_cost = 0
+        self._energy_cost = -1
+        self._gold = 10     # GoldVar(10), Debt.cs:17 — no upgrade, no ascension branch
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         pass
@@ -59,4 +59,4 @@ class DebtCard(Card):
             return
         balance = (combat.player_gold + combat.gold_gained
                    - combat.gold_stolen - combat.gold_spent)
-        combat.gold_spent += max(0, min(self.GOLD, balance))
+        combat.gold_spent += max(0, min(self._gold, balance))

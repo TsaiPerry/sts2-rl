@@ -28,11 +28,12 @@ class InfectionCard(Card):
     has_turn_end_in_hand_effect = True
 
     def _init_vars(self) -> None:
-        self._energy_cost = 0
+        self._energy_cost = -1
+        self._damage = 3   # DamageVar(3m, Unpowered | Move), Infection.cs:20
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         pass
 
     def on_turn_end_in_hand(self, ctx: CombatCtx) -> None:
         from ..cmds import DamageCmd
-        DamageCmd.deal(ctx.hooks, ctx.player, 3, dealer=None, card=self)
+        DamageCmd.deal(ctx.hooks, ctx.player, self._damage, dealer=None, card=self)

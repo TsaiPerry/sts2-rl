@@ -333,9 +333,9 @@ class Card(ABC):
     # Attr names that hold a card's principal secondary number ("magic
     # number"), in priority order; magic_number exposes the first present.
     _MAGIC_ATTRS = (
-        "_vulnerable", "_weak", "_strength", "_power_amount", "_power",
-        "_plating", "_cards", "_energy", "_energy_gain", "_heal", "_extra",
-        "_increase", "_attacks", "_repeat",
+        "_vulnerable", "_weak", "_frail", "_strength", "_power_amount",
+        "_power", "_plating", "_cards", "_energy", "_energy_gain", "_heal",
+        "_extra", "_increase", "_attacks", "_repeat",
     )
 
     @property
@@ -360,6 +360,15 @@ class Card(ABC):
         return getattr(self, "_hp_loss", 0)
 
     @property
+    def base_gold(self) -> int | None:
+        """Printed gold amount before modifiers (Debt's drain, Spoils Map's
+        payout, Hand of Greed's kill bonus); None if the card has no gold
+        var. Mirrors base_hp_loss's shape -- GoldVar has no home anywhere
+        else in this API, and is not one of the MAGIC_ATTRS (gold is not a
+        combat "magic number" any more than damage/block/hp_loss are)."""
+        return getattr(self, "_gold", None)
+
+    @property
     def magic_number(self) -> int | None:
         """The card's principal secondary number (Vulnerable stacks, cards
         drawn, Strength gained, ...); None if it has no such number."""
@@ -371,6 +380,18 @@ class Card(ABC):
 
     @property
     def energy_cost(self) -> int:
+        # CardEnergyCost.GetWithModifiers short-circuits on `if (_base < 0)
+        # return num;` (CardEnergyCost.cs:100-103) BEFORE any local modifier
+        # is even consulted -- an unplayable card's canonical -1 (the 29
+        # unplayable curse/status/quest cards, e.g. Wound.cs `base(-1, ...)`)
+        # is immune to every cost modifier and is read back verbatim. This
+        # must be the FIRST check: _free_this_turn / _cost_this_turn /
+        # _cost_this_combat / _cost_delta_this_turn all mirror LocalCostModifier
+        # state that the game either never adds (SetThisCombat/SetThisTurn's
+        # own `cost != 0 || Canonical >= 0` guards) or adds inertly, since
+        # GetWithModifiers would never reach it either way.
+        if self._energy_cost < 0:
+            return self._energy_cost
         if self._free_this_turn:
             return 0
         if self._cost_this_turn is not None:

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     }
   ],
@@ -42,8 +42,8 @@
     },
     "AfterDamageGiven": {
       "maps_to": "powers.py:2943-2959 on_damage_received",
-      "verdict": "gap",
-      "issue": "WRONG HOOK. C#'s `AfterDamageGiven(choiceContext, dealer, result, props, target, cardSource)` is the DEALER-side after-damage event; the sim's counterpart is `on_damage_dealt` (hooks.py:469, fired at cmds.py:123-124), and this power uses `on_damage_received` instead, filtering on `dealer is self.owner`. The reason the port had to do that is itself the finding: cmds.py:123 fires on_damage_dealt only `if dealer is not None and hp_lost > 0`, so the sim's dealer-side event **cannot see a fully-blocked or zero-damage hit at all**, where C#'s AfterDamageGiven sees every one (`result.WasFullyBlocked` is a field it is expected to read). Consequence of the substitution: cmds.py:121's killing-blow guard suppresses the sim's on_damage_received when the hit killed the VICTIM, and cmds.py:119-120's own comment says \"AfterDamageGiven (on_damage_dealt) is not guarded and still fires on the kill\" -- so this power silently stops working on a lethal hit in the sim and keeps working in the game. Third-file citations, not hashed here. The guards are otherwise exact: `dealer == base.Owner && target.IsPlayer && props.IsPoweredAttack() && result.UnblockedDamage > 0` (PaperCutsPower.cs:18) maps to powers.py:2952-2957, props read directly. `CreatureCmd.LoseMaxHp(choiceContext, target, base.Amount, isFromCard: false)` maps to `CreatureCmd.lose_max_hp(self.hooks, target, self.amount)`; `isFromCard` has no sim analogue and gates only run-history bookkeeping. The live-shaped residue is the killing-blow asymmetry: a lethal hit from the Scroll of Biting costs the player max HP in the game and none in the sim. DORMANT as a practical matter -- max HP on the turn the player dies is only observable through a death PREVENTION, and on that path cmds.py:112 sets hp = 1 so `target.is_dead` is False and the sim fires after all. So the two models agree when Lizard Tail saves you and disagree when nothing does, at which point the run is over. Trigger: any ported effect that reads max HP after a lethal blow. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-31 (tier-2 campaign): (Task 26.) The substitution is UNDONE. `on_damage_dealt`'s dispatch condition dropped `hp_lost > 0` (keeping `dealer is not None`), so the sim's dealer-side event now sees every hit including fully-blocked and zero-damage ones, matching CreatureCmd.cs:388-395 where AfterDamageGiven fires unconditionally while only AfterDamageReceived carries the killing-blow guard; a `was_fully_blocked` value was added mirroring CreatureCmd.cs's formula exactly (`not Unblockable and (absorbed > 0 or target.block > 0) and int(unblocked) == 0`, reading `absorbed` pre-modifier and `target.block` post-absorption in C#'s own order), which required hoisting `absorbed = 0` out of the has-block branch. ImbalancedPower and PaperCutsPower now listen on `on_damage_dealt` instead of filtering `on_damage_received` by dealer. Imbalanced also LOST two guards C# never had -- ImbalancedPower.cs:19 is exactly `if (dealer == base.Owner && result.WasFullyBlocked)` with no target check and no MOVE-only gate (C# gets self-exclusion for free from being dealer-side). That removal is inert on today's content: Imbalanced is applied only to BowlbugRock, whose sole move always targets the player, so the old `target is not self.owner` guard was dead code. PaperCuts' own guards were already faithful and only its hook site moved. T2's dealer-before-victim ordering and killing-blow snapshot are untouched. Pins: test/test_combat_veto_and_dealer_event.py.  The text it replaced read: WRONG HOOK. C#'s `AfterDamageGiven(choiceContext, dealer, result, props, target, cardSource)` is the DEALER-side after-damage event; the sim's counterpart is `on_damage_dealt` (hooks.py:469, fired at cmds.py:123-124), and this power uses `on_damage_received` instead, filtering on `dealer is self.owner`. The reason the port had to do that is itself the finding: cmds.py:123 fires on_damage_dealt only `if dealer is not None and hp_lost > 0`, so the sim's dealer-side event **cannot see a fully-blocked or zero-damage hit at all**, where C#'s AfterDamageGiven sees every one (`result.WasFullyBlocked` is a field it is expected to read). Consequence of the substitution: cmds.py:121's killing-blow guard suppresses the sim's on_damage_received when the hit killed the VICTIM, and cmds.py:119-120's own comment says \"AfterDamageGiven (on_damage_dealt) is not guarded and still fires on the kill\" -- so this power silently stops working on a lethal hit in the sim and keeps working in the game. Third-file citations, not hashed here. The guards are otherwise exact: `dealer == base.Owner && target.IsPlayer && props.IsPoweredAttack() && result.UnblockedDamage > 0` (PaperCutsPower.cs:18) maps to powers.py:2952-2957, props read directly. `CreatureCmd.LoseMaxHp(choiceContext, target, base.Amount, isFromCard: false)` maps to `CreatureCmd.lose_max_hp(self.hooks, target, self.amount)`; `isFromCard` has no sim analogue and gates only run-history bookkeeping. The live-shaped residue is the killing-blow asymmetry: a lethal hit from the Scroll of Biting costs the player max HP in the game and none in the sim. DORMANT as a practical matter -- max HP on the turn the player dies is only observable through a death PREVENTION, and on that path cmds.py:112 sets hp = 1 so `target.is_dead` is False and the sim fires after all. So the two models agree when Lizard Tail saves you and disagree when nothing does, at which point the run is over. Trigger: any ported effect that reads max HP after a lethal blow. Third-file citations, not hashed here."
     }
   },
   "guards": [
@@ -53,6 +53,6 @@
       "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

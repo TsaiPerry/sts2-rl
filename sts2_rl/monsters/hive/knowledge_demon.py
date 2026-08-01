@@ -78,11 +78,27 @@ class KnowledgeDemon(MachineMonster):
         disintegration = DisintegrationCard()
         disintegration.power_amount = _DISINTEGRATION_DMG[self.curse_counter]
         choices = [disintegration, other_cls()]
-        chosen = ctx.combat.select_cards("curse_of_knowledge", choices, 1)
+        # KnowledgeDemon.cs:183 -- `FromChooseACardScreen(new
+        # BlockingPlayerChoiceContext(), cards, target.Player)`; no
+        # auto-select shortcut (CardSelectCmd.cs:216-261) -- has_shortcut=False.
+        # Always 2 candidates today so this is currently unobservable, but the
+        # architecture must not depend on that.
+        chosen = ctx.combat.select_cards(
+            "curse_of_knowledge", choices, 1, has_shortcut=False)
         if chosen:
             card = chosen[0]
+            # Disintegration.cs:27 / MindRot.cs:27 / Sloth.cs:27 /
+            # WasteAway.cs:30 all read `PowerCmd.Apply<XPower>(...,
+            # base.Owner.Creature, amount, base.Owner.Creature, this)` -- the
+            # CARD applies its own power with the PLAYER (base.Owner.Creature)
+            # as BOTH target and applier, and itself (`this`) as the card
+            # source. The port previously applied with the demon (`self`) as
+            # applier; PowerCmd.apply has no card-source parameter at all
+            # (architecture-wide -- see the report), so only the applier half
+            # is fixable here. monster/knowledge_demon/g1.
             PowerCmd.apply(
-                ctx.hooks, ctx.player, card.power_cls, card.power_amount, applier=self
+                ctx.hooks, ctx.player, card.power_cls, card.power_amount,
+                applier=ctx.player,
             )
         self.curse_counter += 1
 

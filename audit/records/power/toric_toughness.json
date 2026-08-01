@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -21,22 +21,22 @@
     },
     {
       "path": "sts2_rl/cards/event_cards.py",
-      "sha256": "57208afe6ae70f9dd177e57aee53a7f5b5624a5ba5d830a46de5263c8732e691",
+      "sha256": "dfd78fff2c2a36323033d8c74d986f9211a6cff57920b7380b731bb6cf9d3a5a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
+      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
       "side": "sim"
     }
   ],
@@ -51,10 +51,9 @@
       "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "InstanceType": {
-      "maps_to": "no sim counterpart; cmds.py:308-311 keys stacking on power id alone",
-      "verdict": "gap",
-      "live": true,
-      "issue": "PowerInstanceType.Instanced: in C# every application is an independently tracked instance with its own Amount and its own internal state, where the sim's PowerCmd.apply merges by power id via on_stack (cmds.py:308-311). BOUND, not re-derived: mechanism `power_cmd/G5` is already settled LIVE by the `seam-power-cmd` batch with an executed witness (`FindExistingInstanceForStacking` never models the instance type, so two applications of one power to one owner merge into a single instance instead of C#'s independent per-instance counters); per binding rule 3 the mechanism itself is not re-verdicted here. What IS this unit's own witness is REACHABILITY of two simultaneous Toric Toughness instances specifically, and it CORROBORATES rather than diverges from G5's finding. RE-EXECUTED 2026-07-30: `ToricToughnessCard` (cards/event_cards.py:113-149) is unchanged in shape -- Skill, Event rarity, cost 2, `on_play` calls `BlockCmd.apply` then `PowerCmd.apply(ctx.hooks, ctx.player, ToricToughnessPower, self._turns, applier=ctx.player)` then `power.set_block(gained)` (:143-149) -- and this is the OTHER unit power_cmd G5 credits with documenting the approximation in its own docstring (powers.py:1194-1199 in the prior read; current class carries the same admission: 're-applying stacks the turn counter and overwrites the block value'). So two C# instances of Toric Toughness 2 with block 5 and block 9 gain 5 + 9 = 14 block for two turns; the sim holds one instance at Amount 4 with block 9 and gains 9 block for FOUR turns -- both the per-turn amount and the duration wrong, in opposite directions. REACHABLE, EXECUTED: the card's docstring states it is 'Granted by Wood Carvings (Torus), transforming a Basic card' (event_cards.py:123) -- a permanent deck addition, not a one-shot event reward -- and it does not exhaust (no `exhausts = True` on the class), so it re-enters the draw pile on every reshuffle and can be drawn and played a second time within one sufficiently long combat, the same reachability path already accepted for the sibling G5 witnesses `power/rolling_boulder` and `power/automation` (not re-verdicted here). Third reachable G5 witness in half A."
+      "maps_to": "no sim counterpart; cmds.py:308 keys stacking on power id alone",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): ToricToughnessPower.instance_type = PowerInstanceType.INSTANCED (sts2_rl/powers.py), mirroring ToricToughnessPower.cs. Both the per-turn amount AND the duration divergence this entry names are fixed together, since each instance now carries its own turns_left and its own block value (set via its own set_block call -- cards/event_cards.py's ToricToughnessCard.on_play already looked up the dict-visible instance right after PowerCmd.apply and so needed no change: after the fix that lookup finds the just-created NEW instance, exactly as intended). The class's own docstring approximation caveat was removed. Verified by test/test_powers.py::TestPowerInstanceType::test_toric_toughness_two_applications_track_independent_block_and_duration (grants of 14, 14, 9, then both expired -- matching two independent 2-turn/3-turn timers, not one merged 4-turn one).  The text it replaced read: PowerInstanceType.Instanced: in C# every application is an independently tracked instance with its own Amount and its own internal state, where the sim's PowerCmd.apply merges by power id via on_stack (cmds.py:308-311). This is audit/records/seam/power_cmd.json's gap G5, which lists this power among its 11 ported InstanceType units; the mechanism is not re-verdicted here per binding rule 3. What is per-unit is REACHABILITY of two simultaneous instances and what diverges when they exist. This is the OTHER unit power_cmd G5 credits with documenting the approximation (powers.py:1194-1199) -- but unlike power/the_bomb it does NOT work around it, and the docstring admits as much: 're-applying stacks the turn counter and overwrites the block value'. So two C# instances of Toric Toughness 2 with block 5 and block 9 gain 5 + 9 = 14 block for two turns; the sim holds one instance at Amount 4 with block 9 and gains 9 block for FOUR turns. Both the per-turn amount and the duration are wrong, in opposite directions. REACHABLE: the applier is the ported Trash Heap event card (cards/event_cards.py:120, :142-145), a normal deck card that can be drawn and played twice in one combat. Third reachable G5 witness in half A, after power/rolling_boulder and power/automation."
     },
     "AfterBlockCleared": {
       "maps_to": "powers.py:1214-1219 ToricToughnessPower.on_block_cleared (hooks.py:500-504, player.py:157-159)",
@@ -84,6 +83,6 @@
       "rationale": "The sim's Power._tick (powers.py:70-75) decrements the field and _expires at <= 0 where C# routes through PowerCmd.Decrement -> ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:215-250); PowerCmd.Decrement, NOT TickDownDuration, so neither side honours SkipNextDurationTick. Observationally identical -- ModifyAmount's only unconditional modifier leg is Hook.ModifyPowerAmountReceived (PowerCmd.cs:234), whose ported listeners are ArtifactPower (Debuff-only) and RuinedHelmet (StrengthPower-only). Same mechanism and same verdict as audit/records/power/colossus.json's AfterSideTurnEnd guard, per binding rule 3."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

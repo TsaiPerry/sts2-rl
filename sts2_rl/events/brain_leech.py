@@ -54,7 +54,7 @@ class BrainLeech(Event):
         from ..cards.pool import COLORLESS_POOL
         from ..rewards import RarityOddsType, create_reward_cards
 
-        from ..rewards import CardRewardGroup, CombatRewards
+        from ..rewards import CardRewardGroup, CombatRewards, apply_reward_modifiers
         from ..rooms import RoomType
 
         self.run.lose_hp(_RIP_HP_LOSS)
@@ -78,6 +78,14 @@ class BrainLeech(Event):
             )
             groups.append(CardRewardGroup(cards=cards, room_type=RoomType.MONSTER,
                                           count=3, populated=True))
-        self.pending_rewards = CombatRewards(room_type=RoomType.MONSTER,
-                                             card_rewards=groups)
+        rewards = CombatRewards(room_type=RoomType.MONSTER, card_rewards=groups)
+        # `RewardsCmd.OfferCustom` is `new RewardsSet(player).WithCustomRewards(
+        # rewards).Offer()` (RewardsCmd.cs:47-50), whose Offer -> Generate
+        # WithoutOffering runs Hook.ModifyRewards (RewardsSet.cs:136) same as
+        # any other screen. `rewards.room` stays None here (no AbstractRoom
+        # behind a mid-event screen), which is what keeps the room-gated
+        # relics off it — Driftwood.TryModifyRewardsLate doesn't check room
+        # (Driftwood.cs:14-25), so it still reaches this CardReward.
+        apply_reward_modifiers(self.run, rewards)
+        self.pending_rewards = rewards
         self._finish("RIP")

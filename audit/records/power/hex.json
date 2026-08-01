@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/glory/knights.py",
-      "sha256": "6a095775bb36c20f59234a35a2885a456613f46c41b390ef0212df45c6a4854e",
+      "sha256": "c0ef52dd119eee94e8cdf1d8f4a25ab2e22cb35c3589c30f1a099b10563c418c",
       "side": "sim"
     }
   ],
@@ -32,8 +32,8 @@
     },
     "StackType": {
       "maps_to": "powers.py:3203-3204 on_stack -> pass",
-      "verdict": "gap",
-      "issue": "PowerStackType.Single with on_stack overridden to `pass` -- the census's wrong-reasoning class. DORMANT with a caveat that is NOT true of the other 14: Hex's Amount IS read -- it is the Hexed affliction's amount (`CardCmd.Afflict<Hexed>(card, base.Amount)`, HexPower.cs:79, vs `CardCmd.afflict(card, HexedAffliction, self.amount)`, powers.py:3209) -- so a second application would afflict LATER cards at 2 in the game and at 1 in the sim. It stays dormant only because the sole applier, monsters/glory/knights.py:119-120, applies it once and KNIGHTS_ELITE fields exactly one Spectral Knight (knights.py:129-131). Trigger: a second Spectral Knight or a second Hex application. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 25.) The 15 `on_stack` no-op overrides are DELETED; the base `Power.on_stack` adds, matching PowerCmd.ModifyAmount (PowerCmd.cs:236), which adds unconditionally with no StackType branch -- PowerStackType.Single means 'Amount is hidden and displayed as 1' (PowerStackType.cs:10-13), not 'does not stack'. All 16 units re-verified against their own C#: 15 are StackType.Single, and NONE overrides InstanceType (PowerModel.cs:144 default None), so none needs T1's instance machinery instead of amount-adding. Two per-site exceptions, both verified: (1) DAMPEN's C# StackType is actually `None`, not Single (DampenPower.cs:22) -- the queue's 16-unit list was wrong about it; its only applier, MagiKnight, dedupes caller-side (MagiKnight.cs:78-96: re-application calls AddCaster only and never reaches PowerCmd.Apply), so the deletion is inert through the real caller and T28's caster-set machinery is untouched and re-pinned. (2) HEX genuinely reads Amount (HexPower.cs:79 feeds CardCmd.Afflict<Hexed>(card, Amount)), so this deletion closes a real divergence that remains DORMANT only because SpectralKnight's move machine never loops back to HEX and KnightsElite fields exactly one -- a second Hex applier makes it live. ILLUSION needed no override and is unchanged (the opposite-sign case the record notes). No reachable re-application among the other 13: Burrowed and Soar re-apply only after their own expire/remove, always onto a fresh instance. Pins: test/test_stack_type_single.py (39 tests).  The text it replaced read: PowerStackType.Single with on_stack overridden to `pass` -- the census's wrong-reasoning class. DORMANT with a caveat that is NOT true of the other 14: Hex's Amount IS read -- it is the Hexed affliction's amount (`CardCmd.Afflict<Hexed>(card, base.Amount)`, HexPower.cs:79, vs `CardCmd.afflict(card, HexedAffliction, self.amount)`, powers.py:3209) -- so a second application would afflict LATER cards at 2 in the game and at 1 in the sim. It stays dormant only because the sole applier, monsters/glory/knights.py:119-120, applies it once and KNIGHTS_ELITE fields exactly one Spectral Knight (knights.py:129-131). Trigger: a second Spectral Knight or a second Hex application. Third-file citations, not hashed here."
     },
     "TryModifyKeywordsInCombat": {
       "maps_to": "powers.py:3206-3211 `card.is_ethereal = True` + powers.py:3233-3239 restore",
@@ -83,6 +83,6 @@
       "rationale": "Closed game-wide, re-verified 2026-07-26. EXECUTED: `py audit/tools/power_census.py visible` reports 0 IsVisibleInternal overrides of 260 files. That 260 is the .cs files DIRECTLY under src/Core/Models/Powers and EXCLUDES the 16 in Powers/Mocks/ (276 including them); a recursive `grep -rn IsVisibleInternal src/Core/Models/Powers/`, which does cover Mocks/, also returns 0 -- so IsVisible is provably always true for every power in the decompiled game, mocks included. CITATION FIX (2026-07-26 review fix pass): the property lives in src/Core/Models/PowerModel.cs, NOT under Models/Powers/ -- `IsVisible` is the non-virtual property at PowerModel.cs:150-160 and the overridable virtual is `IsVisibleInternal` at PowerModel.cs:167."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

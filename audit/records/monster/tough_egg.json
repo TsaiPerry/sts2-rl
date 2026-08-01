@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\hive\\ovicopter.py",
-    "sha256": "c18cdfa7236818d59a50756da1adfc62939986b06f61854ec3bd231e9d0bc304"
+    "sha256": "96fadba9f8c2309a0902be7c87b9986f14178e6f7b35263945a55cfe38c54338"
   },
   "hooks": {
     "Title": {
@@ -58,9 +58,8 @@
   "guards": [
     {
       "what": "HatchMove's raw SetMaxAndCurrentHp - creature_card_cmds step 26 through Ovicopter",
-      "verdict": "gap",
-      "live": false,
-      "issue": "The seam's step 26 hands the content tier the question of whether the raw max_hp/hp assignment at ovicopter.py:81-82 (standing in for CreatureCmd.SetMaxAndCurrentHp, CreatureCmd.cs:856-860) becomes LIVE through Ovicopter. EXECUTED ANSWER: NO, it stays dormant, and one of the seam's three named clauses does not even apply at this site. (a) The clamp - SetMaxHp does SetMaxHpInternal(Math.Max(0m, amount)) (CreatureCmd.cs:839-848); the amount here is the hatchling HP roll, and `py audit/tools/monster_probes_b05.py ovicopter-hp` runs 2000 hatches and reports min=19 max=22, never negative, so Math.Max never bites. (b) The MaxHp <= 0 -> Kill arm at CreatureCmd.cs:844-847 and the IsDead -> Kill arm at :775-778 need a non-positive roll; the same 2000-hatch run asserts max_hp > 0 and hp > 0 on every iteration. (c) AfterCurrentHpChanged - the seam's wording says the sim site skips it, and at THIS site it does not: ovicopter.py:83 calls ctx.hooks.on_hp_changed(self, delta), and the probe shows it firing with ('ToughEgg', 7). C# fires Hook.AfterCurrentHpChanged only when the value actually changed (CreatureCmd.cs:767-774); the same run asserts delta != 0 on every iteration, because an egg (14-18 HP, less if damaged) can never already be at a hatchling roll (19-22). Recorded as a gap rather than faithful because the site genuinely bypasses the command and would silently inherit all three defects the moment the roll range or a caller changed. Reporting only - the seam's own entry is not re-verdicted, and the wording correction about clause (c) goes in the batch report."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-31 (tier-2 campaign): The seam gap this entry mirrors is fixed: ovicopter.py:92 now calls CreatureCmd.set_max_and_current_hp instead of raw-assigning, so the command's own clamp/Kill clauses run (CreatureCmd.cs:856-860). As this entry's clause (c) already recorded, the site fired AfterCurrentHpChanged itself; the new verb fires the same delta (amount - old CurrentHp, computed before either assignment), so the event stream is unchanged and the executed dormancy finding below stands.  The text it replaced read: The seam's step 26 hands the content tier the question of whether the raw max_hp/hp assignment at ovicopter.py:81-82 (standing in for CreatureCmd.SetMaxAndCurrentHp, CreatureCmd.cs:856-860) becomes LIVE through Ovicopter. EXECUTED ANSWER: NO, it stays dormant, and one of the seam's three named clauses does not even apply at this site. (a) The clamp - SetMaxHp does SetMaxHpInternal(Math.Max(0m, amount)) (CreatureCmd.cs:839-848); the amount here is the hatchling HP roll, and `py audit/tools/monster_probes_b05.py ovicopter-hp` runs 2000 hatches and reports min=19 max=22, never negative, so Math.Max never bites. (b) The MaxHp <= 0 -> Kill arm at CreatureCmd.cs:844-847 and the IsDead -> Kill arm at :775-778 need a non-positive roll; the same 2000-hatch run asserts max_hp > 0 and hp > 0 on every iteration. (c) AfterCurrentHpChanged - the seam's wording says the sim site skips it, and at THIS site it does not: ovicopter.py:83 calls ctx.hooks.on_hp_changed(self, delta), and the probe shows it firing with ('ToughEgg', 7). C# fires Hook.AfterCurrentHpChanged only when the value actually changed (CreatureCmd.cs:767-774); the same run asserts delta != 0 on every iteration, because an egg (14-18 HP, less if damaged) can never already be at a hatchling roll (19-22). Recorded as a gap rather than faithful because the site genuinely bypasses the command and would silently inherit all three defects the moment the roll range or a caller changed. Reporting only - the seam's own entry is not re-verdicted, and the wording correction about clause (c) goes in the batch report."
     },
     {
       "what": "the hatchling HP roll's exclusive upper bound",
@@ -88,7 +87,7 @@
       "rationale": "ToughEgg.cs:172 wraps the roll in Creature.ScaleHpForMultiplayer(..., Players.Count, CurrentActIndex). Multiplayer scaling is out of scope by the contract's global-scope clause, and in single player the factor is identity - the act-index argument is the game's own act scaling, which the sim applies through its parity HP path rather than here."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-27",
   "extra_sources": [
     {

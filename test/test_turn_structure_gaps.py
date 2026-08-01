@@ -401,9 +401,16 @@ class TestG13TheWinConditionIsRecomputed:
         burn = make_card("burn")
         burn.combat = cs
         cs.player.hand.append(burn)
-        # Burn resolves its turn-end effect and is discarded; the discard is
-        # what fires the kill, so the fight ends inside DoTurnEnd.
-        cs.hooks.register(_KillsOn(cs, "on_card_discarded"))
+        # Burn resolves its turn-end effect (on_turn_end_in_hand deals its 2
+        # damage via DamageCmd.deal, which fires on_damage_received) inside
+        # _process_turn_end_cards -- still before the flush -- so the kill
+        # trigger there proves the same thing DoTurnEnd's discard used to.
+        # Was "on_card_discarded": tier-2 Task 11 item G removed that
+        # dispatch from this path (CardModel.cs:1682-1698's
+        # OnTurnEndInHandWrapper calls CardPileCmd.Add directly and fires no
+        # Hook.AfterCardDiscarded; CardCmd.cs:194/DiscardAndDraw is the sole
+        # C# call site) so it no longer fires here at all.
+        cs.hooks.register(_KillsOn(cs, "on_damage_received"))
         cs.end_turn()
         assert cs.phase is Phase.COMBAT_OVER
         assert cs.player.hand == held

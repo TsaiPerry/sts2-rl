@@ -26,22 +26,22 @@
     },
     {
       "path": "sts2_rl/cards/blood_wall.py",
-      "sha256": "2ef9b0a19764b528dbf351c65d38af81f48aa4bc9fb303dcec6237dd1d174dbe",
+      "sha256": "1d1ec6cb27d7b273865fa9202f01a401c8b44a22aa365ff719197d4ecee48975",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/bloodletting.py",
-      "sha256": "63b74523b3fab1dd116a591579c896b55354cf7f5994c01b0019d08634171558",
+      "sha256": "4a3f2d1c15b086e9fbaf3a14ab28364d7a3ed3146069ea5e784445c97f4b9329",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/hemokinesis.py",
-      "sha256": "2b8dd056cfd9c9e9638c9f719284609e796dd2ecdfd35a2332317dac0994f38f",
+      "sha256": "0884845fb19842f369e4004e16f82cb81fec2c5b7237e3f8a541e20d04beb138",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/offering.py",
-      "sha256": "a65394e8ceb35c3380c37fb169951e957507379cf734c601b50ee6ec3b5ff652",
+      "sha256": "8215519e56fcc9d8e496901e5cff6a38df8c4c5cce74523257a0571afb0f6997",
       "side": "sim"
     },
     {
@@ -51,12 +51,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
@@ -76,10 +76,9 @@
       "verdict": "faithful"
     },
     "ModifyDamageAdditive": {
-      "maps_to": "modify_damage_additive (miniature_cannon.py:23-37), consumed via is_powered_attack-gated call sites in cmds.py, previews.py and cards/thrash.py",
+      "maps_to": "modify_damage_additive (miniature_cannon.py:22-33), summed by HookSystem.modify_damage_additive (hooks.py:52-63) and consumed at three sites -- cmds.py:57 (the real pipeline), previews.py:56 (intent display) and cards/thrash.py:46 (Thrash's absorb)",
       "verdict": "gap",
-      "live": false,
-      "issue": "Rollup of guard G1 per binding rule 4. Three of C#'s four early returns are reproduced exactly (N1-N3, all executed); the fourth is an AND that the port narrows to one of its two disjuncts. DORMANT, RE-VERIFIED 2026-07-30 (`.superpowers/sdd/unlabelled/probes/relic-6-checks.py::probe_miniature_cannon_census`): the census of ported `DamageCmd.deal` call sites that pass `card=` without `dealer=` (the shape needed to demonstrate the dropped `cardSource.Owner == base.Owner` disjunct) has GROWN from the 4 the guard's own text names to 8 -- enchantments.py's self-damage plus cards/bad_luck.py, cards/beckon.py, cards/bloodletting.py, cards/blood_wall.py, cards/hemokinesis.py, cards/offering.py, cards/regret.py -- but the conclusion is unchanged: every one of the 8 is a self-damage drawback tagged `DamageProps.CARD_HP_LOSS` or `UNBLOCKABLE|UNPOWERED|MOVE`, both of which carry `ValueProp.UNPOWERED` (valueprops.py:38), so `is_powered_attack` (guard N1's own gate) is false for all of them and none reaches this hook's body at all."
+      "issue": "Rollup of guard G1 per binding rule 4. Three of C#'s four early returns are reproduced exactly (N1-N3, all executed); the fourth is an AND that the port narrows to one of its two disjuncts."
     }
   },
   "guards": [

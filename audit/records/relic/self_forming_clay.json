@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/cards/hemokinesis.py",
-      "sha256": "2b8dd056cfd9c9e9638c9f719284609e796dd2ecdfd35a2332317dac0994f38f",
+      "sha256": "0884845fb19842f369e4004e16f82cb81fec2c5b7237e3f8a541e20d04beb138",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {

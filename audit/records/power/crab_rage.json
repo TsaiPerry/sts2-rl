@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/relics/unsettling_lamp.py",
-      "sha256": "7f3e9b4f005331480d2b9dc6c824be57a12abf91bc638639b8d5714e1b5f5b87",
+      "sha256": "fc3c134fc62f28d8c30b2ac40a1ece7bbd914dd9b2766fbca402a96c939bba82",
       "side": "sim"
     }
   ],
@@ -55,8 +55,7 @@
     {
       "what": "CrabRagePower.cs:36 `applier: base.Owner`",
       "verdict": "gap",
-      "live": false,
-      "issue": "MISSING `applier=`. C# passes `base.Owner` (`PowerCmd.Apply<StrengthPower>(choiceContext, base.Owner, ..., base.Owner, null)`); the sim's `PowerCmd.apply(self.hooks, self.owner, StrengthPower, self.STRENGTH_GAIN)` (powers.py:2950) omits the kwarg, so `applier` is None through hooks.modify_power_amount (cmds.py:553), hooks.on_power_applied and hooks.on_power_amount_changed, and the granted StrengthPower's `.applier` is left None (powers.py:88). Recurring gap shape 5. DORMANT, RE-EXECUTED 2026-07-30 (`py audit/tools/power_slot_probes.py applier-readers`, 10 hits): every applier READER in the tree was read at its current line and none of them observes an enemy's own Strength self-buff. `_PossessPower._track` (powers.py:3603-3608) needs `applier is self.owner AND name == self._stat_id AND target.side == \"player\" AND delta < 0` -- CrabRage's target is an enemy with a positive delta, failing three of the four clauses. DampenPower.on_death (powers.py:3691-3695) and HexPower.on_death (powers.py:3745-3748) both test `creature is self.applier` against a DIFFERENT power instance's own stored applier at a creature's DEATH, not against a live Strength grant's applier -- irrelevant to this site by construction. UnsettlingLamp.modify_power_amount (relics/unsettling_lamp.py:45-54) requires `applier is self.player` (fails: None is not the player either way) AND `power_cls.power_type == DEBUFF` (fails outright: Strength is a BUFF), so the missing applier changes nothing there regardless. CITATION FIX: RitualPower no longer reads applier at all -- its own comment (powers.py:262-268) says the port used to test `applier.side != owner.side` and doesn't anymore ('The APPLIER is not consulted at all'), so the old citation to powers.py:195 is stale; RitualPower is not part of this enumeration. Reproduce with `py audit/tools/power_slot_probes.py applier-readers`. HANDOFF: power/high_voltage and power/territorial are recorded elsewhere as the same gap shape (rule 3) -- not owned by this file, not re-verdicted here; see report HANDOFF section."
+      "issue": "MISSING `applier=`. C# passes `base.Owner` (`PowerCmd.Apply<StrengthPower>(choiceContext, base.Owner, ..., base.Owner, null)`); the sim omits it, so `applier` is None through hooks.modify_power_amount (cmds.py:297), hooks.on_power_applied (cmds.py:327) and hooks.on_power_amount_changed (cmds.py:312), and the granted power's .applier is left None (powers.py:59). Recurring gap shape 5. DORMANT, executed: the sim's applier readers are RitualPower.__init__ (powers.py:195), _PossessPower._track (powers.py:3092-3099 -- needs `applier is self.owner` AND a player target AND a negative delta), UnsettlingLamp (relics/unsettling_lamp.py:47 -- needs `applier is self.player`) and the `creature is self.applier` on_death tests of shrink/constrict/dampen/hex; none matches an enemy self-buff with a positive delta. Reproduce with `py audit/tools/power_slot_probes.py applier-readers`. Same verdict as power/high_voltage's and power/territorial's (rule 3). Third-file citations, not hashed here."
     },
     {
       "what": "CrabRagePower.cs:38 PowerCmd.Remove(this) vs _expire()",

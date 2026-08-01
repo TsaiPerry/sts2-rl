@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\glory\\queen.py",
-    "sha256": "9ea33801e77b1b03811245b9d8d9f8921d4ed36b2c8d05beb66ae23b7d440cc0"
+    "sha256": "88e0a83e4b7b82a07a963bdfb687237be4639cff33e5c89b68a1702c6a821d2a"
   },
   "hooks": {
     "AssetPaths": {
@@ -63,9 +63,8 @@
     },
     {
       "what": "BurnBrightForMeMove's teammate loop: C# iterates GetTeammatesOf with NO IsAlive filter (Queen.cs:187-191), the sim filters `not enemy.is_gone` (queen.py:176-178)",
-      "verdict": "gap",
-      "issue": "Queen.cs:187-188 is `CombatState.GetTeammatesOf(Creature).ToList().Where(t => t != Creature)` -- membership of the enemy side is the only test. A creature whose removal was vetoed (the death-is-not-removal case) stays on the side at 0 HP and would still be handed +1 Strength. The sim's enemies list retains every corpse, so the port must filter, and it filters on `is_gone`, which also excludes the retained corpse C# would include. SAME MECHANISM and same verdict as monster/guardbot's GuardMove target-set guard (governing rule 3). DORMANT with the trigger named: no ported power sets `retained_after_death` on a TorchHeadAmalgam, and the branch only reaches Burn Bright while the amalgam is alive anyway, so the filter cannot fire on a corpse today. The self-exclusion `t != Creature` matches the sim's `enemy is not self`.",
-      "live": false
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 28.) Both scans now filter on `not enemy.is_removed_from_combat` (membership-only, matching Guardbot.cs:51's `Enemies.Where(c => c.Monster is Fabricator)` and Queen.cs:187-188's teammate walk): a death-vetoed retained corpse (is_gone and retained_after_death, set through the real should_remove_from_combat_after_death hook) is now a valid target in both, while ordinarily killed/escaped creatures stay excluded. Witness: test/test_monster_tier_families.py::TestRetainedCorpseInScan (constructs the corpse via the sim's retention machinery, not a hand-set flag).  The text it replaced read: Queen.cs:187-188 is `CombatState.GetTeammatesOf(Creature).ToList().Where(t => t != Creature)` -- membership of the enemy side is the only test. A creature whose removal was vetoed (the death-is-not-removal case) stays on the side at 0 HP and would still be handed +1 Strength. The sim's enemies list retains every corpse, so the port must filter, and it filters on `is_gone`, which also excludes the retained corpse C# would include. SAME MECHANISM and same verdict as monster/guardbot's GuardMove target-set guard (governing rule 3). DORMANT with the trigger named: no ported power sets `retained_after_death` on a TorchHeadAmalgam, and the branch only reaches Burn Bright while the amalgam is alive anyway, so the filter cannot fire on a corpse today. The self-exclusion `t != Creature` matches the sim's `enemy is not self`."
     },
     {
       "what": "BurnBrightForMeMove numerics and order (Queen.cs:182-193 vs queen.py:166-179)",
@@ -83,7 +82,7 @@
       "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. Hides four move ids from the bestiary list."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-27",
   "extra_sources": [
     {
@@ -103,27 +102,27 @@
     },
     {
       "path": "sts2_rl\\monsters\\state_machine.py",
-      "sha256": "bcec29d18fdbd56453de4872aad26b727a9eb3afe1a1961d802713b5e7efe68e",
+      "sha256": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\monsters\\base.py",
-      "sha256": "b52d8d15ba11856c157ae544d7837db5c35df881260a0065cf1d2b97917bd392",
+      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\creatures.py",
-      "sha256": "34e44031a337c75e1c2685e0521a075d95fa7a1478ca8594e6a138651c361078",
+      "sha256": "1c73063f3ca726775f0a121fe826933fe8a4dfdcbda18bb0e0d4dfacff69de7f",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     },
     {

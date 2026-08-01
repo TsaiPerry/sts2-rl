@@ -31,6 +31,24 @@ class ExpectAFightCard(Card):
     def _on_upgrade(self) -> None:
         self._energy_cost = max(0, self._energy_cost - 1)
 
+    @property
+    def magic_number(self) -> int:
+        """ExpectAFight.cs:18-24 -- `CalculatedVar("CalculatedEnergy")` =
+        `CalculationBaseVar(0) + CalculationExtraVar(1) * (Attack cards in
+        Owner's hand)`, i.e. the energy this card would grant RIGHT NOW if
+        played -- a live number (it changes as you draw/play Attacks), not a
+        constant. None of the four C# vars (EnergyVar/CalculationBaseVar/
+        CalculationExtraVar/CalculatedVar) has a static value worth storing,
+        so this overrides `Card.magic_number`'s `_MAGIC_ATTRS` scan (which
+        would otherwise return None) and mirrors the exact count `on_play`
+        below performs.
+        """
+        if self.combat is None:
+            return 0
+        return sum(
+            1 for c in self.combat.player.hand if c.card_type == CardType.ATTACK
+        )
+
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cmds import EnergyCmd, PowerCmd
         from ..powers import NoEnergyGainPower

@@ -26,6 +26,7 @@ class StampedeCard(Card):
 
     def _init_vars(self) -> None:
         self._energy_cost = 2
+        self._power_amount = 1  # DynamicVar("Power", 1m), Stampede.cs:15
 
     def _on_upgrade(self) -> None:
         self._energy_cost = max(0, self._energy_cost - 1)
@@ -33,4 +34,7 @@ class StampedeCard(Card):
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cmds import PowerCmd
         from ..powers import StampedePower
-        PowerCmd.apply(ctx.hooks, ctx.player, StampedePower, 1, applier=ctx.player)
+        PowerCmd.apply(
+            ctx.hooks, ctx.player, StampedePower, self._power_amount,
+            applier=ctx.player,
+        )

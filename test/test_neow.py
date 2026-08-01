@@ -495,12 +495,23 @@ def test_booming_conch_inert_outside_elites():
 
 
 def test_neows_fury_card():
+    # NeowsFury.cs:39 builds a genuine 0..2 `CardSelectorPrefs` range (see
+    # creature_card_cmds/N10's tier-2 fix), so the sim's selectorless fallback
+    # now legitimately rolls how many of the (<=2) discard candidates come
+    # back — no longer a fixed "take both". A selector is installed here so
+    # this test keeps pinning the damage/exhaust/return-to-hand mechanics
+    # deterministically, the way any real driven run (RL or replay) would —
+    # `scripted_card_selector` has no "from_discard"-specific heuristic, so it
+    # falls to its default "first `count` candidates in offered order" arm.
+    from sts2_rl.selectors import scripted_card_selector
+
     deck = [make_card("neows_fury")] + [make_card("strike") for _ in range(5)]
     combat = CombatState(
         starting_deck=deck,
         rng=random.Random(0),
         encounter=ENCOUNTERS["fuzzy_wurm_weak"],
     )
+    combat.card_selector = scripted_card_selector
     fury = next(c for c in combat.player.hand if c.id == "neows_fury")
     enemy = combat.enemy
     hp_before = enemy.hp
@@ -509,6 +520,37 @@ def test_neows_fury_card():
     assert hp_before - enemy.hp == 10
     assert fury in combat.player.exhaust_pile  # Exhaust keyword
     assert len(combat.player.discard_pile) == 0  # both returned to hand
+
+
+def test_neows_fury_selectorless_range_can_return_fewer_than_the_max():
+    """Companion to test_neows_fury_card: WITHOUT an installed selector, the
+    genuine 0..2 range (NeowsFury.cs:39) means the sim's headless fallback
+    must be able to return fewer than 2 — including none — not the old
+    fixed-N clamp. Statistical over seeds, like
+    TestMinSelectZero.test_the_zero_reaches_the_selectorless_engine_default
+    (test_potions.py) does for Ashwater's identical prefs shape."""
+    sizes = set()
+    for seed in range(30):
+        deck = [make_card("neows_fury")] + [make_card("strike") for _ in range(5)]
+        combat = CombatState(
+            starting_deck=deck,
+            rng=random.Random(seed),
+            encounter=ENCOUNTERS["fuzzy_wurm_weak"],
+        )
+        # The opening-hand draw is seed-dependent, so Neow's Fury isn't always
+        # in hand — pull it from wherever it landed rather than assuming.
+        fury = next(c for c in combat.player.all_cards if c.id == "neows_fury")
+        for pile in (combat.player.hand, combat.player.draw_pile,
+                     combat.player.discard_pile):
+            if fury in pile:
+                pile.remove(fury)
+                break
+        combat.player.hand.append(fury)
+        combat.player.discard_pile = [make_card("defend"), make_card("defend")]
+        combat.play_card(combat.player.hand.index(fury))
+        sizes.add(2 - len(combat.player.discard_pile))
+    assert sizes <= {0, 1, 2}
+    assert len(sizes) > 1, f"still an exactly-N screen: {sizes}"
 
 
 # ═════════════════════════════════════════════════════════════════════════

@@ -31,7 +31,8 @@ class DoubtCard(Card):
     has_turn_end_in_hand_effect = True
 
     def _init_vars(self) -> None:
-        self._energy_cost = 0
+        self._energy_cost = -1
+        self._weak = 1      # PowerVar<WeakPower>(1m), Doubt.cs:20
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         pass
@@ -39,4 +40,4 @@ class DoubtCard(Card):
     def on_turn_end_in_hand(self, ctx: CombatCtx) -> None:
         from ..cmds import PowerCmd
         from ..powers import WeakPower
-        PowerCmd.apply(ctx.hooks, ctx.player, WeakPower, 1)
+        PowerCmd.apply(ctx.hooks, ctx.player, WeakPower, self._weak)

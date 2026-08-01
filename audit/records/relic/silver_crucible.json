@@ -66,7 +66,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
+      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
       "side": "sim"
     },
     {
@@ -81,7 +81,7 @@
     },
     {
       "path": "sts2_rl/events/brain_leech.py",
-      "sha256": "dcccfa7348ca10d72727a0cd03772b29e60af4e2ca752f457456339ed022e5cf",
+      "sha256": "220a635f96c3938d07bb172ecd05641c9808d471f8a5c32575712e33b0188f30",
       "side": "sim"
     },
     {
@@ -169,8 +169,7 @@
     "ShouldGenerateTreasure": {
       "maps_to": "should_generate_treasure (silver_crucible.py:42-43), dispatched by RunState.enter_room as `all(r.should_generate_treasure(self) for r in self.relics)` (run.py:1001)",
       "verdict": "gap",
-      "live": false,
-      "issue": "Rollup of guard G3 per binding rule 4. The predicate matches (`TreasureRoomsEntered > 1`, SilverCrucible.cs:146) and so does the all-must-agree dispatcher (`if (!item.ShouldGenerateTreasure(player)) return false`, Hook.cs:2316-2322). What diverges is WHAT the gate covers: C# reaches the Spoils Map payout only inside the gated DoTreasureRoomRewards, and the sim pays map-point quests outside the gate (G3). LIVENESS: DORMANT, RE-EXECUTED 2026-07-30 (round 11) rather than inherited. The divergence itself is still present: `sts2_rl/run.py`'s `enter_room` still calls `resolution.gold += self._complete_map_point_quests(point)` at the SAME indentation level as (i.e. OUTSIDE) the `if all(r.should_generate_treasure(self) for r in self.relics): ...` block for `RoomType.TREASURE`, confirmed by reading the current function body end to end. Reachability re-derived from today's map generator, not the guard's original prose: `sts2_rl/actmap.py`'s `StandardActMap._assign_point_types` (the generator every act except Spoils' own uses) assigns EVERY point in `points_in_row(self.row_count - 7)` to `MapPointType.TREASURE` unconditionally (unless `replace_treasure_with_elites`, off by default) -- exactly one guaranteed, unavoidable TREASURE row per act, confirmed for act 0 (Overgrowth, the first act, generated before Spoils Map's own act can be reached). `cards/spoils_map.py:36` still pins `SPOILS_ACT_INDEX = 1` (the SECOND act), and Spoils' own `SpoilsActMap` (actmap.py) independently forces its own single mandatory `_treasure_row`. Since Silver Crucible's gate only suppresses `treasure_rooms_entered <= 1` (i.e. the FIRST treasure room of the run ever), and act 0's mandatory treasure room is always encountered before act 1's, the counter is already > 1 by the time Spoils Map's own (act-1) treasure room is reached -- so `should_generate_treasure` returns True there regardless of the bug, and the divergence never has a room to fire on. Silver Crucible's own obtainability is unchanged: still `RelicRarity.ANCIENT` (`silver_crucible.py`, confirmed by reading the class) and still granted only via Neow's curse-relic pool (`events/neow.py:47` still lists `silver_crucible`) or Neow's Bones (itself Neow-only), so it cannot be picked up mid-run to target a later act's treasure room. Porting a second `ShouldGenerateTreasure` implementer, a Spoils Map variant targeting act 0, or a mid-run Silver Crucible grant path would make this live; none exists today."
+      "issue": "Rollup of guard G3 per binding rule 4. The predicate matches (`TreasureRoomsEntered > 1`, SilverCrucible.cs:146) and so does the all-must-agree dispatcher (`if (!item.ShouldGenerateTreasure(player)) return false`, Hook.cs:2316-2322). What diverges is WHAT the gate covers: C# reaches the Spoils Map payout only inside the gated DoTreasureRoomRewards, and the sim pays map-point quests outside the gate (G3)."
     }
   },
   "guards": [

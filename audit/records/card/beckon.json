@@ -6,12 +6,12 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\beckon.py",
-    "sha256": "1e2645b251a2a0808d24bf62d199e81d32a0365056967f799d7dded60961ea11"
+    "sha256": "9286db802c205ea0772a72d2ab2be30683a7c9f320a750a50663430440b76ee5"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
+      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
       "side": "sim"
     },
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     },
     {
@@ -73,8 +73,8 @@
     },
     "CanonicalVars": {
       "maps_to": "nothing -- the sim inlines 6 at the damage site (beckon.py:39)",
-      "verdict": "gap",
-      "issue": "`new HpLossVar(6m)` (Beckon.cs:17) is a printed card var; the sim declares no `_hp_loss` in `_init_vars`, so `Card.base_hp_loss` (cards/base.py:202-210) returns its 0 default and the number 6 exists only as a literal inside `on_turn_end_in_hand`. A policy sees Beckon as a harmless 0-HP-loss status. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no corresponding `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the dealt number is identical), LIVE for the observation encoder."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 24.) All 23 cards now store their printed C# var under a `_`-attribute (or, for 3 cards whose C# var is a live/computed value at display time -- guilty, normality, expect_a_fight -- a `magic_number` property override; wither similarly overrides `base_damage`) so `Card.base_damage`/`base_block`/`base_hp_loss`/`magic_number` report the C# value instead of the 0/None default. Two additive base.py changes: `_frail` added to `_MAGIC_ATTRS` (shame) and a new `base_gold` property (debt, spoils_map -- GoldVar had no base property at all). feel_no_pain's `_block` was renamed to `_power_amount` (fixing a WRONG value, not just a missing one -- `base_block` no longer misreports it as block-granting; matches Rage/Corruption/Stampede's DynamicVar('Power', ...) convention). Combat behavior / dealt numbers are byte-identical in every case -- a printed-number / observation-encoder fix only. 3 of the 23 (debt, spoils_map, rolling_boulder's secondary IncrementAmount) have NO obs-vector change despite the API fix (full_env.py has no base_gold read site; magic_number carries one number per card and _power_amount dominates rolling_boulder's scan) -- documented, not closed further. CHECKPOINT NOTE for training: encoded VALUES changed for the other 20 cards in feature slots f[17]/f[18] damage, f[20]/f[21] block, f[22] hp_loss, f[23] magic_number; obs LAYOUT unchanged. Pins: test/test_printed_vars.py (48 tests).  The text it replaced read: `new HpLossVar(6m)` (Beckon.cs:17) is a printed card var; the sim declares no `_hp_loss` in `_init_vars`, so `Card.base_hp_loss` (cards/base.py:202-210) returns its 0 default and the number 6 exists only as a literal inside `on_turn_end_in_hand`. A policy sees Beckon as a harmless 0-HP-loss status. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no corresponding `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the dealt number is identical), LIVE for the observation encoder."
     },
     "OnTurnEndInHand": {
       "maps_to": "BeckonCard.on_turn_end_in_hand (beckon.py:35-40)",
@@ -94,6 +94,6 @@
       "rationale": "The verdict holds but NOT for the reason first recorded: `is_unpowered` has NINE readers in the sim, not one. Besides `DamageCmd.deal`'s prop inference (cmds.py:46-50) it is read at powers.py:116, 1260, 1385, 1911 and 3965, relics/the_boot.py:37, previews.py:157 and cards/thrash.py:44. Each is independently unreachable for Beckon, checked by execution rather than assumed: (1) cmds.py:46-50 is the `props is None` branch and Beckon's only damage passes `CARD_HP_LOSS` explicitly (beckon.py:39), so the inference never runs. (2) powers.py:116 (StrengthPower.modify_damage_additive), 1260 and 1385 (modify_damage_multiplicative) are dispatched only from inside `DamageCmd.deal`'s `if is_powered_attack(props):` gate (cmds.py:56-58); `CARD_HP_LOSS` is `UNBLOCKABLE | UNPOWERED | MOVE` (valueprops.py:38) and `is_powered_attack` is `MOVE in props and UNPOWERED not in props` (valueprops.py:47-49), which evaluates False -- the whole modifier dispatch is skipped, so those three never see Beckon. (3) powers.py:1911 (VigorPower.before_attack) and 3965 (before_attack) fire only from combat.py:476-479, which brackets the play in `is_attack = card.card_type == CardType.ATTACK`; Beckon is a STATUS, and its damage is not a card play at all -- it comes from `on_turn_end_in_hand`. (4) relics/the_boot.py:37 is guarded by `if dealer is not self.player or target is self.player: return amount` (the_boot.py:34-35) and Beckon deals with NO dealer to the player, so both disjuncts hold and it returns before the read. (5) previews.py:157 is preceded by `base = card_base_damage(...); if base is None: return None` (previews.py:154-156); Beckon declares no `_damage` and no `calc_damage`, so `base_damage` returns its `getattr(self, \"_damage\", None)` default of None (cards/base.py:191-196) and the function returns before line 157. (6) cards/thrash.py:44 runs only on a victim drawn from `[c for c in ctx.player.hand if c.card_type == CT.ATTACK]` (thrash.py:58); Beckon is a STATUS and can never be that victim. So the flag is inert on this card at every site, and adding it to a card Beckon.cs does not mark is harmless -- but it is inert by nine separate unreachability facts, not because nothing reads it."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

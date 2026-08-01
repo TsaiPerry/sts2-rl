@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\neows_fury.py",
-    "sha256": "56b9910ed1dbfafd895973adb2703f0ee866c44bc5b05e47885ac1a15c520965"
+    "sha256": "bbd33fee525f35f6d1aa19cefa9b7d528a3d212268f5985f21d7eba2a49e27e3"
   },
   "extra_sources": [
     {
@@ -26,20 +26,20 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
+      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
       "side": "sim"
     }
   ],
   "hooks": {
     "CanBeGeneratedInCombat": {
       "maps_to": "NOT PORTED -- the sim relies on rarity instead (neows_fury.py:378-379)",
-      "verdict": "gap",
-      "issue": "`public override bool CanBeGeneratedInCombat => false` (NeowsFury.cs:15) has no `can_be_generated_in_combat = False` counterpart; the sim's comment says the ANCIENT rarity already keeps it out of `pool_card_ids`. That is true today, so the OUTCOME matches -- but it is a different mechanism, and the flag is the one C# actually exposes: `CardModel.CanBeGeneratedInCombat` (CardModel.cs:642) is read by FilterForCombat regardless of rarity, so any future in-combat generator pointed at a pool that includes Ancients would pick up Neow's Fury in the sim and not in the game. DORMANT with the trigger named. Contrast card/feed, card/hand_of_greed and card/hidden_gem, which set the flag explicitly, and card/disintegration / card/frantic_escape / card/mind_rot, which set the WRONG flag -- three different treatments of one override across six cards."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-31 (tier-2 campaign): Flag pair corrected against the C#, read line-by-line for all six cards: none overrides CanBeGeneratedByModifiers or CanonicalKeywords, so the sim's is_playable=False AND can_be_generated_by_modifiers=False were BOTH wrong and can_be_generated_in_combat=False was missing. These Statuses are playable no-effect cards in the game (the shape the sim already models for card/beckon). LIVENESS CORRECTION: the recorded dormancy checked only pool_card_ids and curse_pool_ids, but a THIRD consumer exists -- transform_options_in_combat's STATUS branch, reached by ported Entropy. Pre-fix this genuinely leaked all four bad cards as transform options for every reachable Status card, including frantic_escape, which The Insatiable really does put in piles (test_hive.py::TestTheInsatiable). Reproduced by execution by both the implementer and the task reviewer, and closed by the same fix -- the STATUS branch's filter is the correct mirror of GetFilteredTransformationOptions (CardFactory.cs:189-203). So this mechanism was recorded DORMANT but was reachable; it is fixed, not merely re-argued. Pinned in test/test_card_generation_pool.py.  The text it replaced read: `public override bool CanBeGeneratedInCombat => false` (NeowsFury.cs:15) has no `can_be_generated_in_combat = False` counterpart; the sim's comment says the ANCIENT rarity already keeps it out of `pool_card_ids`. That is true today, so the OUTCOME matches -- but it is a different mechanism, and the flag is the one C# actually exposes: `CardModel.CanBeGeneratedInCombat` (CardModel.cs:642) is read by FilterForCombat regardless of rarity, so any future in-combat generator pointed at a pool that includes Ancients would pick up Neow's Fury in the sim and not in the game. DORMANT with the trigger named. Contrast card/feed, card/hand_of_greed and card/hidden_gem, which set the flag explicitly, and card/disintegration / card/frantic_escape / card/mind_rot, which set the WRONG flag -- three different treatments of one override across six cards."
     },
     "CanonicalKeywords": {
       "maps_to": "NeowsFuryCard.exhausts = True (neows_fury.py:380)",
@@ -71,7 +71,7 @@
     {
       "what": "the chosen cards are moved with `CardPileCmd.Add(list, PileType.Hand)` in C# (NeowsFury.cs:39) and by direct list mutation in the sim (neows_fury.py:405-407)",
       "verdict": "gap",
-      "issue": "The sim pops the chosen cards out of `player.discard_pile` and appends them to `player.hand` in place (neows_fury.py:405-407) instead of routing through a pile-add verb, so nothing fires for the pile transition. C# `CardPileCmd.Add` runs `Hook.AfterCardChangedPiles` (CardPileCmd.cs:635) and enforces `MaxCardsInHand` inside `AddInternal` (the cap is separately enforced here by the `count` computation in OnPlay, so only the hook is dropped). SAME MECHANISM AND SAME VERDICT AS card/anointed's `CardPileCmd.Add` guard (rule 3) -- this is the card-level instance of creature_card_cmds's 'no unified AfterCardChangedPiles' structural finding (docs/audit/seams/creature_card_cmds.md:643-666), recorded here because it is Neow's Fury's own code doing the bypass. DORMANT: the sim has no `after_card_changed_piles` listener at all, so nothing observable is dropped yet. TRIGGER: the first ported model overriding `AfterCardChangedPiles`. Was recorded faithful while its own rationale said \"Same structural point as card/anointed's guard\" and card/anointed carries `gap`; the report also files it under the DORMANT-GAP family \"Direct pile mutation instead of a pile verb\" (\u00a75)."
+      "issue": "The sim pops the chosen cards out of `player.discard_pile` and appends them to `player.hand` in place (neows_fury.py:405-407) instead of routing through a pile-add verb, so nothing fires for the pile transition. C# `CardPileCmd.Add` runs `Hook.AfterCardChangedPiles` (CardPileCmd.cs:635) and enforces `MaxCardsInHand` inside `AddInternal` (the cap is separately enforced here by the `count` computation in OnPlay, so only the hook is dropped). SAME MECHANISM AND SAME VERDICT AS card/anointed's `CardPileCmd.Add` guard (rule 3) -- this is the card-level instance of creature_card_cmds's 'no unified AfterCardChangedPiles' structural finding (docs/audit/seams/creature_card_cmds.md:643-666), recorded here because it is Neow's Fury's own code doing the bypass. DORMANT: the sim has no `after_card_changed_piles` listener at all, so nothing observable is dropped yet. TRIGGER: the first ported model overriding `AfterCardChangedPiles`. Was recorded faithful while its own rationale said \"Same structural point as card/anointed's guard\" and card/anointed carries `gap`; the report also files it under the DORMANT-GAP family \"Direct pile mutation instead of a pile verb\" (§5)."
     }
   ],
   "verdict": "gap",

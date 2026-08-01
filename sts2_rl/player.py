@@ -43,7 +43,7 @@ def stable_shuffled_cards(cards: "list[Card]", combat_rng,
 
     Content that picks a card at random by shuffling a pile and taking the
     front (Catastrophe) must burn the shuffle's N-1 draws, not one. The
-    stabilizing sort is the same CardModel.CompareTo key `_shuffle_draw_pile`
+    stabilizing sort is the same CardModel.CompareTo key `_shuffle_cards`
     uses, and is parity-only for the same reason: legacy stays byte-for-byte.
 
     `stream` names the Rng the call site's C# passes to StableShuffle, because
@@ -105,7 +105,10 @@ class PlayerCombatState(Creature):
         # Combat-start draw-pile randomization is CardPile.RandomizeOrderInternal
         # -> UnstableShuffle (Fisher-Yates, NO stabilizing sort), unlike the
         # mid-combat reshuffle which is a StableShuffle. Hence stable=False here.
-        self._shuffle_draw_pile(stable=False)
+        # Pass self.draw_pile itself (not a copy): RandomizeOrderInternal
+        # shuffles the pile's own `_cards` in place before dispatching, so the
+        # aliasing is the correct replication here -- see _shuffle_cards.
+        self.draw_pile = self._shuffle_cards(self.draw_pile, stable=False)
 
     @property
     def all_cards(self) -> list[Card]:
@@ -249,15 +252,28 @@ class PlayerCombatState(Creature):
         Hook.AfterPlayerTurnStart."""
         # Energy reset — or add-to-current when a listener vetoes the reset
         # (mirrors ShouldPlayerResetEnergy → ResetEnergy / AddMaxEnergyToCurrent).
+        # CombatManager.cs:641-649 — ShouldPlayerResetEnergy is evaluated
+        # FIRST; MaxEnergy (== Hook.ModifyMaxEnergy(..., player.MaxEnergy),
+        # PlayerCombatState.cs:101) is read INSIDE the chosen branch, exactly
+        # once either way. The sim used to call modify_max_energy first
+        # (tier-2 Task 11, item E; turn_structure/step17, dormant).
+        should_reset = self._hooks.should_reset_energy(self)
         gained = self._hooks.modify_max_energy(self, self.ENERGY_PER_TURN)
-        if self._hooks.should_reset_energy(self):
+        if should_reset:
             self.energy = gained
         else:
             self.energy += gained
         self._hooks.on_energy_reset(self)
         self._hooks.on_player_turn_start(self)
 
-        draw_count = self._hooks.modify_hand_draw(self, self.DRAW_PER_TURN)
+        hand_draw_modifiers: list = []
+        draw_count = self._hooks.modify_hand_draw(
+            self, self.DRAW_PER_TURN, hand_draw_modifiers)
+        # CombatManager.cs:655 — Hook.AfterModifyingHandDraw, immediately
+        # after ModifyHandDraw returns and before the turn-1 pile moves and
+        # the draw itself (tier-2 Task 11, item C; turn_structure/step20,
+        # dormant).
+        self._hooks.after_modifying_hand_draw(hand_draw_modifiers)
         if self._first_turn:
             self._first_turn = False
             # Innate cards move to the top of the draw pile and the first-turn
@@ -291,7 +307,7 @@ class PlayerCombatState(Creature):
         self._hooks.on_player_turn_started(self)
 
     def discard_hand(self, flush: bool = True) -> None:
-        """FlushPlayerHand (CombatManager.cs:1327-1346).
+        """FlushPlayerHand (CombatManager.cs:1313-1347).
 
         Retain cards stay in hand (ShouldRetainThisTurn). `flush=False` is
         Hook.ShouldFlush returning false, which C# treats as "every card is
@@ -299,10 +315,30 @@ class PlayerCombatState(Creature):
         the TAIL — Hook.AfterFlush and PlayerCombatState.EndOfTurnCleanup —
         still runs. The sim used to skip the whole call.
 
-        No `on_hand_emptied` here. CombatManager.cs:880-883 excludes the flush
-        from CheckForEmptyHand in as many words ("besides ending turn, which
-        should not trigger an empty hand check"), and the flush is the one site
-        the sim used to fire it from (turn_structure G16).
+        No `on_card_discarded`/`Hook.AfterCardDiscarded` here, and this is not
+        a "fire after the move" ordering fix -- FlushPlayerHand never fires it
+        at all. `await CardPileCmd.Add(cardsToFlush, PileType.Discard)` is the
+        ONLY pile-change call this method makes, and a repo-wide
+        `grep -rn AfterCardDiscarded src/` over the decompiled game returns
+        exactly four hits: the AbstractModel/Hook.cs declarations, the two
+        relic overrides (Tingsha.cs:18, ToughBandages.cs:20), and its ONE
+        call site, `CardCmd.cs:194`, inside `DiscardAndDraw` -- the explicit
+        "discard these specific cards" command (Concentrate, Sly, Gambler's
+        Brew/Gambling Chip's `CardCmd.DiscardAndDraw`), which this method is
+        not and does not call. `discard_hand`'s only caller is the turn-end
+        flush (`combat.py`'s `should_flush_hand`/`discard_hand` pair) --
+        confirmed by grep, no other site calls it -- so it is FlushPlayerHand
+        and nothing else. (Tier-2 Task 10 finding: the previously-recorded gap
+        here, creature_card_cmds guard G11 / step49, cited CardCmd.cs:186-195
+        as this method's C# counterpart and asked only for a move-then-fire
+        reorder; CombatManager.cs's real FlushPlayerHand shows that citation
+        names the wrong method, and the correct fix is removing the call, not
+        reordering it. See task-10-report.md for the full trace.)
+
+        No `on_hand_emptied` here either. CombatManager.cs:880-883 excludes
+        the flush from CheckForEmptyHand in as many words ("besides ending
+        turn, which should not trigger an empty hand check"), and the flush is
+        the one site the sim used to fire it from (turn_structure G16).
         """
         # CardCmd.cs:174-177 -- Discard/DiscardAndDraw open on
         # `IsOverOrEnding -> return`, so the end-of-turn flush of a combat that
@@ -312,8 +348,6 @@ class PlayerCombatState(Creature):
         # CombatManager.cs:1330 partitions on `!flag || card.ShouldRetainThisTurn`
         # — the Retain KEYWORD or a single-turn grant (CardModel.cs:590-600).
         flushed = [c for c in self.hand if not c.should_retain_this_turn] if flush else []
-        for card in flushed:
-            self._hooks.on_card_discarded(card)
         self.discard_pile.extend(flushed)
         if flush:
             self.hand = [c for c in self.hand if c.should_retain_this_turn]
@@ -363,13 +397,31 @@ class PlayerCombatState(Creature):
             # the top card and played it again. Measured before removing the gate:
             # the whole suite passes either way apart from the six tests this
             # round moved for other reasons, so nothing depended on it.
-            self.draw_pile = [c for c in self.discard_pile if c is not held]
-            self.discard_pile = [held]
+            cards = [c for c in self.discard_pile if c is not held]
+            new_discard = [held]
         else:
-            self.draw_pile = self.discard_pile
-            self.discard_pile = []
-        # A mid-combat reshuffle is CardPileCmd.Shuffle -> StableShuffle.
-        self._shuffle_draw_pile(stable=True)
+            cards = list(self.discard_pile)   # COPY -- see _shuffle_cards
+            new_discard = []
+        # A mid-combat reshuffle is CardPileCmd.Shuffle -> StableShuffle. Shuffle
+        # and dispatch BEFORE touching self.draw_pile/self.discard_pile -- see
+        # _shuffle_cards (creature_card_cmds/G10, RE-VERIFIED 2026-07-30,
+        # tier-2 Task 5).
+        cards = self._shuffle_cards(cards, stable=True)
+        self.draw_pile = cards
+        self.discard_pile = new_discard
+        # CardPileCmd.cs:892-912: every card in the shuffled order gets a
+        # full `Add()` -> `AfterCardChangedPiles` UNLESS it was already
+        # sitting in the draw pile (those are re-seated silently,
+        # `AddInternal(item2, -1, silent: true)`, no hook at all). This
+        # method only ever runs with an EMPTY draw pile -- every one of its
+        # five callers gates on `not self.draw_pile` first
+        # (`shuffle_if_necessary` above, plus DistilledChaos/Cascade/Toasty
+        # Mittens' own `if not draw_pile` guards) -- so every card here
+        # originated in the discard and the silent branch never applies at
+        # this call site; contrast `shuffle_draw_and_discard`, where it can.
+        # seam/creature_card_cmds guard G8, step96.
+        for card in cards:
+            self._hooks.after_card_changed_piles(card, "discard", None)
         self._hooks.on_shuffle(self)
 
     def shuffle_draw_and_discard(self) -> None:
@@ -385,18 +437,37 @@ class PlayerCombatState(Creature):
         if _is_over_or_ending(self._hooks):
             return          # CardPileCmd.cs:866-869
         held = self._playing_card
-        discard = self.discard_pile
-        if held is not None and held in discard:
-            discard = [c for c in discard if c is not held]
-            self.discard_pile = [held]
+        if held is not None and held in self.discard_pile:
+            discard = [c for c in self.discard_pile if c is not held]
+            new_discard = [held]
         else:
-            self.discard_pile = []
-        self.draw_pile = discard + self.draw_pile
-        self._shuffle_draw_pile(stable=True)
+            discard = self.discard_pile
+            new_discard = []
+        # CardPileCmd.cs:874 `drawPileCards = drawPile.Cards.ToHashSet()` --
+        # captured BEFORE the shuffle, so it names each card's ORIGIN pile,
+        # not its post-shuffle position. Only non-origin (discard-sourced)
+        # cards get a full `Add()` -> `AfterCardChangedPiles` dispatch below;
+        # already-in-draw cards are re-seated silently (CardPileCmd.cs:911),
+        # the asymmetry step96 describes -- and unlike
+        # `reshuffle_discard_into_draw`, this method (Bottled Potential,
+        # Reboot) can genuinely run with cards already in the draw pile, so
+        # the asymmetry has a real surface here. seam/creature_card_cmds
+        # guard G8, step96.
+        already_in_draw = {id(c) for c in self.draw_pile}
+        cards = discard + self.draw_pile   # `+` always copies -- see _shuffle_cards
+        # See reshuffle_discard_into_draw: shuffle and dispatch BEFORE touching
+        # the real piles (creature_card_cmds/G10, tier-2 Task 5).
+        cards = self._shuffle_cards(cards, stable=True)
+        self.draw_pile = cards
+        self.discard_pile = new_discard
+        for card in cards:
+            if id(card) not in already_in_draw:
+                self._hooks.after_card_changed_piles(card, "discard", None)
         self._hooks.on_shuffle(self)
 
-    def _shuffle_draw_pile(self, stable: bool) -> None:
-        """Shuffle the draw pile via the Shuffle stream.
+    def _shuffle_cards(self, cards: list[Card], stable: bool) -> list[Card]:
+        """Shuffle `cards` via the Shuffle stream and dispatch
+        Hook.ModifyShuffleOrder on it, in place.
 
         The game has two draw-pile shuffles that both draw from the same
         Shuffle stream but differ in one step:
@@ -423,29 +494,64 @@ class PlayerCombatState(Creature):
         game's front-to-back draw order under the sim's top=end convention.
 
         Legacy is byte-for-byte unchanged: the shared random.Random shuffles in
-        place with no sort and no reorientation."""
+        place with no sort and no reorientation.
+
+        WHO CAN CALL THIS WITH WHAT (creature_card_cmds/G10, RE-VERIFIED
+        2026-07-30, tier-2 Task 5): Hook.ModifyShuffleOrder fires HERE — after
+        the Fisher-Yates and before the pile is repopulated (CardPileCmd.cs:877
+        for the mid-combat shuffle, CardPile.cs:73 for RandomizeOrderInternal).
+        `HookSystem.modify_shuffle_order`'s per-dispatch listener order is keyed
+        on each listener's card's position in `player.all_cards` (Hand, Draw,
+        Discard, Exhaust), re-derived fresh every call to mirror
+        CombatState.IterateHookListeners (CombatState.cs:449-467) doing the same
+        from the real piles. C# gets this for free because `CardPileCmd.Shuffle`
+        builds a DETACHED local `list` (CardPileCmd.cs:871-876) and only removes
+        cards from the real Draw/Discard piles AFTER the hook has run
+        (CardPileCmd.cs:878-913) -- so at dispatch time the real piles are still
+        in their PRE-shuffle state. `CardPile.RandomizeOrderInternal` is the one
+        exception: it shuffles the pile's OWN `_cards` list in place
+        (CardPile.cs:69-73), so there the "pre-shuffle" and "post-shuffle" pile
+        both mean the same object, and combat start's caller below passes
+        `self.draw_pile` itself (aliased, correctly). For the two mid-combat
+        callers, `cards` MUST be a list this method can mutate freely WITHOUT
+        that mutation being visible through `self.draw_pile`/`self.discard_pile`
+        -- callers build a fresh list (never `self.discard_pile`/`self.draw_pile`
+        by reference) and must not reassign either attribute until this method
+        returns. Getting this wrong once already cost a `Perfect Fit` + clone
+        collision its determinism: reassigning `self.draw_pile =
+        self.discard_pile` and shuffling THAT before dispatch made the "later in
+        the discard wins" tie-break depend on the Fisher-Yates outcome instead
+        of the pre-shuffle discard order — an RNG coin flip that only looked
+        fixed because the regression tests pinned a single seed where the
+        2-card shuffle happened not to swap."""
         if stable and self._combat_rng.is_parity:
-            self.draw_pile.sort(key=_compare_to_key)
-        self._combat_rng.shuffle.shuffle(self.draw_pile)
+            cards.sort(key=_compare_to_key)
+        self._combat_rng.shuffle.shuffle(cards)
         if self._combat_rng.is_parity:
-            self.draw_pile.reverse()
-        # Hook.ModifyShuffleOrder fires HERE — after the Fisher-Yates and before
-        # the pile is repopulated (CardPileCmd.cs:877 for the mid-combat shuffle,
-        # CardPile.cs:73 for RandomizeOrderInternal). `stable` distinguishes the
-        # two exactly as `isInitialShuffle` does, inverted: the initial shuffle is
-        # the UNSTABLE one.
-        self._hooks.modify_shuffle_order(self, self.draw_pile,
-                                         is_initial_shuffle=not stable)
+            cards.reverse()
+        self._hooks.modify_shuffle_order(self, cards, is_initial_shuffle=not stable)
+        return cards
 
     def _draw(self, n: int, from_hand_draw: bool = False) -> None:
         # CardPileCmd.cs:800-803 -- `IsOverOrEnding -> empty`, before
         # Hook.ShouldDraw is even consulted.
         if _is_over_or_ending(self._hooks):
             return
+        # CardPileCmd.cs:804-808 -- Hook.ShouldDraw is evaluated EXACTLY ONCE
+        # per Draw call, strictly before `drawsRequested`/`num` (the hand-space
+        # count) are even computed -- i.e. before the per-card loop below, not
+        # inside it. A refusal fires Hook.AfterPreventingDraw(modifier),
+        # targeted at the ONE listener that vetoed (mirrors ShouldDie/
+        # ShouldClearBlock's `out preventer` pattern), then the WHOLE draw
+        # returns empty: unlike a `break` reached mid-loop, no card is drawn at
+        # all, not even the ones that would have come before a hypothetical
+        # per-card refusal. seam/creature_card_cmds guard G9, step84.
+        preventer: list = []
+        if not self._hooks.should_draw(self, from_hand_draw, preventer):
+            self._hooks.after_preventing_draw(preventer)
+            return
         for _ in range(n):
             if len(self.hand) >= self.MAX_HAND_SIZE:
-                break
-            if not self._hooks.should_draw(self, from_hand_draw):
                 break
             if not self.draw_pile:
                 if not self.discard_pile:
@@ -457,4 +563,10 @@ class PlayerCombatState(Creature):
                     break
             card = self.draw_pile.pop()  # end of list = top of pile
             self.hand.append(card)
+            # `await Add(card, hand)` (CardPileCmd.cs:849) is the FULL Add
+            # pipeline, whose own end-of-batch dispatch
+            # (CardPileCmd.cs:635) fires before Draw's own hooks below --
+            # oldPile was Draw, so `pile="draw"`. seam/creature_card_cmds
+            # guard G8, step89.
+            self._hooks.after_card_changed_piles(card, "draw", None)
             self._hooks.on_card_drawn(card, from_hand_draw)

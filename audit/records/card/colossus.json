@@ -6,12 +6,12 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colossus.py",
-    "sha256": "6580db016757356e219e44e5da621cf93cbbf4c0714b33fc1622533a8a2b4b4d"
+    "sha256": "ed4185b50fe8d2fdccd41ca6f14bc9a999a6efa1a6e4f1c48bbb61cc359ccb03"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
@@ -33,8 +33,8 @@
     },
     "CanonicalVars": {
       "maps_to": "_block = 5 declared; the ColossusPower amount is inlined as 1 (colossus.py:30, 39)",
-      "verdict": "gap",
-      "issue": "`new BlockVar(5m, ValueProp.Move)` maps to `_block = 5`, but the second var `new DynamicVar(\"Colossus\", 1m)` (Colossus.cs:21-25) has no `_`-attribute in `_init_vars` -- the sim passes the literal 1 at the apply site. `base_block` is right, but `magic_number` returns None where the game prints a second var. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no corresponding `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the dealt/applied number is identical), LIVE for the observation encoder. The BlockVar carries Move WITHOUT Unpowered -> POWERED block, so `BlockCmd.apply`'s `is_powered_attack` gate (cmds.py:145-147) lets the modifier dispatch run and this card is NOT in gap G1's blast radius; confirmed pool-wide by `py audit/tools/card_probes.py unpowered-block`, which lists only Entrench among ported cards."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 24.) All 23 cards now store their printed C# var under a `_`-attribute (or, for 3 cards whose C# var is a live/computed value at display time -- guilty, normality, expect_a_fight -- a `magic_number` property override; wither similarly overrides `base_damage`) so `Card.base_damage`/`base_block`/`base_hp_loss`/`magic_number` report the C# value instead of the 0/None default. Two additive base.py changes: `_frail` added to `_MAGIC_ATTRS` (shame) and a new `base_gold` property (debt, spoils_map -- GoldVar had no base property at all). feel_no_pain's `_block` was renamed to `_power_amount` (fixing a WRONG value, not just a missing one -- `base_block` no longer misreports it as block-granting; matches Rage/Corruption/Stampede's DynamicVar('Power', ...) convention). Combat behavior / dealt numbers are byte-identical in every case -- a printed-number / observation-encoder fix only. 3 of the 23 (debt, spoils_map, rolling_boulder's secondary IncrementAmount) have NO obs-vector change despite the API fix (full_env.py has no base_gold read site; magic_number carries one number per card and _power_amount dominates rolling_boulder's scan) -- documented, not closed further. CHECKPOINT NOTE for training: encoded VALUES changed for the other 20 cards in feature slots f[17]/f[18] damage, f[20]/f[21] block, f[22] hp_loss, f[23] magic_number; obs LAYOUT unchanged. Pins: test/test_printed_vars.py (48 tests).  The text it replaced read: `new BlockVar(5m, ValueProp.Move)` maps to `_block = 5`, but the second var `new DynamicVar(\"Colossus\", 1m)` (Colossus.cs:21-25) has no `_`-attribute in `_init_vars` -- the sim passes the literal 1 at the apply site. `base_block` is right, but `magic_number` returns None where the game prints a second var. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed DynamicVar with no corresponding `_`-attribute in `_init_vars`, so the sim's printed-number API reports the default and `full_env.card_features` (full_env.py:455-489) encodes the card wrongly for the policy. DORMANT for game fidelity (the dealt/applied number is identical), LIVE for the observation encoder. The BlockVar carries Move WITHOUT Unpowered -> POWERED block, so `BlockCmd.apply`'s `is_powered_attack` gate (cmds.py:145-147) lets the modifier dispatch run and this card is NOT in gap G1's blast radius; confirmed pool-wide by `py audit/tools/card_probes.py unpowered-block`, which lists only Entrench among ported cards."
     },
     "OnPlay": {
       "maps_to": "ColossusCard.on_play (colossus.py:35-39)",
@@ -48,6 +48,6 @@
     }
   },
   "guards": [],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

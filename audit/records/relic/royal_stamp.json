@@ -55,8 +55,8 @@
   "guards": [
     {
       "what": "G1 (DORMANT, and the port's stated premise is FALSE): 'the sim has no enchantments, so this is a no-op stub' (royal_stamp.py:8-9)",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. sts2_rl/relics/royal_stamp.py's docstring now names the real blocker: the **Royally Approved enchantment** is not among the 17 sts2_rl/enchantments.py registers, so there is nothing to attach and the `UnstableShuffle(RunState.Rng.Niche)` RoyalStamp.cs:36 spends on the candidate list is still never made. A fix must do both halves at once -- shuffle on the Niche stream AND attach the enchantment -- or it reproduces relic/astrolabe's old off-stream defect."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-31 (tier-2 campaign): PREMISE CORRECTED: this is not a stub. royal_stamp.py carries a complete after_obtained (Niche shuffle + RoyallyApprovedEnchantment attach), and the behavior is already pinned by test/test_shared_enchantments.py::test_royal_stamp_enchants_a_deck_card_and_burns_the_niche_shuffle, which the task reviewer named and ran. The entry described a port that no longer matches the tree.  The text it replaced read: NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. sts2_rl/relics/royal_stamp.py's docstring now names the real blocker: the **Royally Approved enchantment** is not among the 17 sts2_rl/enchantments.py registers, so there is nothing to attach and the `UnstableShuffle(RunState.Rng.Niche)` RoyalStamp.cs:36 spends on the candidate list is still never made. A fix must do both halves at once -- shuffle on the Niche stream AND attach the enchantment -- or it reproduces relic/astrolabe's old off-stream defect."
     },
     {
       "what": "G2 (DORMANT for RL play, LIVE for RNG parity): `list.UnstableShuffle(base.Owner.RunState.Rng.Niche)` (RoyalStamp.cs:36) is an RNG draw the sim never makes",
@@ -74,6 +74,6 @@
       "rationale": "C# tolerates a deck with no RoyallyApproved-eligible card: the selection returns nothing, the null check skips the enchant, and the relic simply does nothing -- but the UnstableShuffle has still run, so G2's stream draw happens even in that case (a shuffle of an empty or single-element list still consumes what UnstableShuffle consumes for that length). Recorded so a fix does not put the shuffle inside an `if candidates` guard and silently diverge on decks with no eligible card. Recorded as faithful because the port's do-nothing behaviour happens to match this arm exactly; every other arm is G1's."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

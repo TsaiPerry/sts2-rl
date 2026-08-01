@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\glory\\aeonglass.py",
-    "sha256": "122f47b88b1d87fd6dec7dbe7f575fa92aa176adb2b1e3d1d03f70f04a4c4dd8"
+    "sha256": "4106f8d25cd8c5d3aa6f86faf884907896a10605fc1250c8dc5d8f66cbb0d39e"
   },
   "extra_sources": [
     {
@@ -31,17 +31,17 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
+      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
       "side": "sim"
     },
     {
@@ -51,7 +51,7 @@
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "b52d8d15ba11856c157ae544d7837db5c35df881260a0065cf1d2b97917bd392",
+      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
       "side": "sim"
     }
   ],
@@ -83,9 +83,8 @@
     },
     "AfterCardGeneratedForCombat": {
       "maps_to": "no sim counterpart; the effect is open-coded at aeonglass.py:78-82 and powers.py:3284-3289",
-      "verdict": "gap",
-      "issue": "THE SECOND OF THIS UNIT'S TWO UNCLAIMED C# HOOK OVERRIDES, and unlike AfterDeath it is genuinely mechanical -- read to the end and it is still mechanical. Aeonglass.cs:150-166: for EVERY card generated for combat, if it is a Wither, call `MatchWitherToUpgradeCount(wither)`, which applies `wither.FakeUpgrade()` WitherUpgradeCount times. The hook is dispatched by Hook.AfterCardGeneratedForCombat from CardPileCmd.cs:246 (inside AddGeneratedCardsToCombat, per generated card) and CardCmd.cs:504, i.e. it is a GENERAL interception point that catches Withers from any source. The sim has no such dispatch and no MonsterModel listener category (hook_dispatch G5, not re-verdicted), so the effect is open-coded at each of the sim's two Wither-creating sites instead: aeonglass.py:78-82 fake-upgrades the boss's own new Wither, and powers.py:3284-3289 (WitheringPresencePower) fake-upgrades the punish Wither by reading `getattr(self.owner, \"wither_upgrade_count\", 0)`. Note that the C# line the power record cites for the same behaviour, WitheringPresencePower.cs:37, is inside `ExtraHoverTips` -- a HOVER-TIP preview property -- not inside AfterCardPlayed; the real Wither the power adds at :55 is matched only via this Aeonglass hook, so the sim's open-coding is standing in for THIS override at both sites, not for that line. **NOT LIVE, executed** (`py audit/tools/monster_probes_b06.py wither`): the sim constructs a WitherCard at exactly two sites, aeonglass.py:79 and powers.py:3286, and both already apply the upgrade count, so no ported path can produce an unmatched Wither today. Named triggers that would make it live: (a) porting anything that draws Wither from the status pool -- StatusCardPool.cs:28 lists Wither among its 12 entries, so any 'add a random status' card/relic/potion reaches it; (b) a second monster or power adding Wither during an Aeonglass fight; (c) porting Regalite, RocketPunch, ArsenalPower, PillarOfCreationPower, SmokestackPower or TrashToTreasurePower, the other six AfterCardGeneratedForCombat implementers, which would need the dispatch to exist at all.",
-      "live": false
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 8.) IMPLEMENTED, not merely proven dormant-safe. monsters/glory/aeonglass.py gained `_AeonglassWitherListener` (the queen.py `_AmalgamDeathListener` pattern for the missing MonsterModel listener category, hook_dispatch/G5), registered in Aeonglass.__init__; its on_card_generated_for_combat mirrors Aeonglass.cs:150-166 exactly, including post-increment ordering. Both open-coded upgrade loops deleted (the boss's own Increasing-Intensity add and WitheringPresencePower's punish-Wither add); TDD proves exact equivalence for both former sites. The record's own anticipated trigger -- 'any third Wither source -- drawing one from StatusCardPool.cs:28' -- turned out to be ALREADY REACHABLE: `wither` sits in transform_options_in_combat's Status pool, so an Entropy transform could roll one; before this task such a Wither was silently un-upgraded (the old 'NOT LIVE, executed' dormancy verdict was stale). Root cause of the stale verdict: audit/tools/monster_probes_b06.py's probe_wither() greps literally for 'WitherCard(' and cannot see make_card()-style dynamic construction -- a probe blind spot reported in GAP-QUEUE.md's Outstanding record defects. With step61's dispatch wired, a transform-rolled Wither now arrives fake-upgraded (test_task8_aeonglass_generated_wither.py, 7 tests). NOT closed: the six other C# AfterCardGeneratedForCombat implementers (Regalite, RocketPunch, ArsenalPower, PillarOfCreationPower, SmokestackPower, TrashToTreasurePower) remain unported. power/withering_presence's ExtraHoverTips citation stays a reported-not-edited inconsistency.  The text it replaced read: THE SECOND OF THIS UNIT'S TWO UNCLAIMED C# HOOK OVERRIDES, and unlike AfterDeath it is genuinely mechanical -- read to the end and it is still mechanical. Aeonglass.cs:150-166: for EVERY card generated for combat, if it is a Wither, call `MatchWitherToUpgradeCount(wither)`, which applies `wither.FakeUpgrade()` WitherUpgradeCount times. The hook is dispatched by Hook.AfterCardGeneratedForCombat from CardPileCmd.cs:246 (inside AddGeneratedCardsToCombat, per generated card) and CardCmd.cs:504, i.e. it is a GENERAL interception point that catches Withers from any source. The sim has no such dispatch and no MonsterModel listener category (hook_dispatch G5, not re-verdicted), so the effect is open-coded at each of the sim's two Wither-creating sites instead: aeonglass.py:78-82 fake-upgrades the boss's own new Wither, and powers.py:3284-3289 (WitheringPresencePower) fake-upgrades the punish Wither by reading `getattr(self.owner, \"wither_upgrade_count\", 0)`. Note that the C# line the power record cites for the same behaviour, WitheringPresencePower.cs:37, is inside `ExtraHoverTips` -- a HOVER-TIP preview property -- not inside AfterCardPlayed; the real Wither the power adds at :55 is matched only via this Aeonglass hook, so the sim's open-coding is standing in for THIS override at both sites, not for that line. **NOT LIVE, executed** (`py audit/tools/monster_probes_b06.py wither`): the sim constructs a WitherCard at exactly two sites, aeonglass.py:79 and powers.py:3286, and both already apply the upgrade count, so no ported path can produce an unmatched Wither today. Named triggers that would make it live: (a) porting anything that draws Wither from the status pool -- StatusCardPool.cs:28 lists Wither among its 12 entries, so any 'add a random status' card/relic/potion reaches it; (b) a second monster or power adding Wither during an Aeonglass fight; (c) porting Regalite, RocketPunch, ArsenalPower, PillarOfCreationPower, SmokestackPower or TrashToTreasurePower, the other six AfterCardGeneratedForCombat implementers, which would need the dispatch to exist at all."
     },
     "GenerateMoveStateMachine (protected; added by hand -- the skeleton only enumerates `public override` members)": {
       "maps_to": "aeonglass.py:43-59 build_machine",
@@ -116,9 +115,8 @@
     },
     {
       "what": "INCREASING_INTENSITY's intent drops StatusIntent's count",
-      "verdict": "gap",
-      "issue": "Aeonglass.cs:102 telegraphs `new StatusIntent(WitherAmount), new BuffIntent()`; the sim records `Intent(MoveType.STATUS_CARD, also=(MoveType.BUFF,))` (aeonglass.py:54) with no count field. Same mechanism as the_insatiable's StatusIntent(6) -- one verdict at both sites per rule 3. monster_state_machine's scope boundary item 2 records the whole AbstractIntent -> Intent mapping as audited by no seam. NOT LIVE: the sim's Intent (monsters/base.py:36-59) has no status-count field, so no ported consumer can observe the loss. Named trigger: adding one, or an observation/replay consumer that reads it.",
-      "live": false
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 28.) Intent gained a `status_count` field (default None -- no other construction site changed) and the three recorded sites now carry C#'s number: aeonglass INCREASING_INTENSITY = WitherAmount (non-asc 1, Aeonglass.cs:44/:102), the_insatiable LIQUIFY = 6 (TheInsatiable.cs:96), test_subject BURNING_GROWL = BurningGrowlBurnCount (non-asc 3, TestSubject.cs:101/:201). The observation encoder deliberately stays a single flag bit -- the count is carried but unencoded (checkpoint concern, per the queue's own impact note). NOT closed: Vantom.cs:119's StatusIntent(3) on DISMEMBER is a genuine, previously-uncounted 4th site of this mechanism (out of this task's footprint; filed in GAP-QUEUE.md's Named work). Witness: test/test_monster_tier_families.py::TestIntentCountLost.  The text it replaced read: Aeonglass.cs:102 telegraphs `new StatusIntent(WitherAmount), new BuffIntent()`; the sim records `Intent(MoveType.STATUS_CARD, also=(MoveType.BUFF,))` (aeonglass.py:54) with no count field. Same mechanism as the_insatiable's StatusIntent(6) -- one verdict at both sites per rule 3. monster_state_machine's scope boundary item 2 records the whole AbstractIntent -> Intent mapping as audited by no seam. NOT LIVE: the sim's Intent (monsters/base.py:36-59) has no status-count field, so no ported consumer can observe the loss. Named trigger: adding one, or an observation/replay consumer that reads it."
     },
     {
       "what": "PowerCmd.Apply's `applier` argument",
@@ -131,6 +129,6 @@
       "rationale": "rooms.py:196 puts `aeonglass` in Glory's boss_keys and aeonglass.py:90-93 exports AEONGLASS_BOSS. Both sides reachable with ported content."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-27"
 }

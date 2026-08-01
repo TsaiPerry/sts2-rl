@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\pacts_end.py",
-    "sha256": "cd2494ef8e81910674a4e9b32e92fb7b24ce50215497a3f6b80b88f3173aa88e"
+    "sha256": "ec62256e7bd244a24602b443b4ef73b29c9dc8ca24aad1ac54699224e771eaf0"
   },
   "extra_sources": [
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "41353618867e55be53cb277579e9964c09fd60239f7f7a7ad0ee1a54c43da6da",
+      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
@@ -43,8 +43,8 @@
     },
     "CanonicalVars": {
       "maps_to": "_damage = 17 declared; the CardsVar threshold is stored as `_required_exhausted` (pacts_end.py:110-111)",
-      "verdict": "gap",
-      "issue": "`new DamageVar(17m, ValueProp.Move)` maps to `_damage = 17`, and the second var `new CardsVar(3)` (PactsEnd.cs:15-19) IS stored -- but under the name `_required_exhausted`, which is not in `Card._MAGIC_ATTRS` (cards/base.py:185-189), so `magic_number` returns None where the game prints 3. The VALUE is right and the behaviour is right; only the printed-number API misses it, which for this card is the number that decides whether the play does anything at all. A one-word rename to `_cards` would surface it. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed number the sim's `magic_number` cannot surface, so `full_env.card_features` (full_env.py:455-489) encodes the card without it. DORMANT for game fidelity, LIVE for the observation encoder."
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 24.) All 23 cards now store their printed C# var under a `_`-attribute (or, for 3 cards whose C# var is a live/computed value at display time -- guilty, normality, expect_a_fight -- a `magic_number` property override; wither similarly overrides `base_damage`) so `Card.base_damage`/`base_block`/`base_hp_loss`/`magic_number` report the C# value instead of the 0/None default. Two additive base.py changes: `_frail` added to `_MAGIC_ATTRS` (shame) and a new `base_gold` property (debt, spoils_map -- GoldVar had no base property at all). feel_no_pain's `_block` was renamed to `_power_amount` (fixing a WRONG value, not just a missing one -- `base_block` no longer misreports it as block-granting; matches Rage/Corruption/Stampede's DynamicVar('Power', ...) convention). Combat behavior / dealt numbers are byte-identical in every case -- a printed-number / observation-encoder fix only. 3 of the 23 (debt, spoils_map, rolling_boulder's secondary IncrementAmount) have NO obs-vector change despite the API fix (full_env.py has no base_gold read site; magic_number carries one number per card and _power_amount dominates rolling_boulder's scan) -- documented, not closed further. CHECKPOINT NOTE for training: encoded VALUES changed for the other 20 cards in feature slots f[17]/f[18] damage, f[20]/f[21] block, f[22] hp_loss, f[23] magic_number; obs LAYOUT unchanged. Pins: test/test_printed_vars.py (48 tests).  The text it replaced read: `new DamageVar(17m, ValueProp.Move)` maps to `_damage = 17`, and the second var `new CardsVar(3)` (PactsEnd.cs:15-19) IS stored -- but under the name `_required_exhausted`, which is not in `Card._MAGIC_ATTRS` (cards/base.py:185-189), so `magic_number` returns None where the game prints 3. The VALUE is right and the behaviour is right; only the printed-number API misses it, which for this card is the number that decides whether the play does anything at all. A one-word rename to `_cards` would surface it. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed number the sim's `magic_number` cannot surface, so `full_env.card_features` (full_env.py:455-489) encodes the card without it. DORMANT for game fidelity, LIVE for the observation encoder."
     },
     "OnPlay": {
       "maps_to": "PactsEndCard.on_play, routed per-enemy by the framework (pacts_end.py:116-120; combat.py:481-487)",

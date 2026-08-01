@@ -219,29 +219,58 @@ class RandomBranchState(MonsterState):
         state: MonsterState,
         weight: float | Callable[[], float] = 1.0,
         repeat_type: MoveRepeatType = MoveRepeatType.CAN_REPEAT_FOREVER,
-        max_times: int = 0,
+        max_times: int | None = None,
         cooldown: int = 0,
     ) -> None:
+        # RandomBranchState.cs's ten AddBranch overloads split into two
+        # families: the ones that take an explicit `MoveRepeatType repeatType`
+        # parameter all funnel into overload #1 (:46-51), which has NO
+        # maxRepeats slot and THROWS ArgumentException if repeatType is
+        # CanRepeatXTimes ("Use other constructor to specify number of
+        # repeats"); the ones that take `int maxRepeats` instead (#2/#3/#7/#9)
+        # always imply CanRepeatXTimes and never throw -- maxRepeats == 0 is
+        # legal there (a permanently-disabled branch, RandomBranchState.cs
+        # :144-147, step 21/G7 clause a, already ported below in
+        # `_effective_weight`). The sim has one keyword signature instead of
+        # ten overloads, so `max_times=None` (not supplied) is what
+        # distinguishes overload #1's illegal shape from a real, explicit
+        # maxRepeats of 0. A caller that means "disable forever" must say so:
+        # `max_times=0`.
+        if repeat_type is MoveRepeatType.CAN_REPEAT_X_TIMES and max_times is None:
+            raise ValueError(
+                f"add_branch({state.id!r}, ..., repeat_type=CAN_REPEAT_X_TIMES) "
+                "requires an explicit max_times (RandomBranchState.cs:48-51 -- "
+                "the repeatType-only overload has no maxRepeats slot and "
+                "rejects CanRepeatXTimes there; pass max_times=0 if you mean "
+                "a permanently-disabled branch)"
+            )
         self._branches.append({
             "state_id": state.id,
             "weight": weight,
             "repeat_type": repeat_type,
-            "max_times": max_times,
+            "max_times": 0 if max_times is None else max_times,
             "cooldown": cooldown,
         })
 
     def get_next_state(self, owner: MachineMonster, rng: random.Random) -> str | None:
+        # RandomBranchState.cs:115-127, including the all-zero-weights edge:
+        # `rng.NextFloat(0f)` (Rng.cs:145-164, min==max==0) does NOT throw --
+        # it burns a draw and returns 0f -- so `num` starts at 0 and the FIRST
+        # branch's `num -= 0f; num <= 0f` is true immediately. There is no
+        # C#-side special case for total-weight-zero; it resolves through the
+        # exact same loop as every other roll, landing on branch 0. Only a
+        # genuine fall-through (every branch's `num` still positive after
+        # subtracting all of them -- sequential float rounding) reaches the
+        # THROW at RandomBranchState.cs:127.
         machine = owner.machine
         weights = [self._effective_weight(b, machine) for b in self._branches]
         total = sum(weights)
-        if total <= 0:
-            raise RuntimeError(f"No valid branch in RandomBranchState {self.id}")
         roll = _weighted_roll(rng, total)
         for branch, weight in zip(self._branches, weights):
             roll -= weight
             if roll <= 0:
                 return branch["state_id"]
-        return self._branches[-1]["state_id"]
+        raise RuntimeError(f"No valid state found in RandomBranchState {self.id}!")
 
     @staticmethod
     def _effective_weight(branch: dict, machine: MonsterMoveStateMachine) -> float:
@@ -296,9 +325,46 @@ class ConditionalBranchState(MonsterState):
 
 
 class MonsterMoveStateMachine:
-    def __init__(self, states: list[MonsterState], initial_state: MonsterState) -> None:
+    def __init__(
+        self,
+        states: list[MonsterState],
+        initial_state: MonsterState,
+        unreachable_states: tuple[MonsterState, ...] = (),
+    ) -> None:
+        """`states` is the reachable graph (step 23: RegisterStates only adds
+        the state itself, never what it points at, so every state a monster's
+        graph can reach must be listed here explicitly).
+
+        `unreachable_states` mirrors a shape the game itself ships:
+        PhrogParasite.cs:39-52 builds a RandomBranchState ("RAND") with two
+        CannotRepeat branches over INFECT/LASH, adds it to the SAME list
+        RegisterStates walks (PhrogParasite.cs:51, `list.Add(randomBranchState)`)
+        -- so it IS in `MonsterMoveStateMachine.States` -- and then never
+        assigns it as anyone's FollowUpState and never passes it as
+        `initialState`; INFECT and LASH FollowUp directly at each other
+        instead (:45-46). A live, registered branch dispatcher the game
+        built and then left permanently dead. RegisterStates performs no
+        reachability check (MonsterMoveStateMachine.cs:20-25 just registers
+        whatever it is handed), so C# does not need a second list to express
+        this -- the sim does, because leaving an unwired state out of `states`
+        already means something else here: NOT registering it at all (see
+        Inklet.cs:69-81, where `INIT_RAND` is built and given branches but
+        `list.Add` is never called on it, so it never reaches
+        `GenerateMoveStateMachine`'s constructor call and never enters
+        `States` -- a stricter case than PhrogParasite's, needing no
+        machinery beyond simply not passing the object anywhere). Passing a
+        state here registers it exactly as `states` does (same
+        `register_states` call, same duplicate-id check) but keeps it out of
+        every place that infers reachability; nothing else in `states` may
+        point back at it, and this constructor does not check that (it has no
+        graph-walk on either side, matching C#). A monster with nothing
+        unreachable -- every port today -- passes nothing and gets identical
+        behavior to before this parameter existed.
+        """
         self.states: dict[str, MonsterState] = {}
         for state in states:
+            state.register_states(self.states)
+        for state in unreachable_states:
             state.register_states(self.states)
         self._initial_state = initial_state
         self.current: MonsterState = initial_state
@@ -404,9 +470,39 @@ class MachineMonster(Monster):
     def __init__(self, hooks: HookSystem, rng: random.Random) -> None:
         super().__init__(hooks, rng)
         self._rng = rng
+        self._machine: MonsterMoveStateMachine | None = None
         self.machine = self.build_machine()
         self._current_move: MoveState = MoveState(
             UNSET_STATE_ID, _unset_move, Intent(MoveType.UNKNOWN))
+
+    @property
+    def machine(self) -> MonsterMoveStateMachine:
+        return self._machine  # type: ignore[return-value]
+
+    @machine.setter
+    def machine(self, value: MonsterMoveStateMachine) -> None:
+        # MonsterModel.MoveStateMachine's setter (MonsterModel.cs:222-237)
+        # THROWS InvalidOperationException if a machine is already set --
+        # ResetStateMachine (MonsterModel.cs:389-392) is the only sanctioned
+        # way to clear one first. A bare Python attribute rebind is legal and
+        # would silently replace a live machine mid-combat, losing its
+        # state_log and current state where the game refuses outright.
+        if self._machine is not None:
+            raise RuntimeError(
+                f"{type(self).__name__}'s move state machine has already "
+                "been set"
+            )
+        self._machine = value
+
+    def reset_state_machine(self) -> None:
+        """Port of MonsterModel.ResetStateMachine (MonsterModel.cs:389-392):
+        the ONLY way to clear an already-set machine, bypassing the setter's
+        guard so a subsequent `self.machine = ...` (a SetUpForCombat-style
+        rebuild) does not raise. Nothing calls this today -- no sim code path
+        rebuilds a monster's machine mid-combat -- so it is dormant
+        machinery, present for the same reason the C# method is: the setter
+        guard is only useful once something CAN clear it."""
+        self._machine = None
 
     def build_machine(self) -> MonsterMoveStateMachine:
         raise NotImplementedError

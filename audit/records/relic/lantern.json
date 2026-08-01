@@ -11,17 +11,17 @@
   "extra_sources": [
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "12e358d13101d8ae2bf4340ede3a9c64bdf367c6783daf6454fec2a00cc9e461",
+      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2",
+      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
       "side": "sim"
     }
   ],
@@ -40,7 +40,7 @@
     {
       "what": "N1: `PlayerCmd.GainEnergy(amount, player)` (Lantern.cs:26) vs `EnergyCmd.gain(self.hooks, player, 1)` (lantern.py:20-21) -- the missing AfterModifyingEnergyGain companion and the `finalAmount > 0` / `IsEnding` guards",
       "verdict": "gap",
-      "issue": "PlayerCmd.GainEnergy does five things: bail on `amount <= 0`, bail on `CombatManager.Instance.IsEnding`, `Hook.ModifyEnergyGain(... out modifiers)`, `await Hook.AfterModifyingEnergyGain(state, modifiers)`, then `GainEnergy(finalAmount)` only when finalAmount > 0. EnergyCmd.gain (cmds.py:545-554) does the modify chain and the add, and nothing else. Taken one at a time: the `amount <= 0` bail is unreachable (Lantern passes a pinned 1); the `finalAmount > 0` skip is equivalent because hooks.modify_energy_gain already clamps with `max(0, amount)` (hooks.py:215) and `+= 0` is a no-op -- EXECUTED, the only ported modify_energy_gain listener is powers.py:554 and the clamp is unconditional; the IsEnding guard is the combat-over guard family; and the missing AfterModifyingEnergyGain out-parameter/companion pair is the SAME family audit/records/relic/bag_of_preparation.json guard N1, audit/records/seam/turn_structure.json step 20 and audit/records/seam/power_cmd.json gap G4 all record for their own dispatchers -- one verdict per mechanism, binding rule 3. DORMANT at this site: Lantern itself implements no AfterModifyingEnergyGain (Lantern.cs declares only Rarity, CanonicalVars, ExtraHoverTips and AfterSideTurnStart), so none of ITS behaviour is lost; porting any model that implements the companion makes the energy hook's half live, exactly as bag_of_preparation records for the draw hook. Rule 7: cmds.py, hooks.py and powers.py are not hashed by this record."
+      "issue": "Narrowed 2026-07-31 (tier-2 campaign, Task 20): the IsEnding component is FIXED. EnergyCmd.gain now opens with an is_ending(hooks) bail, mirroring PlayerCmd.GainEnergy's `!CombatManager.Instance.IsEnding` guard over its whole body (PlayerCmd.cs:29-43) and matching CardCmd.downgrade/upgrade's existing idiom. Of this entry's five enumerated clauses, four are now settled: the `amount <= 0` bail is unreachable (Lantern passes a pinned 1), the `finalAmount > 0` skip is equivalent via modify_energy_gain's unconditional max(0, amount) clamp, the modify chain is present, and IsEnding is now real. WHAT REMAINS is only the missing AfterModifyingEnergyGain out-parameter/companion pair -- the same family as relic/bag_of_preparation N1 and seam/turn_structure step 20, and one of the nine uncovered AfterModifying* variants under damage_pipeline/G2. NOT closed for that reason.  The text it replaced read: PlayerCmd.GainEnergy does five things: bail on `amount <= 0`, bail on `CombatManager.Instance.IsEnding`, `Hook.ModifyEnergyGain(... out modifiers)`, `await Hook.AfterModifyingEnergyGain(state, modifiers)`, then `GainEnergy(finalAmount)` only when finalAmount > 0. EnergyCmd.gain (cmds.py:545-554) does the modify chain and the add, and nothing else. Taken one at a time: the `amount <= 0` bail is unreachable (Lantern passes a pinned 1); the `finalAmount > 0` skip is equivalent because hooks.modify_energy_gain already clamps with `max(0, amount)` (hooks.py:215) and `+= 0` is a no-op -- EXECUTED, the only ported modify_energy_gain listener is powers.py:554 and the clamp is unconditional; the IsEnding guard is the combat-over guard family; and the missing AfterModifyingEnergyGain out-parameter/companion pair is the SAME family audit/records/relic/bag_of_preparation.json guard N1, audit/records/seam/turn_structure.json step 20 and audit/records/seam/power_cmd.json gap G4 all record for their own dispatchers -- one verdict per mechanism, binding rule 3. DORMANT at this site: Lantern itself implements no AfterModifyingEnergyGain (Lantern.cs declares only Rarity, CanonicalVars, ExtraHoverTips and AfterSideTurnStart), so none of ITS behaviour is lost; porting any model that implements the companion makes the energy hook's half live, exactly as bag_of_preparation records for the draw hook. Rule 7: cmds.py, hooks.py and powers.py are not hashed by this record."
     },
     {
       "what": "N2: EnergyVar(1) read as BaseValue (Lantern.cs:17, 26) vs the literal 1 (lantern.py:21)",

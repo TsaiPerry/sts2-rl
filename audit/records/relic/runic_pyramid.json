@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
@@ -44,7 +44,7 @@
     "ShouldFlush": {
       "maps_to": "should_flush_hand() (sts2_rl/relics/runic_pyramid.py:16-17), dispatched by CombatHooks.should_flush_hand (sts2_rl/hooks.py:921-928) and consumed as the `flush=` ARGUMENT of PlayerCombatState.discard_hand at sts2_rl/combat.py:806, with the flush/retain partition and the unconditional tail at sts2_rl/player.py:234-240",
       "verdict": "faithful",
-      "rationale": "The predicate itself was never in doubt (runic_pyramid.py:16-17 returns False unconditionally = RunicPyramid.cs's ShouldFlush for the owner). The recorded divergence was in the CONSUMER: combat.py gated the whole discard_hand call on the predicate and so skipped the tail. Today combat.py:806 calls `self.player.discard_hand(flush=self.hooks.should_flush_hand())` unconditionally, and player.py:234-240 mirrors CombatManager.cs:1327-1346 \u2014 with flush=False `flushed` is empty and the hand is left intact (C#'s cardsToRetain = every card, batched Add skipped), and `self._hooks.on_hand_emptied(self)` still fires at :240 where C# still fires Hook.AfterFlush at :1344. Joss Paper's deferred Ethereal credit is therefore delivered behind Runic Pyramid, which is what this entry's cited mechanism identified as live.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: Rollup of guards G1 and N1 per binding rule 4. The predicate itself is faithful -- the sim returns False unconditionally, matching RunicPyramid.cs:10-17 for the owner -- but the sim's CONSUMER of the predicate diverges: audit/records/seam/turn_structure.json step 61 and guard G4 record that C#'s FlushPlayerHand treats ShouldFlush == false as 'retain every card' and still runs Hook.AfterFlush and PlayerCombatState.EndOfTurnCleanup (CombatManager.cs:1327-1346), while combat.py:661-662 gates the whole discard_hand call on the predicate and so skips the tail as well. That record labels the mechanism a LIVE gap and names relics/runic_pyramid.py:16-17 as one of its two ported witnesses; binding rule 3 -- one verdict per mechanism -- so this entry cites and matches it rather than re-deriving it. Rule 7: turn_structure.json, CombatManager.cs, combat.py, hooks.py and relics/joss_paper.py are NOT hashed by this record; the seam record hashes the machinery."
+      "rationale": "The predicate itself was never in doubt (runic_pyramid.py:16-17 returns False unconditionally = RunicPyramid.cs's ShouldFlush for the owner). The recorded divergence was in the CONSUMER: combat.py gated the whole discard_hand call on the predicate and so skipped the tail. Today combat.py:806 calls `self.player.discard_hand(flush=self.hooks.should_flush_hand())` unconditionally, and player.py:234-240 mirrors CombatManager.cs:1327-1346 — with flush=False `flushed` is empty and the hand is left intact (C#'s cardsToRetain = every card, batched Add skipped), and `self._hooks.on_hand_emptied(self)` still fires at :240 where C# still fires Hook.AfterFlush at :1344. Joss Paper's deferred Ethereal credit is therefore delivered behind Runic Pyramid, which is what this entry's cited mechanism identified as live.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: Rollup of guards G1 and N1 per binding rule 4. The predicate itself is faithful -- the sim returns False unconditionally, matching RunicPyramid.cs:10-17 for the owner -- but the sim's CONSUMER of the predicate diverges: audit/records/seam/turn_structure.json step 61 and guard G4 record that C#'s FlushPlayerHand treats ShouldFlush == false as 'retain every card' and still runs Hook.AfterFlush and PlayerCombatState.EndOfTurnCleanup (CombatManager.cs:1327-1346), while combat.py:661-662 gates the whole discard_hand call on the predicate and so skips the tail as well. That record labels the mechanism a LIVE gap and names relics/runic_pyramid.py:16-17 as one of its two ported witnesses; binding rule 3 -- one verdict per mechanism -- so this entry cites and matches it rather than re-deriving it. Rule 7: turn_structure.json, CombatManager.cs, combat.py, hooks.py and relics/joss_paper.py are NOT hashed by this record; the seam record hashes the machinery."
     }
   },
   "guards": [

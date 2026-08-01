@@ -337,7 +337,11 @@ def test_thorns_reflect_fires_after_damage_given_on_the_owner():
     enemy = cs.enemies[0]
 
     class Spy:
-        def on_damage_dealt(self, dealer, target, amount, card):
+        # `on_damage_dealt` grew `props`/`was_fully_blocked` params under
+        # tier-2 Task 26 (power/_after_damage_given_substitution), passed
+        # positionally by `_each`; `*_` absorbs both without re-encoding the
+        # old 4-arg shape.
+        def on_damage_dealt(self, dealer, target, amount, card=None, *_):
             seen.append((dealer, target, amount))
 
     spy = Spy()
@@ -396,7 +400,10 @@ def test_constrict_squeeze_names_its_dealer_and_keeps_no_extra_is_dead_guard():
     PowerCmd.apply(cs.hooks, enemy, ConstrictPower, 2, applier=cs.player)
 
     class Spy:
-        def on_damage_dealt(self, dealer, target, amount, card):
+        # See the note in test_thorns_reflect_fires_after_damage_given_on_the_
+        # owner above: `on_damage_dealt` grew two more positional params
+        # under tier-2 Task 26.
+        def on_damage_dealt(self, dealer, target, amount, card=None, *_):
             seen.append((dealer, target, amount))
 
     cs.hooks.register(Spy())

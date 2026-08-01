@@ -33,7 +33,11 @@ class TheInsatiable(MachineMonster):
     def build_machine(self) -> MonsterMoveStateMachine:
         liquify = MoveState(
             "LIQUIFY_GROUND_MOVE", self._liquify,
-            Intent(MoveType.BUFF, also=(MoveType.STATUS_CARD,)),
+            # TheInsatiable.cs:96 `new StatusIntent(6)` -- a bare literal, not
+            # derived from _ESCAPE_DRAW/_ESCAPE_DISCARD below (which happen to
+            # sum to it): the C# telegraph count and the move's mechanical
+            # effect are two independent reads of the same design number.
+            Intent(MoveType.BUFF, also=(MoveType.STATUS_CARD,), status_count=6),
         )
         thrash = MoveState(
             "THRASH_MOVE", self._thrash,

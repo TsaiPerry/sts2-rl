@@ -33,11 +33,10 @@ class BreakthroughCard(Card):
     def _init_vars(self) -> None:
         self._energy_cost = 1
         self._damage = 9
+        self._hp_loss = 1   # HpLossVar(1m), Breakthrough.cs:16 — no upgrade, no ascension
 
     def _on_upgrade(self) -> None:
         self._damage += 4
-
-    HP_LOSS = 1     # HpLossVar(1m), Breakthrough.cs:16 — no upgrade, no ascension
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cmds import DamageCmd
@@ -53,7 +52,7 @@ class BreakthroughCard(Card):
         # play Breakthrough holding Rupture and the game gains Strength while the
         # sim did not. The bypass also skipped the Intangible cap and Buffer.
         DamageCmd.deal(
-            ctx.hooks, ctx.player, self.HP_LOSS, dealer=ctx.player, card=self,
+            ctx.hooks, ctx.player, self._hp_loss, dealer=ctx.player, card=self,
             props=ValueProp.UNBLOCKABLE | ValueProp.UNPOWERED | ValueProp.MOVE)
         if ctx.player.is_dead:
             return

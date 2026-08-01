@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "c639bbbe8867fd8b295f85422a4eb0315764af32ae785c4ce010a0d4a29e6cf2"
+    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
   },
   "extra_sources": [
     {
@@ -26,22 +26,22 @@
     },
     {
       "path": "sts2_rl/cards/colorless_powers.py",
-      "sha256": "781659d4e8cf5baa55bb1bf61572843ad9180a5bef5de881817c0bf97aadf0de",
+      "sha256": "c2cde0318957b1906d487ec7de4988642829637ed94602ca4f3e4c4d7af298ec",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "fc5d23e271b3b6c5618d6d81d545b406bd5eb3c9954b7dca28552a162fd5ed9f",
+      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "05530b1a10b7059a3447e7b6541d23b8bec6ff84f69660b49cf219f8383fc6ef",
+      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "df4ede6550fabed2fc9f20b6935521523b5c3ed599303f9c9f0620a2f041eec0",
+      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
       "side": "sim"
     }
   ],
@@ -105,8 +105,7 @@
     {
       "what": "Contention with power/corruption and power/rebound on the same chain",
       "verdict": "gap",
-      "live": true,
-      "issue": "RE-VERIFIED 2026-07-30 against today's tree, LIVE, with an executed witness (this entry's earlier passes narrowed the shape but never ran it). The hook moved: `modify_card_play_result_pile` is consulted at combat.py:842, before the play-count loop (:858), mirroring CardModel.cs:1890/:1922 preceding the loop at :1904. The MOVE it decides happens at combat.py:929-931, AFTER the loop and therefore AFTER `on_card_played` fires per iteration (:904) -- which is where CorruptionPower.on_card_played (powers.py:799-805, exhausts a played Skill) and ReboundPower.on_card_played (powers.py:3232-3241, redirects to draw-top) still reach into the piles by hand, unconditionally, the instant the card is played. DIVERGENCE: C# has all three (Corruption, Rebound, Nostalgia) on ONE `ModifyCardPlayResultPileTypeAndPosition` chain (Hook.cs:1391-1405) where each listener sees the PREVIOUS listener's already-decided `(pileType, position)` and may override it -- last listener in `IterateCombatHookListeners` order wins, so the winner depends on APPLICATION ORDER. The sim instead structurally guarantees Corruption/Rebound always win: their hand-rolled pile move runs inside the loop, Nostalgia's runs after it and is gated on `if card in self.player.discard_pile` (combat.py:929), which is already false once Corruption/Rebound moved the card out. OBSERVABLE, EXECUTED (`.superpowers/sdd/unlabelled/probes/power-2-nostalgia-corruption.py`, PYTHONPATH=repo root): apply Nostalgia(1) then Corruption(1) to the player, play a Defend (Skill) -- the sim's Defend ends in `exhaust_pile` (Corruption's move), never reaching Nostalgia's draw-top redirect; the same with Rebound(1) instead of Corruption ends the Defend in `draw_pile` (Rebound's move). In C#, whichever of the two ran LAST in the hook chain decides the outcome, so a run where Nostalgia is registered/applied after Corruption would instead see the card go to draw-top -- a case the sim can never produce, because Nostalgia can structurally never win this contention regardless of application order. TRIGGER: Nostalgia and Corruption (or Rebound) are both ported Colorless power cards, freely combinable in one combat -- Corruption's own gate is Skill-only and Nostalgia's is Attack-or-Skill, so a played Skill is the overlap; reachable with no relic. FIX: move Corruption's and Rebound's pile moves onto the same `modify_card_play_result_pile` hook Nostalgia uses (a real chain, each returning the incoming pile/position or overriding it), consulted once before the loop like C#, rather than three independent hand-rolled `on_card_played` pile mutations. RADIUS: any future power that also wants to redirect a card's result pile joins the same chain; the three ported units (Corruption, Rebound, Nostalgia) are the whole current population. C# still has all three on ONE chain with a last-writer-wins rule versus three different sim mechanisms, so the gap stands -- only the direction of the wrong answer changed from the prior (unexecuted) pass, which claimed Nostalgia used to win."
+      "issue": "NARROWED 2026-07-27, and the contention's OUTCOME has INVERTED. The hook moved: `modify_card_play_result_pile` is now consulted at combat.py:567, before the playCount loop (CardModel.cs:1890), but the MOVE it decides happens at combat.py:617-619, AFTER the loop and therefore AFTER `on_card_played` (:600) -- which is where CorruptionPower (powers.py:658-670) and ReboundPower (powers.py:2952-2961) still reach into the piles by hand. So Corruption and Rebound now act FIRST and Nostalgia's redirect finds the card already gone from the discard pile; previously Nostalgia won. C# still has all three on ONE ModifyCardPlayResultPileTypeAndPosition chain with a last-writer-wins rule (Hook.cs:1391-1405) versus three different sim mechanisms, so the gap stands -- only the direction of the wrong answer changed. VERIFIED by reading combat.py:555-620 and powers.py."
     }
   ],
   "verdict": "gap",

@@ -17,6 +17,11 @@ class FranticEscapeCard(Card):
       On play: add 1 to the Sandpit power's counter (delaying the devour by a
       turn), then this card costs 1 more for the rest of the combat
       (EnergyCost.AddThisCombat).
+
+    FranticEscape.cs:38-42 calls `PowerCmd.ModifyAmount` directly on the
+    found SandpitPower instance rather than `PowerCmd.Apply` — SandpitPower
+    is now InstanceType.Instanced (power_cmd/G5), so Apply would start a
+    fresh, independent instance instead of extending the existing timer.
     """
     id = "frantic_escape"
     name = "Frantic Escape"
@@ -25,18 +30,30 @@ class FranticEscapeCard(Card):
     target_type = TargetType.SELF
     max_upgrade_level = 0
     is_unpowered = True
-    can_be_generated_by_modifiers = False
+    # FranticEscape.cs:30 overrides `CanBeGeneratedInCombat => false` and
+    # does NOT override `CanBeGeneratedByModifiers` (CardModel.cs:648 default
+    # stays `=> true`) -- the flags were backwards here.
+    can_be_generated_in_combat = False
 
     def _init_vars(self) -> None:
         self._energy_cost = 1
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cmds import PowerCmd
-        from ..powers import SandpitPower
         for enemy in ctx.enemies:
             sandpit = enemy.powers.get("sandpit")
             if sandpit is not None and not enemy.is_gone:
-                PowerCmd.apply(ctx.hooks, enemy, SandpitPower, 1)
+                # PowerCmd.modify_amount is the decrement-only path (cmds.py):
+                # it deliberately skips the ModifyPowerAmountGiven/Received
+                # chain and takes no applier. Safe here only because every
+                # current listener on that chain is domain-disjoint from
+                # Sandpit — UnsettlingLamp gates on DEBUFF power_type, Ruined
+                # Helmet gates on `power_cls is StrengthPower`, and Vicious
+                # (on_power_amount_changed, which modify_amount DOES still
+                # fire) gates on `name == "vulnerable"` — and Sandpit is none
+                # of those. A future listener sensitive to Buff power amounts
+                # in general would need this call reconsidered.
+                PowerCmd.modify_amount(ctx.hooks, sandpit, 1)
                 break
         # AddThisCombat(1): permanent for this combat, not cleared at turn end.
         # FranticEscape.cs:45 is `EnergyCost.AddThisCombat(1)`, a

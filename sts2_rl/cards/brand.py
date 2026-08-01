@@ -41,8 +41,15 @@ class BrandCard(Card):
             ctx.hooks, ctx.player, self._hp_loss,
             dealer=ctx.player, card=self, props=DamageProps.CARD_HP_LOSS,
         )
-        if ctx.player.is_dead:
-            return
+        # Brand.cs has no is_dead guard here -- C# unconditionally awaits the
+        # card-select and StrengthPower apply next. No divergence to
+        # reproduce: CardSelectCmd.FromHand's own IsOverOrEnding bail
+        # (CardSelectCmd.cs:694), mirrored by combat.select_cards, already
+        # returns no pick on a dying player (so ExhaustCmd.exhaust is never
+        # reached), and PowerCmd.Apply<T>'s own IsEnding bail
+        # (PowerCmd.cs:69-72), mirrored by PowerCmd.apply, already refuses
+        # the Strength -- see card/_is_dead_early_return (Task 27) and
+        # test/test_is_dead_early_returns.py.
         chosen = CardSelectCmd.from_hand(ctx.hooks, ctx.player, "exhaust")
         if chosen:
             ExhaustCmd.exhaust(ctx.hooks, ctx.player, chosen[0])

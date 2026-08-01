@@ -40,7 +40,7 @@ class ByrdonisEggCard(Card):
     can_be_generated_by_modifiers = False
 
     def _init_vars(self) -> None:
-        self._energy_cost = 0
+        self._energy_cost = -1
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         pass
@@ -395,7 +395,32 @@ class LanternKeyCard(Card):
     GLORY_ACT_INDEX = 2
 
     def _init_vars(self) -> None:
-        self._energy_cost = 0
+        self._energy_cost = -1
+
+    def modify_unknown_map_point_room_types(self, run, room_types):
+        """LanternKey.cs:21-28 — outside act 3 the set passes through; inside
+        it, it is REPLACED by {Event} rather than filtered, so the key beats
+        any other listener's narrowing."""
+        from ..rooms import RoomType
+
+        if run.act_index != self.GLORY_ACT_INDEX:
+            return room_types
+        return {RoomType.EVENT}
+
+    def modify_next_event(self, run, event_id):
+        """LanternKey.cs:29-36 — inside the Glory act the next event is REPLACED
+        by War Historian Repy; outside it the incoming event passes through.
+
+        That the target event's own `IsAllowed` is False is the POINT, not an
+        obstacle: IsAllowed gates the random pool and this hook bypasses it, so
+        any run carrying a Lantern Key into act 3 is routed there. The port used
+        to justify omitting this with "the sim has no map", which was false twice
+        over — the sim has a map, and it already dispatched the companion hook
+        over the deck.
+        """
+        if run.act_index != self.GLORY_ACT_INDEX:
+            return event_id
+        return "war_historian_repy"
 
     def modify_unknown_map_point_room_types(self, run, room_types):
         """LanternKey.cs:21-28 — outside act 3 the set passes through; inside
