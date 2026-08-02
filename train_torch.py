@@ -65,6 +65,7 @@ import torch.nn as nn
 
 from sts2_rl import checkpoints
 from sts2_rl.checkpoints import ModelSpec
+from sts2_rl.tensor_obs import TensorObs
 from sts2_rl.vec_env import EnvSpec, make_vec_env, resolve_n_workers
 
 # --lr's default lives here rather than in add_argument so the flag can stay
@@ -105,11 +106,20 @@ def parse_args() -> argparse.Namespace:
                     help="combat env only: Overgrowth encounter key to fix "
                          "(default: sample the whole act)")
     ap.add_argument("--card-obs", choices=["hybrid", "features"], default="hybrid")
-    ap.add_argument("--arch", choices=["mlp", "entity"], default="mlp",
-                    help="mlp = MaskedActorCritic (flat trunks over the raw "
-                         "obs); entity = EntityActorCritic (per-segment "
-                         "embedding encoders over the same obs). Checkpoints "
-                         "are arch-stamped — switching arch is a full retrain")
+    ap.add_argument("--arch", choices=["mlp", "entity", "entset"], default="entset",
+                    help="entset (default) = EntitySetActorCritic, the "
+                         "v4-native arch (masked per-row embeddings over the "
+                         "{f,i} pair); mlp = MaskedActorCritic (flat trunks "
+                         "over concat(f, i), ids as plain numbers); entity = "
+                         "EntityActorCritic (the same flat trunks, but the "
+                         "v3-era per-segment embedding encoder -- against "
+                         "the v4 obs it degenerates to the same raw "
+                         "pass-through as mlp, see sts2_rl/models.py). "
+                         "mlp/entity are refused against the current v4/v7 "
+                         "envs (checkpoints.make_model): unnormalized "
+                         "vocabulary ids would swamp the numeric features. "
+                         "Checkpoints are arch-stamped — switching arch is a "
+                         "full retrain")
     ap.add_argument("--enemy-hp-reward", type=float, default=0.0,
                     help="dense damage-dealt reward weight (0 = HP-delta + win only)")
     ap.add_argument("--win-hp-bonus", type=float, default=1.0,
@@ -357,6 +367,21 @@ def segment_spans(agent: nn.Module, names: list[str]) -> list[tuple[int, int]]:
     """
     if not names:
         return []
+    if getattr(agent, "arch", None) == "entset":
+        # T6 brief §4.4's explicit escape hatch: entset's encoder masked-
+        # sum-pools per-row projections rather than exposing a flat first-
+        # layer column range per segment, so the mlp/entity column-zeroing
+        # trick (apply_zero_segments below) doesn't have a column range to
+        # zero. Re-expressing the ablation as zeroing the segment's pooled
+        # CONTRIBUTION inside the encoder's forward is real future work, not
+        # attempted here — a silently-no-op flag would be worse than this
+        # refusal.
+        raise SystemExit(
+            "--zero-segments is not implemented for --arch entset: its "
+            "encoder pools per-row embeddings rather than exposing a flat "
+            "first-layer column range per segment, so the mlp/entity "
+            "column-zeroing trick doesn't apply. Use --arch entity for this "
+            "diagnostic, or omit --zero-segments.")
     if not hasattr(agent, "actor_encoder"):
         raise SystemExit("--zero-segments needs --arch entity (no segment "
                          "encoder to take column spans from)")
@@ -479,7 +504,11 @@ def main() -> None:
 
     # ── rollout buffers: [n_steps, n_envs, ...] ─────────────────────────────
     N, E = args.n_steps, args.n_envs
-    obs_buf = torch.zeros((N, E, obs_dim), device=device)
+    f_dim, i_dim = obs_dim
+    obs_buf = TensorObs(
+        torch.zeros((N, E, f_dim), device=device),
+        torch.zeros((N, E, i_dim), dtype=torch.long, device=device),
+    )
     mask_buf = torch.zeros((N, E, n_actions), dtype=torch.bool, device=device)
     act_buf = torch.zeros((N, E), dtype=torch.long, device=device)
     logp_buf = torch.zeros((N, E), device=device)
@@ -493,7 +522,7 @@ def main() -> None:
     # index, so the worker layout can't shift which stream an env gets.
     reset_obs, reset_mask = envs.reset(
         [args.seed + start_iter * E + i for i in range(E)])
-    next_obs = torch.as_tensor(reset_obs, dtype=torch.float32, device=device)
+    next_obs = reset_obs.to(device)
     next_mask = torch.as_tensor(reset_mask, dtype=torch.bool, device=device)
     next_done = torch.zeros(E, device=device)
 
@@ -552,9 +581,7 @@ def main() -> None:
                 # serial path.
                 for i, final_obs in batch.final_obs.items():
                     with torch.no_grad():
-                        tv = agent.get_value(
-                            torch.as_tensor(final_obs, dtype=torch.float32,
-                                            device=device).unsqueeze(0))
+                        tv = agent.get_value(final_obs.to(device)[None])
                     rewards[i] += args.gamma * float(tv.item())
 
                 dones = batch.terminated | batch.truncated
@@ -566,7 +593,7 @@ def main() -> None:
                     ep_len_running[i] = 0
 
                 rew_buf[t] = torch.as_tensor(rewards, device=device)
-                next_obs = torch.as_tensor(batch.obs, dtype=torch.float32, device=device)
+                next_obs = batch.obs.to(device)
                 next_mask = torch.as_tensor(batch.masks, dtype=torch.bool, device=device)
                 next_done = torch.as_tensor(dones.astype(np.float32), device=device)
 

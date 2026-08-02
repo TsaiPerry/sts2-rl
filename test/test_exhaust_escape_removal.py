@@ -175,7 +175,7 @@ class TestEscapeStripsPowersSilently:
         cs = fresh()
         enemy = cs.enemy
         power = _RecordingPower(enemy, 1, cs.hooks)
-        enemy.powers["recording_test_power"] = power
+        enemy.powers.add(power)
         cs.hooks.register(power)
 
         CreatureCmd.escape(cs.hooks, enemy)
@@ -190,7 +190,7 @@ class TestEscapeStripsPowersSilently:
         cs = fresh()
         enemy = cs.enemy
         power = _RecordingPower(enemy, 1, cs.hooks)
-        enemy.powers["recording_test_power"] = power
+        enemy.powers.add(power)
         cs.hooks.register(power)
 
         CreatureCmd.escape(cs.hooks, enemy)
@@ -204,7 +204,7 @@ class TestEscapeStripsPowersSilently:
         cs = fresh()
         enemy = cs.enemy
         power = _RecordingPower(enemy, 1, cs.hooks)
-        enemy.powers["recording_test_power"] = power
+        enemy.powers.add(power)
         cs.hooks.register(power)
 
         CreatureCmd.kill(cs.hooks, enemy)
@@ -238,7 +238,7 @@ class TestEscapeStripsPowersSilently:
         cs = fresh()
         enemy = cs.enemy
         power = _RecordingPower(enemy, 1, cs.hooks)
-        enemy.powers["recording_test_power"] = power
+        enemy.powers.add(power)
         cs.hooks.register(power)
         enemy.hp = 0
         enemy.retained_after_death = True  # withered-but-kept, like Decimillipede
@@ -263,7 +263,7 @@ class TestThieveryDispatchesAfterCardChangedPiles:
 
         cs.end_turn()  # THIEVERY: steal a card
 
-        stolen = cs.enemy.powers["swipe"].stolen_cards[0]
+        stolen = cs.enemy.powers["swipe"].stolen_card
         matches = [c for c in recorder.calls if c[0] is stolen]
         assert len(matches) == 1
         _card, pile, cloned_by = matches[0]
@@ -276,5 +276,5 @@ class TestThieveryDispatchesAfterCardChangedPiles:
         behaviour the new dispatch call must not disturb."""
         cs = fresh_with(ThievingHopper)
         cs.end_turn()  # THIEVERY
-        stolen = cs.enemy.powers["swipe"].stolen_cards[0]
+        stolen = cs.enemy.powers["swipe"].stolen_card
         assert stolen not in cs.hooks._listeners

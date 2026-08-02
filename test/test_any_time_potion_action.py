@@ -33,12 +33,12 @@ from sts2_rl.potions import make_potion
 from sts2_rl.run import RunState
 from sts2_rl.run_env import (
     MAX_POTION_SLOTS,
+    MAX_SELECT_CANDIDATES,
     N_ACTIONS,
     POTION_BASE,
     SELECT_BASE,
     STS2RunEnv,
 )
-from sts2_rl.full_env import N_CARDS
 
 
 def _run_with(potion_ids):
@@ -152,7 +152,10 @@ def _env():
 
 
 def test_the_potion_block_is_its_own_action_range():
-    assert POTION_BASE == SELECT_BASE + 2 * N_CARDS
+    # T5b (R4): the select block is now MAX_SELECT_CANDIDATES-wide (a
+    # candidate-index block), not 2*N_CARDS (the old (card id, upgraded)
+    # pair block).
+    assert POTION_BASE == SELECT_BASE + MAX_SELECT_CANDIDATES
     assert N_ACTIONS == POTION_BASE + MAX_POTION_SLOTS
     assert _env().action_space.n == N_ACTIONS
 

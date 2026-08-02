@@ -360,7 +360,7 @@ def test_reward_potion_take_needs_free_slot():
     from sts2_rl.rewards import CombatRewards
 
     run = fresh_run(9)
-    rewards = CombatRewards(room_type=RoomType.MONSTER, potion=run.random_potion())
+    rewards = CombatRewards(room_type=RoomType.MONSTER, potions=[run.random_potion()])
     req = DecisionRequest(
         kind=DecisionKind.REWARD_POTION, run=run, rewards=rewards,
     )

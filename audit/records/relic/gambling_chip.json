@@ -48,7 +48,8 @@
     "AfterPlayerTurnStart": {
       "maps_to": "on_player_turn_started (gambling_chip.py:23-36), dispatched by HookSystem.on_player_turn_started (hooks.py:285-289) from PlayerCombatState.start_turn (player.py:183-186)",
       "verdict": "gap",
-      "issue": "Rollup of guards G1, G2 and G3 per binding rule 4. The hook SLOT is right and the turn gate matches, but CardCmd.DiscardAndDraw does two things the sim's inline loop does not: it routes each discard through CardPileCmd.Add (G2) and, after the draw, it AUTO-PLAYS every discarded card that was Sly this turn (G1). The selector's `min = 0` is also collapsed (G3). [2026-07-26 fix pass: guard G3 is now also a gap -- the min-0 decline is unreachable in the sim.]"
+      "issue": "REASONING REPLACED. G1 (Sly auto-play) FLIPS from dormant-gap to faithful: gambling_chip.py no longer open-codes a discard loop -- it now calls the shared CardCmd.discard_and_draw (cmds.py), which implements the Sly-collect-and-auto-play tail in full. Executed end to end with a hand-fed sly=True card: it auto-plays via sly_discard through Gambling Chip's own call site. G1's only residue is now a content gap (no registered card sets sly=True), which belongs to the Sly keyword's own porting record, not this relic's. G3 (min=0 decline) is ALSO faithful, contradicting the hooks-level issue text's stale \"[2026-07-26 fix pass: guard G3 is now also a gap]\" annotation -- the guards array underneath it already reads \"verdict\": \"faithful\", \"Closed 2026-07-27\" (driver.py's SKIPPABLE_PURPOSES), re-confirmed here by direct execution. Only G2 (no AfterCardChangedPiles dispatch on the pile mutation -- still zero registered listeners for that hook) remains an open, dormant gap. Propose narrowing the hooks-level issue text to name G2 alone.",
+      "live": false
     }
   },
   "guards": [

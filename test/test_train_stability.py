@@ -269,8 +269,12 @@ def test_anneal_lr_decays_the_logged_lr_over_a_short_run(tmp_path, monkeypatch):
     import csv
 
     save = str(tmp_path / "run.pt")
+    # --arch mlp/entity are refused against the real (v4-schema) combat env,
+    # so --arch entset (now also the CLI default) is passed explicitly here
+    # to keep this test working regardless of what the default is.
     monkeypatch.setattr("sys.argv", [
-        "train_torch.py", "--env", "combat", "--encounter", "fuzzy_wurm_weak",
+        "train_torch.py", "--env", "combat", "--arch", "entset",
+        "--encounter", "fuzzy_wurm_weak",
         "--timesteps", "64", "--n-envs", "2", "--n-steps", "8",
         "--minibatches", "2", "--epochs", "1", "--hidden", "16",
         "--lr", "1e-3", "--anneal-lr", "--save", save])
@@ -289,7 +293,11 @@ def test_resume_with_anneal_lr_restarts_the_schedule(tmp_path, monkeypatch):
     import csv
 
     save = str(tmp_path / "run.pt")
-    argv = ["train_torch.py", "--env", "combat", "--encounter", "fuzzy_wurm_weak",
+    # --arch mlp/entity are refused against the real (v4-schema) combat env,
+    # so --arch entset (now also the CLI default) is passed explicitly here
+    # to keep this test working regardless of what the default is.
+    argv = ["train_torch.py", "--env", "combat", "--arch", "entset",
+            "--encounter", "fuzzy_wurm_weak",
             "--timesteps", "32", "--n-envs", "2", "--n-steps", "8",
             "--minibatches", "2", "--epochs", "1", "--hidden", "16",
             "--lr", "1e-3", "--anneal-lr", "--save", save]

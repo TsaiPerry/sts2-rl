@@ -73,10 +73,12 @@ def test_stocked_act2_run_makes_the_shared_pool_eligible():
         run.add_relic(make_relic(rid))
 
     eligible = {e for e in SHARED_EVENTS if ALL_EVENTS[e].is_allowed(run)}
-    # the_legends_were_true is act-1-only; crystal_sphere / war_historian_repy
-    # are deferred pool stubs (is_allowed=False — see their event modules).
+    # the_legends_were_true is act-1-only; war_historian_repy is the one
+    # remaining deferred pool stub (is_allowed=False — see its event module).
+    # crystal_sphere IS eligible here now that it is ported: this run stands in
+    # act 2 with 500 gold, which is exactly its gate (CrystalSphere.cs:49-56).
     assert eligible == set(SHARED_EVENTS) - {
-        "the_legends_were_true", "crystal_sphere", "war_historian_repy"}
+        "the_legends_were_true", "war_historian_repy"}
 
 
 def test_act_gated_shared_event_is_skipped_in_act1():

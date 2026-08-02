@@ -123,7 +123,8 @@
     "AfterCardPlayed": {
       "maps_to": "on_card_played (kusarigama.py:35-50)",
       "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. The per-Replay half (G1) is CLOSED: CombatState._resolve_card_play fires on_card_played inside the play-count loop (sts2_rl/combat.py:574, 597-600). WHAT REMAINS is guard G2, the candidate list: Kusarigama.cs picks with `RunState.Rng.CombatTargets.NextItem(HittableEnemies)` and sts2_rl/relics/kusarigama.py still passes `self.living_enemies()`, which sts2_rl/relics/base.py:386-389 filters on `not e.is_gone` alone -- no Hook.ShouldAllowHitting term -- so an alive-but-unhittable enemy is still eligible to be drawn."
+      "issue": "FIXED the candidate-set divergence (`living_enemies()` → `hittable_enemies()`, matching `Kusarigama.cs:115`'s `HittableEnemies` read exactly). Re-derived (not trusted) that the fix is currently unobservable: every ported `should_allow_hitting` implementer only fires post-death, so `hittable_enemies() == living_enemies()` for every reachable state today (pinned by `test_reviving_enemy_is_still_is_gone_today`). Stays `gap`/DORMANT — now for set-coincidence reasons alone, not because the sim reads the wrong helper. Code-path fix verified via synthetic `should_allow_hitting` refusal (`test_kusarigama_never_targets_an_unhittable_enemy`).",
+      "live": false
     },
     "AfterCombatEnd": {
       "maps_to": "no counterpart",

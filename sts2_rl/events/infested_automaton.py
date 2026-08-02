@@ -34,11 +34,14 @@ class InfestedAutomaton(Event):
         ]
 
     def _offer(self, pool: list[str]) -> None:
-        from ..rewards import RarityOddsType, create_reward_cards
+        from ..rewards import CardCreationFlags, RarityOddsType, create_reward_cards
 
+        # `ForNonCombatWithDefaultOdds` always ORs `NoUpgradeRoll`
+        # (CardCreationOptions.cs:137-140).
         for card in create_reward_cards(
             self.run, RarityOddsType.REGULAR, count=1, mutate_pity=False,
             pool=pool,
+            extra_flags=CardCreationFlags.NO_UPGRADE_ROLL,
         ):
             self.run.add_card(card)
 

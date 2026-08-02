@@ -52,8 +52,8 @@
     },
     "AfterApplied": {
       "maps_to": "powers.py:1464-1477 TangledPower.__init__",
-      "verdict": "gap",
-      "issue": "The sim adds a guard C# does not have, and it changes the outcome. TangledPower.cs:23-30 afflicts EVERY Attack card with Entangled unconditionally -- there is no `Affliction == null` test, unlike its own AfterCardEnteredCombat at :34 and unlike Ringing's and Smoggy's AfterApplied -- so in the game Tangled OVERWRITES an existing affliction on Attack cards. powers.py:1476 adds `card.affliction is None`, so the sim skips already-afflicted Attacks and they cost nothing extra. Reachable with two ported enemy powers in one combat: Ringing (powers.py:1319-1332) afflicts every unafflicted card, after which the game's Tangled re-afflicts the Attacks as Entangled and the sim leaves them Ringing. Also note the sim's __init__ walk misses the Play pile for the same reason recorded on power/ringing and power/smoggy (player.py:100-103 vs PlayerCombatState.cs:70-80). Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "Replaced BOTH of the record's claims, not just its verdict. (1) The extra `card.affliction is None` guard powers.py's `__init__` carries is not a divergence: `Entangled.is_stackable` is `False` (matches the C# default), so `cmds.py`'s `CardCmd.afflict` -> `Affliction.can_afflict` chain already refuses re-affliction of a differently-afflicted card — executed directly, an unconditional `CardCmd.afflict` call on a Ringing-carrying Attack card is refused, matching what the guard would have done. C#'s own `Afflict`/`CanAfflict` pipeline enforces the exact same policy the sim's local guard does, through a different code path; no overwrite occurs on either side. (2) The \"misses the Play pile\" claim is also stale: `player.all_cards` (player.py) already includes `play_pile`, added specifically for this affliction-sweep family (docstring names Ringing/Smoggy/Tainted/Galvanized by name). No code change made — nothing to fix. Pinned by `test/test_r14_powers.py::TestTangledGuardIsRedundant` (3 tests)."
     },
     "AfterCardEnteredCombat": {
       "maps_to": "powers.py:1479-1484 TangledPower.on_card_entered_combat",
@@ -96,6 +96,6 @@
       "rationale": "Same correct shape as power/ringing's: the sim overrides _expire (powers.py:1496-1502) and calls super() last, so every removal path sweeps the afflictions."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

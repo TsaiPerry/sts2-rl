@@ -184,13 +184,16 @@ def test_choices_paradox_generates_its_options_on_combat_card_generation():
             > plain.combat_card_generation.counter)
 
 
-def test_glass_eye_rolls_for_upgrade_on_every_created_card():
-    # GlassEye.cs:29 sets only CardCreationFlags.NoRarityModification, so
-    # CardFactory.CreateForReward still calls RollForUpgrade per card, and
-    # RollForUpgrade's FIRST statement is `rng.NextFloat()` — before the
-    # IsUpgradable test (CardFactory.cs:288-304). Five 3-card screens =
-    # 15 NextItem + 15 NextFloat = 30 PlayerRng.Rewards draws.
+def test_glass_eye_never_rolls_for_upgrade():
+    # R14/R11: this test's old name and its docstring were wrong. GlassEye.cs:29
+    # calls `ForNonCombatWithUniformOdds(...).WithFlags(NoRarityModification)`,
+    # and `ForNonCombatWithUniformOdds` ITSELF ORs `NoUpgradeRoll`
+    # (CardCreationOptions.cs:160-163) — a fact hidden behind the one visible
+    # `.WithFlags(...)` call. Under that flag `CardFactory.CreateForReward`
+    # skips `RollForUpgrade` wholesale, INCLUDING its `rng.NextFloat()` draw
+    # (CardFactory.cs:98-102/290). Five 3-card screens, uniform odds (no
+    # rarity roll either) = 15 NextItem picks only, never 30.
     run = RunState(string_seed=SEED)
     assert run.player_rng.rewards.counter == 0
     run.add_relic("glass_eye")
-    assert run.player_rng.rewards.counter == 30
+    assert run.player_rng.rewards.counter == 15

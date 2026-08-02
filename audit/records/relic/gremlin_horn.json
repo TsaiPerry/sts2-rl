@@ -48,7 +48,8 @@
     "AfterDeath": {
       "maps_to": "on_death (gremlin_horn.py:18-22), dispatched by DamageCmd.deal (cmds.py:105) and CreatureCmd.kill (cmds.py:203)",
       "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The relic's own body is exact -- GremlinHorn.cs:24-32's side check, EnergyVar(1) and CardsVar(1) map one-for-one onto gremlin_horn.py:19-22, and EXECUTED (py audit/tools/relic_probes_b07.py horn-death) an enemy death takes energy 3 -> 4 and hand 5 -> 6 while a player-side death changes neither. What diverges is WHICH deaths reach the hook (G1: the sim never fires on_death for a prevented death, and C# does) and WHEN relative to the dealer's own post-damage event (G2)."
+      "issue": "REASONING REPLACED at the hooks-level rollup. G1 was already closed faithful in round 7 (2026-07-29) at the guard level -- the hooks-level issue text quoted in the brief (\"WHICH deaths reach the hook (G1)\") was never refreshed after that closure and is stale. Re-confirmed directly: neither IllusionPower nor AdaptablePower defines should_die; both define should_remove_from_combat_after_death, and an executed two-enemy kill confirms the payout lands on a real Illusion death. G2's own CENSUS has also gone stale (the record says \"no sim power implements on_damage_dealt at all\" -- now false, ImbalancedPower and PaperCutsPower both do) though its VERDICT has not: neither implementer reads the dealer's energy or hand, so Gremlin Horn's own payout (the thing an ordering bug would expose) still has no observer. Propose narrowing the hooks-level issue text to name G2 alone, with its reachability argument updated to the two-implementer census.",
+      "live": false
     }
   },
   "guards": [

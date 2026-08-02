@@ -33,7 +33,8 @@
     "AfterSideTurnStart": {
       "maps_to": "on_player_turn_start (booming_conch.py:31-34)",
       "verdict": "gap",
-      "issue": "STILL OPEN on the ENERGY-GAIN CHAIN only. The HOOK SLOT is CLOSED: BoomingConch.cs:45 declares AfterSideTurnStart and the relic moved from the pre-draw slot to the new `after_side_turn_start` dispatcher (CombatManager.cs:522). WHAT REMAINS is the other guard: the grant bypasses the energy-gain modifier chain.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: Rollup of guards G1 and G2 per binding rule 4. The energy amount and the Elite/turn-1 conditions are right (executed: Elite turn-1 energy is 4 = base 3 + 1), but the hook slot is wrong and the grant bypasses the energy-gain modifier chain."
+      "issue": "G2 (energy-gain modifier-chain bypass) re-executed rather than re-read: the bypass is real (spied hooks.modify_energy_gain, zero calls), and the one power that could expose it (NoEnergyGainPower) can only be granted by a played card, which cannot predate this relic's own turn<=1, pre-decision-loop dispatch. No fix landed; reasoning confirmed against current code, not carried from the 2026-07-26 audit unread.",
+      "live": false
     }
   },
   "guards": [

@@ -1,16 +1,142 @@
 """Creature base class — the common ground between the player and monsters.
 
 A Creature owns the state every combatant shares: HP, block, the `powers`
-dict, side ("player"/"enemy"), and the `stunned`/`escaped` flags that the
+list, side ("player"/"enemy"), and the `stunned`/`escaped` flags that the
 combat loop reads. `PlayerCombatState` (player.py) and `Monster`
 (monsters/base.py) both subclass it. Mirrors STS2's CreatureModel.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterator
 
 if TYPE_CHECKING:
     from .powers import Power
+
+
+class PowerList:
+    """`Creature._powers` (Creature.cs:34) — an ORDERED LIST of power
+    instances, not one slot per power id.
+
+    C# holds `List<PowerModel> _powers` and lets several instances share an
+    id: `PowerCmd.FindExistingInstanceForStacking` (PowerCmd.cs:165-174)
+    returns `null` for a `PowerInstanceType.Instanced` power, so each
+    application appends a new, independently ticking instance. The sim used a
+    `dict[str, Power]` here, so a second Instanced application OVERWROTE the
+    slot: the older instance stayed hook-registered and kept ticking, but no
+    reader could see it. That is the state half of `power_cmd/G5`.
+
+    Reads mirror C#'s own accessors exactly, so a sim call site translates
+    one-for-one:
+
+    ==========================  =========================================
+    sim                         C# (Creature.cs)
+    ==========================  =========================================
+    ``id in creature.powers``   ``HasPower(id)``          (:561, Any)
+    ``creature.powers[id]``     ``GetPower(id)``          (:571, First)
+    ``.get(id)``                ``GetPower(id)``          (:571, First)
+    ``.instances(id)``          ``GetPowerInstances(id)`` (:581, Where)
+    ``.values()``               ``Powers``                (:326, all)
+    ==========================  =========================================
+
+    NOT a Mapping, deliberately: ``values()`` walks every instance in
+    application order (what the hook walk, the death strip and the turn-start
+    snapshot all need — C# iterates `_powers` at each of those sites), while
+    ``__iter__``/``keys()`` yield each id ONCE, in first-application order, so
+    ``"minion" in c.powers`` and ``set(c.powers)`` keep reading as before.
+    ``len()`` counts INSTANCES, matching `_powers.Count`.
+    """
+
+    __slots__ = ("_list",)
+
+    def __init__(self) -> None:
+        self._list: list[Power] = []
+
+    # ── C# Creature accessors ────────────────────────────────────────────
+    def __contains__(self, power_id: object) -> bool:
+        return any(p.id == power_id for p in self._list)
+
+    def get(self, power_id: str, default=None):
+        """`Creature.GetPower(id)` — the FIRST (oldest) instance, or
+        ``default``. C# is `FirstOrDefault`, so a second Instanced
+        application never displaces the answer."""
+        for p in self._list:
+            if p.id == power_id:
+                return p
+        return default
+
+    def __getitem__(self, power_id: str):
+        p = self.get(power_id)
+        if p is None:
+            raise KeyError(power_id)
+        return p
+
+    def instances(self, power_id: str) -> tuple:
+        """`Creature.GetPowerInstances(id)` (Creature.cs:581) — every
+        instance sharing this id, in application order."""
+        return tuple(p for p in self._list if p.id == power_id)
+
+    def values(self) -> tuple:
+        """`Creature.Powers` (Creature.cs:326) — EVERY instance, in
+        application order. Returned as a tuple: callers walk this while
+        expiring powers, and C#'s own sites (`RemoveAllPowersInternalExcept`,
+        Creature.cs:660) snapshot to a list first for the same reason."""
+        return tuple(self._list)
+
+    def items(self) -> tuple:
+        return tuple((p.id, p) for p in self._list)
+
+    def keys(self) -> tuple:
+        return tuple(self)
+
+    def __iter__(self) -> Iterator[str]:
+        seen: set[str] = set()
+        for p in self._list:
+            if p.id not in seen:
+                seen.add(p.id)
+                yield p.id
+
+    def __len__(self) -> int:
+        return len(self._list)
+
+    def __repr__(self) -> str:
+        return f"PowerList({list(self._list)!r})"
+
+    # ── Mutation (command layer only) ────────────────────────────────────
+    def add(self, power: Power) -> None:
+        """`Creature.ApplyPowerInternal` (Creature.cs:600-612) — appends.
+
+        C#'s own guard here throws on a second `PowerInstanceType.None`
+        instance ("Trying to add multiple instances of a non-instanced
+        power"); `PowerCmd.apply` routes those to `on_stack` instead, so
+        reaching this method with one is a bug in the command layer.
+        """
+        from .powers import PowerInstanceType
+
+        if (power.instance_type is PowerInstanceType.NONE
+                and power.id in self):
+            raise RuntimeError(
+                f"second instance of the non-instanced power {power.id!r}")
+        self._list.append(power)
+
+    def discard(self, power: Power) -> bool:
+        """`Creature.RemovePowerInternal` (Creature.cs:641-650) — removes THIS
+        instance by identity, never "whichever one has that id". Returns
+        whether it was attached."""
+        for i, p in enumerate(self._list):
+            if p is power:
+                del self._list[i]
+                return True
+        return False
+
+    def pop(self, power_id: str, default=None):
+        """Remove and return the FIRST instance with this id — the shape
+        `PowerCmd.Remove<T>(creature)` has in C# (PowerCmd.cs:278-281:
+        `Remove(creature.GetPower<T>())`, a `FirstOrDefault`)."""
+        p = self.get(power_id)
+        if p is None:
+            return default
+        self.discard(p)
+        return p
 
 
 class Creature:
@@ -19,7 +145,7 @@ class Creature:
         self.hp = max_hp
         self.block = 0
         self.side: str = "enemy"
-        self.powers: dict[str, Power] = {}
+        self.powers: PowerList = PowerList()
         # Set by CreatureCmd.stun; the creature skips its next turn.
         self.stunned = False
         # Set by CreatureCmd.escape; the creature has left combat alive.

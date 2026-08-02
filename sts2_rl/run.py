@@ -160,6 +160,13 @@ class RunState:
         else:
             self.rng_set = None
             self.player_rng = None
+        # Lazily seated by `crystal_sphere_rng` (see its docstring).
+        self._crystal_sphere_rng = None
+        # Optional (minigame) -> (x, y, tool) click policy for the Crystal
+        # Sphere. The conformance runner installs one to replay a recording's
+        # `CrystalSphereClick` commands; unset, the event falls back to the
+        # source's own automated rule (CrystalSphereScreenHandler.cs:82-104).
+        self.crystal_sphere_clicks = None
         # How many rooms have been entered this run (IRunState.TotalFloor).
         # Used by event gates like Punch-Off (>= 6); the sim has no map, so the
         # caller sets this when it matters.
@@ -307,6 +314,28 @@ class RunState:
         """The per-player Rewards stream (reward gold/cards/potions/relic-rarity
         rolls) in the SP2 parity path, else the shared legacy run.rng."""
         return self.player_rng.rewards if self.player_rng is not None else self.rng
+
+    @property
+    def crystal_sphere_rng(self):
+        """SIM-ONLY stream for the Crystal Sphere click policy.
+
+        The game has no such stream: a cell click is human input, so
+        `CrystalSphereMinigame.CellClicked` consumes no run RNG whatsoever.
+        The sim still has to invent a click, and drawing it from any parity
+        stream would shift every placement and reward draw after it. So it
+        draws here — off a name the game never uses, seeded from the run seed
+        — which keeps a seeded run reproducible while making a collision with
+        a parity counter impossible by construction. Legacy (no rng_set) runs
+        have no parity contract and stay on the shared `run.rng`. A
+        conformance replay overrides the policy outright
+        (`run.crystal_sphere_clicks`) and never reaches this."""
+        if self.rng_set is None:
+            return self.rng
+        if self._crystal_sphere_rng is None:
+            from .rng import Rng
+            self._crystal_sphere_rng = Rng(
+                self.rng_set.seed, name="crystal_sphere_clicks")
+        return self._crystal_sphere_rng
 
     @property
     def shops_rng(self):
@@ -1156,9 +1185,34 @@ class RunState:
     # ── Map generation pipeline (RunManager.GenerateMap) ─────────────────
 
     def _map_listeners(self):
-        """AbstractModel hook listeners for map generation — the run's relics
-        and deck cards (mirrors IRunState.IterateHookListeners for this pass)."""
-        return [*self.relics, *self.deck]
+        """AbstractModel hook listeners for map generation — the run's deck
+        cards and relics (mirrors IRunState.IterateHookListeners for this
+        pass, RunState.cs:545-576).
+
+        hook_dispatch/guard12 (round 14, LABEL F2): this used to return
+        `[*self.relics, *self.deck]`, relic-first. RunState.IterateHookListeners
+        builds its list deck-FIRST (RunState.cs:548-562: every deck card, plus
+        its enchantment if any, per player) and only then appends
+        relics/potions (:563-576, also skipped entirely here since a map-hook
+        walk always passes `childCombatState == null` in the callers this
+        mirrors). The order is observable, not just a call-count difference:
+        `SpoilsMapCard.modify_generated_map` (cards/spoils_map.py) and
+        `GoldenCompass.modify_generated_map` (relics/golden_compass.py) both
+        REPLACE the generated act map wholesale rather than merging, so
+        whichever listener runs LAST wins outright when both target the same
+        act. `LanternKeyCard` (cards/event_cards.py) contends with
+        `GoldenCompass.modify_unknown_map_point_room_types` the same way.
+
+        Enchantments are NOT appended here (unlike RunState.cs:557-560's
+        `if (card.Enchantment != null) list.Add(card.Enchantment)`): no ported
+        `Enchantment` subclass implements any of the three map hooks this
+        feeds (`modify_generated_map[_late]`, `modify_next_event`,
+        `modify_unknown_map_point_room_types` — grepped across
+        sts2_rl/enchantments.py), so the omission is dormant today, not a
+        second live gap; flagged in the round-14 R1 report rather than fixed
+        here since sts2_rl/enchantments.py is outside this lane's footprint.
+        """
+        return [*self.deck, *self.relics]
 
     def _map_rng(self):
         """The RNG the act's map layout is carved from.
@@ -1596,9 +1650,12 @@ class RunState:
             if origin in self.deck:
                 self.deck.remove(origin)
         for enemy in combat.enemies:
-            swipe = enemy.powers.get("swipe")
-            for stolen in getattr(swipe, "stolen_cards", ()):
-                origin = combat.deck_card_origins.get(id(stolen))
+            # Swipe is Instanced: one power per steal, so every instance has
+            # to be walked, not just the first.
+            for swipe in enemy.powers.instances("swipe"):
+                if swipe.stolen_card is None:
+                    continue
+                origin = combat.deck_card_origins.get(id(swipe.stolen_card))
                 if origin is not None and origin in self.deck:
                     self.deck.remove(origin)
         # Carry any post-combat extras (a dead hopper's returned card) into

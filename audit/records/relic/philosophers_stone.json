@@ -79,7 +79,8 @@
     "AfterCreatureAddedToCombat": {
       "maps_to": "on_creature_added (philosophers_stone.py:34-41), dispatched by HookSystem.on_creature_added (hooks.py:546-550) from CreatureCmd.add (cmds.py:266)",
       "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. The effect and the constant are right -- 1 Strength on each joiner, executed at b12-stone: a mid-combat SpinyToad spawn comes in at Strength(1) -- and the two hooks provably cannot double-apply (guard N1). The divergence is the side test: C# skips creatures on the OWNER's side (`creature.Side == base.Owner.Creature.Side`, PhilosophersStone.cs:43) while the sim skips only the player object itself (`creature is self.combat.player`, philosophers_stone.py:39)."
+      "issue": "Re-executed rather than re-derived (round 13 R8 already carries a pinning test for this exact guard). No change: the sim's CombatState models no player-side creature other than the player, so the side-vs-identity substitution in the skip clause cannot currently misclassify anything. Fresh witness added in test/test_r14_relics_a.py.",
+      "live": false
     },
     "AfterRoomEntered": {
       "maps_to": "on_combat_start (philosophers_stone.py:28-32), dispatched by HookSystem.on_combat_start from CombatState.__init__ (combat.py:208)",

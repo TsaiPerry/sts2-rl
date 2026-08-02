@@ -52,9 +52,8 @@
     },
     "AfterObtained": {
       "maps_to": "after_obtained (kifuda.py:17-28), which selects up to CARDS=3 eligible deck cards via `run.select_cards(\"enchant\", candidates, self.CARDS)` and attaches Adroit(3) to each",
-      "verdict": "gap",
-      "live": true,
-      "issue": "UPDATED (round 11): the stub premise this rollup was built on is gone -- G1 (the whole missing effect) closed 2026-07-29 (round 7), and kifuda.py is no longer a behaviourless stub; `after_obtained` is real. What remains, re-resolved rather than inherited: G2 is PROMOTED to LIVE this round (see G2's own entry) -- now that the effect is implemented, it demonstrably always enchants exactly `min(3, eligible)` cards with no way to enchant fewer, where C#'s `CardSelectorPrefs(prompt, minSelect=0, maxSelect=3)` lets the player confirm having enchanted 0, 1 or 2. Kifuda is Shop rarity and obtainable, and the trigger (owning it with any eligible deck card) is essentially guaranteed every run. The issue it replaced read: Rollup of guards G1 and G2 per binding rule 4. Kifuda.cs:24-37 enchants up to 3 deck cards with Adroit at amount 3; the port does nothing at all."
+      "verdict": "faithful",
+      "issue": "STALE-ALREADY-FIXED, proven against the actual tree, not prose: relics/kifuda.py:17-54 already implements the full min_select=0 / \"enchant_optional\" shape this record's G2 asked for, and test/test_kifuda_partial_enchant.py (pre-existing) already exercises it end to end through a real RunDriver -- reran it this round (10 tests, pass). No change made. relic/kifuda/g2's own record (not covered by this brief) should be checked for the same staleness if not already closed."
     }
   },
   "guards": [
@@ -79,6 +78,6 @@
       "rationale": "There is no AscensionHelper.GetValueIfAscension anywhere in Kifuda.cs, so 3 is the pinned non-ascension value for both uses, and `DynamicVars.Cards.IntValue` and the literal `3` agree. Nothing to compare in the sim (the port carries no constants at all), so this entry records that a G1 fix has no ascension branch to resolve."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

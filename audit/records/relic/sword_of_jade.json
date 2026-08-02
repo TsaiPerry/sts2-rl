@@ -94,7 +94,8 @@
     "AfterRoomEntered": {
       "maps_to": "on_combat_start (sword_of_jade.py:22-29)",
       "verdict": "gap",
-      "issue": "Rollup of guards G1 and N1 per binding rule 4. The power, the amount and the target are right and executed; the hook SITE is one dispatch later than C#'s and the applier identity differs."
+      "issue": "Re-executed rather than re-derived. G1's pool-wide census (AfterRoomEntered-vs-on_combat_start dispatch collapse, shared by the same twelve relics as stone_cracker's G2) re-confirmed against the current ALL_RELICS registry; N1 stays faithful. No fix landed.",
+      "live": false
     }
   },
   "guards": [

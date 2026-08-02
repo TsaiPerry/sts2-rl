@@ -141,10 +141,12 @@ class ToricToughnessCard(Card):
         from ..cmds import BlockCmd, PowerCmd
         from ..powers import ToricToughnessPower
         gained = BlockCmd.apply(ctx.hooks, ctx.player, self._block, card=self)
-        PowerCmd.apply(
+        # Instanced (ToricToughnessPower.cs): the block belongs to the
+        # instance THIS play created, so take Apply's own result rather than
+        # re-fetching by id, which is a FirstOrDefault over every instance.
+        power = PowerCmd.apply(
             ctx.hooks, ctx.player, ToricToughnessPower, self._turns, applier=ctx.player
         )
-        power = ctx.player.powers.get("toric_toughness")
         if power is not None:
             power.set_block(gained)
 

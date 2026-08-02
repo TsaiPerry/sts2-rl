@@ -1142,12 +1142,23 @@ def test_whispering_earring_plays_are_auto_plays():
 
 
 def test_a_doubled_skill_that_kills_still_runs_its_second_replay():
-    """relic/tuning_fork/g1's residue. CardModel.cs's Replay loop returns early
-    on `Owner.Creature.IsDead` alone (:1950 and :1960) — the PLAYER dying. The
-    sim also broke on `_all_enemies_dead()`, so a Throwing-Axe-doubled Skill
-    that killed on iteration 0 counted ONCE in the game's terms and zero more
-    times in the sim's; Tuning Fork's SkillsPlayed is run-scoped, so the drift
-    never washes out."""
+    """relic/tuning_fork/g1's residue, R8-review repair. The original fixture
+    killed the enemy with a raw `DamageCmd.deal` call BEFORE `play_card`, i.e.
+    before `_resolve_card_play` even computes `play_count` — that exercises
+    "can a play started after the enemy is already dead still get doubled"
+    (correctly: no, in both engines; ModifyCardPlayCount/Hook.cs:1372-1386 is
+    gated by `IsOverOrEnding`, same as the sim's `_COMBAT_GATED_HOOKS`), not
+    the mechanism this test is named for.
+
+    The actual mechanism: CardModel.cs's Replay loop returns early on
+    `Owner.Creature.IsDead` alone (:1950 and :1960) — the PLAYER dying, not
+    the enemy. An IN-PROGRESS doubled play whose FIRST iteration kills the
+    (only) enemy must still run its SECOND iteration, because `play_count` is
+    computed once, before the loop starts, while the enemy is still alive.
+    Throwing Axe doubles the first card played each combat regardless of
+    type (`throwing_axe.py` has no card-type filter), so a lethal Strike
+    (an Attack, unlike Defend) exercises this directly: the enemy dies on
+    iteration 0's hit, but iteration 1 must still fire."""
     plays = []
 
     class _Counter(Relic):
@@ -1158,14 +1169,13 @@ def test_a_doubled_skill_that_kills_still_runs_its_second_replay():
             plays.append(card.id)
 
     cs = fresh(relics=[make_relic("throwing_axe"), _Counter()])
-    cs.enemy.hp = 1
+    cs.enemy.hp = 1          # dies to the FIRST hit of the doubled Strike
     cs.player.energy = 10
-    defend = make_card("defend")
-    cs.player.hand.append(defend)
-    # Kill with an attack first so the Skill's own play lands in the ending
-    # window, then play the doubled Skill.
-    DamageCmd.deal(cs.hooks, cs.enemy, 50, dealer=cs.player,
-                   props=DamageProps.CARD)
+    strike = make_card("strike")
+    cs.player.hand.append(strike)
     plays.clear()
-    cs.play_card(cs.player.hand.index(defend))
-    assert plays == ["defend", "defend"]     # both Replay iterations counted
+    cs.play_card(cs.player.hand.index(strike))
+    # play_count is locked in as 2 BEFORE either hit lands (enemy is alive
+    # when modify_card_play_count runs), so both iterations must run even
+    # though the enemy dies on iteration 0.
+    assert plays == ["strike", "strike"]     # both Replay iterations counted

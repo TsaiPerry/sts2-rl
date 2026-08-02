@@ -14,10 +14,15 @@ if TYPE_CHECKING:
 class Vambrace(Relic):
     """The first time you gain Block from a card each combat, double it.
 
-    `modify_block_multiplicative` READS `_triggering_card`/`_used` -- a
-    preview call is still safe because only `after_modify_block_amount`/
-    `on_card_played` write them DURING a card play (`__init__` and
-    `reset_for_combat` also write them, but only to clear).
+    `modify_block_multiplicative` READS `_triggering_card`/`_used` -- it is
+    NOT stateless (round-14 R6: an earlier docstring here claimed the
+    opposite, which was itself the bug class 24 misdescription that
+    relic/vambrace guard N3 flags -- it read as a justification for the
+    since-fixed latch-collapse bug, G3). A preview call is still SAFE,
+    though, because only
+    `after_modify_block_amount`/`on_card_played` WRITE that state DURING a
+    card play (`__init__` and `reset_for_combat` also write them, but only to
+    clear) -- a preview only reads it.
 
     Vambrace overrides no `AfterBlockGained` hook -- not in this port and not
     in `Vambrace.cs`, whose overrides are ModifyBlockMultiplicative,

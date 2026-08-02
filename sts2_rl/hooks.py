@@ -51,10 +51,6 @@ _PHASE_SUFFIXES = tuple(sorted((s for s in _PHASES if s), key=len, reverse=True)
 
 _PHASE_HOOKS_BY_CLASS: dict[type, frozenset[str]] = {}
 
-# Lazily-populated cache for `HookSystem.combat_is_over`'s `Phase` reference —
-# see that property's docstring for why this can't be a module-level import.
-_PHASE_CLS: type | None = None
-
 
 # ── Hook.IterateCombatHookListeners' combat-over gate ────────────────────
 #
@@ -101,8 +97,11 @@ _PHASE_CLS: type | None = None
 #     on_attacked, on_card_retained, on_hp_changed, on_power_applied,
 #     on_creature_escaped, on_stunned, on_extra_turn);
 #
-# `IsStarting` needs no counterpart: the sim only ever sets Phase.COMBAT_OVER
-# in `CombatState._end_combat`, so the gate cannot be closed during setup.
+# `IsStarting` needs no counterpart: during `CombatState.__init__`, before
+# `phase` is assigned, both `is_ending` and `is_over_or_ending` read False on
+# the missing attribute (`getattr` guards on both), so `combat_is_over` --
+# which now delegates to `is_over_or_ending` (hook_dispatch/guard10, round
+# 14) -- stays False throughout setup exactly like the old phase-only check.
 _COMBAT_GATED_HOOKS: dict[str, str] = {
     "after_attack": "AfterAttack",
     "after_auto_post_play_phase_entered": "AfterAutoPostPlayPhaseEntered",
@@ -303,9 +302,8 @@ class HookSystem:
         `register`/`unregister` maintain and what the presence cache keys on);
         this method supplies the ORDER. Everything the derivation reaches is
         emitted in the game's slot; anything registered that it cannot reach —
-        an orphaned power instance the sim's `powers` dict no longer indexes
-        (power_cmd/G5), a card sitting in no pile, a synthetic listener a test
-        registered by hand — is seated at the end of its (creature, category)
+        a card sitting in no pile, a synthetic listener a test registered by
+        hand — is seated at the end of its (creature, category)
         group by `_merge_extras` rather than dropped, since dropping would
         silently retire a listener the sim dispatches to today.
 
@@ -524,44 +522,42 @@ class HookSystem:
     @property
     def combat_is_over(self) -> bool:
         """`CombatManager.IsOverOrEnding` — the predicate
-        `Hook.IterateCombatHookListeners` gates on.
+        `Hook.IterateCombatHookListeners` gates on (Hook.cs:53-58:
+        `if (IsOverOrEnding && !IsStarting) yield break;`).
 
-        The sim has one flag where C# has two states (`IsEnding` while the
-        ending sequence runs, `IsOver` after it): `CombatState.phase` is set to
-        `Phase.COMBAT_OVER` in `_end_combat`, which is the moment the ending
-        begins, so it covers both. Outside a combat (a bare HookSystem, or a
-        run-level listener walk) there is no phase and the gate is inert.
+        F3-R13 / hook_dispatch/guard10 (round 14): this used to test only
+        `phase == Phase.COMBAT_OVER`, C#'s `!IsInProgress` half of
+        `IsOverOrEnding` (CombatManager.cs:210-220 — `IsEnding ||
+        !IsInProgress`). That missed the `IsEnding` half entirely: the window
+        between the killing blow (all primary enemies dead) and
+        `CheckWinCondition`'s teardown, where `phase` has not flipped to
+        `COMBAT_OVER` yet but C# already refuses to dispatch. Delegating to
+        `CombatState.is_over_or_ending` (combat.py) closes that window — it
+        already carries the full `IsEnding || !IsInProgress` shape, including
+        `ShouldStopCombatFromEnding`'s veto (CombatManager.cs:196) for a
+        creature dead at 0 HP and about to revive.
 
-        Perf note (power_cmd/G3+G4, tier-2 Task 18): this property is read
-        once per `_each()` call — every combat-gated dispatch, i.e. most of
-        them — so splitting `modify_power_amount` into five separately-
-        dispatched phases quintupled its call count on `PowerCmd.apply`
-        alone. Profiling that regression found the DOMINANT cost was not the
-        `_has_listener_for` cache (working as designed) but THIS property's
-        own `from .combat import Phase` running as a fresh `import`
-        statement on every single call (~28% of a warm-cache PowerCmd.apply
-        microbenchmark's total time — `importlib._bootstrap.parent` alone).
-        `Phase` is cached at module scope after the first call instead — a
-        MODULE-level `from .combat import Phase` at the top of this file
-        would be a real circular import (`combat.py` does `from .hooks
-        import HookSystem` at ITS module level, so hooks.py importing
-        combat.py before `HookSystem` exists fails); caching lazily on first
-        USE (long after both modules have finished loading) is safe and
-        keeps the deferred-import shape.
+        Outside a combat (a bare HookSystem, or a run-level listener walk)
+        `self.combat` is None and the gate stays inert, same as before.
+        `getattr` on `is_over_or_ending` for combat SETUP: `CombatState`
+        back-references itself here early in `__init__`, before `phase` is
+        assigned, so a starting-power `PowerCmd` call during encounter build
+        finds neither `phase` nor a meaningful `is_ending` — both read False,
+        which is C#'s `IsStarting` exemption (Hook.cs:45-47), for free.
+
+        Perf note (power_cmd/G3+G4, tier-2 Task 18) for the property this
+        replaces: it used to matter that `Phase` was cached at module scope
+        (the old `_PHASE_CLS`, now removed) rather than re-imported every
+        `_each()` call. Delegating to `combat.is_over_or_ending` drops that
+        concern entirely — no import in this property at all now — at the
+        cost of `is_ending`'s `_all_enemies_dead()` walk (O(enemy count), the
+        same recomputation C#'s own `IsEnding` getter does via LINQ `Any()`
+        on every read) once `phase` is not already `COMBAT_OVER`.
         """
         combat = self.combat
         if combat is None:
             return False
-        global _PHASE_CLS
-        if _PHASE_CLS is None:
-            from .combat import Phase
-            _PHASE_CLS = Phase
-
-        # `getattr`, because CombatState back-references itself here early in
-        # __init__ and only assigns `phase` further down — so combat SETUP
-        # dispatches (encounter build, on_combat_start) find no phase at all.
-        # That is `IsStarting`, the guard's own exemption, for free.
-        return getattr(combat, "phase", None) == _PHASE_CLS.COMBAT_OVER
+        return getattr(combat, "is_over_or_ending", False)
 
     def _has_listener_for(self, hook: str) -> bool:
         """True if some currently-LIVE listener implements `hook` (its plain

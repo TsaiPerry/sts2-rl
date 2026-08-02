@@ -424,8 +424,24 @@ class TestInfestedBehavior:
 
 class TestIllusionBehavior:
     def test_eye_survives_lethal_damage_and_revives(self):
-        cs = fresh_with(EyeWithTeeth)
-        eye = cs.enemies[0]
+        # A solo Illusion/Minion-holder is unreachable in ported content and
+        # structurally unobservable in C# even if constructed: IllusionPower
+        # auto-grants MinionPower (IllusionPower.cs:70-74), which makes the
+        # owner a SECONDARY enemy (Creature.cs:245-278); the instant the sole
+        # secondary-only enemy dies, CombatManager.IsEnding
+        # (CombatManager.cs:192, no living IsPrimaryEnemy) goes true with
+        # nothing to veto it (IllusionPower has no ShouldStopCombatFromEnding
+        # override), and CombatManager.cs:590-604 runs CheckWinCondition
+        # BEFORE ExecuteEnemyTurn -- so the enemy's revive move would never
+        # even be reached. EyeWithTeeth is only ever reached in the real game
+        # as Fogmog's summon (Fogmog stays primary and present throughout;
+        # sts2_rl/monsters/overgrowth/fogmog.py:95), so add Fogmog as a
+        # living primary companion here to match how the scenario is
+        # actually constructed and keep combat alive past the eye's death.
+        from sts2_rl.monsters.overgrowth.fogmog import Fogmog
+        enc = Encounter("test", [Fogmog, EyeWithTeeth])
+        cs = CombatState(rng=random.Random(0), encounter=enc)
+        eye = cs.enemies[1]
         DamageCmd.deal(cs.hooks, eye, 999, dealer=cs.player)
         # CreatureCmd.cs:565 leaves a prevented death AT 0 HP and retained in
         # combat -- it is genuinely dead until its REVIVE move heals it. This

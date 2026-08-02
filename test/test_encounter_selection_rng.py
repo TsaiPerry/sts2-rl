@@ -255,4 +255,4 @@ def test_thieving_hopper_steal_pick_comes_from_the_card_gen_stream():
     assert rs.combat_card_generation.counter == before + 1
     assert expected not in player.draw_pile
     assert expected not in player.discard_pile
-    assert hopper.powers["swipe"].stolen_cards == [expected]
+    assert hopper.powers["swipe"].stolen_card is expected

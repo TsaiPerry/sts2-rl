@@ -135,7 +135,8 @@
     {
       "what": "IllusionPower.cs:34-45 FollowUpStateId",
       "verdict": "gap",
-      "issue": "A public settable property with no sim analogue: it lets an applier choose which state the revived creature resumes on, defaulting to the last LOGGED state. Folded into the AfterDeath entry; carried separately because it survives a should_die-to-AfterDeath fix. Dormant, but NOT for the reason recorded before the 2026-07-26 fix pass (\"no ported applier\", which was false): both ported appliers have single self-looping move machines (Parafright.cs:44-47, EyeWithTeeth.cs:39-42) and neither sets FollowUpStateId, so the default resolves to the only state there is. Trigger: an IllusionPower applier with more than one move state, or a caller that sets the property."
+      "issue": "Re-executed rather than cited: confirmed by direct class inspection that both of the sim's two `IllusionPower` appliers (`EyeWithTeeth`, `Parafright`) are single-move, non-`MachineMonster` classes, matching their C# sources' single self-looping `MoveState` exactly. The record's post-2026-07-26 reasoning holds; this closes it with fresh evidence instead of leaving it to a third re-read. Pinned by `test/test_r14_powers.py::TestIllusionFollowUpStateId` (2 tests).",
+      "live": false
     },
     {
       "what": "IllusionPower.cs:129 Heal(MaxHp - CurrentHp) on revive",
@@ -159,8 +160,8 @@
     },
     {
       "what": "The prevention branch's HP contract: sim `hp = 1` vs C# leaving the creature at 0 and re-entering KillWithoutCheckingWinCondition",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. THE FLOOR IS GONE: `_resolve_death`'s prevention arm (cmds.py:51-64) no longer writes `target.hp = 1`; it leaves the creature dead at 0 HP, sets `retained_after_death = True`, fires `on_death(..., True)` and then `after_preventing_death` -- CreatureCmd.cs:560-571's shape. The 1-vs-0 HP number conformance asserts on now matches, and the downstream consequences this entry listed go with it (Feed's `if target.is_dead` scores, and steam_eruption's HP restore no longer depends on the floor -- it moved to `on_death`, powers.py:2144-2151). WHAT REMAINS: the sim still does not model C#'s RE-ENTRY. CreatureCmd.cs:562-565 re-enters `KillWithoutCheckingWinCondition(creature, force, recursion + 1)` while `creature.IsDead`, up to 10 times before throwing InvalidOperationException; `_resolve_death`'s else-arm simply returns. So a prevention that heals nothing is permanent in the sim and re-kills in the game, and the sim still cannot express a prevention that fails. VERIFIED by reading cmds.py:30-64."
+      "verdict": "faithful",
+      "issue": "Same misidentification as power/adaptable/g5 (see that note) — IllusionPower has no `ShouldDie` override, so it never reaches the prevention branch either; the real-death arm (`powers.py:2046-2072`) already implements this correctly. Nothing to fix. Verified by execution."
     },
     {
       "what": "The non-damage kill path: CreatureCmd.kill reproduces both arms but fires no on_damage_received",

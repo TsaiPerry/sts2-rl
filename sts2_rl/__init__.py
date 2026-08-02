@@ -43,7 +43,7 @@ from .previews import (
 from .selectors import scripted_card_selector
 
 # ── Evaluation (OBS_PLAN Phase 4: lethal probes, win-rate evals, ablation) ───
-from .full_env import AblatedObsEnv, numeric_obs_indices, obs_segments, obs_slices
+from .full_env import AblatedObsEnv, numeric_obs_indices
 from .probes import (
     PROBES,
     Probe,
@@ -239,8 +239,6 @@ __all__ = [
     # Evaluation
     "AblatedObsEnv",
     "numeric_obs_indices",
-    "obs_segments",
-    "obs_slices",
     "PROBES",
     "Probe",
     "ProbeResult",

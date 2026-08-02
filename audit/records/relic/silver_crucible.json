@@ -169,7 +169,8 @@
     "ShouldGenerateTreasure": {
       "maps_to": "should_generate_treasure (silver_crucible.py:42-43), dispatched by RunState.enter_room as `all(r.should_generate_treasure(self) for r in self.relics)` (run.py:1001)",
       "verdict": "gap",
-      "issue": "Rollup of guard G3 per binding rule 4. The predicate matches (`TreasureRoomsEntered > 1`, SilverCrucible.cs:146) and so does the all-must-agree dispatcher (`if (!item.ShouldGenerateTreasure(player)) return false`, Hook.cs:2316-2322). What diverges is WHAT the gate covers: C# reaches the Spoils Map payout only inside the gated DoTreasureRoomRewards, and the sim pays map-point quests outside the gate (G3)."
+      "issue": "G3 re-executed against the CURRENT RunState.enter_point (the audit's own citation of \"enter_room\"/\"run.py:1001\" is itself stale -- the method is enter_point and has moved). Structural check confirms _complete_map_point_quests still sits outside the should_generate_ treasure gate at today's line numbers; a direct behavioral test proves the two calls are independent (a stub quest pays out while the gate reads False); SpoilsMapCard.SPOILS_ACT_INDEX is still 1 (Act 2), so Silver Crucible's one-time suppression -- which can only ever land on the FIRST treasure room -- is always spent by Act 1's own unavoidable treasure room before Act 2 is reachable. No fix landed; the underlying act-1-map-has-one-treasure-row shape claim was not independently re-derived from actmap.py (only the SPOILS_ACT_INDEX ordering was), flagged as a narrower re-confirmation than the rest of this entry.",
+      "live": false
     }
   },
   "guards": [

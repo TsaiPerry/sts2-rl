@@ -724,12 +724,15 @@ class TestColorlessPowers:
         assert cs.player.powers["dexterity"].amount == 1
 
     def test_the_bomb_stacks_are_independent_fuses(self):
+        # PowerInstanceType.Instanced: two plays are two PowerModel
+        # instances with their own fuses, not two entries inside one power.
         cs = fresh()
         play(cs, make_card("the_bomb"))
         cs.end_turn()
         play(cs, make_card("the_bomb"))
-        power = cs.player.powers["the_bomb"]
-        assert sorted(t for t, _ in power.bombs) == [2, 3]
+        fuses = cs.player.powers.instances("the_bomb")
+        assert sorted(p.amount for p in fuses) == [2, 3]
+        assert [p.damage for p in fuses] == [40, 40]
 
 
 # ══════════════════════════════════════════════════════════════════════════

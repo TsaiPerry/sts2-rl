@@ -36,7 +36,7 @@ class RoomFullOfCheese(Event):
 
     def _gorge(self) -> None:
         from ..cards.pool import _CARD_CLASSES, reward_pool_card_ids
-        from ..rewards import RarityOddsType, create_reward_cards
+        from ..rewards import CardCreationFlags, RarityOddsType, create_reward_cards
 
         # `CardFactory.CreateForReward(owner, 8,
         #  ForNonCombatWithUniformOdds(Character.CardPool, Rarity == Common))`
@@ -44,7 +44,9 @@ class RoomFullOfCheese(Event):
         # what runs CreateForReward's tail — Hook.TryModifyCardRewardOptions
         # (CardFactory.cs:262-266), i.e. the egg relics' offer-side upgrade —
         # which a hand-rolled offer never reaches (NoModifyHooks is NOT set
-        # here).
+        # here). `ForNonCombatWithUniformOdds` always ORs `NoUpgradeRoll`
+        # (CardCreationOptions.cs:160-163), so this offer takes 8 Rewards
+        # draws, not 16, and its cards reach AfterGenerated at +0.
         commons = [
             cid for cid in reward_pool_card_ids(self.run.card_pool)
             if _CARD_CLASSES[cid].rarity == CardRarity.COMMON
@@ -52,6 +54,7 @@ class RoomFullOfCheese(Event):
         cards = create_reward_cards(
             self.run, RarityOddsType.UNIFORM, count=8, mutate_pity=False,
             pool=commons,
+            extra_flags=CardCreationFlags.NO_UPGRADE_ROLL,
         )
         for card in self.run.select_cards("card_reward", cards, 2):
             self.run.add_card(card)

@@ -174,8 +174,8 @@
     },
     {
       "what": "The prevention branch's HP contract: sim `hp = 1` vs C# leaving the creature at 0 and re-entering KillWithoutCheckingWinCondition",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. THE FLOOR IS GONE: `_resolve_death`'s prevention arm (cmds.py:51-64) no longer writes `target.hp = 1`; it leaves the creature dead at 0 HP, sets `retained_after_death = True`, fires `on_death(..., True)` and then `after_preventing_death` -- CreatureCmd.cs:560-571's shape. The 1-vs-0 HP number conformance asserts on now matches, and the downstream consequences this entry listed go with it (Feed's `if target.is_dead` scores, and steam_eruption's HP restore no longer depends on the floor -- it moved to `on_death`, powers.py:2144-2151). WHAT REMAINS: the sim still does not model C#'s RE-ENTRY. CreatureCmd.cs:562-565 re-enters `KillWithoutCheckingWinCondition(creature, force, recursion + 1)` while `creature.IsDead`, up to 10 times before throwing InvalidOperationException; `_resolve_death`'s else-arm simply returns. So a prevention that heals nothing is permanent in the sim and re-kills in the game, and the sim still cannot express a prevention that fails. VERIFIED by reading cmds.py:30-64."
+      "verdict": "faithful",
+      "issue": "The record misidentified the mechanism this unit reaches. AdaptablePower has no `ShouldDie` override, so it never takes `_resolve_death`'s prevention (else) arm at all — it takes the real-death arm, exactly as `cmds.py:126-220` and `powers.py:4237-4250` already implement (both carry their own citations to this effect). The record's own \"prevention branch's HP contract\" framing, and its \"re-entry not modelled\" residue, both belong to true `ShouldDie` preventers, not this unit. Nothing to fix here; replaced the record's reasoning, not its intent. Verified by execution (test_r14_power_cmd.py)."
     },
     {
       "what": "The non-damage kill path: CreatureCmd.kill reproduces both arms but fires no on_damage_received",
@@ -183,6 +183,6 @@
       "issue": "Closed 2026-07-27: `CreatureCmd.kill` (cmds.py:284-292) now routes through the shared `_resolve_death`, so the non-damage kill path runs the same two arms as DamageCmd.deal and fires both `on_death(..., was_removal_prevented)` (cmds.py:49 / :63) and `after_preventing_death` (:64). Consequence (a) is moot as well: steam_eruption's 999999999 HP restore moved off `on_damage_received` onto `on_death` (powers.py:2144-2151), which this path fires. VERIFIED 2026-07-27 by reading cmds.py:30-64 and :284-292."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

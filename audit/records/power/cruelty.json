@@ -55,7 +55,8 @@
     {
       "what": "CrueltyPower.cs:27 `amount + base.Amount / 100m`",
       "verdict": "gap",
-      "issue": "The arithmetic is right and the TYPE is not: powers.py:416 computes `mult += cruelty.amount / 100.0` in float where C# uses decimal. `1.5 + n/100` is non-dyadic for most n (10 -> 1.6, 30 -> 1.8), so a Cruelty-boosted Vulnerable is a third non-dyadic damage multiplier beyond the two literals `py audit/tools/power_census.py multipliers` reports, widening hook_dispatch gap G9. Per rule 3 the aggregation mechanism keeps G9's verdict; recorded at both this record and power/vulnerable because the factor is jointly theirs."
+      "issue": "Replaced the record's \"third non-dyadic multiplier\" framing: the ONE live applier (`cards/cruelty.py`) only ever grants multiples of 25, so `1.5 + n/100.0` is exact in `float` for every reachable value (executed: `Decimal` cross-check for n in 25..500 step 25, plus n=500). The float-vs-decimal TYPE mismatch is real but currently inert on its own; what actually widens `hook_dispatch/G9` is the pre-existing literal factors (Shrink `×0.7` etc.), not Cruelty. Verdict stays `gap`/`live:false` by cross-reference to G9's own (already-`gap`) verdict, not because Cruelty independently reaches it. Pinned by `test/test_r14_powers.py::TestCruelty` (13 tests, incl. an 11-value parametrized exactness sweep).",
+      "live": false
     },
     {
       "what": "Cruelty has no turn hook and never decays",

@@ -19,5 +19,8 @@ class BagOfMarbles(Relic):
         if self.turn <= 1:
             from ..cmds import PowerCmd
             from ..powers import VulnerablePower
-            for enemy in self.living_enemies():
+            # BagOfMarbles.cs:28: PowerCmd.Apply<VulnerablePower>(...,
+            # combatState.HittableEnemies, ...) -- the candidate set is
+            # HittableEnemies, not "every not-dead enemy".
+            for enemy in self.hittable_enemies():
                 PowerCmd.apply(self.hooks, enemy, VulnerablePower, 1, applier=player)

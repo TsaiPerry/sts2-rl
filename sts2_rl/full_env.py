@@ -8,7 +8,8 @@ method reports the legal actions each step).
 
 Design at a glance
 ------------------
-Action space (flat ``Discrete``), decoded in ``_decode_action``::
+Action space (flat ``Discrete``), decoded in ``_decode_action`` — UNCHANGED by
+the schema-v4 observation rewrite below::
 
     0                          end turn
     1 .. H*E                   play hand card h at enemy target e
@@ -18,60 +19,76 @@ Action space (flat ``Discrete``), decoded in ``_decode_action``::
   don't need a target (SELF / ALL_ENEMIES / non-targeted potions) are masked to
   a single canonical target so equivalent actions don't bloat the space.
 
-Observation (flat ``Box`` in [0, 1], layout in ``_build_obs``), schema
-``OBS_SCHEMA_VERSION``. Guiding principle: the agent sees everything a human
-sees on screen, with absolute numbers so lethal math is computable — every
-HP-like quantity (HP, block, damage) is encoded on one shared absolute scale
-(``/ABS_SCALE`` clipped, plus a coarse ``/ABS_SCALE_COARSE`` companion so
-Act-2+ values don't saturate). The blocks:
+Observation: ``OBS_SCHEMA_VERSION`` 4, the ``{"f": Box(0,1), "i": Box(0,
+MAX_ID)}`` Dict contract of ``OBS_SCHEMA.md`` (this module's combat half —
+``sts2_rl/obs.py`` for the shared contract, ``sts2_rl/relic_obs.py`` for the
+relic row, ``sts2_rl/afflictions.py`` / ``sts2_rl/enchantments.py`` for the two
+new vocabularies). Replaces the v3 flat float ``Box`` (17,873 floats, ~96% of
+it sparse one-hot categoricals): every entity (a power INSTANCE, a relic, a
+hand/pile card, an enemy, a potion) is now one row of ``(id, floats)`` instead
+of a slot in a per-id one-hot, so two instances of the same power (The Bomb's
+independently-ticking fuses) are two rows, not one dict slot silently
+overwritten by the second.
 
-* Player vitals: HP as ratio *and* absolute hp/max_hp, block, energy,
-  strength/dexterity (signed), pile sizes, turn, the total post-block damage
-  telegraphed at the player this turn, history scalars (cards/attacks played
-  this turn, damage taken this combat), and the **full power vocabulary**
-  (every id in ``ALL_POWERS``: presence + signed amount at two scales).
-* One row per hand slot: card identity one-hot (in ``card_obs="hybrid"``
-  mode) plus engineered features — hook-modified effective energy cost,
-  type/target flags, base damage/hits/block, *effective* block
-  (Dexterity/Frail-modified), self HP loss, magic number.
-* One row per enemy slot: absolute+ratio vitals, intent flags, the intent's
-  attack fully run through the damage-modifier pipeline (per-hit, hits,
-  total, and post-block vs the player's current block — mirroring
-  ``AttackIntent.GetSingleDamage``), enemy identity one-hot (from the
-  ``Monster`` subclass registry), and the full power vocabulary.
-* A per-(hand slot, enemy slot) **effective damage matrix** aligned 1:1 with
-  the play actions: the fully modified per-hit damage each card would deal
-  to each enemy (Strength, Weak, target Vulnerable — the number printed on
-  the card face).
-* One row per potion slot, then — for each of the draw / discard / exhaust
-  piles — an unordered *composition histogram*: per card id, how many base
-  copies and how many upgraded copies it holds (the shuffled draw order
-  stays hidden, only the multiset is exposed).
+The blocks (see OBS_SCHEMA.md §5 for the exact layout table):
 
-The exact dimension is measured once at construction so the declared space and
-``_build_obs`` never drift.
+* Player vitals — the pre-v4 scalar segments (hp/max_hp/block/energy/
+  strength/dexterity/pile sizes/turn/incoming/history), names and encodings
+  UNCHANGED (``--zero-segments`` and the pin tests address these by name).
+* ``player.powers`` / ``enemy{e}.powers`` — every power INSTANCE on the
+  creature (C#'s application order, oldest first), not one row per id:
+  ``(power_id, amount_fine, amount_coarse, aux)``. ``aux`` carries the one
+  per-instance numeric field beyond ``amount`` a handful of powers need (The
+  Bomb's own blast damage, and others — see ``_power_aux``).
+* ``player.relics`` — every relic the player holds, acquisition order:
+  ``(relic_id, counter, flag)``, delegating the two aux floats to
+  ``relic_obs.relic_row`` (which already applies every admissibility rule).
+* ``hand`` — POSITIONAL (row *is* the action index): ``(card_id,
+  affliction_id, enchantment_id)`` plus the 29 hand floats (``card_features``
+  plus five R2 per-instance fields).
+* ``enemies`` — POSITIONAL, monster identity id plus the 25-float enemy row
+  (vitals, 9 intent flags, 6 intent-preview floats, 1 StatusIntent card-count
+  float — the last one is v5; see ``_enemy_floats``).
+* ``enemy{e}.intent_history`` — R3 (v6), one segment per enemy slot: the
+  last ``MAX_INTENT_HISTORY`` (3) DISPLAYED intents for whichever creature
+  currently occupies that slot, keyed internally by ``net_id`` (not list
+  position) so slot-reordering encounters can't cross-contaminate two
+  creatures' histories. No ``.ids`` half — see ``_N_ENEMY_HISTORY_SCALARS``.
+* ``damage_matrix`` — unchanged: the per-(hand slot, enemy slot) effective
+  per-hit damage preview, aligned 1:1 with the play actions.
+* ``potions`` — POSITIONAL: potion id plus a targeted flag.
+* ``cards`` — the ONE draw+discard+exhaust block, the ONLY sorted block (pile
+  order is hidden information the real game never gives the player — see
+  OBS_SCHEMA.md §5.3): ``(pile_id, card_id, affliction_id, enchantment_id)``
+  ints, ``(upgrade, effective_cost, affliction_amount, exhaust_on_next_play)``
+  floats. ``pile_id`` (1=draw, 2=discard, 3=exhaust) is a LITERAL, not a
+  vocab index.
 
-Reward (all configurable): per-step normalized player-HP delta, plus a terminal
-win/loss bonus. Because only ``end turn`` advances the enemy, damage taken is
-naturally attributed to the step that ended the turn. On a win the bonus is
-``reward_win + win_hp_bonus * (final HP / max HP)`` — ``win_hp_bonus`` (default 0)
-makes winning with more HP worth more, so the agent is pushed to win *clean* and
-not just to win. ``enemy_hp_reward_scale`` (default 0) adds a dense damage-dealt
-signal normalized by the encounter's total starting HP.
+``card_obs`` keeps its two values, but v4's layout is IDENTICAL for both (an
+id is one int, not a 640-wide one-hot): ``"features"`` writes PAD in place of
+``card_id`` in ``hand.ids`` rows ONLY. The ``cards`` (pile) block always keeps
+card identity in both modes — today's ``"features"`` mode only ever dropped
+the hand one-hot, and the pile histograms always kept card identity, so
+blanking them here would silently widen the ablation beyond what it has ever
+meant.
 
-Simplifications (documented, not silent): mid-play card *selections* (Armaments,
-Burning Pact, the Knowledge Demon curse pick, …) are not exposed as separate
-timesteps; they are resolved by ``scripted_card_selector`` — a deterministic
-heuristic (see ``selectors.py``), so training sees no hidden stochasticity from
-selection effects. Pass ``card_selector=`` to substitute your own policy, or
-``card_selector=None`` for the engine's seeded-random default. Living enemies
-past ``MAX_ENEMIES`` (only reachable via unusually spammy summons) are not
-targetable.
+Every padded row is ``id == 0`` (``PAD``) and all-zero floats (OBS_SCHEMA.md
+§2.1) — a power *present* at amount 0 stays distinguishable from one that is
+*absent* (id nonzero either way; the 0.5-centered ``_signed`` encoding never
+reads exactly 0.0 for a present instance, only a padded slot does).
+
+Simplifications (documented, not silent): mid-play card *selections*
+(Armaments, Burning Pact, the Knowledge Demon curse pick, …) are not exposed
+as separate timesteps; they are resolved by ``scripted_card_selector`` — a
+deterministic heuristic (see ``selectors.py``), so training sees no hidden
+stochasticity from selection effects. Pass ``card_selector=`` to substitute
+your own policy, or ``card_selector=None`` for the engine's seeded-random
+default. Living enemies past ``MAX_ENEMIES`` (only reachable via unusually
+spammy summons) are not targetable.
 """
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Callable, Sequence
 
@@ -79,16 +96,22 @@ import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 
+from .afflictions import AFFLICTION_INDEX
 from .cards import Card, CardType, TargetType, make_card
 from .cards.base import _CARD_CLASSES
 from .combat import CombatState, Phase
+from .enchantments import ENCHANTMENT_INDEX
 from .history import CardPlayedEntry, DamageReceivedEntry
 from .monsters import Encounter, Monster, MoveType
+from .monsters.base import MAX_INTENT_HISTORY, intent_flags
 from .monsters.overgrowth import BOSS_ENCOUNTER_KEYS as _BOSS_KEYS
 from .monsters.overgrowth import ENCOUNTERS as _OVERGROWTH
+from .obs import ObsBuffer, ObsLayout, PAD, oid
 from .player import PlayerCombatState
 from .potions import ALL_POTIONS, Potion, make_potion
 from .powers import ALL_POWERS
+from .relic_obs import relic_row
+from .relics import ALL_RELICS
 from .selectors import scripted_card_selector
 from .vocab import capacity as vocab_capacity, frozen_ids
 from .previews import (
@@ -105,14 +128,82 @@ from .previews import (
 # intent + card previews, full power vocabulary, enemy identity, history
 # scalars, dexterity fix. v3: capacity-padded frozen vocabularies (vocab.py) —
 # dims are reserved capacities, so future content additions no longer bump
-# this.
-OBS_SCHEMA_VERSION = 3
+# this. v4 (OBS_SCHEMA.md, prompts/entity-obs-schema.md phase 1): the flat
+# float Box is replaced by the {"f": Box(0,1), "i": Box(0, MAX_ID)} Dict —
+# every entity is a row addressed by id, not a slot in a one-hot, so two
+# instances of one power are two rows instead of one dict slot overwriting
+# the other. No dual-path / back-compat encoding: the old flat builders are
+# deleted outright (see the module docstring's block list). v5: the enemy
+# row grows from 24 to 25 floats — StatusIntent's displayed card count
+# (NIntent.cs:133-136 writes a number for AttackIntent AND StatusIntent; only
+# the former was encoded) is admitted as field 24, closing the last
+# documented-but-unimplemented admissible number in the intent renderer
+# sweep (OBS_SCHEMA.md §7's R3 discussion). v6 (R3, superseding §7's earlier
+# "stays deferred" decision): per-enemy intent HISTORY — the last
+# MAX_INTENT_HISTORY (3) DISPLAYED intents per enemy, keyed by net_id so the
+# three slot-reordering encounters (ovicopter_normal, fabricator_normal,
+# living_fog_normal) can't hand one creature's history to another. New
+# `enemy{e}.intent_history.f` segments (no `.ids` half — a history slot
+# carries no id, only a `recorded` presence float; see OBS_SCHEMA.md §5.2).
+OBS_SCHEMA_VERSION = 6
 
 # ── Fixed-size bounds (obs/action slots). Bump + retrain if an encounter or a
 #    relic ever exceeds these. ────────────────────────────────────────────────
 MAX_HAND = PlayerCombatState.MAX_HAND_SIZE      # 10
 MAX_POTIONS = PlayerCombatState.MAX_POTIONS      # 3
 MAX_ENEMIES = 6                                  # initial lineup ≤4; headroom for summons
+
+# T5a Task 0: the combat `potions` OBSERVATION block used to be sized to
+# MAX_POTIONS (3) — the belt's DEFAULT size — but `PlayerCombatState.__init__`
+# (player.py:136-139) accepts a `max_potions` grown past 3, and `run.py`'s
+# `RunState.create_combat` (run.py:1601) passes the RUN's `max_potions` into
+# every combat it builds. `driver.py:267` masks combat actions with
+# `combat_action_masks(self.combat, self.run.max_potions)`, so a run holding a
+# belt-growing relic hands the policy a legal potion action for a slot this
+# block had no row for. MAX_POTION_ROWS is the observation-only ceiling that
+# closes that gap; it does NOT touch the action space (COMBAT_POTION_BASE,
+# combat_action_count, STS2FullCombatEnv.n_actions all stay keyed on
+# MAX_POTIONS, per the T5a brief) — only how many rows the `potions` block
+# reserves.
+#
+# CORRECTION to the T5a brief, which cited only Phial Holster: THREE relics
+# grow the belt via `RunState.add_potion_slots` (run.py:808-813) —
+# `phial_holster.py:18` (+1), `potion_belt.py:19` (+2, COMMON rarity, always
+# reachable) and `alchemical_coffer.py:27` (+4, ANCIENT rarity like Phial
+# Holster). Phial Holster is a Neow bonus (events/neow.py:40) and Alchemical
+# Coffer an Orobas pick (events/orobas.py:22) — two DIFFERENT one-shot
+# offers, both reachable in the same run alongside a normally-rewarded
+# Potion Belt — so the true worst case is base 3 + 1 + 2 + 4 = 10 (re-verified
+# at source by T5b: each relic is unique and grants once, `RunState.MAX_
+# POTIONS` is 3). T5a kept this at 4 (base 3 + one belt-growing relic) on the
+# stated ground that widening it would grow run_env's action space
+# (N_COMBAT_ACTIONS / POTION_BASE / N_ACTIONS all derive from
+# MAX_POTION_SLOTS, which is wired onto this constant) and that was declared
+# out of scope for that lane.
+#
+# T5b CORRECTION: that deferral left a live crash, not just an undersized
+# static ceiling. `run_env.py`'s `action_masks` writes
+# `mask[POTION_BASE + (answer - POTION_ACTION_BASE)]` for every belt slot
+# `request.potion_actions()` yields — one per ACTUAL slot, not per
+# `MAX_POTION_SLOTS` — so a run holding a Potion Belt (a single COMMON relic,
+# reachable from any ordinary relic reward) already grows the belt to 5 and
+# raises `IndexError` the first time `action_masks()` runs with 5 AnyTime
+# potions held. Reproduced: `IndexError: index 1385 is out of bounds for axis
+# 0 with size 1385`. So the ceiling is widened to the true worst case (10)
+# here; `run_env.MAX_POTION_SLOTS`/`N_COMBAT_ACTIONS`/`POTION_BASE`/
+# `N_ACTIONS` all derive from this constant (never hardcoded), so the fix
+# lands in exactly one place. `STS2FullCombatEnv`'s OWN action space is
+# unaffected — it stays keyed on `MAX_POTIONS` (3), per its module docstring;
+# only the `potions` OBSERVATION block (this constant) and, through it,
+# `run_env`'s action space, change.
+MAX_POTION_ROWS = 10
+
+# OBS_SCHEMA.md §4 — every one of these traces to a measurement in the phase-1
+# ledger, not a guess.
+MAX_POWERS_PLAYER = 32
+MAX_POWERS_ENEMY = 16
+MAX_RELIC_ROWS = 48
+MAX_COMBAT_CARDS = 96
 
 # Shared absolute unit for every HP-like quantity (HP, block, damage): a fine
 # /100 scale plus a coarse /500 companion so Act-2+ values don't saturate.
@@ -121,17 +212,12 @@ MAX_ENEMIES = 6                                  # initial lineup ≤4; headroom
 ABS_SCALE = 100.0
 ABS_SCALE_COARSE = 500.0
 
-# Saturation cap for per-card pile-composition counts: how many copies of a
-# *single* card id one pile can hold before the (normalized) count saturates.
-# 10 comfortably covers realistic decks; bump if you train pathological stacks.
-PILE_COUNT_CAP = 10.0
-
 # Stable vocabularies (index = position), frozen append-only via vocab.json
 # so ported content never shifts existing indices; every N_* layout constant
 # is the reserved *capacity* (padded slots stay zero/masked), so obs and
 # action dims survive new content — see sts2_rl/vocab.py.
-# Importing .cards / .potions / .monsters / .powers has already registered
-# every class into these registries.
+# Importing .cards / .potions / .monsters / .powers / .relics has already
+# registered every class into these registries.
 CARD_IDS: list[str] = frozen_ids("cards", _CARD_CLASSES)
 CARD_INDEX: dict[str, int] = {cid: i for i, cid in enumerate(CARD_IDS)}
 N_CARDS = vocab_capacity("cards")
@@ -143,10 +229,22 @@ N_POTIONS = vocab_capacity("potions")
 # The FULL power vocabulary (no curated subset: an unlisted power would be
 # silently invisible to the agent). Strength/dexterity also get dedicated
 # signed scalar slots for resolution, but stay in the vocabulary for
-# uniformity.
+# uniformity. No longer sized as a one-hot-triple BLOCK WIDTH (that was v3;
+# v4's player.powers/enemy{e}.powers are id-addressed instance rows, capped
+# at MAX_POWERS_PLAYER/ENEMY) — POWER_INDEX is still how a power id becomes
+# an observation id.
 POWER_IDS: list[str] = frozen_ids("powers", ALL_POWERS)
 POWER_INDEX: dict[str, int] = {pid: i for i, pid in enumerate(POWER_IDS)}
 N_POWERS = vocab_capacity("powers")
+
+# New in v4 (OBS_SCHEMA.md §6, R1): the combat observation had no relic
+# segment at all before. Built here (not imported from run_env.py, which
+# computes the identical thing for the run observation) so full_env.py has no
+# dependency on run_env.py — frozen_ids is idempotent against the same
+# persisted vocab.json key, so the two computations agree by construction.
+RELIC_IDS: list[str] = frozen_ids("relics", ALL_RELICS)
+RELIC_INDEX: dict[str, int] = {rid: i for i, rid in enumerate(RELIC_IDS)}
+N_RELICS = vocab_capacity("relics")
 
 
 def _monster_classes() -> list[type[Monster]]:
@@ -168,35 +266,96 @@ MONSTER_IDS: list[str] = frozen_ids(
 MONSTER_INDEX: dict[str, int] = {mid: i for i, mid in enumerate(MONSTER_IDS)}
 N_MONSTERS = vocab_capacity("monsters")
 
+# The largest storable observation id: stored id = vocab index + 1 (obs.oid),
+# and index < capacity, so the max stored id over every vocabulary the
+# observation uses equals the max CAPACITY over those vocabularies. Computed,
+# not hardcoded, so a future capacity bump can never silently disagree with
+# the declared space's upper bound.
+MAX_OBS_ID = max(
+    vocab_capacity(kind) for kind in
+    ("cards", "relics", "powers", "monsters", "potions", "afflictions", "enchantments")
+)
+
 _CARD_TYPES = [CardType.ATTACK, CardType.SKILL, CardType.POWER, CardType.STATUS, CardType.CURSE]
 _TARGET_TYPES = [
     TargetType.ANY_ENEMY, TargetType.ALL_ENEMIES, TargetType.RANDOM_ENEMY,
     TargetType.SELF, TargetType.NONE,
 ]
 
-# Engineered card features per hand slot (see _card_features).
-N_CARD_FEATURES = 24
-# Enemy-row scalars before the identity one-hot and power vocabulary
-# (see _enemy_row): present + hp ratio + hp×2 + max_hp×2 + block×2 + strength
-# + 9 intent flags + per_hit + hits + total×2 + post_block×2.
-_N_ENEMY_SCALARS = 24
-ENEMY_ROW_DIM = _N_ENEMY_SCALARS + N_MONSTERS + 3 * N_POWERS
+# card_features()'s per-hand-row / per-pile-row-adjacent width: the 24
+# existing engineered features (cost/type/target/flags/numbers) plus 5 new R2
+# fields (OBS_SCHEMA.md §3.4) — affliction amount and three per-instance
+# flags/counters no vocabulary can express. Fields 17..23 of the original 24
+# are still "the card's numbers" (see _HAND_NUMERIC_OFFSETS below); the 5 new
+# fields are deliberately NOT part of that numeric-ablation subset (see
+# numeric_obs_indices).
+N_CARD_FEATURES = 29
+# Enemy-row scalars (see _enemy_floats): present + hp ratio + hp×2 + max_hp×2
+# + block×2 + strength + 9 intent flags + per_hit + hits + total×2 +
+# post_block×2 + status_count. The first 24 are UNCHANGED from v3 — only the
+# identity one-hot (now a single int id in enemies.ids) and the power
+# vocabulary (now enemy{e}.powers, an instance-row block) moved out of this
+# per-row float vector. Field 24 (status_count) is NEW in v5 — see
+# OBS_SCHEMA_VERSION's comment and _enemy_floats.
+_N_ENEMY_SCALARS = 25
 
-# ── Observation layout map ───────────────────────────────────────────────────
-# A named index map over the flat observation, mirroring _build_obs segment by
-# segment. Consumed by the pin tests (test/test_obs_pins.py) and by the
-# Phase 4 ablation (AblatedObsEnv) to address feature groups by name instead
-# of magic indices. A drift between this map and _build_obs fails the pin test
-# that sums the segments against the probe-measured obs dimension.
+# R3: one history slot's width. `recorded` (presence — §2.1's padding rule
+# needs an explicit flag here because a history slot carries no id, so
+# "id==0 and all-zero floats" isn't available to mean absent) + the 9 intent
+# flags (`intent_flags` order) + 4 attack-preview floats (per_hit, hits,
+# total_fine, total_coarse — `post_block` excluded, see
+# `monsters.base.IntentHistoryEntry`'s docstring) + 1 StatusIntent
+# card-count float = 15. `MAX_INTENT_HISTORY` (3) is sized in
+# `monsters/base.py` by a census of every ported monster's repeat/cooldown
+# windows (OBS_SCHEMA.md's R3 section has the numbers).
+_N_ENEMY_HISTORY_SCALARS = 15
 
-# _card_features splits into f[0:17] (cost/type/target/flags) and f[17:24] —
-# the card's *numbers* (base damage ×2 scales, hits, base block, effective
-# block, HP loss, magic number), which is what the numeric ablation removes.
-_N_CARD_NUMBER_FEATURES = 7
+
+# ── v4 observation layout (OBS_SCHEMA.md §5) ─────────────────────────────────
+# Named (segment, width) lists, exactly like v3's obs_segments()/obs_slices()
+# but split across the int/float halves per sts2_rl.obs's ObsLayout
+# convention: a logical block "name" is f"{name}.ids" (int half) / f"{name}.f"
+# (float half). Consumed by build_combat_obs/write_combat_obs below, by
+# STS2FullCombatEnv.observation_space, by the pin tests, and by T5's run env
+# (which prefixes every name "combat." and folds these into its own layout —
+# see write_combat_obs's docstring).
 
 
-def obs_segments(card_obs: str = "hybrid") -> list[tuple[str, int]]:
-    """The observation as an ordered (segment name, width) list."""
+def _check_card_obs(card_obs: str) -> None:
+    if card_obs not in ("hybrid", "features"):
+        raise ValueError("card_obs must be 'hybrid' or 'features'")
+
+
+def combat_obs_segments_i(card_obs: str = "hybrid") -> list[tuple[str, int]]:
+    """The int half as an ordered (segment name, width) list (OBS_SCHEMA.md
+    §3.1). Identical for both ``card_obs`` values — v4 stores an id as one
+    int regardless of mode; only ``write_combat_obs`` reads ``card_obs`` (to
+    decide whether ``hand.ids``' card_id column is PAD or real)."""
+    _check_card_obs(card_obs)
+    segs: list[tuple[str, int]] = [
+        ("player.powers.ids", MAX_POWERS_PLAYER * 1),
+        ("player.relics.ids", MAX_RELIC_ROWS * 1),
+        ("hand.ids", MAX_HAND * 3),               # (card_id, affliction_id, enchantment_id)
+        ("enemies.ids", MAX_ENEMIES * 1),          # monster_id
+    ]
+    for e in range(MAX_ENEMIES):
+        segs.append((f"enemy{e}.powers.ids", MAX_POWERS_ENEMY * 1))
+    segs.append(("potions.ids", MAX_POTION_ROWS * 1))
+    # (pile_id, card_id, affliction_id, enchantment_id). pile_id (1=draw,
+    # 2=discard, 3=exhaust) is a LITERAL, not a vocab index — see
+    # OBS_SCHEMA.md §3.3's correction and _cards_rows below. pile_id comes
+    # FIRST so ObsBuffer.write_rows(sort=True)'s generic (ints, floats) sort
+    # reproduces the canonical (pile_id, card_id, ...) ordering.
+    segs.append(("cards.ids", MAX_COMBAT_CARDS * 4))
+    return segs
+
+
+def combat_obs_segments_f(card_obs: str = "hybrid") -> list[tuple[str, int]]:
+    """The float half as an ordered (segment name, width) list (OBS_SCHEMA.md
+    §3.2). The player-vitals segment names/widths/encodings are UNCHANGED
+    from v3 verbatim (``--zero-segments`` and the pin tests address them by
+    name)."""
+    _check_card_obs(card_obs)
     segs: list[tuple[str, int]] = [
         ("player.hp_ratio", 1),
         ("player.hp_abs", 2),
@@ -211,64 +370,80 @@ def obs_segments(card_obs: str = "hybrid") -> list[tuple[str, int]]:
         ("player.cards_played_this_turn", 1),
         ("player.attacks_this_turn", 1),
         ("player.damage_taken", 2),
-        ("player.powers", 3 * N_POWERS),
+        ("player.powers.f", MAX_POWERS_PLAYER * 3),    # (amount_fine, amount_coarse, aux)
+        ("player.relics.f", MAX_RELIC_ROWS * 2),        # (counter/10, flag)
+        ("hand.f", MAX_HAND * N_CARD_FEATURES),
+        ("enemies.f", MAX_ENEMIES * _N_ENEMY_SCALARS),
     ]
-    for h in range(MAX_HAND):
-        segs.append((f"hand{h}.present", 1))
-        if card_obs == "hybrid":
-            segs.append((f"hand{h}.onehot", N_CARDS))
-        segs.append((f"hand{h}.features", N_CARD_FEATURES - _N_CARD_NUMBER_FEATURES))
-        segs.append((f"hand{h}.numbers", _N_CARD_NUMBER_FEATURES))
     for e in range(MAX_ENEMIES):
-        segs.extend([
-            (f"enemy{e}.present", 1),
-            (f"enemy{e}.hp_ratio", 1),
-            (f"enemy{e}.hp_abs", 2),
-            (f"enemy{e}.max_hp_abs", 2),
-            (f"enemy{e}.block_abs", 2),
-            (f"enemy{e}.strength", 1),
-            (f"enemy{e}.intent_flags", 9),
-            (f"enemy{e}.intent_preview", 6),
-            (f"enemy{e}.identity", N_MONSTERS),
-            (f"enemy{e}.powers", 3 * N_POWERS),
-        ])
+        segs.append((f"enemy{e}.powers.f", MAX_POWERS_ENEMY * 3))
+    # R3: no `.ids` counterpart — a history slot carries no id (see
+    # `_N_ENEMY_HISTORY_SCALARS`'s docstring) — and no `.overflow` flag
+    # either: unlike every other capped block, this one cannot overflow by
+    # construction (the recorder is a `deque(maxlen=MAX_INTENT_HISTORY)`, so
+    # it is physically impossible to ever hold more than the cap; there is no
+    # externally-sized game quantity here for §2.3's "truncate rather than
+    # assert" to apply to).
+    for e in range(MAX_ENEMIES):
+        segs.append(
+            (f"enemy{e}.intent_history.f",
+             MAX_INTENT_HISTORY * _N_ENEMY_HISTORY_SCALARS))
     segs.append(("damage_matrix", MAX_HAND * MAX_ENEMIES))
-    for p in range(MAX_POTIONS):
-        segs.append((f"potion{p}", 1 + N_POTIONS + 1))
-    segs.extend([
-        ("draw_pile", 2 * N_CARDS),
-        ("discard_pile", 2 * N_CARDS),
-        ("exhaust_pile", 2 * N_CARDS),
-    ])
+    segs.append(("potions.f", MAX_POTION_ROWS * 1))     # targeted flag
+    segs.append(("cards.f", MAX_COMBAT_CARDS * 4))      # (upgrade, cost, affl_amt, exhaust_next)
+    # Overflow flags (OBS_SCHEMA.md §2.3 / §3.5): one per capped block, set to
+    # 1.0 iff ObsBuffer.write_rows truncated that block this step. Listed in
+    # the order the blocks were introduced above.
+    for name in ("player.powers", "player.relics", "hand", "enemies", "potions", "cards"):
+        segs.append((f"{name}.overflow", 1))
+    for e in range(MAX_ENEMIES):
+        segs.append((f"enemy{e}.powers.overflow", 1))
     return segs
 
 
-def obs_slices(card_obs: str = "hybrid") -> dict[str, slice]:
-    """Segment name → slice into the flat observation vector."""
-    out: dict[str, slice] = {}
-    i = 0
-    for name, width in obs_segments(card_obs):
-        out[name] = slice(i, i + width)
-        i += width
-    return out
+@lru_cache(maxsize=None)
+def combat_obs_layout(card_obs: str = "hybrid") -> ObsLayout:
+    return ObsLayout(combat_obs_segments_f(card_obs), combat_obs_segments_i(card_obs))
 
 
-# The Phase 1 "absolute numbers & pipeline previews" feature groups — the
-# enhanced half of the OBS_PLAN Phase 4 ablation. Everything else (ratios,
-# energy, flags, identities, power vocabulary, pile histograms) stays.
-_NUMERIC_SEGMENT_SUFFIXES = (
-    "hp_abs", "max_hp_abs", "block_abs", "incoming_post_block",
-    "numbers", "intent_preview",
+# ── Numeric ablation (OBS_PLAN Phase 4, step 12) ─────────────────────────────
+# Ported onto the v4 layout: v3 addressed whole SEGMENTS by name (a hand row's
+# "numbers" and an enemy row's "hp_abs"/"intent_preview" were each their own
+# named sub-segment). v4 packs a whole hand/enemy row into one "hand.f" /
+# "enemies.f" segment, so the numeric subset is now a set of WITHIN-ROW
+# offsets instead of whole segment names — same features, different
+# addressing. See OBS_SCHEMA.md's "what breaks, deliberately" framing: this
+# ablation still means "what the agent saw before the schema-v2 numeric
+# overhaul", so the 5 new R2 hand fields (indices 24..28 — they did not exist
+# at schema v2) are deliberately NOT included below.
+_HAND_NUMERIC_OFFSETS = tuple(range(17, 24))    # dmg×2, hits, block, eff_block, hp_loss, magic
+_ENEMY_NUMERIC_OFFSETS = (2, 3, 4, 5, 6, 7, 18, 19, 20, 21, 22, 23, 24)   # hp/max_hp/block_abs, preview, status_count
+_PLAYER_NUMERIC_SEGMENTS = (
+    "player.hp_abs", "player.max_hp_abs", "player.block_abs", "player.incoming_post_block",
 )
 
 
 def numeric_obs_indices(card_obs: str = "hybrid") -> np.ndarray:
-    """Flat indices of every absolute-number / preview feature."""
+    """Flat indices into ``obs["f"]`` of every absolute-number / preview
+    feature (the v3 ablation, re-expressed over the v4 float layout).
+    ``AblatedObsEnv.observation`` zeroes exactly these indices in ``obs["f"]``
+    — ``obs["i"]`` is never touched, since ids are categorical, not numeric."""
+    layout = combat_obs_layout(card_obs)
     idx: list[int] = []
-    for name, sl in obs_slices(card_obs).items():
-        if name == "damage_matrix" or name.rsplit(".", 1)[-1] in _NUMERIC_SEGMENT_SUFFIXES:
-            idx.extend(range(sl.start, sl.stop))
-    return np.asarray(idx, dtype=np.int64)
+    for name in _PLAYER_NUMERIC_SEGMENTS:
+        sl = layout.f_slices[name]
+        idx.extend(range(sl.start, sl.stop))
+    dm = layout.f_slices["damage_matrix"]
+    idx.extend(range(dm.start, dm.stop))
+    hand_sl = layout.f_slices["hand.f"]
+    for h in range(MAX_HAND):
+        base = hand_sl.start + h * N_CARD_FEATURES
+        idx.extend(base + o for o in _HAND_NUMERIC_OFFSETS)
+    enemies_sl = layout.f_slices["enemies.f"]
+    for e in range(MAX_ENEMIES):
+        base = enemies_sl.start + e * _N_ENEMY_SCALARS
+        idx.extend(base + o for o in _ENEMY_NUMERIC_OFFSETS)
+    return np.asarray(sorted(idx), dtype=np.int64)
 
 
 DEFAULT_DECK_IDS = ["strike"] * 5 + ["defend"] * 4 + ["bash"] + ["whirlwind"] + ["bloodletting"] + ["pommel_strike"] + ["tremble"]
@@ -296,7 +471,9 @@ def _abs2(x: float) -> tuple[float, float]:
 # ── Combat action block (shared by STS2FullCombatEnv and the run driver /
 #    run env): 0 = end turn, then MAX_HAND×MAX_ENEMIES play actions, then
 #    per-slot potion actions. The play block is fixed-size, so decoding never
-#    depends on how many potion slots the caller exposes. ──────────────────
+#    depends on how many potion slots the caller exposes. UNCHANGED by the
+#    schema-v4 observation rewrite — the action space is not part of this
+#    task. ──────────────────────────────────────────────────────────────────
 
 COMBAT_PLAY_BASE = 1
 COMBAT_POTION_BASE = COMBAT_PLAY_BASE + MAX_HAND * MAX_ENEMIES   # 61
@@ -375,7 +552,7 @@ def combat_action_masks(
 
 # ── Combat observation builder (shared by STS2FullCombatEnv and the run
 #    env). Pure reads over a CombatState; layout documented segment-by-
-#    segment in obs_segments()/obs_slices() above. ─────────────────────────
+#    segment in combat_obs_segments_i()/_f() above. ─────────────────────────
 
 
 def _power_amt(creature, pid: str) -> float:
@@ -383,77 +560,145 @@ def _power_amt(creature, pid: str) -> float:
     return float(pw.amount) if pw is not None else 0.0
 
 
-# The constant power-vocabulary background: every slot as an *absent* power
-# (presence 0, signed amount 0.5/0.5 at both scales — the encoding of "not
-# present"). Baked into the obs template so a present power is a few sparse
-# overwrites instead of pushing 3·N_POWERS constants every build.
-_POWER_BG = np.empty(3 * N_POWERS, dtype=np.float32)
-_POWER_BG[0::3] = 0.0
-_POWER_BG[1::3] = 0.5
-_POWER_BG[2::3] = 0.5
+def _power_aux(pw) -> float:
+    """The one per-instance numeric field beyond ``amount`` that no
+    vocabulary can express (OBS_SCHEMA.md §3.6). Keyed on the power's id
+    EXPLICITLY, never duck-typed off an attribute name — a duck-typed
+    ``getattr(pw, "damage", 0)`` would silently misread any unrelated power
+    that happens to define a same-named attribute.
+
+    **Admissibility (fix-pass correction, 2026-08-02):** the original sweep
+    here was scoped to ``PowerInstanceType.INSTANCED*`` classes, on the
+    theory that those are "the only ones that can ever produce more than one
+    row for the same id". That theory does not establish the scope: ``aux``
+    is a per-ROW field, populated once per instance regardless of how many
+    rows the id ends up with, so a power that only ever has ONE instance can
+    still need an ``aux`` the moment it carries per-instance numeric state
+    the ``(id, amount)`` pair alone can't express. The actual test — the
+    same one ``relic_obs.py`` already applies to relics — is **the game's
+    own display path**: a C# power's ``PowerModel.DisplayAmount`` override is
+    that path for powers, exactly as ``RelicModel.ShowCounter`` /
+    ``DisplayAmount`` is for relics. Twelve C# powers override
+    ``DisplayAmount``; four are ported, and none of the four are INSTANCED —
+    they are admitted below for that reason, not because they can multi-row.
+
+    Grepping ``sts2_rl/powers.py`` for every ``PowerInstanceType.INSTANCED*``
+    class found SIX with a per-instance numeric field beyond ``amount``, not
+    just The Bomb:
+
+    =====================  ======  =========================================
+    power id                side    field (what it tracks)
+    =====================  ======  =========================================
+    the_bomb                player  damage   — this fuse's own blast damage
+    toric_toughness         player  block    — this fuse's own block-on-clear
+    automation              player  cards_left — countdown to the next tick
+    panache                 player  cards_left — countdown to the next tick
+    thievery                enemy   gold_stolen — running total THIS instance stole
+    withering_presence      enemy   _cards_left — countdown to the next Wither
+    =====================  ======  =========================================
+
+    (``rolling_boulder`` is INSTANCED too, but its growing value IS
+    ``amount`` — ``PowerCmd.modify_amount`` bumps it directly — so it needs no
+    ``aux``. ``swipe``'s ``stolen_card`` and ``strangle``'s ``_amounts`` are
+    also per-instance state beyond ``amount``, but neither is a NUMBER — a
+    card reference and a transient dict aren't encodable as one float, so
+    they are out of scope for this field; a future R3-style history block
+    would be the right place for card-identity state like ``stolen_card``.)
+
+    Four more, found by grepping the C# ``DisplayAmount`` overrides directly
+    rather than the INSTANCED subset (verified against
+    ``Slay the Spire 2/src/Core/Models/Powers/*.cs``, not taken on faith):
+
+    =====================  ======  =========================================
+    power id                side    displayed value (DisplayAmount)
+    =====================  ======  =========================================
+    hardened_shell          either  max(0, Amount − damageReceivedThisTurn)
+                                     — the REMAINING absorb cap, never the raw
+                                     damage-received counter
+                                     (HardenedShellPower.cs:25)
+    sloth                   either  _cardsPlayedThisTurn (SlothPower.cs:20)
+    tender                  either  CardsPlayedThisTurn (TenderPower.cs:22)
+    slow                    either  SlowAmount * 10 (SlowPower.cs:22,26-30)
+    =====================  ======  =========================================
+
+    Two scales, chosen by what kind of quantity the field is:
+      - HP-like/currency-like quantities (blast damage, block, gold,
+        hardened_shell's remaining cap) share this module's ABS_SCALE (/100)
+        — the same unit every other HP/block/damage number here uses.
+      - Small countdown/per-turn-count counters (bounded by their own
+        CARDS_PER_TRIGGER or initial ``amount``, typically single digits)
+        share a /10.0 scale — the same denominator already used for a
+        relic's counter and a card's affliction amount — rather than
+        ABS_SCALE, which would compress them into the bottom few percent of
+        [0, 1] for no benefit. sloth and tender's displayed
+        cards-played-this-turn counts land here.
+      - slow is the interesting case: its C# ``DisplayAmount`` is already
+        ``raw_counter * 10``, and this module's ABS_SCALE is 100 — so
+        publishing ``displayed / ABS_SCALE`` and publishing
+        ``raw_counter / 10.0`` are the exact same float, not two competing
+        choices. It is implemented as ``_cards_this_turn / 10.0`` below,
+        which is that shared value.
+    """
+    pid = pw.id
+    if pid == "the_bomb":
+        return _clip01(pw.damage / ABS_SCALE)
+    if pid == "toric_toughness":
+        return _clip01(pw.block / ABS_SCALE)
+    if pid == "thievery":
+        return _clip01(pw.gold_stolen / ABS_SCALE)
+    if pid == "withering_presence":
+        return _clip01(pw._cards_left / 10.0)
+    if pid == "automation" or pid == "panache":
+        return _clip01(pw.cards_left / 10.0)
+    if pid == "hardened_shell":
+        return _clip01(max(0, pw.amount - pw._damage_received_this_turn) / ABS_SCALE)
+    if pid == "sloth" or pid == "tender":
+        return _clip01(pw._cards_played_this_turn / 10.0)
+    if pid == "slow":
+        return _clip01(pw._cards_this_turn / 10.0)
+    return 0.0
 
 
-def _write_power_triples(creature, out: np.ndarray, base: int) -> None:
-    """Overwrite the present powers into ``out[base : base+3·N_POWERS]``,
-    which must already hold the ``_POWER_BG`` absent-power background. Only a
-    creature's actually-present powers (a handful) are written; every absent
-    slot and the reserved-capacity tail keep the (0, 0.5, 0.5) background."""
-    for pid, pw in creature.powers.items():
-        i = POWER_INDEX.get(pid)
-        if i is None:                      # power id outside the frozen vocab
-            continue
-        o = base + 3 * i
-        out[o] = 1.0
-        out[o + 1] = _signed(pw.amount, 10)
-        out[o + 2] = _signed(pw.amount, 50)
+def _power_rows(creature) -> list[tuple[list[int], list[float]]]:
+    """Every power INSTANCE on ``creature``, oldest-first — C#'s application
+    order (``creatures.PowerList.values()``, phase 0). One row per INSTANCE,
+    not per id: two ``the_bomb`` fuses are two rows with two different
+    ``aux`` values, which is the entire reason phase 0 changed
+    ``creature.powers`` from a dict to an ordered instance list."""
+    return [
+        ([oid(POWER_INDEX.get(pw.id))],
+         [_signed(pw.amount, 10), _signed(pw.amount, 50), _power_aux(pw)])
+        for pw in creature.powers.values()
+    ]
 
 
-def power_triples(creature) -> list[float]:
-    """Full power vocabulary: per power id, presence bit + signed amount at
-    a fine (±10) and a coarse (±50) scale. Signed so Strength/Dexterity
-    below zero stay representable; presence disambiguates 'absent' from
-    'present at 0'. Thin list-returning wrapper over ``_write_power_triples``
-    for legacy callers; the obs builders write in place. Computed in float64
-    so the returned list is bit-identical to the pre-vectorization API (the
-    observation itself is float32, exactly as before)."""
-    out = np.array(_POWER_BG, dtype=np.float64)
-    _write_power_triples(creature, out, 0)
-    return out.tolist()
+def _relic_rows(state: CombatState) -> list[tuple[list[int], list[float]]]:
+    """Every relic the player holds, in acquisition order (``state.relics`` —
+    what the relic bar shows). The two aux floats are entirely
+    ``relic_obs.relic_row``'s — every admissibility rule (displayed value,
+    the in-combat-only gates, the clamp) already lives there; this only
+    divides the returned counter by 10 (OBS_SCHEMA.md §5.2)."""
+    rows = []
+    for relic in state.relics:
+        counter, flag = relic_row(relic, in_combat=True)
+        rows.append(([oid(RELIC_INDEX.get(relic.id))], [counter / 10.0, float(flag)]))
+    return rows
 
 
-def _write_pile_composition(pile, out: np.ndarray, base: int) -> None:
-    """Write a pile's normalized base/upgraded histogram into
-    ``out[base : base+2·N_CARDS]`` (which must start zeroed). Loops the pile's
-    cards (tens) and writes only the distinct ids present — never scans the
-    2·N_CARDS slots or clips constants. Matches the reference exactly: counts
-    are ``count / PILE_COUNT_CAP`` clipped to 1.0."""
-    counts: dict[int, int] = {}
-    for card in pile:
-        idx = CARD_INDEX[card.id]
-        key = (N_CARDS + idx) if card.upgrade_level > 0 else idx
-        counts[key] = counts.get(key, 0) + 1
-    for key, c in counts.items():
-        v = c / PILE_COUNT_CAP
-        out[base + key] = 1.0 if v > 1.0 else v
+def _affliction_id_int(card: Card) -> int:
+    aff = card.affliction
+    return PAD if aff is None else oid(AFFLICTION_INDEX.get(aff.id))
 
 
-def pile_composition(pile: list[Card]) -> list[float]:
-    """Order-agnostic histogram of a card pile, split by upgrade state.
-
-    Returns ``2 * N_CARDS`` normalized counts: the first ``N_CARDS`` are
-    base (unupgraded) copies per card id, the next ``N_CARDS`` are upgraded
-    copies. Splitting the histogram is what lets the policy tell a pile of
-    Strikes from a pile of Strike+ — upgrade is (currently) a single bit per
-    card, so a base/upgraded split captures it exactly; any card whose
-    ``upgrade_level`` climbs past 1 in future simply counts as upgraded. Thin
-    list-returning wrapper (float64, bit-identical to the pre-vectorization
-    API); the obs builders write float32 in place."""
-    out = np.zeros(2 * N_CARDS, dtype=np.float64)
-    _write_pile_composition(pile, out, 0)
-    return out.tolist()
+def _enchantment_id_int(card: Card) -> int:
+    ench = card.enchantment
+    return PAD if ench is None else oid(ENCHANTMENT_INDEX.get(ench.id))
 
 
 def card_features(state: CombatState, card: Card | None) -> list[float]:
+    """29 floats: the original 24 engineered card features (fields 0..23,
+    UNCHANGED — do not re-tune), plus 5 new R2 per-instance fields
+    (OBS_SCHEMA.md §3.4) no vocabulary can express."""
     f = [0.0] * N_CARD_FEATURES
     if card is None:
         return f
@@ -488,7 +733,267 @@ def card_features(state: CombatState, card: Card | None) -> list[float]:
     f[22] = _clip01(card.base_hp_loss / ABS_SCALE)
     magic = card.magic_number
     f[23] = _clip01(magic / 20.0) if magic is not None else 0.0
+    # ── R2 fields (OBS_SCHEMA.md §3.4) ────────────────────────────────
+    f[24] = _clip01(card.affliction.amount / 10.0) if card.affliction is not None else 0.0
+    f[25] = 1.0 if card.exhaust_on_next_play else 0.0
+    f[26] = 1.0 if card._has_single_turn_retain else 0.0
+    f[27] = 1.0 if card._has_single_turn_sly else 0.0
+    f[28] = _clip01(card.base_replay_count / 3.0)
     return f
+
+
+def _hand_rows(state: CombatState, card_obs: str) -> list[tuple[list[int], list[float]]]:
+    """POSITIONAL: row h IS hand slot h (the play-action grid depends on
+    this). Empty slots are explicit PAD rows, never skipped.
+
+    Builds ``max(MAX_HAND, len(hand))`` rows, not exactly ``MAX_HAND`` — a
+    hand at or under cap gets exactly the same rows as before (this is a
+    no-op change in the common case), but a hand that somehow exceeds
+    ``MAX_HAND`` now hands ``write_rows`` a genuinely over-cap sequence, so
+    ``hand.overflow`` can actually fire (OBS_SCHEMA.md §2.3) instead of being
+    structurally dead. ``write_rows`` still does the real truncation/warning
+    and keeps the positional prefix — this only stops pre-truncating before
+    the caller ever sees the true count."""
+    hand = state.player.hand
+    rows = []
+    for h in range(max(MAX_HAND, len(hand))):
+        if h < len(hand):
+            card = hand[h]
+            card_id = PAD if card_obs == "features" else oid(CARD_INDEX.get(card.id))
+            ints = [card_id, _affliction_id_int(card), _enchantment_id_int(card)]
+            floats = card_features(state, card)
+        else:
+            ints = [PAD, PAD, PAD]
+            floats = [0.0] * N_CARD_FEATURES
+        rows.append((ints, floats))
+    return rows
+
+
+def _enemy_floats(state: CombatState, e) -> list[float]:
+    """One living enemy's 25-float scalar row. Fields 0-23 are UNCHANGED
+    from v3 — only the identity one-hot and power vocabulary moved out of
+    this row. Field 24 (status_count) is NEW in v5 (OBS_SCHEMA_VERSION's
+    comment). Gone/absent enemies are handled by the caller (an all-zero
+    row)."""
+    f = [0.0] * _N_ENEMY_SCALARS
+    f[0] = 1.0
+    f[1] = _clip01(e.hp / max(1, e.max_hp))
+    f[2], f[3] = _abs2(e.hp)
+    f[4], f[5] = _abs2(e.max_hp)
+    f[6], f[7] = _abs2(e.block)
+    f[8] = _signed(e.strength, 30)
+
+    intent = e.current_intent
+    fb = 9
+    if intent.has(MoveType.ATTACK):
+        f[fb] = 1.0
+    if intent.has(MoveType.DEFEND):
+        f[fb + 1] = 1.0
+    if intent.has(MoveType.BUFF):
+        f[fb + 2] = 1.0
+    if (intent.has(MoveType.DEBUFF) or intent.has(MoveType.DEBUFF_STRONG)
+            or intent.has(MoveType.CARD_DEBUFF)):
+        f[fb + 3] = 1.0
+    if intent.has(MoveType.STATUS_CARD):
+        f[fb + 4] = 1.0
+    if intent.has(MoveType.SUMMON):
+        f[fb + 5] = 1.0
+    if intent.has(MoveType.ESCAPE):
+        f[fb + 6] = 1.0
+    if intent.has(MoveType.HEAL):
+        f[fb + 7] = 1.0
+    if intent.has(MoveType.STUN) or intent.has(MoveType.SLEEP) or e.stunned:
+        f[fb + 8] = 1.0
+
+    # Telegraphed attack through the full modifier pipeline (what the game
+    # displays — see AttackIntent.GetSingleDamage), plus a post-block preview
+    # against the player's current block.
+    preview = preview_incoming_damage(state, e)
+    if preview is not None:
+        pb = 18
+        f[pb] = _clip01(preview.per_hit / ABS_SCALE)
+        f[pb + 1] = _clip01(preview.hits / 10.0)
+        f[pb + 2], f[pb + 3] = _abs2(preview.total)
+        f[pb + 4], f[pb + 5] = _abs2(preview.post_block)
+
+    # StatusIntent's card count — the only OTHER IntentType besides Attack
+    # whose icon carries a number (NIntent.cs:133-136; StatusIntent.cs's
+    # FORMAT_STATUS_CARD_COUNT labels it with CardCount). Same /10.0 bucket
+    # as the `hits` field above: the C# source's `new StatusIntent(N)` call
+    # sites range 1..10 (SlimedBerserker.cs's VOMIT_ICHOR_MOVE is the max).
+    # `Intent.status_count` mirrors that C# CardCount, but as of
+    # monster/_intent_count_lost only 5 of the sim's 18 StatusIntent
+    # construction sites populate it (sts2_rl/monsters/base.py's `Intent`
+    # docstring) — the other 13 leave it None, and this correctly reads 0.0
+    # for them rather than fabricating a number the sim was never told,
+    # pending that separate, already-tracked port gap.
+    if intent.has(MoveType.STATUS_CARD) and intent.status_count is not None:
+        f[24] = _clip01(intent.status_count / 10.0)
+    return f
+
+
+def _enemies_rows(state: CombatState) -> list[tuple[list[int], list[float]]]:
+    """POSITIONAL: row e IS enemy slot e (the play-action grid and
+    damage_matrix depend on this). A gone/absent enemy is an explicit PAD
+    row, never skipped — see OBS_SCHEMA.md §3.3's alignment warning.
+
+    Builds ``max(MAX_ENEMIES, len(enemies))`` rows (see ``_hand_rows``'s
+    docstring for why) — a spammy-summon encounter that actually exceeds
+    ``MAX_ENEMIES`` (the module docstring already documents these as
+    unreachable by targeting) now sets ``enemies.overflow`` instead of
+    silently hiding the extra creatures with the flag stuck at 0.0."""
+    enemies = state.enemies
+    rows = []
+    for e_i in range(max(MAX_ENEMIES, len(enemies))):
+        e = enemies[e_i] if e_i < len(enemies) else None
+        if e is None or e.is_gone:
+            rows.append(([PAD], [0.0] * _N_ENEMY_SCALARS))
+        else:
+            idx = MONSTER_INDEX.get(e.__class__.__name__)
+            rows.append(([oid(idx)], _enemy_floats(state, e)))
+    return rows
+
+
+def _enemy_power_rows(state: CombatState, e_i: int) -> list[tuple[list[int], list[float]]]:
+    """Power instance rows for enemy slot ``e_i`` — positional in the SLOT
+    (one segment per enemy, ``enemy{e}.powers``), ``sort=False`` within it
+    (C#'s application order), same as ``_power_rows``."""
+    enemies = state.enemies
+    e = enemies[e_i] if e_i < len(enemies) else None
+    if e is None or e.is_gone:
+        return []
+    return _power_rows(e)
+
+
+def _enemy_intent_history_floats(state: CombatState, e_i: int) -> list[float]:
+    """R3: the ``MAX_INTENT_HISTORY * _N_ENEMY_HISTORY_SCALARS``-float
+    history block for enemy slot ``e_i``, most-recent-first.
+
+    Looked up by the creature CURRENTLY occupying slot ``e_i``'s ``net_id``
+    — never by list position — so the three encounters that reorder a live
+    enemy's slot mid-combat (``ovicopter_normal``, ``fabricator_normal``,
+    ``living_fog_normal``) can't hand one creature's history to another: the
+    dict is keyed by net_id, and this function re-resolves ``net_id`` from
+    ``state.enemies[e_i]`` fresh on every call.
+
+    A gone/absent slot (no creature, or ``is_gone``) reads fully unrecorded
+    — every slot's `recorded` float 0.0 — matching how ``_enemies_rows``
+    already blanks that row's CURRENT fields; a creature that once occupied
+    this slot but is gone now has no business appearing in the observation
+    at all, current or historical. A living creature with fewer than
+    ``MAX_INTENT_HISTORY`` prior turns (freshly summoned, or still early in
+    the combat) gets unrecorded PAD in its remaining slots — never
+    fabricated zeros passed off as a real turn."""
+    width = MAX_INTENT_HISTORY * _N_ENEMY_HISTORY_SCALARS
+    enemies = state.enemies
+    e = enemies[e_i] if e_i < len(enemies) else None
+    if e is None or e.is_gone or e.net_id is None:
+        return [0.0] * width
+    entries = state._intent_history.get(e.net_id, ())
+    out: list[float] = []
+    for slot in range(MAX_INTENT_HISTORY):
+        if slot < len(entries):
+            entry = entries[slot]
+            atk, defend, buff, deb, status_card, summon, escape, heal, stun = entry.flags
+            row = [
+                1.0,  # recorded
+                1.0 if atk else 0.0,
+                1.0 if defend else 0.0,
+                1.0 if buff else 0.0,
+                1.0 if deb else 0.0,
+                1.0 if status_card else 0.0,
+                1.0 if summon else 0.0,
+                1.0 if escape else 0.0,
+                1.0 if heal else 0.0,
+                1.0 if stun else 0.0,
+                _clip01(entry.per_hit / ABS_SCALE) if entry.per_hit is not None else 0.0,
+                _clip01(entry.hits / 10.0) if entry.hits is not None else 0.0,
+            ]
+            row += list(_abs2(entry.total)) if entry.total is not None else [0.0, 0.0]
+            row.append(
+                _clip01(entry.status_count / 10.0)
+                if entry.status_count is not None else 0.0
+            )
+        else:
+            row = [0.0] * _N_ENEMY_HISTORY_SCALARS
+        out.extend(row)
+    return out
+
+
+def _potions_rows(state: CombatState) -> list[tuple[list[int], list[float]]]:
+    """POSITIONAL: row p IS potion slot p (the potion-action grid depends on
+    this). An empty slot is an explicit PAD row, never skipped.
+
+    Builds ``max(MAX_POTION_ROWS, len(potions))`` rows (see ``_hand_rows``'s
+    docstring for why) — a belt grown past ``MAX_POTION_ROWS`` now sets
+    ``potions.overflow`` instead of silently hiding the extra slot with the
+    flag stuck at 0.0. (T5a Task 0: this cap was ``MAX_POTIONS`` — the
+    belt's default size, 3 — which is narrower than a grown belt's real
+    slot count; see ``MAX_POTION_ROWS``'s own comment for the fix and the
+    still-open gap beyond 4.)"""
+    potions = state.player.potions
+    rows = []
+    for p_i in range(max(MAX_POTION_ROWS, len(potions))):
+        potion = potions[p_i] if p_i < len(potions) else None
+        if potion is None:
+            rows.append(([PAD], [0.0]))
+        else:
+            rows.append(([oid(POTION_INDEX.get(potion.id))],
+                         [1.0 if potion.targeted else 0.0]))
+    return rows
+
+
+def card_instance_row(
+    card: Card, pile_id: int, effective_cost: float,
+) -> tuple[list[int], list[float]]:
+    """The shared R2 card-instance row (OBS_SCHEMA.md §5.1/§5.2):
+    `(pile_id, card_id, affliction_id, enchantment_id)` ints,
+    `(upgrade, effective_cost, affliction_amount, exhaust_on_next_play)`
+    floats. Used for EVERY card-instance row in both envs — combat piles
+    (`_pile_card_row`, below) and every run-side block with no live
+    `CombatState` (deck, reward cards, select candidates —
+    `run_env._run_card_row`).
+
+    `effective_cost` is an explicit PARAMETER rather than computed here,
+    because the one genuine divergence between the two callers is exactly
+    how that one field is produced (OBS_SCHEMA.md §2.3): in combat it is
+    hook-modified (`previews.preview_card_energy_cost`, which runs the card
+    through `state.hooks`/`state.player.energy`); out of combat there is no
+    live `CombatState` to run hooks through, so `run_env._run_card_row`
+    passes the card's plain printed `energy_cost` instead — which is also
+    what the game's own out-of-combat screens (deck view, shop, reward) show.
+    Splitting the row shape from cost computation this way means the two
+    callers share ONE encoder rather than hand-keeping two copies of the row
+    shape that have to agree by construction (T5b's fix — see the T5a report
+    this closes: that lane's brief asked to reuse this function while also
+    restricting it from touching this file for anything but Task 0, so it
+    correctly left the duplication in place and reported the conflict).
+    """
+    ints = [pile_id, oid(CARD_INDEX.get(card.id)), _affliction_id_int(card), _enchantment_id_int(card)]
+    floats = [
+        _clip01(card.upgrade_level / 5.0),
+        _clip01(effective_cost / 6.0),
+        _clip01(card.affliction.amount / 10.0) if card.affliction is not None else 0.0,
+        1.0 if card.exhaust_on_next_play else 0.0,
+    ]
+    return ints, floats
+
+
+def _pile_card_row(state: CombatState, card: Card, pile_id: int) -> tuple[list[int], list[float]]:
+    return card_instance_row(card, pile_id, preview_card_energy_cost(state, card))
+
+
+def _cards_rows(state: CombatState) -> list[tuple[list[int], list[float]]]:
+    """The unordered draw+discard+exhaust multiset (OBS_SCHEMA.md §5.3): the
+    hidden-information rule the sort in ``write_rows(..., sort=True)``
+    enforces. Card identity is ALWAYS carried here regardless of
+    ``card_obs`` — see the module docstring's ``card_obs`` note."""
+    p = state.player
+    rows = []
+    for pile_id, pile in ((1, p.draw_pile), (2, p.discard_pile), (3, p.exhaust_pile)):
+        for card in pile:
+            rows.append(_pile_card_row(state, card, pile_id))
+    return rows
 
 
 def _write_damage_matrix(state: CombatState, out: np.ndarray, base: int) -> None:
@@ -513,265 +1018,120 @@ def _write_damage_matrix(state: CombatState, out: np.ndarray, base: int) -> None
                 out[rowbase + e_i] = 1.0 if v > 1.0 else v
 
 
-def damage_matrix(state: CombatState) -> list[float]:
-    """MAX_HAND × MAX_ENEMIES effective per-hit damage previews, in the
-    shared absolute unit; 0 for empty slots, gone enemies, and cards that
-    deal no enemy damage. Thin list-returning wrapper (float64, bit-identical
-    to the pre-vectorization API); obs builders write float32 in place."""
-    out = np.zeros(MAX_HAND * MAX_ENEMIES, dtype=np.float64)
-    _write_damage_matrix(state, out, 0)
-    return out.tolist()
+def write_combat_obs(
+    state: CombatState, buf: ObsBuffer, card_obs: str = "hybrid", *, prefix: str = "",
+) -> None:
+    """Write the combat observation into ``buf``, a buffer the CALLER owns.
 
+    Segments are addressed as ``prefix + name`` — so the run env (T5) can
+    build one ``ObsLayout`` whose combat half is
+    ``combat_obs_segments_*()`` with every name prefixed ``"combat."``,
+    allocate one ``ObsBuffer`` for the whole run observation, and call
+    ``write_combat_obs(combat, buf, prefix="combat.")``.
 
-# Intra-enemy-row byte offsets (relative to the row start), derived once from
-# the layout — enemy rows are identical in both card_obs modes.
-def _enemy_row_offsets() -> dict[str, int]:
-    sl = obs_slices("hybrid")
-    base = sl["enemy0.present"].start
-    return {
-        "hp_ratio": sl["enemy0.hp_ratio"].start - base,
-        "hp_abs": sl["enemy0.hp_abs"].start - base,
-        "max_hp": sl["enemy0.max_hp_abs"].start - base,
-        "block": sl["enemy0.block_abs"].start - base,
-        "strength": sl["enemy0.strength"].start - base,
-        "flags": sl["enemy0.intent_flags"].start - base,
-        "preview": sl["enemy0.intent_preview"].start - base,
-        "identity": sl["enemy0.identity"].start - base,
-        "powers": sl["enemy0.powers"].start - base,
-    }
-
-
-_ENEMY_E_OFF = _enemy_row_offsets()
-
-
-def _write_enemy_row(state: CombatState, e, out: np.ndarray, rb: int,
-                     off: dict[str, int]) -> None:
-    """Write a *living* enemy's row into ``out`` starting at ``rb``. The row's
-    scalar/identity region must be zeroed and its power sub-block must hold the
-    ``_POWER_BG`` background; only present features/powers are written."""
-    s = state
-    out[rb] = 1.0
-    out[rb + off["hp_ratio"]] = _clip01(e.hp / max(1, e.max_hp))
-    o = rb + off["hp_abs"]; out[o:o + 2] = _abs2(e.hp)
-    o = rb + off["max_hp"]; out[o:o + 2] = _abs2(e.max_hp)
-    o = rb + off["block"]; out[o:o + 2] = _abs2(e.block)
-    out[rb + off["strength"]] = _signed(e.strength, 30)
-
-    intent = e.current_intent
-    fb = rb + off["flags"]
-    if intent.has(MoveType.ATTACK):
-        out[fb] = 1.0
-    if intent.has(MoveType.DEFEND):
-        out[fb + 1] = 1.0
-    if intent.has(MoveType.BUFF):
-        out[fb + 2] = 1.0
-    if (intent.has(MoveType.DEBUFF) or intent.has(MoveType.DEBUFF_STRONG)
-            or intent.has(MoveType.CARD_DEBUFF)):
-        out[fb + 3] = 1.0
-    if intent.has(MoveType.STATUS_CARD):
-        out[fb + 4] = 1.0
-    if intent.has(MoveType.SUMMON):
-        out[fb + 5] = 1.0
-    if intent.has(MoveType.ESCAPE):
-        out[fb + 6] = 1.0
-    if intent.has(MoveType.HEAL):
-        out[fb + 7] = 1.0
-    if intent.has(MoveType.STUN) or intent.has(MoveType.SLEEP) or e.stunned:
-        out[fb + 8] = 1.0
-
-    # Telegraphed attack through the full modifier pipeline (what the
-    # game displays — see AttackIntent.GetSingleDamage), plus a post-block
-    # preview against the player's current block.
-    preview = preview_incoming_damage(s, e)
-    if preview is not None:
-        pb = rb + off["preview"]
-        out[pb] = _clip01(preview.per_hit / ABS_SCALE)
-        out[pb + 1] = _clip01(preview.hits / 10.0)
-        out[pb + 2:pb + 4] = _abs2(preview.total)
-        out[pb + 4:pb + 6] = _abs2(preview.post_block)
-
-    # Enemy identity one-hot (unknown classes stay all-zero).
-    idx = MONSTER_INDEX.get(e.__class__.__name__)
-    if idx is not None:
-        out[rb + off["identity"] + idx] = 1.0
-
-    _write_power_triples(e, out, rb + off["powers"])
-
-
-def enemy_row(state: CombatState, e) -> list[float]:
-    """One enemy's observation row (thin list-returning wrapper; obs builders
-    write in place; float64, bit-identical to the pre-vectorization API).
-    Gone/absent enemies are an all-zero row."""
-    out = np.zeros(ENEMY_ROW_DIM, dtype=np.float64)
-    if e is not None and not e.is_gone:
-        pb = _ENEMY_E_OFF["powers"]
-        out[pb:pb + 3 * N_POWERS] = _POWER_BG
-        _write_enemy_row(state, e, out, 0, _ENEMY_E_OFF)
-    return out.tolist()
-
-
-@dataclass(frozen=True)
-class _CombatLayout:
-    """Precomputed integer write-offsets and the constant template for one
-    ``card_obs`` mode — derived once from ``obs_slices`` so it can never drift
-    from the layout. ``_write_combat_obs`` writes into a copy of ``template``."""
-    dim: int
-    template: np.ndarray
-    hybrid: bool
-    p: dict            # player segment name (sans "player.") -> start offset
-    p_powers: int
-    enemy_base: int
-    enemy_stride: int
-    e_off: dict
-    hand_base: int
-    hand_stride: int
-    h_onehot: int      # offset within a hand row, or -1 in "features" mode
-    h_feat: int
-    dmg_base: int
-    potion_base: int
-    potion_stride: int
-    po_onehot: int
-    po_targeted: int
-    draw: int
-    discard: int
-    exhaust: int
-
-
-@lru_cache(maxsize=None)
-def _combat_layout(card_obs: str) -> _CombatLayout:
-    sl = obs_slices(card_obs)
-    dim = sum(w for _, w in obs_segments(card_obs))
-
-    p = {name.split(".", 1)[1]: s.start for name, s in sl.items()
-         if name.startswith("player.")}
-    p_powers = sl["player.powers"].start
-
-    enemy_base = sl["enemy0.present"].start
-    enemy_stride = sl["enemy1.present"].start - enemy_base
-
-    hand_base = sl["hand0.present"].start
-    hand_stride = sl["hand1.present"].start - hand_base
-    hybrid = card_obs == "hybrid"
-    h_onehot = (sl["hand0.onehot"].start - hand_base) if hybrid else -1
-    h_feat = sl["hand0.features"].start - hand_base
-
-    potion_base = sl["potion0"].start
-    potion_stride = sl["potion1"].start - potion_base
-
-    template = np.zeros(dim, dtype=np.float32)
-    template[p_powers:p_powers + 3 * N_POWERS] = _POWER_BG
-    for e in range(MAX_ENEMIES):
-        b = enemy_base + e * enemy_stride + _ENEMY_E_OFF["powers"]
-        template[b:b + 3 * N_POWERS] = _POWER_BG
-
-    return _CombatLayout(
-        dim=dim, template=template, hybrid=hybrid, p=p, p_powers=p_powers,
-        enemy_base=enemy_base, enemy_stride=enemy_stride, e_off=_ENEMY_E_OFF,
-        hand_base=hand_base, hand_stride=hand_stride, h_onehot=h_onehot,
-        h_feat=h_feat, dmg_base=sl["damage_matrix"].start,
-        potion_base=potion_base, potion_stride=potion_stride,
-        po_onehot=1, po_targeted=1 + N_POTIONS,
-        draw=sl["draw_pile"].start, discard=sl["discard_pile"].start,
-        exhaust=sl["exhaust_pile"].start,
-    )
-
-
-def _write_combat_obs(state: CombatState, L: _CombatLayout, buf: np.ndarray) -> None:
-    """Sparse-write the live combat features into ``buf`` (which must already
-    hold ``L.template`` — the power backgrounds and zeros). Only the few dozen
-    nonzero entries per step are touched."""
+    Does NOT call ``buf.reset()`` (the caller owns that) and must not assume
+    the buffer holds only combat segments — every write below goes through
+    ``buf.write_rows`` (row blocks) or an explicit ``layout.f_slices[...]``
+    lookup (scalars), never a raw offset into the whole array. Because the
+    caller resets the buffer first, every segment here starts zeroed, so
+    this function never needs to clear a tail (OBS_SCHEMA.md §2.1/§2.3).
+    """
+    _check_card_obs(card_obs)
     s = state
     p = s.player
-    P = L.p
+    L = buf.layout
 
-    # ── Player vitals (layout mirrors the player.* segments) ─────────
-    buf[P["hp_ratio"]] = _clip01(p.hp / max(1, p.max_hp))
-    o = P["hp_abs"]; buf[o:o + 2] = _abs2(p.hp)
-    o = P["max_hp_abs"]; buf[o:o + 2] = _abs2(p.max_hp)
-    o = P["block_abs"]; buf[o:o + 2] = _abs2(p.block)
-    buf[P["energy"]] = _clip01(p.energy / 10.0)
-    buf[P["strength"]] = _signed(p.strength, 30)
-    buf[P["dexterity"]] = _signed(_power_amt(p, "dexterity"), 30)
-    ps = P["pile_sizes"]
-    buf[ps] = _clip01(len(p.hand) / MAX_HAND)
-    buf[ps + 1] = _clip01(len(p.draw_pile) / 40.0)
-    buf[ps + 2] = _clip01(len(p.discard_pile) / 40.0)
-    buf[ps + 3] = _clip01(len(p.exhaust_pile) / 40.0)
-    buf[P["turn"]] = _clip01(s.turn / 30.0)
-    o = P["incoming_post_block"]; buf[o:o + 2] = _abs2(preview_total_incoming(s))
+    def F(name: str) -> slice:
+        return L.f_slices[prefix + name]
+
+    # ── Player vitals (segment names/encodings UNCHANGED from v3) ────────
+    buf.f[F("player.hp_ratio")] = _clip01(p.hp / max(1, p.max_hp))
+    buf.f[F("player.hp_abs")] = _abs2(p.hp)
+    buf.f[F("player.max_hp_abs")] = _abs2(p.max_hp)
+    buf.f[F("player.block_abs")] = _abs2(p.block)
+    buf.f[F("player.energy")] = _clip01(p.energy / 10.0)
+    buf.f[F("player.strength")] = _signed(p.strength, 30)
+    buf.f[F("player.dexterity")] = _signed(_power_amt(p, "dexterity"), 30)
+    buf.f[F("player.pile_sizes")] = [
+        _clip01(len(p.hand) / MAX_HAND),
+        _clip01(len(p.draw_pile) / 40.0),
+        _clip01(len(p.discard_pile) / 40.0),
+        _clip01(len(p.exhaust_pile) / 40.0),
+    ]
+    buf.f[F("player.turn")] = _clip01(s.turn / 30.0)
+    buf.f[F("player.incoming_post_block")] = _abs2(preview_total_incoming(s))
     # History scalars the deck can condition on (Stomp, Spite, ...).
     cards_this_turn = sum(1 for _ in s.history.of_type(CardPlayedEntry, this_turn=True))
     dmg_taken = sum(
         e.amount for e in s.history.of_type(DamageReceivedEntry) if e.target is p
     )
-    buf[P["cards_played_this_turn"]] = _clip01(cards_this_turn / 10.0)
-    buf[P["attacks_this_turn"]] = _clip01(s.history.attack_plays_this_turn() / 10.0)
-    o = P["damage_taken"]; buf[o:o + 2] = _abs2(dmg_taken)
-    _write_power_triples(p, buf, L.p_powers)
+    buf.f[F("player.cards_played_this_turn")] = _clip01(cards_this_turn / 10.0)
+    buf.f[F("player.attacks_this_turn")] = _clip01(s.history.attack_plays_this_turn() / 10.0)
+    buf.f[F("player.damage_taken")] = _abs2(dmg_taken)
 
-    # ── Hand rows (empty slots keep the zero template) ───────────────
-    hand = p.hand
-    for h in range(min(MAX_HAND, len(hand))):
-        card = hand[h]
-        rb = L.hand_base + h * L.hand_stride
-        buf[rb] = 1.0
-        if L.h_onehot >= 0:
-            buf[rb + L.h_onehot + CARD_INDEX[card.id]] = 1.0
-        fb = rb + L.h_feat
-        buf[fb:fb + N_CARD_FEATURES] = card_features(s, card)
+    # ── Entity-row blocks — each returns whether it truncated (overflow) ──
+    overflow: dict[str, bool] = {}
 
-    # ── Enemy rows (gone/absent rows are zeroed to clear power bg) ────
-    enemies = s.enemies
-    ne = len(enemies)
+    overflow["player.powers"] = buf.write_rows(
+        prefix + "player.powers", _power_rows(p),
+        cap=MAX_POWERS_PLAYER, n_int=1, n_float=3, sort=False)
+
+    overflow["player.relics"] = buf.write_rows(
+        prefix + "player.relics", _relic_rows(s),
+        cap=MAX_RELIC_ROWS, n_int=1, n_float=2, sort=False)
+
+    overflow["hand"] = buf.write_rows(
+        prefix + "hand", _hand_rows(s, card_obs),
+        cap=MAX_HAND, n_int=3, n_float=N_CARD_FEATURES, sort=False)
+
+    overflow["enemies"] = buf.write_rows(
+        prefix + "enemies", _enemies_rows(s),
+        cap=MAX_ENEMIES, n_int=1, n_float=_N_ENEMY_SCALARS, sort=False)
+
     for e_i in range(MAX_ENEMIES):
-        rb = L.enemy_base + e_i * L.enemy_stride
-        e = enemies[e_i] if e_i < ne else None
-        if e is None or e.is_gone:
-            buf[rb:rb + L.enemy_stride] = 0.0
-            continue
-        _write_enemy_row(s, e, buf, rb, L.e_off)
+        name = f"enemy{e_i}.powers"
+        overflow[name] = buf.write_rows(
+            prefix + name, _enemy_power_rows(s, e_i),
+            cap=MAX_POWERS_ENEMY, n_int=1, n_float=3, sort=False)
 
-    # ── Effective damage matrix (aligned 1:1 with play(h, e) actions) ─
-    _write_damage_matrix(s, buf, L.dmg_base)
+    # R3: direct slice writes, not write_rows — fixed-width, no ids, and
+    # cannot overflow by construction (see the segment-registration comment
+    # in combat_obs_segments_f).
+    for e_i in range(MAX_ENEMIES):
+        buf.f[F(f"enemy{e_i}.intent_history.f")] = (
+            _enemy_intent_history_floats(s, e_i))
 
-    # ── Potion rows ──────────────────────────────────────────────────
-    potions = p.potions
-    for pi in range(min(MAX_POTIONS, len(potions))):
-        potion = potions[pi]
-        if potion is None:
-            continue
-        rb = L.potion_base + pi * L.potion_stride
-        buf[rb] = 1.0
-        buf[rb + L.po_onehot + POTION_INDEX[potion.id]] = 1.0
-        if potion.targeted:
-            buf[rb + L.po_targeted] = 1.0
+    # ── Effective damage matrix (aligned 1:1 with play(h, e) actions) ─────
+    _write_damage_matrix(s, buf.f, F("damage_matrix").start)
 
-    # ── Pile composition (unordered; base vs upgraded copies per card) ─
-    _write_pile_composition(p.draw_pile, buf, L.draw)
-    _write_pile_composition(p.discard_pile, buf, L.discard)
-    _write_pile_composition(p.exhaust_pile, buf, L.exhaust)
+    overflow["potions"] = buf.write_rows(
+        prefix + "potions", _potions_rows(s),
+        cap=MAX_POTION_ROWS, n_int=1, n_float=1, sort=False)
+
+    # The ONLY sorted block — pile order is hidden information (OBS_SCHEMA.md
+    # §5.3); sort=True makes the block a pure function of the multiset.
+    overflow["cards"] = buf.write_rows(
+        prefix + "cards", _cards_rows(s),
+        cap=MAX_COMBAT_CARDS, n_int=4, n_float=4, sort=True)
+
+    # ── Overflow flags: 1.0 iff truncated, else the reset()-left 0.0 ──────
+    for name, truncated in overflow.items():
+        if truncated:
+            buf.f[F(f"{name}.overflow")] = 1.0
 
 
-def build_combat_obs(
-    state: CombatState, card_obs: str = "hybrid", out: np.ndarray | None = None,
-) -> np.ndarray:
-    """The full combat observation (schema v3) for a CombatState — the body
-    of STS2FullCombatEnv._build_obs, reusable by the run env (which embeds it
-    as its combat block, zeroed outside combat).
-
-    Template + sparse writes: start from a precomputed constant template (all
-    zeros plus the absent-power backgrounds) and overwrite only the entries
-    that are nonzero this step. Pass ``out=`` a length-``dim`` array (e.g. a
-    slice of the run buffer) to write in place; with ``out=None`` a fresh
-    array is returned (an independent copy, safe for the caller to store)."""
-    L = _combat_layout(card_obs)
-    if out is None:
-        buf = L.template.copy()
-    else:
-        np.copyto(out, L.template)
-        buf = out
-    _write_combat_obs(state, L, buf)
-    return buf
+def build_combat_obs(state: CombatState, card_obs: str = "hybrid") -> dict[str, np.ndarray]:
+    """The full v4 combat observation for a standalone ``CombatState``:
+    allocate an ``ObsBuffer`` for ``combat_obs_layout(card_obs)``, reset it,
+    ``write_combat_obs`` into it, and return COPIES — ``{"f": ..., "i":
+    ...}``. Copies, not views: a caller holding onto a returned observation
+    (a rollout buffer entry) must never see it silently mutate on the next
+    call."""
+    layout = combat_obs_layout(card_obs)
+    buf = ObsBuffer(layout)
+    buf.reset()
+    write_combat_obs(state, buf, card_obs)
+    return {"f": buf.f.copy(), "i": buf.i.copy()}
 
 
 class STS2FullCombatEnv(gym.Env):
@@ -795,8 +1155,7 @@ class STS2FullCombatEnv(gym.Env):
         render_mode: str | None = None,
     ) -> None:
         super().__init__()
-        if card_obs not in ("hybrid", "features"):
-            raise ValueError("card_obs must be 'hybrid' or 'features'")
+        _check_card_obs(card_obs)
 
         # Encounter pool to sample each reset.
         if encounter is not None:
@@ -831,13 +1190,9 @@ class STS2FullCombatEnv(gym.Env):
         self._steps = 0
         self._encounter_start_hp = 1
 
-        # Measure the observation dimension once from a throwaway combat so the
-        # declared space can never disagree with _build_obs.
-        probe = self._new_state(random.Random(0))
-        self._state = probe
-        obs_dim = len(self._build_obs())
-        self._state = None
-        self.observation_space = spaces.Box(0.0, 1.0, shape=(obs_dim,), dtype=np.float32)
+        # The v4 layout is static (every dim is a reserved capacity), so the
+        # declared space needs no throwaway probe combat to measure it.
+        self.observation_space = combat_obs_layout(card_obs).space(MAX_OBS_ID)
 
     # ------------------------------------------------------------------
     # Construction helpers
@@ -940,24 +1295,11 @@ class STS2FullCombatEnv(gym.Env):
     def _power_amt(creature, pid: str) -> float:
         return _power_amt(creature, pid)
 
-    @staticmethod
-    def _power_triples(creature) -> list[float]:
-        return power_triples(creature)
-
-    def _build_obs(self) -> np.ndarray:
+    def _build_obs(self) -> dict[str, np.ndarray]:
         return build_combat_obs(self._state, self._card_obs)
-
-    def _pile_composition(self, pile: list[Card]) -> list[float]:
-        return pile_composition(pile)
 
     def _card_features(self, card: Card | None) -> list[float]:
         return card_features(self._state, card)
-
-    def _damage_matrix(self) -> list[float]:
-        return damage_matrix(self._state)
-
-    def _enemy_row(self, e) -> list[float]:
-        return enemy_row(self._state, e)
 
     # ------------------------------------------------------------------
 
@@ -975,7 +1317,12 @@ class AblatedObsEnv(gym.ObservationWrapper):
     the absolute-number / preview features zeroed (``numeric_obs_indices``) —
     what the agent saw before the schema-v2 numeric overhaul. Dynamics, action
     space, masks, and the obs *shape* are untouched, so full/ablated runs are
-    comparable dimension-for-dimension on the same seeds."""
+    comparable dimension-for-dimension on the same seeds.
+
+    Adapted for the v4 Dict observation: only ``obs["f"]`` is ever ablated —
+    ``obs["i"]`` holds ids, which are categorical, not numeric, and zeroing
+    one would turn a real entity into a PAD row instead of impoverishing a
+    number."""
 
     def __init__(self, env: STS2FullCombatEnv, indices: np.ndarray | None = None) -> None:
         super().__init__(env)
@@ -983,10 +1330,19 @@ class AblatedObsEnv(gym.ObservationWrapper):
             indices = numeric_obs_indices(env.unwrapped._card_obs)
         self._ablated = np.asarray(indices, dtype=np.int64)
 
-    def observation(self, observation: np.ndarray) -> np.ndarray:
-        observation = observation.copy()
-        observation[self._ablated] = 0.0
-        return observation
+    def observation(self, observation: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+        # Copy BOTH halves, not just "f". "f" needs its own copy because it is
+        # mutated in place just below; "i" is never mutated here, but handing
+        # out a reference the caller could mutate is only safe today because
+        # build_combat_obs happens to always return fresh copies (its own
+        # docstring's contract) — a future caller that hands this wrapper a
+        # VIEW (e.g. a buffer-backed obs from T5's run env) would otherwise
+        # let a rollout buffer entry's in-place edit corrupt the source
+        # buffer. Copying defensively costs one array copy per step and
+        # removes the dependency on that upstream contract entirely.
+        f = observation["f"].copy()
+        f[self._ablated] = 0.0
+        return {"f": f, "i": observation["i"].copy()}
 
     def action_masks(self) -> np.ndarray:
         return self.env.action_masks()

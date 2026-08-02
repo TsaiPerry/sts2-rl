@@ -165,9 +165,10 @@ class TestRegistry:
         # Wongo's Mystery Ticket + Customer Appreciation Badge = 235; Byrdonis
         # Nest's Byrdpip, granted by Byrdonis Egg's HATCH rest-site option
         # = 236; Darv's 12 = 248; the Fake Merchant's 9 knock-offs plus his
-        # Rug = 258)
+        # Rug = 258; War Historian Repy's History Course, granted by the
+        # UNLOCK CAGE option = 259)
         # — all constructible by id, and the original head is present.
-        assert len(ALL_RELICS) == 258
+        assert len(ALL_RELICS) == 259
         assert "golden_compass" in ALL_RELICS
         for nid in ("golden_pearl", "cursed_pearl", "winged_boots",
                     "neows_bones", "silver_crucible"):

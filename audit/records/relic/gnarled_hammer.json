@@ -59,9 +59,8 @@
     },
     {
       "what": "N2: `CardSelectorPrefs(EnchantSelectionPrompt, 0, Cards.IntValue) { Cancelable = false, RequireManualConfirmation = true }` (GnarledHammer.cs:30-34) -- minimum ZERO",
-      "verdict": "gap",
-      "live": true,
-      "issue": "**REOPENED faithful -> gap 2026-08-01 (tier-2 round 13, R12 review).** This guard was MIS-RECORDED as faithful on DOUBLY STALE reasoning. All three legs verified by the reviewer: (a) GnarledHammer.cs:30-34 builds CHARACTER-FOR-CHARACTER Kifuda's CardSelectorPrefs -- (0..CardsVar(3), Cancelable = false, RequireManualConfirmation = true); (b) the sim still calls run.select_cards(\"enchant\", ...) and FORCE-FILLS 3 through a real RunDriver -- EXECUTED, not inferred; (c) the old rationale's two supports are both dead -- it argued a fix needs no machinery (false: round 13 had to build the enchant_optional surface for Kifuda) and deferred to gambling_chip G3, which is CLOSED. THIS IS WHY relic/_auto_keep NARROWS RATHER THAN CLOSES: Kifuda is fixed, this site is not. The fix is the same one-line shape (pass the optional purpose); it was out of R12's footprint. WHAT REASONING THIS REPLACES: both supports of the faithful verdict, and the verdict itself.  The text it replaced read: The screen is uncancelable but its minimum is 0, so the player may confirm an empty selection and enchant nothing. run.select_cards has the matching shape -- `count` is a maximum (run.py:386 clamps it to the candidate count) and an installed selector may return fewer or none -- so a fix needs no new machinery, and the sim's default random selector picking `count` is the same player-choice-model divergence recorded at relic/gambling_chip G3 rather than a new one. Cancelable/RequireManualConfirmation are UI affordances."
+      "verdict": "faithful",
+      "issue": "Replaces the whole prior verdict, not just its supports (the reopen's three legs were all correct: mis-recorded as faithful on doubly stale reasoning). FIXED this round: gnarled_hammer.py now calls run.select_cards(\"enchant_optional\", candidates, self.CARDS, min_select=0), the identical shape to relics/kifuda.py for the character-for-character-identical CardSelectorPrefs (GnarledHammer.cs:30-34 vs Kifuda.cs:26-29). Unlike the two potions above, this needed NO driver.py change: \"enchant_optional\" was already registered in SKIPPABLE_PURPOSES from an earlier round's kifuda.py fix, so the fix is fully within this lane's footprint and fully closes the entry. Tests: test_gnarled_hammer_now_uses_the_optional_shape, test_gnarled_hammer_confirms_zero, test_gnarled_hammer_still_enchants_three_by_default, test_gnarled_hammer_no_longer_shares_the_plain_enchant_purpose (test/test_r14_card_selection.py), all through a real RunDriver."
     },
     {
       "what": "N3: `CardSelectCmd.FromDeckForEnchantment(Owner, canonicalEnchantment, SharpAmount, prefs)` filters the deck to cards the enchantment accepts, and `CardCmd.Enchant(canonicalEnchantment.ToMutable(), item, amount)` enchants a MUTABLE copy of the canonical enchantment onto the deck card in place",
@@ -79,6 +78,6 @@
       "rationale": "This record hashes only relic/gnarled_hammer's own two files (the game_source / sim_source pair above). Every other file it cites by line is listed here so the staleness blind spot is visible, per binding rule 7 and the UNHASHED reminder that `py audit/tools/citation_check.py audit/records/relic` prints: src/Core/Models/Enchantments/Sharp.cs, sts2_rl/cards/base.py, sts2_rl/enchantments.py, sts2_rl/relics/claws.py, sts2_rl/relics/glass_eye.py, sts2_rl/run.py. The individually load-bearing ones are also named inline in the guard or hook entry that leans on them."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

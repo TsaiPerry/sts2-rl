@@ -37,7 +37,11 @@ class LetterOpener(Relic):
         self._skills_this_turn += 1
         if self._skills_this_turn % self.SKILLS == 0:
             from ..cmds import DamageCmd
-            for enemy in self.living_enemies():
+            # LetterOpener.cs:118: CreatureCmd.Damage(choiceContext,
+            # base.Owner.Creature.CombatState.HittableEnemies, ...) -- the
+            # AoE candidate set is HittableEnemies, not "every not-dead
+            # enemy".
+            for enemy in self.hittable_enemies():
                 DamageCmd.deal(
                     self.hooks, enemy, self.DAMAGE,
                     dealer=self.player, props=DamageProps.NON_CARD_UNPOWERED,

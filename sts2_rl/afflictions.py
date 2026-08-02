@@ -11,9 +11,35 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .hooks import CAT_CARD
+from .vocab import capacity as vocab_capacity, frozen_ids
 
 if TYPE_CHECKING:
     from .cards import Card
+
+
+_AFFLICTION_CLASSES: dict[str, type[Affliction]] = {}
+
+
+def register_affliction(cls: type[Affliction]) -> type[Affliction]:
+    """Registers a concrete `Affliction` subclass by its `id`.
+
+    Mirrors `enchantments.register_enchantment`: an explicit decorator rather
+    than a `__subclasses__()` walk, because the frozen vocabulary (vocab.py)
+    needs a deterministic source that does not depend on import order.
+    """
+    _AFFLICTION_CLASSES[cls.id] = cls
+    return cls
+
+
+def make_affliction(affliction_id: str, amount: int = 1) -> Affliction:
+    """Factory mirroring `enchantments.make_enchantment`.
+
+    Unlike `Enchantment.__init__` (which defaults `amount` to 1),
+    `Affliction.__init__` requires `amount` with no default, so this factory
+    supplies one; every real call site constructs the concrete class
+    directly with an explicit amount and is unaffected by this default.
+    """
+    return _AFFLICTION_CLASSES[affliction_id](amount)
 
 
 class Affliction:
@@ -97,6 +123,7 @@ class Affliction:
         return True
 
 
+@register_affliction
 class RingingAffliction(Affliction):
     """Applied by RingingPower; blocks play after the turn's first card."""
 
@@ -104,6 +131,7 @@ class RingingAffliction(Affliction):
     name = "Ringing"
 
 
+@register_affliction
 class EntangledAffliction(Affliction):
     """Applied by TangledPower to Attack cards; raises their energy cost."""
 
@@ -111,6 +139,7 @@ class EntangledAffliction(Affliction):
     name = "Entangled"
 
 
+@register_affliction
 class SmogAffliction(Affliction):
     """Applied by SmoggyPower to Skill cards; blocks playing them this turn."""
 
@@ -118,6 +147,7 @@ class SmogAffliction(Affliction):
     name = "Smog"
 
 
+@register_affliction
 class TaintedAffliction(Affliction):
     """Applied by VitalSparkPower (Infested Prism) to Skill cards; playing a
     Tainted card gives the player Tainted (take +N attack damage this turn).
@@ -139,6 +169,7 @@ class TaintedAffliction(Affliction):
         return card_type == CardType.SKILL
 
 
+@register_affliction
 class GalvanizedAffliction(Affliction):
     """Applied by GalvanicPower (Globe Head) to Power cards; playing a
     Galvanized card deals N damage to the player.
@@ -151,6 +182,7 @@ class GalvanizedAffliction(Affliction):
     is_stackable = True
 
 
+@register_affliction
 class HexedAffliction(Affliction):
     """Applied by HexPower (Spectral Knight); while present the card is
     Ethereal (exhausts if still in hand at turn end)."""
@@ -159,9 +191,21 @@ class HexedAffliction(Affliction):
     name = "Hexed"
 
 
+@register_affliction
 class BoundAffliction(Affliction):
     """Applied by ChainsOfBindingPower (the Queen) to drawn cards; only one
     Bound card may be played per turn."""
 
     id = "bound"
     name = "Bound"
+
+
+ALL_AFFLICTIONS: dict[str, type[Affliction]] = dict(_AFFLICTION_CLASSES)
+
+# Stable vocabulary (frozen append-only + capacity-padded; vocab.py). Mirrors
+# full_env.py's CARD_IDS / run_env.py's RELIC_IDS wiring; it lives here
+# rather than in full_env.py/run_env.py because this file owns the registry
+# those constants are derived from.
+AFFLICTION_IDS: list[str] = frozen_ids("afflictions", ALL_AFFLICTIONS)
+AFFLICTION_INDEX: dict[str, int] = {aid: i for i, aid in enumerate(AFFLICTION_IDS)}
+N_AFFLICTIONS = vocab_capacity("afflictions")

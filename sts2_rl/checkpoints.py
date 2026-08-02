@@ -26,6 +26,12 @@ from typing import Any
 RUN_SCALE_ENVS = frozenset({"run", "column"})
 
 
+#: Recognised --arch values. An unrecognised arch must raise (T6 brief §4.1)
+#: rather than silently falling through to MaskedActorCritic, the bug
+#: make_model used to have.
+ARCHS = frozenset({"mlp", "entity", "entset"})
+
+
 @dataclass(frozen=True)
 class ModelSpec:
     """Everything needed to build the model for one env, minus the env's own
@@ -33,7 +39,9 @@ class ModelSpec:
 
     env_kind: str                       # combat | run | column
     card_obs: str = "hybrid"
-    arch: str = "mlp"                   # mlp | entity
+    arch: str = "entset"                # mlp | entity | entset -- entset is
+                                         # the only arch make_model still
+                                         # builds against the v4/v7 envs
     hidden: tuple[int, ...] = (256, 256)
 
 
@@ -50,38 +58,156 @@ def obs_schema_version(spec: ModelSpec) -> int:
     return OBS_SCHEMA_VERSION
 
 
-def model_obs_segments(spec: ModelSpec) -> list[tuple[str, int]]:
-    """The named (segment, width) layout of this env's observation — what the
-    entity model slices by. The run-scale envs report their trailing combat
-    block as one opaque segment, so expand it into the combat layout here."""
-    from .full_env import obs_segments
-
-    combat = obs_segments(spec.card_obs)
+def model_obs_layout(spec: ModelSpec) -> tuple[list[tuple[str, int]], list[tuple[str, int]]]:
+    """This env's ``(f_segments, i_segments)`` — the v4 ``{"f", "i"}``
+    layout ``--arch entset`` slices by (T6 brief §4.3). The run-scale envs'
+    own ``run_obs_layout`` already folds the trailing combat block in under
+    a ``"combat."`` prefix (``sts2_rl.run_env``), so this just picks the
+    right layout function and hands back its two segment lists."""
     if spec.env_kind in RUN_SCALE_ENVS:
-        from .run_env import run_obs_segments
+        from .run_env import run_obs_layout
 
-        return run_obs_segments(spec.card_obs) + [
-            (f"combat.{name}", width) for name, width in combat]
-    return combat
+        layout = run_obs_layout(spec.card_obs)
+    else:
+        from .full_env import combat_obs_layout
+
+        layout = combat_obs_layout(spec.card_obs)
+    return layout.f_segments, layout.i_segments
 
 
-def make_model(spec: ModelSpec, obs_dim: int, n_actions: int):
-    """Build the spec's architecture for an env of this shape."""
-    from .models import EntityActorCritic, MaskedActorCritic
+def model_obs_segments(spec: ModelSpec) -> list[tuple[str, int]]:
+    """The named (segment, width) layout ``--arch entity`` slices by:
+    ``model_obs_layout``'s two halves concatenated ``f_segments +
+    i_segments`` (the same order ``models._as_flat`` flattens a
+    :class:`~sts2_rl.tensor_obs.TensorObs` in, so the two stay in sync).
 
+    ``entity`` is frozen at its v3-era, flat-``Box`` design
+    (``models._segment_plan``'s name-suffix-plus-width matching) — against
+    the v4 layout's names/widths almost nothing matches, so this
+    degenerates to raw float pass-through (no embeddings), which is the
+    deliberate, documented outcome for the two frozen archs (see
+    ``models.py``'s module docstring) rather than something this function
+    needs to fix.
+    """
+    f_segments, i_segments = model_obs_layout(spec)
+    return f_segments + i_segments
+
+
+#: The schema version at which each env's observation became the "f"/"i"
+#: Dict generation (the entity-obs-schema.md rewrite that made ``mlp``/
+#: ``entity`` unsafe -- see ``make_model``): combat's Dict rewrite landed at
+#: schema 4, run-scale's (run/column share one layout) at schema 7.
+#:
+#: This used to be a ``frozenset({4, 7})`` literal enumerating "the known-bad
+#: versions" -- the exact shape of guard this project keeps getting bitten
+#: by: it checked membership in a fixed set, so the very next schema bump
+#: (5, 8, ...) fell outside the set and the refusal went silent without a
+#: single line changing at the call site. A checkpoint-format schema number
+#: can only go up (``check_checkpoint``'s schema check refuses anything that
+#: doesn't match exactly, and nothing in this codebase ever decrements
+#: ``OBS_SCHEMA_VERSION``/``RUN_OBS_SCHEMA_VERSION``), so "is this env still
+#: on the unsafe Dict generation" is exactly "is its current schema version
+#: >= the version that generation started at" -- a threshold, not a
+#: membership test. Every later bump is automatically >= the threshold, so
+#: the refusal cannot lapse just because a number changed elsewhere;
+#: ``test_make_model_refuses_future_v4_generation_schema`` in test_models.py
+#: pins that property directly by simulating a future bump.
+_V4_GENERATION_MIN_SCHEMA = {
+    "combat": 4,
+    "run": 7,
+    "column": 7,
+}
+
+
+def _is_v4_generation(spec: ModelSpec) -> bool:
+    """Whether ``spec``'s env is still on the "f"/"i" Dict generation that
+    ``mlp``/``entity`` cannot safely train against (see the threshold map's
+    docstring above) -- true at the generation's starting schema and at
+    every schema after it, by construction."""
+    threshold = _V4_GENERATION_MIN_SCHEMA.get(spec.env_kind)
+    if threshold is None:
+        raise SystemExit(
+            f"no v4-generation schema threshold recorded for env_kind "
+            f"{spec.env_kind!r}; add one to _V4_GENERATION_MIN_SCHEMA rather "
+            f"than silently skipping the mlp/entity refusal.")
+    return obs_schema_version(spec) >= threshold
+
+
+def make_model(spec: ModelSpec, obs_dim: tuple[int, int], n_actions: int):
+    """Build the spec's architecture for an env of this shape.
+
+    ``obs_dim`` is always the env's own ``(f_dim, i_dim)`` pair (T6 brief
+    §1/§4) — ``mlp``/``entity`` sum it to the flat width their frozen
+    designs expect; ``entset`` uses it directly. An unrecognised ``arch``
+    raises rather than silently building a ``MaskedActorCritic`` (T6 brief
+    §4.1 — this used to fall through silently for anything other than
+    ``"entity"``).
+
+    ``mlp``/``entity`` are refused outright against the v4/v7 ``{f, i}``
+    generation (final fix-pass review item 2): ``models._as_flat`` feeds
+    both of them ``concat(f, i.float())`` with no normalization, so
+    unnormalized vocabulary ids up to 640 sit beside floats bounded in
+    ``[0,1]`` going into an orthogonal-init ``Linear`` — measured, not just
+    "degenerate": the id magnitudes dwarf the ~1400 genuinely numeric
+    features. This project keeps no old-vs-new comparison baseline by
+    explicit decision, so there is no legitimate reason left to build either
+    architecture against these envs — the same "must raise, not silently
+    degrade" rule already applied to an unrecognised ``arch`` name. The
+    classes themselves are untouched: they stay correct for the frozen flat
+    contract, exercised directly (not through this factory) by their own
+    unit tests.
+    """
+    from .models import EntitySetActorCritic, EntityActorCritic, MaskedActorCritic
+
+    f_dim, i_dim = obs_dim
+    flat_dim = f_dim + i_dim
+
+    if spec.arch in ("mlp", "entity") and _is_v4_generation(spec):
+        raise SystemExit(
+            f"--arch {spec.arch} is refused against env_kind {spec.env_kind!r} "
+            f"(obs schema {obs_schema_version(spec)}, the v4/v7 {{f, i}} "
+            f"generation): concat(f, i) puts raw, unnormalized vocabulary ids "
+            f"(up to 640) beside floats bounded in [0,1] into the same "
+            f"orthogonal-init Linear -- the id magnitudes swamp the numeric "
+            f"half rather than merely degrading it, and this project keeps no "
+            f"old-vs-new comparison baseline. Use --arch entset.")
+
+    if spec.arch == "entset":
+        f_segments, i_segments = model_obs_layout(spec)
+        seg_f = sum(w for _, w in f_segments)
+        seg_i = sum(w for _, w in i_segments)
+        if (seg_f, seg_i) != (f_dim, i_dim):   # layout drift between env and segment map
+            raise SystemExit(
+                f"segment layout sums to (f={seg_f}, i={seg_i}) but the env "
+                f"emits (f={f_dim}, i={i_dim}); model_obs_layout is out of "
+                f"sync with the env.")
+        return EntitySetActorCritic(
+            f_segments, i_segments, n_actions, hidden=tuple(spec.hidden))
     if spec.arch == "entity":
         segments = model_obs_segments(spec)
         seg_dim = sum(w for _, w in segments)
-        if seg_dim != obs_dim:   # layout drift between env and segment map
+        if seg_dim != flat_dim:   # layout drift between env and segment map
             raise SystemExit(
                 f"segment layout sums to {seg_dim} floats but the env emits "
-                f"{obs_dim}; model_obs_segments is out of sync with the env.")
-        return EntityActorCritic(segments, n_actions, hidden=tuple(spec.hidden))
-    return MaskedActorCritic(obs_dim, n_actions, hidden=tuple(spec.hidden))
+                f"{flat_dim}; model_obs_segments is out of sync with the env.")
+        model = EntityActorCritic(segments, n_actions, hidden=tuple(spec.hidden))
+        # Overwritten to the env's own pair, not read anywhere in forward()
+        # (the trunk's Linear was already built from flat_dim above) — this
+        # is purely so checkpoint_payload's "obs_dim" and check_checkpoint's
+        # shape comparison stay in the ONE (f_dim, i_dim) currency every
+        # arch shares, instead of entset's pair vs mlp/entity's flat int.
+        model.obs_dim = obs_dim
+        return model
+    if spec.arch == "mlp":
+        model = MaskedActorCritic(flat_dim, n_actions, hidden=tuple(spec.hidden))
+        model.obs_dim = obs_dim   # see the comment in the "entity" branch above
+        return model
+    raise SystemExit(
+        f"unrecognised --arch {spec.arch!r}; choose one of {sorted(ARCHS)}.")
 
 
 def check_checkpoint(ckpt: dict, spec: ModelSpec,
-                     obs_dim: int, n_actions: int) -> None:
+                     obs_dim: tuple[int, int], n_actions: int) -> None:
     """Refuse a checkpoint that doesn't match this env/schema/model, with a
     clear message instead of a cryptic load_state_dict error."""
     ckpt_kind = ckpt.get("env_kind", "combat")
@@ -97,24 +223,17 @@ def check_checkpoint(ckpt: dict, spec: ModelSpec,
         print(f"Curriculum handoff: continuing a {ckpt_kind!r}-env checkpoint "
               f"on the {spec.env_kind!r} env.")
     if ckpt.get("obs_schema") != obs_schema_version(spec):
-        hint = " the observation layout changed — retrain."
-        # The v3 -> v4 migration is still offered to a v3 checkpoint even now
-        # that the current version is 5: it is the documented first hop, and it
-        # is the only lossless one (v4 -> v5 shifted every index behind the
-        # widened phase segment, so that hop is a retrain).
-        if (ckpt.get("obs_schema") == 3 and spec.env_kind in RUN_SCALE_ENVS):
-            hint = (" v3 → v4 only added features, so a lossless migration "
-                    "exists: py migrate_ckpt.py <this checkpoint> <new path>.")
-        # v6 left the observation alone and appended the out-of-combat potion
-        # block to the END of the action layout, so the policy head is the only
-        # thing that grows — the same one-hop migration tool.
-        elif (ckpt.get("obs_schema") == 5 and spec.env_kind in RUN_SCALE_ENVS):
-            hint = (" v5 → v6 changed only the action layout (a new potion "
-                    "block, appended last), so a migration exists: "
-                    "py migrate_ckpt.py <this checkpoint> <new path>.")
+        # Phase 1 (prompts/entity-obs-schema.md) rewrote the observation from
+        # a flat array to an "f"/"i" Dict — a different Gym space type, not a
+        # reshape of the same array — so there is deliberately NO migration
+        # onto the current schema for any older checkpoint, including the
+        # v3->v4 and v5->v6 hops this hint used to point at (both migration
+        # tools are unreachable dead code now; see migrate_checkpoint and
+        # migrate_checkpoint_actions). Every stale schema dead-ends here.
         raise SystemExit(
             f"checkpoint obs schema {ckpt.get('obs_schema')} != current "
-            f"{obs_schema_version(spec)};" + hint)
+            f"{obs_schema_version(spec)}; this schema bump has no migration "
+            f"path — start training over with --fresh.")
     ckpt_arch = ckpt.get("arch", "mlp")   # pre-stamp checkpoints are all MLP
     if ckpt_arch != spec.arch:
         raise SystemExit(
@@ -148,51 +267,6 @@ def spec_from_checkpoint(ckpt: dict, env_kind: str,
 
 # ── v3 → v4 migration (run.boss.identity + run.map.grid/meta) ────────────
 
-# The run-obs segments added by schema v4. Everything the migration does is
-# derived from these names against the current layout — no hardcoded offsets.
-_V4_NEW_SEGMENTS = frozenset({"run.boss.identity", "run.map.grid", "run.map.meta"})
-
-
-def _segment_out_width(name: str, width: int) -> int:
-    """A segment's width in _SegmentEncoder *output* space: raw pieces pass
-    through, vocabulary pieces contract to their embedding dim."""
-    from .models import EMBED_DIMS, _segment_plan
-
-    total = 0
-    for kind, w in _segment_plan(name, width):
-        total += w if kind == "raw" else EMBED_DIMS["cards" if kind == "cards2" else kind]
-    return total
-
-
-def _new_column_blocks(segments, width_fn) -> list[tuple[int, int]]:
-    """Where the v4 segments land as first-layer input columns: (position in
-    the OLD column space, width) per new segment, ascending. ``width_fn``
-    picks the space — flat obs (mlp trunks) or encoder output (entity)."""
-    blocks: list[tuple[int, int]] = []
-    old_off = 0
-    for name, width in segments:
-        w = width_fn(name, width)
-        if name in _V4_NEW_SEGMENTS:
-            blocks.append((old_off, w))
-        else:
-            old_off += w
-    return blocks
-
-
-def _splice_zero_columns(mat, blocks: list[tuple[int, int]]):
-    """Insert zero column-blocks into a 2-D tensor at the given old-space
-    positions. Old columns keep their values and order."""
-    import torch
-
-    pieces = []
-    prev = 0
-    for pos, width in blocks:
-        pieces.append(mat[:, prev:pos])
-        pieces.append(mat.new_zeros(mat.shape[0], width))
-        prev = pos
-    pieces.append(mat[:, prev:])
-    return torch.cat(pieces, dim=1)
-
 
 def migrate_checkpoint(ckpt: dict, card_obs: str = "hybrid") -> dict:
     """Migrate a v3 run-scale checkpoint (either arch) to obs schema v4.
@@ -208,11 +282,18 @@ def migrate_checkpoint(ckpt: dict, card_obs: str = "hybrid") -> dict:
 
     Returns a new checkpoint dict (the input is not mutated) with updated
     ``obs_dim``/``obs_schema`` stamps.
+
+    UNREACHABLE as of the phase-1 schema bump (entity-obs-schema.md):
+    ``check_checkpoint`` now refuses every pre-v7 checkpoint before this
+    function could ever be called, and phase 1 rewrote the run observation
+    from a flat array to an ``"f"``/``"i"`` Dict — a different Gym space
+    type, not a reshape the old column-splice technique could target even in
+    principle. Kept per CLAUDE.md §3 (this module doesn't delete
+    pre-existing code it didn't write); its env-kind/schema guards below
+    still behave exactly as designed, but a well-formed v3 checkpoint now
+    hits an explicit ``SystemExit`` instead of running the (impossible)
+    migration.
     """
-    import copy
-
-    from .run_env import RUN_OBS_SCHEMA_VERSION, run_obs_segments
-
     env_kind = ckpt.get("env_kind", "combat")
     if env_kind not in RUN_SCALE_ENVS:
         raise SystemExit(
@@ -222,91 +303,21 @@ def migrate_checkpoint(ckpt: dict, card_obs: str = "hybrid") -> dict:
         raise SystemExit(
             f"can only migrate obs schema 3 → 4; checkpoint has schema "
             f"{ckpt.get('obs_schema')}.")
-    # This migration targets the v3 -> v4 feature-only bump. v5 widened the
-    # leading phase segment (a new DecisionKind), which shifts every later
-    # index and so needs its own migration rather than a column splice; v6
-    # changed the ACTION layout only (migrate_checkpoint_actions).
-    assert RUN_OBS_SCHEMA_VERSION == 6, "migration written against the v4 layout"
-
-    segments = run_obs_segments(card_obs)
-    added = sum(w for n, w in segments if n in _V4_NEW_SEGMENTS)
-    new_obs_dim = ckpt["obs_dim"] + added
-    spec = spec_from_checkpoint(ckpt, env_kind, card_obs)
-    # Also validates the segment layout against the env (and would catch a
-    # card_obs mismatch for entity checkpoints via its seg-sum check).
-    model = make_model(spec, new_obs_dim, ckpt["n_actions"])
-
-    width_fn = _segment_out_width if spec.arch == "entity" else (lambda n, w: w)
-    blocks = _new_column_blocks(segments, width_fn)
-    grown = sum(w for _, w in blocks)
-
-    new_ckpt = copy.deepcopy(ckpt)
-    state = new_ckpt["model"]
-    # Adam state is keyed by position in the (single) param group, which is
-    # named_parameters() order — and for the entity arch that ORDER changed:
-    # run.boss.identity makes the encoder create the shared monsters table
-    # earlier in the segment walk than the v3 layout did (it used to first
-    # appear in the combat block). Same names, same shapes, different
-    # positions — so remap the saved per-param state from the v3 order to
-    # the v4 order before touching anything, or moments cross-attach.
-    param_names = [n for n, _ in model.named_parameters()]
-    if spec.arch == "entity":
-        from .models import EntityActorCritic
-
-        old_segments = [(n, w) for n, w in model_obs_segments(spec)
-                        if n not in _V4_NEW_SEGMENTS]
-        old_model = EntityActorCritic(old_segments, ckpt["n_actions"],
-                                      hidden=tuple(spec.hidden))
-        old_names = [n for n, _ in old_model.named_parameters()]
-    else:
-        old_names = param_names   # mlp: actor then critic, unchanged
-    if old_names != param_names:
-        assert sorted(old_names) == sorted(param_names)
-        old_state = new_ckpt["optim"]["state"]
-        new_ckpt["optim"]["state"] = {
-            new_idx: old_state[old_names.index(name)]
-            for new_idx, name in enumerate(param_names)
-            if old_names.index(name) in old_state
-        }
-    for key in ("actor.0.weight", "critic.0.weight"):
-        want_in = model.state_dict()[key].shape[1]
-        if state[key].shape[1] != want_in - grown:
-            raise SystemExit(
-                f"{key} has {state[key].shape[1]} input columns, expected "
-                f"{want_in - grown}; checkpoint doesn't match the v3 layout.")
-        state[key] = _splice_zero_columns(state[key], blocks)
-        pstate = new_ckpt.get("optim", {}).get("state", {}).get(param_names.index(key))
-        if pstate is not None:
-            for moment in ("exp_avg", "exp_avg_sq"):
-                if moment in pstate:
-                    pstate[moment] = _splice_zero_columns(pstate[moment], blocks)
-    model.load_state_dict(state)   # sanity: exact fit, no missing/extra keys
-    new_ckpt["obs_dim"] = new_obs_dim
-    new_ckpt["obs_schema"] = 4
-    return new_ckpt
+    # Everything past this point built a v4 flat-array checkpoint by splicing
+    # zero columns into a v3 flat-array one — a technique with no target: the
+    # phase-1 bump replaced run_obs_segments with run_obs_segments_f/_i and
+    # made the run observation a Dict, not a wider flat array. There is no
+    # schema this function can still migrate a well-formed input onto, so say
+    # that plainly instead of letting `from .run_env import run_obs_segments`
+    # raise a stale ImportError.
+    raise SystemExit(
+        "the v3 -> v4 migration is unreachable: the phase-1 schema bump "
+        "(entity-obs-schema.md) replaced the flat run observation with an "
+        "\"f\"/\"i\" Dict, so there is no schema left for this checkpoint to "
+        "migrate onto — start training over with --fresh.")
 
 
 # ── v5 → v6 migration (the out-of-combat potion action block) ────────────
-
-def _actor_head_key(state: dict) -> str:
-    """The policy head's weight key — ``actor.<last>.weight``, whose ROWS are
-    the actions. Both architectures build the head with ``models._mlp``, so it
-    is the highest-numbered ``actor.N.weight``; the entity arch's encoder
-    parameters are ``actor_encoder.*`` and do not match the prefix."""
-    keys = [k for k in state
-            if k.startswith("actor.") and k.endswith(".weight")]
-    if not keys:
-        raise SystemExit("checkpoint has no actor head to grow")
-    return max(keys, key=lambda k: int(k.split(".")[1]))
-
-
-def _append_zero_rows(mat, rows: int):
-    """Append `rows` zero rows to a 1-D or 2-D tensor."""
-    import torch
-
-    pad = mat.new_zeros((rows,) + tuple(mat.shape[1:]))
-    return torch.cat([mat, pad], dim=0)
-
 
 def migrate_checkpoint_actions(ckpt: dict, card_obs: str = "hybrid") -> dict:
     """Migrate a v5 run-scale checkpoint to the v6 ACTION layout (either arch).
@@ -328,11 +339,19 @@ def migrate_checkpoint_actions(ckpt: dict, card_obs: str = "hybrid") -> dict:
 
     Returns a new checkpoint dict (the input is not mutated) with updated
     ``n_actions``/``obs_schema`` stamps.
+
+    UNREACHABLE as of the phase-1 schema bump (entity-obs-schema.md):
+    ``check_checkpoint`` now refuses every pre-v7 checkpoint before this
+    function could ever be called, and ``RUN_OBS_SCHEMA_VERSION`` moved to 7
+    without this function's target ever becoming buildable again — v6 was a
+    flat-array action-layout tweak, and phase 1 replaced the flat run
+    observation with an ``"f"``/``"i"`` Dict, so "grow the v5 checkpoint
+    onto v6" no longer names a schema this repo produces. Kept per CLAUDE.md
+    §3; its env-kind/schema/shape guards below still behave exactly as
+    designed, but a well-formed v5 checkpoint now hits an explicit
+    ``SystemExit`` instead of the stale ``assert RUN_OBS_SCHEMA_VERSION ==
+    6``.
     """
-    import copy
-
-    from .run_env import MAX_POTION_SLOTS, N_ACTIONS, RUN_OBS_SCHEMA_VERSION
-
     env_kind = ckpt.get("env_kind", "combat")
     if env_kind not in RUN_SCALE_ENVS:
         raise SystemExit(
@@ -342,40 +361,32 @@ def migrate_checkpoint_actions(ckpt: dict, card_obs: str = "hybrid") -> dict:
         raise SystemExit(
             f"can only migrate obs schema 5 -> 6; checkpoint has schema "
             f"{ckpt.get('obs_schema')}.")
-    assert RUN_OBS_SCHEMA_VERSION == 6, (
-        "migration written against the v6 action layout")
-    old_n = N_ACTIONS - MAX_POTION_SLOTS
-    if ckpt.get("n_actions") != old_n:
-        raise SystemExit(
-            f"checkpoint has {ckpt.get('n_actions')} actions, expected the v5 "
-            f"width {old_n}; it doesn't match the layout this migration grows.")
-
-    spec = spec_from_checkpoint(ckpt, env_kind, card_obs)
-    model = make_model(spec, ckpt["obs_dim"], N_ACTIONS)
-    param_names = [n for n, _ in model.named_parameters()]
-
-    new_ckpt = copy.deepcopy(ckpt)
-    state = new_ckpt["model"]
-    head_w = _actor_head_key(state)
-    head_b = head_w[:-len("weight")] + "bias"
-    for key in (head_w, head_b):
-        state[key] = _append_zero_rows(state[key], MAX_POTION_SLOTS)
-        pstate = new_ckpt.get("optim", {}).get("state", {}).get(
-            param_names.index(key))
-        if pstate is not None:
-            for moment in ("exp_avg", "exp_avg_sq"):
-                if moment in pstate:
-                    pstate[moment] = _append_zero_rows(
-                        pstate[moment], MAX_POTION_SLOTS)
-    model.load_state_dict(state)   # sanity: exact fit, no missing/extra keys
-    new_ckpt["n_actions"] = N_ACTIONS
-    new_ckpt["obs_schema"] = 6
-    return new_ckpt
+    # The honest raise comes FIRST, ahead of any shape check on the
+    # checkpoint's ACTUAL n_actions (fix-pass correction, review item 3):
+    # this migration's target no longer exists for ANY well-formed input, so
+    # there is nothing left a shape check could usefully gate -- and the
+    # obvious-looking "does it match the v5 width" check that used to sit
+    # here computed that width from TODAY's `N_ACTIONS - MAX_POTION_SLOTS`,
+    # which is today's formula, not the historical v5 one (MAX_POTION_SLOTS
+    # itself grew 4 -> 10 after v5 shipped). That stale check meant a
+    # genuine v5 checkpoint could be told "it doesn't match the layout this
+    # migration grows" instead of the true reason: there is no migration
+    # path at all.
+    raise SystemExit(
+        "the v5 -> v6 action migration is unreachable: the phase-1 schema "
+        "bump (entity-obs-schema.md) moved RUN_OBS_SCHEMA_VERSION past 6 "
+        "without this migration's v6 flat-action target ever being rebuilt, "
+        "so there is no schema left for this checkpoint to migrate onto — "
+        "start training over with --fresh.")
 
 
-def load_agent(path: str, *, env_kind: str, obs_dim: int, n_actions: int,
+def load_agent(path: str, *, env_kind: str, obs_dim: tuple[int, int], n_actions: int,
                card_obs: str = "hybrid", device: str = "cpu") -> tuple[Any, dict]:
     """Load a ``train_torch.py`` checkpoint into an eval-mode model.
+
+    ``obs_dim`` is the env's ``(f_dim, i_dim)`` pair (T6 brief §5) — every
+    arch's checkpoint stamps its ``obs_dim`` in that same currency now (see
+    ``make_model``), so this needs no arch-specific branching.
 
     Dispatches on the checkpoint's ``arch`` stamp, refuses an env/schema/shape
     mismatch through ``check_checkpoint``, and never writes to ``path``.

@@ -32,6 +32,14 @@ class FakeStrikeDummy(Relic):
     ) -> int:
         if not is_powered_attack(props):   # FakeStrikeDummy.cs
             return 0
-        if card is not None and "strike" in card.tags and dealer is self.player:
-            return self.EXTRA_DAMAGE
-        return 0
+        if card is None or "strike" not in card.tags:
+            return 0
+        # damage_pipeline/G3, relic/fake_strike_dummy (round 14):
+        # FakeStrikeDummy.cs:35-38 is the identical guard to StrikeDummy's
+        # -- decline only when BOTH `dealer != Owner.Creature` AND
+        # `cardSource.Owner != Owner`. See strike_dummy.py's twin comment:
+        # the sim has no enemy-owned CardModel, so the ownership disjunct
+        # can never be true and the AND can never be satisfied. The old
+        # `dealer is self.player` guard was the same unobservable-today,
+        # wrong-in-general mistake as StrikeDummy's.
+        return self.EXTRA_DAMAGE

@@ -319,6 +319,7 @@ def create_reward_cards(
     pool: list[str] | None = None,
     is_card_reward: bool = False,
     extra_flags: CardCreationFlags = CardCreationFlags(0),
+    rng=None,
 ) -> list[Card]:
     """CardFactory.CreateForReward: `count` distinct pool cards, each from a
     rarity roll (escalated with wrapping when the pool lacks the rolled
@@ -357,7 +358,12 @@ def create_reward_cards(
     """
     # CardFactory.CreateForReward draws on the per-player Rewards stream in the
     # SP2 parity path (rng_set present); the legacy RL path stays on run.rng.
-    rng = run.rewards_rng
+    # `rng` overrides that for a caller whose CardCreationOptions carry
+    # `.WithRngOverride(...)` — Crystal Sphere hands every ToReward the EVENT's
+    # own Rng (CrystalSphereCardReward.cs:49-54), so its screens must not
+    # advance the per-player Rewards stream.
+    if rng is None:
+        rng = run.rewards_rng
     if pool is None:
         # The game's reward pool is CardCreationOptions.GetPossibleCards ==
         # CardPool.GetUnlockedCards() — the FULL unlocked pool, NOT
@@ -591,24 +597,55 @@ class CardRewardGroup:
     # Colorless pool — see test_the_future_of_potions_offer_is_not_widened_
     # by_dingy_rug.
     flags: CardCreationFlags = CardCreationFlags(0)
+    # (R14, R10) The `CardCreationSource` this screen's `CardCreationOptions`
+    # actually carries. `Source` is set by the *factory method* the
+    # construction site calls (`ForRoom` -> Encounter/Shop/Other by room
+    # type; every `ForNonCombatWith*` -> Other unconditionally —
+    # CardCreationOptions.cs:102-163) and nothing else; it is INDEPENDENT of
+    # whether the caller also overrode `pool`. `None` (the default) means "not
+    # stated explicitly" and falls back to the old pool-is-None heuristic
+    # below for every construction site that predates this field and never
+    # needed to disagree with it. Set this explicitly on a group whose source
+    # diverges from that heuristic — e.g. a `ForNonCombatWithDefaultOdds`
+    # screen that reads the UN-overridden character pool (Source=Other,
+    # pool=None): `events/trial.py`'s `_NonCombatCardRewardGroup` hardcodes
+    # `mutate_pity=False` for exactly this case (Nondescript Guilty) instead
+    # of using this field, and remains correct doing so — this field is an
+    # alternative way to say the same thing for a group that doesn't need a
+    # whole subclass.
+    source: "CardCreationSource | None" = None
+    # `CardCreationOptions.WithRngOverride(rng)` — the stream this screen's
+    # draws come off when it is NOT the per-player Rewards one. Crystal
+    # Sphere's card items are the only ported site that sets it
+    # (CrystalSphereCardReward.cs:49-54).
+    rng: object | None = None
 
     def _odds(self) -> "RarityOddsType":
         return (self.odds_type if self.odds_type is not None
                 else ROOM_RARITY_ODDS[self.room_type])
+
+    def _mutate_pity(self) -> bool:
+        """Whether this screen's rarity roll mutates the run's pity offset:
+        true only for `CardCreationSource.Encounter`
+        (`CardFactory.RollForRarity`, CardFactory.cs:244-260). Prefers the
+        explicit `source` field; falls back to the pool-is-None heuristic
+        (a pool override implies a non-Encounter, Other-sourced creation,
+        which holds for every site that doesn't set `source`) when it is
+        unset."""
+        if self.source is not None:
+            return self.source == CardCreationSource.ENCOUNTER
+        return self.pool is None
 
     def populate(self, run) -> None:
         """CardReward.Populate: draw this group's options."""
         self.populated = True
         self.cards = create_reward_cards(
             run, self._odds(), count=self.count,
-            # RollForRarity mutates the pity counters only for
-            # CardCreationSource.Encounter, and a pool-overriding group is
-            # always a relic/event creation (Other) — the same rule
-            # create_reward_cards derives its source from.
-            mutate_pity=self.pool is None,
+            mutate_pity=self._mutate_pity(),
             pool=list(self.pool) if self.pool is not None else None,
             is_card_reward=True,          # CardReward.cs:114-115
             extra_flags=self.flags,
+            rng=self.rng,
         )
 
     def reroll(self, run) -> None:
@@ -638,7 +675,14 @@ class CombatRewards:
     # (owner, RoomType.Monster) in DreamCatcher.cs) with no room at all.
     room: "RoomType | None" = None
     gold: int = 0
-    potion: "Potion | None" = None
+    # Every PotionReward on this set, in list order. Usually one (the pity
+    # drop), but a set built by RewardsCmd.OfferCustom can carry several —
+    # Crystal Sphere reveals up to three at once (two Common + one Rare,
+    # CrystalSphereMinigame.cs:165-173). `potion` below is a view onto the
+    # FIRST, the same shape `card_rewards` / `cards` already uses, so every
+    # single-potion reader and the one-slot `reward.potion` obs block keep
+    # working unchanged.
+    potions: list["Potion"] = field(default_factory=list)
     # Every CardReward on this set, in list order. Usually one; a relic can
     # add more (Prayer Wheel, White Star). `cards` / `can_reroll` /
     # `sacrifice_relic` below are views onto the FIRST, which is what a
@@ -712,6 +756,23 @@ class CombatRewards:
         self._first_group().reroll(run)
 
     @property
+    def potion(self) -> "Potion | None":
+        """The first PotionReward on the screen — the pity drop on every set
+        the sim generates on its own. A view onto `potions`, so the driver's
+        one-at-a-time REWARD_POTION decision and the one-slot `reward.potion`
+        obs block read the potion currently being offered."""
+        return self.potions[0] if self.potions else None
+
+    @potion.setter
+    def potion(self, value: "Potion | None") -> None:
+        if value is None:
+            self.potions = []
+        elif self.potions:
+            self.potions[0] = value
+        else:
+            self.potions.append(value)
+
+    @property
     def relic(self) -> "Relic | None":
         """The primary relic (an elite's drop), if any."""
         return self.relics[0] if self.relics else None
@@ -720,7 +781,7 @@ class CombatRewards:
     def is_empty(self) -> bool:
         return (
             self.gold == 0
-            and self.potion is None
+            and not self.potions
             and not any(g.cards for g in self.card_rewards)
             and not self.relics
             and not self.special_cards

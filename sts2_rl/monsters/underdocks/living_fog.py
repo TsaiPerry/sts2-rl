@@ -38,7 +38,18 @@ class GasBomb(MachineMonster):
     def build_machine(self) -> MonsterMoveStateMachine:
         explode = MoveState(
             "EXPLODE_MOVE", self._explode,
-            Intent(MoveType.DEATH_BLOW, damage=_EXPLODE_DMG),
+            # DeathBlowIntent : SingleAttackIntent : AttackIntent
+            # (src/Core/MonsterMoves/Intents/DeathBlowIntent.cs:10) -- it IS
+            # an AttackIntent, so NIntent.cs:135's `intent is AttackIntent`
+            # check renders its damage number, and MonsterModel.IntendsToAttack
+            # (MonsterModel.cs:241-245) explicitly treats DeathBlow as an
+            # attack for gameplay purposes. `also=(MoveType.ATTACK,)` mirrors
+            # that: it lights up `Intent.has(MoveType.ATTACK)` for the
+            # observation's attack flag and damage preview without changing
+            # the primary DEATH_BLOW type (still distinct for anything that
+            # cares which icon/animation the game shows).
+            Intent(MoveType.DEATH_BLOW, damage=_EXPLODE_DMG,
+                   also=(MoveType.ATTACK,)),
         )
         explode.follow_up = explode
         return MonsterMoveStateMachine([explode], explode)

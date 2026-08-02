@@ -33,7 +33,8 @@
     "AfterObtained": {
       "maps_to": "after_obtained (archaic_tooth.py:20-39)",
       "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The transform itself is right -- first deck card whose id is a TranscendenceUpgrades key (ArchaicTooth.cs:146 vs archaic_tooth.py:23-25), replaced via run.transform_card(into=) -- but the upgrade-carry and enchantment-carry clauses of GetTranscendenceTransformedCard (ArchaicTooth.cs:149-166) are each reproduced with a different condition than the source."
+      "issue": "Reasoning re-derived, verdict unchanged. G1 (upgrade-carry): Bash's max_upgrade_level is confirmed still 1 (default, unoverridden), so the sim's upgrade loop and C#'s single-call Upgrade agree for every reachable input. G2 (enchant-carry): the audit's own citation naming Swift as the narrow eligibility predicate is now WRONG (Swift has no can_enchant override today; the BASIC+tag restriction belongs to SpiralEnchantment) -- replaced with a full re-run over all 21 currently registered enchantment classes (up from the audit's 2), none of which distinguishes Bash from Break. Both guards stay open/dormant; no fix landed. Pinned by test/test_r14_relics_a.py's four archaic_tooth tests.",
+      "live": false
     }
   },
   "guards": [

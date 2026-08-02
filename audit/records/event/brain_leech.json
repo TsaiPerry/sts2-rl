@@ -80,17 +80,15 @@
     },
     {
       "what": "F-R13a (round 13): the reroll redraws from the CHARACTER pool, not the screen's own options (brain_leech.py:79-80)",
-      "verdict": "gap",
-      "issue": "LIVE, pre-existing, previously unrecorded (round 13, R2 fix pass + review). C#'s CardReward stores RerollOptions alongside Options and rerolls against the SAME creation options (CardReward.cs:114-115, :148). The sim builds its group as CardRewardGroup(cards=..., populated=True) with NO pool and NO odds_type, so reroll() falls back to redrawing from the CHARACTER pool at MONSTER odds -- and MUTATES THE PITY COUNTER while doing so. EXECUTED by both lane and reviewer: a Colorless-only screen (volley/panache/impatience) becomes an Ironclad screen (armaments/stampede/true_grit) on reroll. The correct pattern now exists in the tree: _PotionCardRewardGroup (events/the_future_of_potions.py), built in round 13 -- carry pool + odds_type + flags on the group.",
-      "live": true
+      "verdict": "faithful",
+      "issue": "Confirmed live exactly as recorded — reroll fell back to CardRewardGroup.populate's `pool is None` default (full character pool, mutating pity) because the group never carried pool/odds_type/flags. FIXED: _rip now builds the group via the `_PotionCardRewardGroup` pattern (construct with real options, call .populate()), so reroll reuses the stored options. Pinned by test_brain_leech_rip_reroll_stays_on_the_ colorless_pool and test_brain_leech_rip_reroll_does_not_mutate_the_ rarity_pity_counter (test/test_r14_events.py). No reasoning replaced — the record's mechanism was correct for this event."
     },
     {
       "what": "F-R13b (round 13): modify_hooks=False is used as a stand-in for a DIFFERENT C# flag",
-      "verdict": "gap",
-      "issue": "brain_leech.py:73-78 passes modify_hooks=False under a comment naming NoRarityModification | NoCardPoolModifications -- different flags. modify_hooks=False maps to NO_MODIFY_HOOKS, which suppresses the WHOLE TryModifyCardRewardOptions[Late] dispatch (CardFactory.cs:104), so Silken Tress, Silver Crucible, the three eggs and Glitter NEVER FIRE on this screen where C# lets them: BrainLeech.cs:56 sets NoRarityModification | NoCardPoolModifications and NOT NoModifyHooks. EXECUTED by the reviewer: silver_crucible.times_used == 0, silken_tress.is_used == False. THE EXACT MIRROR of the bug round 13 fixed on the_future_of_potions -- that one OVER-fired by omitting a flag, this one UNDER-fires by asserting the wrong one. With create_reward_cards' extra_flags passthrough now in place, the fix is two lines here.",
-      "live": true
+      "verdict": "faithful",
+      "issue": "Confirmed live exactly as recorded — modify_hooks=False suppressed the whole hook dispatch instead of setting NoRarityModification | NoCardPoolModifications. FIXED via the same construction-site rewrite as g6: flags=NO_UPGRADE_ROLL|NO_RARITY_MODIFICATION|NO_CARD_POOL_MODIFICATIONS (no NO_MODIFY_HOOKS), and is_card_reward=True now set unconditionally by CardRewardGroup.populate() -- a SECOND defect the record didn't name (both relics also gate on IsCardReward, which the old hand-rolled call never set, even on the first draw). Pinned by test_brain_leech_rip_silken_ tress_and_silver_crucible_fire_on_first_draw and test_brain_leech_rip_ reward_flags_match_the_source. Replaced reasoning: the record named the hook-suppression cause correctly but missed the IsCardReward omission as an independent, compounding cause."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

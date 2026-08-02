@@ -83,8 +83,7 @@ class MagiKnight(MachineMonster):
         target = ctx.player
         existing = target.powers.get(DampenPower.id)
         if existing is None:
-            PowerCmd.apply(ctx.hooks, target, DampenPower, 1, applier=self)
-            created = target.powers.get(DampenPower.id)
+            created = PowerCmd.apply(ctx.hooks, target, DampenPower, 1, applier=self)
             if created is not None:
                 created.add_caster(self)
         else:

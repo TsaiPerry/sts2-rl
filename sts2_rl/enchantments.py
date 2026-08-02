@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 from .hooks import CAT_CARD
 from .valueprops import is_powered_attack
+from .vocab import capacity as vocab_capacity, frozen_ids
 
 if TYPE_CHECKING:
     from .cards import Card
@@ -91,6 +92,20 @@ class Enchantment:
 
     def enchant_block_multiplicative(self, amount: int, props) -> float:
         return 1
+
+    def modify_card_play_count(self, card: Card, target, count: int) -> int:
+        """`EnchantmentModel.EnchantPlayCount` (EnchantmentModel.cs:456-459) —
+        `virtual int EnchantPlayCount(int originalPlayCount) => originalPlayCount`.
+
+        Not a hook: `CardModel.GetEnchantedReplayCount` (CardModel.cs:1129-1132)
+        calls it directly on `card.enchantment`. Exactly two enchantments
+        override it in the game (Glam.cs, Spiral.cs) and exactly two override
+        it here — but the sim shipped the overrides WITHOUT this default, so
+        every other enchantment raised AttributeError through
+        `Card.enchanted_replay_count`. Reachable in ordinary play: Hidden Gem's
+        eligibility filter (cards/colorless_skills.py:369) calls it on every
+        card in hand."""
+        return count
 
     def __init__(self, amount: int = 1) -> None:
         self.amount = amount
@@ -679,3 +694,18 @@ class RoyallyApprovedEnchantment(Enchantment):
 
 
 ALL_ENCHANTMENTS: dict[str, type[Enchantment]] = dict(_ENCHANTMENT_CLASSES)
+
+# Stable vocabulary (frozen append-only + capacity-padded; vocab.py). Mirrors
+# afflictions.py's AFFLICTION_IDS and full_env.py's CARD_IDS wiring; it lives
+# here rather than in full_env.py/run_env.py because this file owns the
+# registry the constants are derived from.
+#
+# Capacity is 32 against a GAME total of 22 real enchantment classes, of which
+# 19 are ported — `Inky`, `Momentum` and `SlumberingEssence` are not. The
+# capacity deliberately covers the unported three: sizing to 19 would force a
+# schema bump the day one of them lands, which is the mistake vocab.py exists
+# to prevent.
+ENCHANTMENT_IDS: list[str] = frozen_ids("enchantments", ALL_ENCHANTMENTS)
+ENCHANTMENT_INDEX: dict[str, int] = {
+    eid: i for i, eid in enumerate(ENCHANTMENT_IDS)}
+N_ENCHANTMENTS = vocab_capacity("enchantments")

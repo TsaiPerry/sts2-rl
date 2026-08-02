@@ -76,7 +76,15 @@ def _make_reviving_enemy(cs: CombatState, index: int = 0):
 
 
 def test_should_allow_hitting_false_still_coincides_with_is_gone():
-    cs = _combat(["bag_of_marbles"], seed=100)
+    # A second, untouched enemy keeps combat alive past the reviving
+    # enemy's death: with a solo Illusion/Minion-holder (IllusionPower
+    # auto-grants MinionPower -> IsPrimaryEnemy false, Creature.cs:245-278),
+    # killing it leaves zero living primary enemies, CombatManager.IsEnding
+    # (CombatManager.cs:192) goes true, and should_allow_hitting's listener
+    # walk is gated off entirely (Hook.cs:2131-2141 via
+    # IterateCombatHookListeners, Hook.cs:53-63) -- returning the loop's
+    # implicit-default True, not the False this test pins.
+    cs = _combat(["bag_of_marbles"], seed=100, enemy_count=2)
     enemy = _make_reviving_enemy(cs)
     assert cs.hooks.should_allow_hitting(enemy) is False
     relic = cs.relics[0]
@@ -135,7 +143,16 @@ def test_damage_cmd_deal_refuses_the_damage_relics_at_the_is_dead_guard():
     `should_allow_hitting` to always-True changes NOTHING, which is the
     dead-code fact asserted in the second half.
     """
-    cs = _combat(["charons_ashes"], seed=102, enemy_count=2)
+    # Three enemies: index 0 dies first (the plain corpse under test), index
+    # 1 is turned into the reviving enemy for the second half, and index 2
+    # is a living primary companion that keeps combat from ending after
+    # index 1 dies -- otherwise (as with only 2 enemies) killing index 1
+    # would leave zero living primary enemies (IllusionPower auto-grants
+    # MinionPower -> IsPrimaryEnemy false, Creature.cs:245-278), making
+    # CombatManager.IsEnding true (CombatManager.cs:192) and gating off
+    # should_allow_hitting's listener walk (Hook.cs:53-63, :2131-2141)
+    # before IllusionPower.should_allow_hitting is ever consulted.
+    cs = _combat(["charons_ashes"], seed=102, enemy_count=3)
     corpse = cs.enemies[0]
     DamageCmd.deal(cs.hooks, corpse, 9999, dealer=cs.player)
     assert corpse.is_dead is True
@@ -252,20 +269,16 @@ def test_hefty_tablet_obtain_purpose_is_still_skippable():
     assert "obtain" in SKIPPABLE_PURPOSES
 
 
-def test_hefty_tablet_after_obtained_never_calls_modify_card_reward_options():
-    """G2's MECHANISM, direct demonstration: a spy relic standing in for any
-    of the TEN current modify_card_reward_options(_late) implementers
-    (fresnel_lens, frozen_egg, glitter, lasting_candy, lava_lamp, molten_egg,
-    silken_tress, silver_crucible, toxic_egg, wing_charm -- the record said 4,
-    R8's first pass said 7) sees no call at all when Hefty Tablet is
-    obtained, where `CardFactory.CreateForReward` (CardFactory.cs:104-107)
-    dispatches `Hook.TryModifyCardRewardOptions` on that exact path.
-
-    This part was and stays correct. What changed is the LIVENESS: see
-    test_hefty_tablet_g2_a_reward_options_relic_is_reachable_before_its_screen."""
+def test_hefty_tablet_after_obtained_calls_modify_card_reward_options():
+    """CardFactory.cs:104-107 dispatches Hook.TryModifyCardRewardOptions
+    unconditionally on the CreateForReward path Hefty Tablet uses (it sets
+    NoUpgradeRoll, not NoModifyHooks — CardCreationFlags.cs, distinct bits).
+    Any of the ten current modify_card_reward_options(_late) implementers
+    sees a call when co-held with Hefty Tablet at AfterObtained time. Fixed
+    in round 14 (R10, relic/hefty_tablet/AfterObtained) — see
+    test/test_r14_hefty_tablet.py for the observable-content pin."""
     import random as _random
     from sts2_rl.run import RunState
-
     from sts2_rl.relics.base import Relic
 
     calls = []
@@ -287,7 +300,8 @@ def test_hefty_tablet_after_obtained_never_calls_modify_card_reward_options():
     run.relics.append(_Spy())
     tablet = make_relic("hefty_tablet")
     tablet.after_obtained(run)
-    assert calls == []
+    assert calls, "Hefty Tablet's screen must dispatch the reward-options hooks"
+    assert {kind for kind, _ in calls} == {"plain", "late"}
 
 
 def _reward_option_implementers():

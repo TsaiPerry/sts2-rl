@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -20,13 +20,33 @@
       "side": "game"
     },
     {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
       "path": "src/Core/Models/PowerModel.cs",
       "sha256": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
       "side": "game"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "f655a201de2bdb93464f4e1998f264887a76fc4168a7f868dea641fc5cf2bdc6",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/creatures.py",
+      "sha256": "9152cb64c277b8c7e5162bcae7d59af41f160a1a347ac586423c41af5be9c530",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/hive/thieving_hopper.py",
+      "sha256": "f53942cb48feefaaec62ea27439cf446f99ae47ad864aa322180c2bd704bf2ce",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "58cf2c3c830b6ab2d3ed0b04f05558660a1d52a5dff9839bcdae018565ac8579",
       "side": "sim"
     }
   ],
@@ -41,9 +61,9 @@
       "rationale": "PowerStackType.Single and the sim leaves Power.on_stack alone, so it adds -- which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236, no StackType branch). This is the CORRECT handling of Single; the census's 15 wrong units are the ones that override on_stack to `pass` (`py audit/tools/power_census.py stack`). Third-file citations, not hashed here."
     },
     "InstanceType": {
-      "maps_to": "powers.py:2260-2261 `self.stolen_cards: list[Card]`",
-      "verdict": "gap",
-      "issue": "PowerInstanceType.Instanced (SwipePower.cs:23): C# creates one SwipePower per stolen card, each with its own `StolenCard` and `Target`. The sim's stacking check (cmds.py:308) always behaves as PowerInstanceType.None, and this power WORKS AROUND it by bundling the instances into a single `stolen_cards` list and documenting the approximation in its own docstring (powers.py:2238-2247). power_cmd gap G5 owns the mechanism (rule 3); **and this is a correction to G5's text**, which says only ToricToughnessPower and TheBombPower \"explicitly document the approximation and hand-roll a workaround\" while \"the other nine do not acknowledge the distinction at all\" -- SwipePower is a third documented workaround, so the count is 3 of 11 and SwipePower should move out of the nine. Reported, not edited (half B does not own the seam docs). DORMANT: the bundling is behaviourally equivalent for the one thing the instances are read for, which is the per-card reward queue. Third-file citations, not hashed here."
+      "maps_to": "powers.py SwipePower.instance_type = PowerInstanceType.INSTANCED; `self.stolen_card: Card | None`",
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-08-01 (entity-obs-schema phase 0). The `stolen_cards` LIST this entry recorded is gone: SwipePower declares PowerInstanceType.INSTANCED and holds exactly one `stolen_card`, so each steal arms its own power, matching SwipePower.cs:17/:23/:25-35. The bundling existed only because `Creature.powers` was a dict with one slot per id, which would have orphaned every steal but the last; it is `creatures.PowerList` now, C#'s ordered `List<PowerModel>`. The three readers moved with it: the hopper's steal takes the instance `PowerCmd.apply` returns (mirroring `Apply<T>`, PowerCmd.cs:66-87) instead of a lookup by id, and both the escape hand-off (monsters/hive/thieving_hopper.py) and `RunState.finish_combat`'s deck reconciliation (run.py) walk `powers.instances(\"swipe\")` -- C#'s GetPowerInstances -- instead of the single dict slot, which is the reachability this entry's own DORMANT reasoning depended on. C#'s per-instance `Target` is still unmodelled; that is the single-player narrowing recorded on the Steal guard, not an instancing gap. Third-file citations, not hashed here."
     },
     "BeforeDeath": {
       "maps_to": "powers.py:2263-2273 SwipePower.on_death (cmds.py:105)",

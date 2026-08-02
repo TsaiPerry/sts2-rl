@@ -68,7 +68,8 @@
     "AfterSideTurnEnd": {
       "maps_to": "no sim counterpart",
       "verdict": "gap",
-      "issue": "HellraiserPower.cs:70-78 resets the per-turn infinite-auto-play counter. The sim tracks no counter (see the AfterCardDrawnEarly entry), so there is nothing to reset. Dormant for the same reason and with the same trigger; carried separately because a fix for the cap must add this reset too, and because the harness requires a verdict per override."
+      "issue": "Re-executed the record's own claim by direct introspection (`vars()` on a live `HellraiserPower` instance, `hasattr` checks for `after_side_turn_end`/`after_enemy_side_end`) instead of citing its prose. Confirmed: no counter, no cap check, no reset method exists on either side of this hook — the record's dormancy verdict was already correct and needed no change, only fresh evidence. Pinned by `test/test_r14_powers.py::TestHellraiserReset` (2 tests).",
+      "live": false
     },
     "BeforeAttack": {
       "maps_to": "no sim counterpart",

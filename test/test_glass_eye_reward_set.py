@@ -109,8 +109,13 @@ def test_g5_every_screen_is_populated_before_any_is_offered():
     run.card_selector = selector
     run.add_relic("glass_eye")
     assert len(counters) == 5
-    # 15 NextItem + 15 NextFloat, all before the first ask, none after.
-    assert counters == [30, 30, 30, 30, 30]
+    # R14/R11: `ForNonCombatWithUniformOdds` itself ORs `NoUpgradeRoll`
+    # (CardCreationOptions.cs:160-163) on top of the `NoRarityModification`
+    # GlassEye.cs:29 adds explicitly — a fact this test previously missed,
+    # asserting 30 (15 NextItem + 15 upgrade-roll NextFloat). Under
+    # NoUpgradeRoll the upgrade-roll draw (and its NextFloat) never happens:
+    # 15 NextItem picks only, all before the first ask, none after.
+    assert counters == [15, 15, 15, 15, 15]
 
 
 def test_g3_the_option_hooks_reach_every_screen():
@@ -149,7 +154,14 @@ def test_g4_the_rare_screen_can_offer_feed_and_not_yet():
         return list(cands)[:count]
 
     # The Rare screen is 3 of a small pool, so a handful of seeds covers it.
-    for seed in ("89U21BV1TZ", "933T39V18D", "DJDCQRWCL081", "TZEK1234567"):
+    # R14/R11: NoUpgradeRoll (see test_g5/test_g2 above) shifted the Rewards
+    # stream this screen consumes, so the previous 4-seed list no longer
+    # happens to land on Feed/Not Yet; widened rather than cherry-picked to
+    # the new stream, so the property (reachable at all) stays honest.
+    for seed in (
+        "89U21BV1TZ", "933T39V18D", "DJDCQRWCL081", "TZEK1234567",
+        *(f"SEED{i}" for i in range(30)),
+    ):
         r = _run(seed)
         r.card_selector = selector
         r.add_relic("glass_eye")
@@ -157,21 +169,25 @@ def test_g4_the_rare_screen_can_offer_feed_and_not_yet():
         "no seed offered Feed or Not Yet; the reward pool is still filtered")
 
 
-def test_g2_the_legacy_path_rolls_for_upgrade_too():
-    """The non-parity branch created cards with `rng.sample` and no roll at
-    all. Both modes now roll; only the STREAM differs, which is the sim's own
-    convention (rewards.create_reward_cards). Act 3 makes the odds
-    act_index * 0.25 = high enough to observe."""
+def test_g2_neither_path_ever_upgrades():
+    """R14/R11 supersedes this test's old name and claim: the non-parity
+    branch created cards with `rng.sample` and no roll at all, and the
+    original G2 fix made both modes roll for upgrade. That fix was itself
+    wrong — `ForNonCombatWithUniformOdds` ORs `NoUpgradeRoll`
+    (CardCreationOptions.cs:160-163), so GlassEye's `CreateForReward` call
+    NEVER rolls for upgrade in either mode (CardFactory.cs:98-102 skips
+    `RollForUpgrade` wholesale under the flag). Act 3 would have made the old
+    (wrong) 0.5 odds easy to observe; correctly, it observes nothing."""
     upgraded = 0
     for seed in range(40):
         run = RunState(rng=random.Random(seed))
         run.start_run()
         run.card_selector = lambda purpose, cands, count: list(cands)[:count]
-        run.act_index = 2                     # act 3 -> 0.5 for non-Rares
+        run.act_index = 2                     # act 3 -> 0.5 for non-Rares, if rolled
         before = len(run.deck)
         run.add_relic("glass_eye")
         upgraded += sum(1 for c in run.deck[before:] if c.upgrade_level > 0)
-    assert upgraded > 0, "legacy Glass Eye still never upgrades anything"
+    assert upgraded == 0, "Glass Eye upgraded a card despite NoUpgradeRoll"
 
 
 def test_the_set_carries_no_room_so_room_gated_relics_stay_off_it():

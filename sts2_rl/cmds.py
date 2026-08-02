@@ -539,9 +539,23 @@ class CreatureCmd:
         that guard would block the very revives it exists for — Illusion's
         REVIVE move and Adaptable's respawn both heal a creature that is dead
         at 0 and retained in combat.
+
+        creature_card_cmds/step19 (round 14): the guard used to read
+        `combat.is_over` (`phase == Phase.COMBAT_OVER`, C#'s `!IsInProgress`),
+        not the bare `IsEnding` CreatureCmd.cs:693 actually gates on. Those
+        disagree in two real windows: between the killing blow and
+        `CheckWinCondition`'s teardown (`is_ending` True, `is_over` False —
+        `is_over` wrongly ALLOWED a non-player heal there), and after teardown
+        (`is_over` True, `is_ending` False again via CombatManager.cs:184-187's
+        leading `!IsInProgress` check — `is_over` wrongly REFUSED one there).
+        ADJACENT TO, NOT THE SAME FIX AS, hook_dispatch/guard10's
+        `HookSystem.combat_is_over`: that site's C# counterpart
+        (`Hook.IterateCombatHookListeners`, Hook.cs:55) gates on the WIDER
+        `IsOverOrEnding`, which this site must not borrow — it would refuse
+        the post-teardown revive C# permits.
         """
         combat = getattr(hooks, "combat", None)
-        if (combat is not None and getattr(combat, "is_over", False)
+        if (combat is not None and getattr(combat, "is_ending", False)
                 and target.side != "player"):
             return 0
         was_dead = target.is_dead
@@ -842,13 +856,29 @@ class PowerCmd:
         power_cls: type[Power],
         amount: int,
         applier: Creature | None = None,
-    ) -> None:
+    ) -> Power | None:
         """
         Apply a power to a creature.
 
         Debuffs are intercepted by Artifact (one stack consumed per debuff blocked).
         If the power is already present on the target, on_stack() is called instead
         of creating a new instance.
+
+        Returns the instance this application produced — the stacked-onto one,
+        or the newly created one — mirroring `Apply<T>`'s own return value
+        (PowerCmd.cs:66-87). Callers that configure the instance they just
+        applied (The Bomb's `SetDamage`, Toric Toughness's `SetBlock`) must
+        use THIS, not a re-fetch by id: `Creature.GetPower` is a
+        `FirstOrDefault`, so for an `Instanced` power it answers with the
+        OLDEST instance, not the one just created.
+
+        One documented narrowing vs `Apply<T>`, which is the already-filed
+        dormant gap `card/the_bomb/g1`: C# returns the constructed-but-
+        unattached PowerModel when the post-modifier amount is 0 (Artifact
+        zeroed the debuff) or when the CanReceivePowers re-test fails, because
+        its inner `Apply` is `void` and cannot signal that. This returns
+        ``None`` in those cases, matching what every sim call site already
+        does with its `if power is not None` re-fetch guard.
         """
         from .powers import PowerInstanceType, PowerType
 
@@ -858,7 +888,7 @@ class PowerCmd:
         # `IsEnding`, not `IsOverOrEnding`: that is what lets the out-of-combat
         # callers through.
         if is_ending(hooks):
-            return
+            return None
 
         # PowerCmd.Apply<T> refuses to apply anything to a creature
         # CanReceivePowers says no to (PowerCmd.cs:73-76). Round 6 wired the
@@ -869,21 +899,18 @@ class PowerCmd:
         # corpse the game still powers, and — for every OTHER caller, which had
         # no guard at all — it let an ordinary corpse be powered.
         if not can_receive_powers(hooks, target):
-            return
+            return None
 
         # PowerCmd.cs:165-174 — FindExistingInstanceForStacking dispatches on
         # PowerInstanceType (PowerModel.cs:144; power_cmd/G5). NONE (the
-        # default) finds the target's existing instance by id, as before.
-        # INSTANCED never finds one — every application starts its own,
-        # independently ticking/expiring instance. INSTANCED_PER_APPLIER
-        # finds one only if it shares this application's applier; a
-        # different applier starts its own instance too. `target.powers`
-        # still holds one dict slot per id, so a forced "not found" below
-        # falls into the new-instance branch, which OVERWRITES that slot —
-        # the instance it replaces is not touched or unregistered, so it
-        # keeps ticking toward its own expiry via the hook system (which
-        # dispatches from its own listener list, not from `target.powers`);
-        # only a direct `target.powers` lookup sees just the newest one.
+        # default) finds the target's existing instance by id
+        # (`Creature.GetPower`, a FirstOrDefault). INSTANCED never finds one
+        # — every application starts its own, independently ticking/expiring
+        # instance, appended alongside the others (`Creature.powers` is
+        # C#'s ordered `List<PowerModel>`, not one slot per id).
+        # INSTANCED_PER_APPLIER searches EVERY instance of that id for one
+        # sharing this application's applier; a different applier starts its
+        # own instance too.
         #
         # Computed HERE, before the modifier chains, not just for the
         # stacking-vs-new branch below: `existing is None` is also what
@@ -891,13 +918,14 @@ class PowerCmd:
         # (only `Apply(power, target, ...)`'s own path has it — `Apply<T>`
         # routes an existing instance straight to `ModifyAmount`, which
         # never re-tests the raw amount at all).
-        existing = target.powers.get(power_cls.id)
-        if existing is not None:
-            if power_cls.instance_type is PowerInstanceType.INSTANCED:
-                existing = None
-            elif (power_cls.instance_type is PowerInstanceType.INSTANCED_PER_APPLIER
-                    and existing.applier is not applier):
-                existing = None
+        if power_cls.instance_type is PowerInstanceType.INSTANCED:
+            existing = None
+        elif power_cls.instance_type is PowerInstanceType.INSTANCED_PER_APPLIER:
+            existing = next(
+                (p for p in target.powers.instances(power_cls.id)
+                 if p.applier is applier), None)
+        else:
+            existing = target.powers.get(power_cls.id)
 
         # PowerCmd.cs:103 — `Apply(power, target, amount, ...)`'s own
         # `amount == 0m` disjunct (power_cmd/step6): C# returns here, before
@@ -907,7 +935,7 @@ class PowerCmd:
         # `ModifyAmount` (the stacking branch) has no such guard at all, and
         # a zero OFFSET flows through its chains normally.
         if existing is None and amount == 0:
-            return
+            return None
 
         # PowerCmd.cs:122-127 — the two chains run in THIS order, before
         # anything downstream sees the amount. A debuff card whose debuffs
@@ -973,7 +1001,9 @@ class PowerCmd:
                 existing.amount < 0 and not existing.allow_negative
             ):
                 existing._expire()
-                return
+                # `Apply<T>` nulls its result when the stacking branch's
+                # ModifyAmount resolves to 0 (PowerCmd.cs:84-86).
+                return None
         else:
             # PowerCmd.cs:133 — CanReceivePowers is re-tested HERE, after the
             # given/received modifier chains have run, because any listener
@@ -989,7 +1019,7 @@ class PowerCmd:
             # companions too, not only skip construction — which it does,
             # simply by returning before `power` is even built.
             if not can_receive_powers(hooks, target):
-                return
+                return None
             # PowerCmd.cs:81 (`power = powerModel.ToMutable()`, done by the
             # `Apply<T>` wrapper before this inner `Apply` even starts) — the
             # PowerModel instance exists, unowned and unregistered, BEFORE
@@ -1019,7 +1049,7 @@ class PowerCmd:
             # re-tested above) and must still fire — that's how Artifact's
             # charge gets spent on a debuff it fully blocks.
             if amount != 0:
-                target.powers[power_cls.id] = power
+                target.powers.add(power)
                 hooks.register(power)
                 hooks.on_power_applied(power_cls.id, target, amount, applier)
                 # Debuffs landing on the player skip their first duration
@@ -1053,6 +1083,12 @@ class PowerCmd:
                 hooks.after_modify_power_amount_given(given_modifiers, power)
             if received_modifiers:
                 hooks.after_modify_power_amount_received(received_modifiers, power)
+            # See the docstring: C# hands back the constructed object even
+            # when `amount == 0` left it unattached; the sim says None, which
+            # is what its callers' `if power is not None` guards already read.
+            if amount == 0:
+                return None
+        return power
 
     @staticmethod
     def modify_amount(hooks: HookSystem, power, offset: int) -> None:
@@ -1101,7 +1137,13 @@ class PowerCmd:
         target: Creature,
         power_id: str,
     ) -> None:
-        """Remove a power from a creature by ID."""
+        """Remove a power from a creature by ID.
+
+        Removes ONE instance — the first, mirroring `PowerCmd.Remove<T>`
+        (PowerCmd.cs:278-281), which resolves its argument through
+        `creature.GetPower<T>()`, a `FirstOrDefault`. Every call site here
+        names a `PowerInstanceType.None` power, where first and only coincide.
+        """
         power = target.powers.pop(power_id, None)
         if power is not None:
             try:

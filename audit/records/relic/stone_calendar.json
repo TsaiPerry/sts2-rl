@@ -79,7 +79,8 @@
     "BeforeSideTurnEnd": {
       "maps_to": "on_player_turn_end (stone_calendar.py:23-32), dispatched by HookSystem.on_player_turn_end from CombatState.end_turn",
       "verdict": "gap",
-      "issue": "Rollup of guards G1 and G2 per binding rule 4. The trigger turn, the damage number, the target set and the props all match and are executed; the divergences are the flattened sub-phase ordering (G1) and the living_enemies-vs-HittableEnemies set (G2)."
+      "issue": "REASONING REPLACED at the hooks-level rollup, same shape as gremlin_horn's. G1 was already closed faithful 2026-07-27 at the guard level (the on_player_turn_end phase walk); the hooks-level issue text quoted in the brief was never refreshed and is stale. Re-confirmed directly: HookSystem.on_player_turn_end's source dispatches through self._each(\"on_player_turn_end\") today. G2 re-confirmed dormant via the identical DamageCmd.deal is_dead-guard mechanism as charons_ashes and festive_popper -- executed end to end (turn-7 trigger deals the full 52 to two living enemies). Propose narrowing the hooks-level issue text to name G2 alone.",
+      "live": false
     },
     "AfterCombatEnd": {
       "maps_to": "no counterpart",

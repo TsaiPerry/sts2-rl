@@ -104,10 +104,10 @@
     },
     {
       "what": "Contention with power/corruption and power/rebound on the same chain",
-      "verdict": "gap",
-      "issue": "NARROWED (2026-08-01, round 13, R3). The Rebound half is CLOSED: Rebound's redirect now happens on modify_card_play_result_pile at C#'s timing (CardModel.cs:1890), so the contention this guard described no longer exists on that side. The Corruption half stays OPEN and LIVE, cross-referenced to power/corruption rather than independently re-argued (binding rule 3) -- and see that entry: its order-independence framing was overturned on 2026-08-01, so this guard must not be read as evidence for it.  The text it replaced read: NARROWED 2026-07-27, and the contention's OUTCOME has INVERTED. The hook moved: `modify_card_play_result_pile` is now consulted at combat.py:567, before the playCount loop (CardModel.cs:1890), but the MOVE it decides happens at combat.py:617-619, AFTER the loop and therefore AFTER `on_card_played` (:600) -- which is where CorruptionPower (powers.py:658-670) and ReboundPower (powers.py:2952-2961) still reach into the piles by hand. So Corruption and Rebound now act FIRST and Nostalgia's redirect finds the card already gone from the discard pile; previously Nostalgia won. C# still has all three on ONE ModifyCardPlayResultPileTypeAndPosition chain with a last-writer-wins rule (Hook.cs:1391-1405) versus three different sim mechanisms, so the gap stands -- only the direction of the wrong answer changed. VERIFIED by reading combat.py:555-620 and powers.py."
+      "verdict": "faithful",
+      "issue": "The Corruption half the record left open is also closed: `CorruptionPower` no longer has an `on_card_played` handler at all (round 13 R5 moved it onto the same `modify_card_play_result_pile` chain Nostalgia/Rebound use, `powers.py:912-955`). Executed both listener orderings and the Corruption+Rebound combination: the final pile is order-independent (Corruption always wins for Skills because it's unconditional and the other two abstain once the pile isn't \"discard\"), matching the ordinary chain last-writer-wins semantics C# specifies. Record was dated the same day but evidently written before the R5 fix landed / was not re-checked against it — replaced the reasoning, verdict was already heading the right direction (Rebound half). Verified by execution (test_r14_power_cmd.py)."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

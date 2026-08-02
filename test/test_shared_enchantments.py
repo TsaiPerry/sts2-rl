@@ -178,3 +178,28 @@ def test_a_clone_carries_the_source_s_this_combat_cost():
     clone = create_clone(strike)
     assert clone.energy_cost == printed + 2
     assert clone.energy_cost == strike.energy_cost
+
+
+def test_every_enchantment_answers_enchanted_replay_count():
+    """`EnchantmentModel.EnchantPlayCount` is VIRTUAL with a default of
+    `originalPlayCount` (EnchantmentModel.cs:456-459), and exactly two
+    enchantments override it (Glam.cs, Spiral.cs). The sim shipped the two
+    overrides without the base-class default, so `Card.enchanted_replay_count`
+    (cards/base.py:310) raised AttributeError on a card carrying any of the
+    other 18 — reachable in ordinary play through Hidden Gem's filter
+    (`_has_replay_enchantment`, cards/colorless_skills.py:369), which calls it
+    on every card in hand.
+
+    Found by the phase-1 powers census, which crashed on it during
+    masked-random run play.
+    """
+    from sts2_rl.enchantments import _ENCHANTMENT_CLASSES
+
+    for eid in sorted(_ENCHANTMENT_CLASSES):
+        card = make_card("strike")
+        card.enchantment = make_enchantment(eid)
+        # The default branch: base_replay_count passes straight through, so a
+        # card that is not already replaying reports 0 rather than raising.
+        assert card.enchanted_replay_count() == card.base_replay_count, eid
+        card.base_replay_count = 1
+        assert card.enchanted_replay_count() >= 1, eid

@@ -95,6 +95,80 @@ class Intent:
         return self.move_type == move_type or move_type in self.also
 
 
+# ---------------------------------------------------------------------------
+# R3: per-enemy intent history (OBS_SCHEMA.md §7's R3 section, superseded by
+# this constant + the recorder in combat.py).
+#
+# Census (state_machine.py's RandomBranchState.add_branch, plus the
+# hand-rolled monsters that reimplement the same primitive via
+# weighted_branch_pick): the deepest COOLDOWN window any ported monster ships
+# is 3 (Flyconid's V_SPORES cooldown=3, FakeMerchant's ENRAGE cooldown=3,
+# TwoTailedRat's SCREECH cooldown=3 — `monsters/overgrowth/flyconid.py`,
+# `monsters/fake_merchant.py`, `monsters/underdocks/two_tailed_rat.py`); the
+# deepest CAN_REPEAT_X_TIMES budget is max_times=2 (Knights' SOUL_SLASH,
+# ScrollOfBiting's CHEW, FlailKnight's FLAIL/RAM, HunterKiller's PUNCTURE,
+# FossilStalker's repeated move); CANNOT_REPEAT is a 1-move window.
+# USE_ONLY_ONCE is excluded from this measurement on purpose: it gates on
+# "has this move EVER happened this combat", a permanent flag, not a
+# recency window — no bounded history depth reconstructs it, and none is
+# expected to. 3 turns of displayed history is therefore sufficient to
+# recover every ported repeat/cooldown gate from what the player has
+# actually seen; a larger N would be dead weight.
+MAX_INTENT_HISTORY = 3
+
+
+def intent_flags(intent: "Intent", stunned: bool = False) -> tuple:
+    """The 9 admissible ``MoveType`` booleans a displayed intent contributes
+    to an enemy observation row, in the fixed order (attack, defend, buff,
+    debuff[-strong]/card_debuff merged, status_card, summon, escape, heal,
+    stun[/sleep] merged) ``full_env._enemy_floats`` has always used for the
+    CURRENT intent. Factored out here so the R3 history recorder
+    (``CombatState._record_intent_history``) computes the identical merge
+    the current-intent encoder does, rather than keeping a second,
+    independently-maintained copy that could silently drift from it."""
+    return (
+        intent.has(MoveType.ATTACK),
+        intent.has(MoveType.DEFEND),
+        intent.has(MoveType.BUFF),
+        intent.has(MoveType.DEBUFF)
+        or intent.has(MoveType.DEBUFF_STRONG)
+        or intent.has(MoveType.CARD_DEBUFF),
+        intent.has(MoveType.STATUS_CARD),
+        intent.has(MoveType.SUMMON),
+        intent.has(MoveType.ESCAPE),
+        intent.has(MoveType.HEAL),
+        intent.has(MoveType.STUN) or intent.has(MoveType.SLEEP) or stunned,
+    )
+
+
+@dataclass(frozen=True)
+class IntentHistoryEntry:
+    """One net_id-keyed snapshot of a previously-DISPLAYED intent (R3).
+
+    Captured once per player turn, immediately before the enemy's intent is
+    rerolled (``CombatState._record_intent_history``) — never derived lazily
+    from a stored ``Intent`` object, because the attack-preview numbers
+    (``per_hit``/``hits``/``total``) depend on the player's block/Strength/
+    Vulnerable at the moment the intent was actually shown, state that is
+    gone by the time an observation is built later.
+
+    ``post_block`` is deliberately NOT captured here (OBS_SCHEMA.md's R3
+    section has the full reasoning): it is a derived combination of a
+    displayed number (damage) and the player's OWN block at that fleeting
+    moment, which a player reconstructs trivially in the instant but does
+    not retain as a discrete remembered fact the way "it hit me for 12" is
+    retained — unlike ``total``, a pure function of the two numbers
+    (``per_hit``, ``hits``) already co-displayed on the same icon, with no
+    additional state involved.
+    """
+
+    flags: tuple  # 9-tuple, see intent_flags()
+    per_hit: int | None
+    hits: int | None
+    total: int | None
+    status_count: int | None
+
+
 class Monster(Creature):
     """Base class for all enemies.  Subclasses must set min_hp / max_hp and
     implement current_intent and take_turn."""

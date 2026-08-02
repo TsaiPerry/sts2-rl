@@ -78,7 +78,8 @@
     "ModifyDamageAdditive": {
       "maps_to": "modify_damage_additive (miniature_cannon.py:22-33), summed by HookSystem.modify_damage_additive (hooks.py:52-63) and consumed at three sites -- cmds.py:57 (the real pipeline), previews.py:56 (intent display) and cards/thrash.py:46 (Thrash's absorb)",
       "verdict": "gap",
-      "issue": "Rollup of guard G1 per binding rule 4. Three of C#'s four early returns are reproduced exactly (N1-N3, all executed); the fourth is an AND that the port narrows to one of its two disjuncts."
+      "issue": "Confirmed against `MiniatureCannon.cs` 2026-08-01: the recorded narrowing (AND-of-two-disjuncts collapsed to one disjunct) is accurate and is a multiplayer-only-reachable gap given the sim's one-player-creature model. Round 13's retraction referenced in the brief was not found to have left any stale prose on THIS record — text matches current code exactly. No action taken.",
+      "live": false
     }
   },
   "guards": [

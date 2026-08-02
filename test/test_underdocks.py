@@ -398,14 +398,23 @@ class TestPhantasmalGardeners:
         assert fourth.strength == 2
 
     def test_skittish_blocks_once_per_turn(self):
+        # Skittish grants block once per AttackCommand, after the whole
+        # command resolves (SkittishPower.cs:56-68) -- a bare DamageCmd.deal
+        # with no attack-command bracket is not a C#-reachable shape (no
+        # AttackCommand ever completes to open/close it), so we drive the
+        # real before_attack/after_attack bracket, one per "swing".
         cs = fresh_encounter(PHANTASMAL_GARDENERS_ELITE)
         gardener = cs.enemies[0]
         strike = make_card("strike")
+        cs.hooks.before_attack(cs.player, card=strike)
         DamageCmd.deal(cs.hooks, gardener, 3, dealer=cs.player, card=strike)
+        cs.hooks.after_attack(cs.player, card=strike)
         assert gardener.block == 6
         # Only the first unblocked card hit each turn triggers it: the second
-        # hit chews through the 6 block without granting more.
+        # attack chews through the 6 block without granting more.
+        cs.hooks.before_attack(cs.player, card=strike)
         DamageCmd.deal(cs.hooks, gardener, 8, dealer=cs.player, card=strike)
+        cs.hooks.after_attack(cs.player, card=strike)
         assert gardener.block == 0
         assert gardener.hp == gardener.max_hp - 3 - 2
 
@@ -418,13 +427,20 @@ class TestPhantasmalGardeners:
         assert gardener.block == 7  # absorbed; no Skittish block
 
     def test_skittish_resets_next_turn(self):
+        # Same bracket requirement as test_skittish_blocks_once_per_turn:
+        # a bare DamageCmd.deal never opens the AttackCommand-level
+        # after_attack bracket that grants Skittish's block.
         cs = fresh_encounter(PHANTASMAL_GARDENERS_ELITE)
         gardener = cs.enemies[0]
         strike = make_card("strike")
+        cs.hooks.before_attack(cs.player, card=strike)
         DamageCmd.deal(cs.hooks, gardener, 3, dealer=cs.player, card=strike)
+        cs.hooks.after_attack(cs.player, card=strike)
         assert gardener.block == 6
         cs.end_turn()
+        cs.hooks.before_attack(cs.player, card=strike)
         DamageCmd.deal(cs.hooks, gardener, 3, dealer=cs.player, card=strike)
+        cs.hooks.after_attack(cs.player, card=strike)
         assert gardener.block == 6  # cleared at its turn start, re-triggered
 
 

@@ -768,7 +768,8 @@
   "runic_pyramid",
   "snecko_eye",
   "sozu",
-  "velvet_choker"
+  "velvet_choker",
+  "history_course"
  ],
  "events": [
   "abyssal_baths",
@@ -856,5 +857,35 @@
   "choose_a_card",
   "choose_a_card_optional",
   "enchant_optional"
+ ],
+ "afflictions": [
+  "bound",
+  "entangled",
+  "galvanized",
+  "hexed",
+  "ringing",
+  "smog",
+  "tainted"
+ ],
+ "enchantments": [
+  "adroit",
+  "clone",
+  "corrupted",
+  "glam",
+  "goopy",
+  "imbued",
+  "instinct",
+  "nimble",
+  "perfect_fit",
+  "royally_approved",
+  "sharp",
+  "slither",
+  "souls",
+  "sown",
+  "spiral",
+  "steady",
+  "swift",
+  "tezcataras_ember",
+  "vigorous"
  ]
 }

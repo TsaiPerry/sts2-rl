@@ -255,11 +255,14 @@ def test_booming_conch_energy_grant_bypasses_modify_energy_gain_chain():
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# relic/{fake_strike_dummy,strike_dummy,miniature_cannon} — G1/G2 dormancy
-# re-confirmed: every ported Strike-tagged card, and every ported Upgraded-
-# Attack-dealing path, passes dealer=player. No self-damage card (the only
-# `card=` sites with no player dealer) carries the strike tag or an upgrade-
-# level check relevant here.
+# relic/{fake_strike_dummy,strike_dummy,miniature_cannon} — the dealer==None
+# guard's *reachability* is still dormant/unobservable (every ported
+# Strike-tagged card, and every ported Upgraded-Attack-dealing path, passes
+# dealer=player), but R8 fixed the guard's *output* under a null dealer: the
+# sim's `Card` has no `owner` field, so `cardSource.Owner == Owner`
+# (StrikeDummy.cs:33-36 / FakeStrikeDummy.cs:35-38) is unconditionally true
+# and the AND-of-negatives guard can never both hold -- C# would never
+# decline on dealer grounds alone, so `with_none` now equals `with_player`.
 # ══════════════════════════════════════════════════════════════════════════
 
 def test_strike_tagged_cards_all_deal_damage_with_the_player_as_dealer():
@@ -319,7 +322,7 @@ def test_fake_strike_dummy_and_strike_dummy_miss_a_null_dealer_strike():
     with_none = cs.hooks.modify_damage_additive(
         cs.enemies[0], base, None, strike, props=DamageProps.CARD)
     assert with_player == base + 1   # FakeStrikeDummy.EXTRA_DAMAGE
-    assert with_none == base         # dormant divergence: C# would still add 1
+    assert with_none == base + 1   # FakeStrikeDummy.EXTRA_DAMAGE
 
 
 def test_strike_dummy_misses_a_null_dealer_strike():
@@ -332,7 +335,7 @@ def test_strike_dummy_misses_a_null_dealer_strike():
     with_none = cs.hooks.modify_damage_additive(
         cs.enemies[0], base, None, strike, props=DamageProps.CARD)
     assert with_player == base + 3   # StrikeDummy.EXTRA_DAMAGE
-    assert with_none == base         # dormant divergence: C# would still add 3
+    assert with_none == base + 3   # StrikeDummy.EXTRA_DAMAGE -- card ownership always == player in this sim, so dealer no longer gates it
     # G2's other disjunct: C# also fires when `cardSource.Owner == Owner`,
     # which the sim's Card has no owner concept to consult at all — the same
     # missing alternative, from the other side.

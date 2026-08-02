@@ -1,0 +1,22 @@
+{
+  "unit": "relic/history_course",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\HistoryCourse.cs",
+    "sha256": "52e276e91f28d1e748bb3066846ee7140fd38b4a1d4295a364e3ef6cd32d8913"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\history_course.py",
+    "sha256": "33037867688fdeac2b7d7bbe3617fed57a5acf0fa285494b788eee98106510c7"
+  },
+  "extra_sources": [],
+  "hooks": {
+    "AfterAutoPrePlayPhaseEntered": {
+      "maps_to": "after_auto_pre_play_phase_entered (history_course.py)",
+      "verdict": "faithful",
+      "issue": "Ported 2026-08-01 (round 14, R12) alongside the war_historian_repy event body; reviewer-verified line-by-line against HistoryCourse.cs (turn-1 skip, last-turn Attack/Skill lookup via CombatHistory, non-dupe filter, CreateDupe via create_clone + is_dupe/exhausts overrides, auto_play_card). ONE DOCUMENTED APPROXIMATION: 'last player turn' is matched via combat.turn rather than a per-entry TurnNumber snapshot, because sim history entries are stamped with round_number -- history.py's own documented limitation, shared by every other HappenedLastPlayerTurn caller (none ported). Pinned by test_r14_war_historian.py."
+    }
+  },
+  "guards": [],
+  "verdict": "faithful",
+  "audited": "2026-08-01"
+}

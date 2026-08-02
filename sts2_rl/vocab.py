@@ -31,8 +31,21 @@ Two mechanisms fix that:
   monsters    121        144
   potions     64         80
   events      68         96
-  purposes    (sim: 14)  24
+  purposes    (sim: 18)  24
+  afflictions 7          16
+  enchantments 22        32
   ==========  =========  ========
+
+  ``afflictions`` and ``enchantments`` are sized to the game total, not the
+  ported count: 7 of 7 afflictions are ported, but only 19 of 22
+  enchantments are (``Inky``, ``Momentum``, ``SlumberingEssence`` are not).
+  Sizing to 19 would force a schema bump the day one of them lands, which is
+  exactly the mistake this module exists to prevent.
+
+  These are documentation, not the source of truth — the live counts are
+  ``len(frozen_ids(kind, ...))`` and the capacities are ``CAPACITIES`` below.
+  The purposes figure was stale at 14 (measured 18, 2026-08-01); re-measure
+  before quoting any of them.
 
   Slots past the live count are permanently zero in the obs and masked in the
   action space until content lands in them; a policy checkpoint then only
@@ -61,6 +74,8 @@ CAPACITIES: dict[str, int] = {
     "potions": 80,
     "events": 96,
     "purposes": 24,
+    "afflictions": 16,
+    "enchantments": 32,
 }
 
 

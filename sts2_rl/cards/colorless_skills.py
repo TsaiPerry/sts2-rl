@@ -780,10 +780,12 @@ class TheBombCard(Card):
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cmds import PowerCmd
         from ..powers import TheBombPower
-        PowerCmd.apply(
+        # TheBomb.cs dereferences the Apply result — and The Bomb is
+        # PowerInstanceType.Instanced, so a re-fetch by id would answer with
+        # the OLDEST fuse and re-arm that one's damage instead of this one's.
+        power = PowerCmd.apply(
             ctx.hooks, ctx.player, TheBombPower, self._turns, applier=ctx.player
         )
-        power = ctx.player.powers.get("the_bomb")
         if power is not None:
             power.set_damage(self._damage)
 

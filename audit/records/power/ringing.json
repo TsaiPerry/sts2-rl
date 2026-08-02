@@ -80,8 +80,8 @@
     },
     "ShouldPlay": {
       "maps_to": "powers.py:1340-1344 RingingPower.should_play_card",
-      "verdict": "gap",
-      "issue": "HISTORY vs FLAG. C# answers 'has the owner played a card this turn' by querying CombatManager.History.CardPlaysStarted for entries that HappenedThisTurn; the sim keeps a boolean set from on_card_played. The two differ during a card's own resolution: C#'s history entry is written when the play STARTS (CardModel.cs:1930), so a card auto-played from inside the first card's resolution is already 'after a card this turn' and is blocked, while the sim's flag is set only in on_card_played, AFTER resolution (combat.py:514), so the nested auto-play slips through. Reachable: the sim auto-plays from inside a resolution in several ported places (HellraiserPower powers.py:707-713 on draw, MayhemPower :3572-3583, StampedePower :1025-1041). Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "FIXED. Replaced the boolean `_card_played_this_turn` flag (set only from `on_card_played`, i.e. after resolution) with a live query against `combat.history.of_type(CardPlayStartedEntry, this_turn=True)` — history infrastructure that already existed and already recorded the needed data, so no change outside `powers.py` was required. Closes the nested-auto-play window the record described (Hellraiser/Mayhem/Stampede). Re-executed the campaign's own round-11 witness script (`.superpowers/sdd/unlabelled/probes/power-5-ringing-hellraiser-order.py`) as a pytest test rather than trusting its printed output. Pinned by `test/test_r14_powers.py::TestRinging` (3 tests)."
     }
   },
   "guards": [
@@ -106,6 +106,6 @@
       "rationale": "The sim routes the clearing through an overridden _expire (powers.py:1357-1363) that calls super()._expire() last, so the affliction sweep happens on every removal path exactly as C#'s AfterRemoved does. This is the right shape: contrast the units where _expire replaces PowerCmd.Remove and an AfterRemoved would be missed."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

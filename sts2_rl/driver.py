@@ -119,19 +119,27 @@ N_REST_OPTIONS = 3
 # `AutoSlayCardSelector` and every headless choice in the source operates at
 # too. (NOT "remote": CardSelectCmd.cs:600's remote arm is screen-level.) See relics/kifuda.py's docstring for the full citation.
 # GnarledHammer.cs:30-34 builds the identical CardSelectorPrefs shape
-# (0..CardsVar(3), Cancelable = false, RequireManualConfirmation = true) but
-# relics/gnarled_hammer.py is a different lane's footprint this round, so it
-# still passes "enchant" (not skippable) and still force-fills 3 — see
-# relics/kifuda.py and this round's report for the citation. Named
-# "enchant_optional" rather than reusing "enchant" because "enchant" also
-# covers six other relics/events whose own CardSelectorPrefs constructors are
-# the exact-count overload (`CardSelectorPrefs(prompt, N)`, MinSelect ==
-# MaxSelect — beautiful_bracelet/electric_shrymp/paels_growth/royal_stamp/
-# tri_boomerang and every "enchant"-purpose event site) — those must keep
-# force-filling, so they must NOT share a purpose string with Kifuda's genuine
+# (0..CardsVar(3), Cancelable = false, RequireManualConfirmation = true) as
+# Kifuda; relics/gnarled_hammer.py was fixed in round 14 (lane R7) to also
+# pass "enchant_optional" with min_select=0, so it shares this purpose and no
+# longer force-fills 3. Named "enchant_optional" rather than reusing
+# "enchant" because "enchant" also covers six other relics/events whose own
+# CardSelectorPrefs constructors are the exact-count overload
+# (`CardSelectorPrefs(prompt, N)`, MinSelect == MaxSelect —
+# beautiful_bracelet/electric_shrymp/paels_growth/royal_stamp/tri_boomerang
+# and every "enchant"-purpose event site) — those must keep force-filling, so
+# they must NOT share a purpose string with Kifuda's/GnarledHammer's genuine
 # range.
+# "exhaust_any" is Ashwater.cs:30's `CardSelectorPrefs(prompt, 0,
+# 999999999)`; "discard_any" is GamblersBrew.cs:26's identical MinSelect-0
+# shape; "from_discard" is NeowsFury.cs:39's `CardSelectorPrefs(prompt, 0,
+# num)`. All three are already-correct call sites (potions.py, cards/
+# neows_fury.py) that were being force-filled here because the registry
+# lacked their purpose strings — round 14 lane R7-F closes that gap (see
+# R7-report.md / R7-review.md).
 SKIPPABLE_PURPOSES = frozenset({
-    "card_reward", "choose_a_card_optional", "enchant_optional",
+    "card_reward", "choose_a_card_optional", "discard_any",
+    "enchant_optional", "exhaust_any", "from_discard",
     "gambling_chip", "obtain", "transform_optional",
 })
 
@@ -411,7 +419,7 @@ class RunDriver:
         # bare offer the same way _offer_potion does. There is no room behind
         # a pickup-effect screen; MONSTER is the neutral label rest-site
         # reward screens already use (RunState.rest_heal_rewards).
-        offer = CombatRewards(room_type=RoomType.MONSTER, potion=item)
+        offer = CombatRewards(room_type=RoomType.MONSTER, potions=[item])
         return self._ask(DecisionRequest(
             kind=DecisionKind.REWARD_POTION, run=self.run,
             rewards=offer, potion=item,
@@ -540,12 +548,20 @@ class RunDriver:
             ))
             if idx == 0:
                 run.add_card(card)
-        if rewards.potion is not None:
+        # Every PotionReward on the set is its own take-or-skip row. Normally
+        # there is one (the pity drop); a RewardsCmd.OfferCustom set can carry
+        # several — Crystal Sphere reveals up to three. `rewards.potions[0]` is
+        # what `rewards.potion` shows, so popping from the front keeps the
+        # decision and the obs pointed at the potion actually being offered.
+        pending = list(rewards.potions)
+        for potion in pending:
+            rewards.potions = [potion]
             take = self._ask(DecisionRequest(
                 kind=DecisionKind.REWARD_POTION, run=run, rewards=rewards,
             )) == 0
             if take:
-                run.add_potion(rewards.potion)
+                run.add_potion(potion)
+        rewards.potions = pending
         # Extra potion offers (PotionReward extras: Punch-Off's fight purse).
         # Each is its own take-or-skip decision, like the pity potion above.
         for potion in rewards.special_potions:
@@ -580,7 +596,7 @@ class RunDriver:
         """One take-or-skip potion offer (PotionReward / RewardsCmd.
         OfferCustom), surfaced through the existing REWARD_POTION decision."""
         run = self.run
-        offer = CombatRewards(room_type=room_type, potion=potion)
+        offer = CombatRewards(room_type=room_type, potions=[potion])
         take = self._ask(DecisionRequest(
             kind=DecisionKind.REWARD_POTION, run=run, rewards=offer,
             potion=potion,

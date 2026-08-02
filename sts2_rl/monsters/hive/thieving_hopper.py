@@ -129,8 +129,12 @@ class ThievingHopper(MachineMonster):
                 pass
             from ...cmds import PowerCmd
             from ...powers import SwipePower
-            PowerCmd.apply(ctx.hooks, self, SwipePower, 1)
-            self.powers["swipe"].stolen_cards.append(card)
+            # SwipePower.Steal (SwipePower.cs:66-76) writes the stolen card
+            # onto the instance THIS steal armed — Instanced, one card each,
+            # so it has to be Apply's own result, not a lookup by id.
+            swipe = PowerCmd.apply(ctx.hooks, self, SwipePower, 1)
+            if swipe is not None:
+                swipe.stolen_card = card
         self._execute_attack(ctx, _THEFT_DMG, 1)
 
     def _flutter(self, ctx: CombatCtx) -> None:
@@ -162,8 +166,7 @@ class ThievingHopper(MachineMonster):
         # task's footprint) rather than pruned, since it is still correct,
         # order-independent bookkeeping for any OTHER path that reaches
         # finish_combat with the power still attached.
-        swipe = self.powers.get("swipe")
-        if swipe is not None:
+        for swipe in self.powers.instances("swipe"):
             swipe.hand_off_stolen_origins()
         from ...cmds import CreatureCmd
         CreatureCmd.escape(ctx.hooks, self)

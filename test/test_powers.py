@@ -986,7 +986,14 @@ class TestPowerInstanceType:
     NONE (the default) keeps finding the existing instance by id and
     stacking onto it. INSTANCED never finds one, so a second application
     starts its own independently-ticking instance. INSTANCED_PER_APPLIER
-    finds one only when the applier matches."""
+    finds one only when the applier matches.
+
+    Every instance is now REACHABLE: `creature.powers` is C#'s ordered
+    `List<PowerModel>`, so `.instances(id)` is `GetPowerInstances` and
+    `powers[id]` is `GetPower` — a FirstOrDefault, i.e. the OLDEST instance.
+    These tests used to read `powers[id]` for "the instance just applied",
+    which only worked because the old dict slot was overwritten by the
+    newest; they address instances explicitly now."""
 
     def test_none_type_power_still_merges_into_one_instance(self):
         # Regression guard: PowerInstanceType.NONE is untouched by G5's fix.
@@ -1008,12 +1015,11 @@ class TestPowerInstanceType:
         from sts2_rl.powers import AutomationPower
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.player, AutomationPower, 1)
-        inst1 = cs.player.powers["automation"]
         for _ in range(6):
             cs.hooks.on_card_drawn(None)
         PowerCmd.apply(cs.hooks, cs.player, AutomationPower, 1)
-        inst2 = cs.player.powers["automation"]
-        assert inst2 is not inst1
+        inst1, inst2 = cs.player.powers.instances("automation")
+        assert cs.player.powers["automation"] is inst1   # GetPower == First
         assert inst1.cards_left == 4      # inst1 kept its own progress...
         assert inst2.cards_left == 10     # ...inst2 starts its own, fresh
 
@@ -1053,8 +1059,9 @@ class TestPowerInstanceType:
         # A different applier -> a separate instance; the first is left
         # untouched, ticking on its own.
         PowerCmd.apply(cs.hooks, cs.enemy, StranglePower, 4, applier=other_applier)
-        second = cs.enemy.powers["strangle"]
-        assert second is not first
+        held = cs.enemy.powers.instances("strangle")
+        assert len(held) == 2 and held[0] is first
+        second = held[1]
         assert second.applier is other_applier
         assert second.amount == 4
         assert first.amount == 5
@@ -1067,10 +1074,8 @@ class TestPowerInstanceType:
         from sts2_rl.powers import RollingBoulderPower
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.player, RollingBoulderPower, 5)
-        inst1 = cs.player.powers["rolling_boulder"]
         PowerCmd.apply(cs.hooks, cs.player, RollingBoulderPower, 5)
-        inst2 = cs.player.powers["rolling_boulder"]
-        assert inst2 is not inst1
+        assert len(cs.player.powers.instances("rolling_boulder")) == 2
 
         before = cs.enemy.hp
         cs.hooks.on_player_turn_started(cs.player)
@@ -1087,12 +1092,12 @@ class TestPowerInstanceType:
         from sts2_rl.powers import ToricToughnessPower
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.player, ToricToughnessPower, 2, applier=cs.player)
-        cs.player.powers["toric_toughness"].set_block(5)
-        inst1 = cs.player.powers["toric_toughness"]
+        # The card sets the block of the instance it just applied — the
+        # NEWEST one (`ToricToughness.cs` dereferences the Apply result).
+        cs.player.powers.instances("toric_toughness")[-1].set_block(5)
         PowerCmd.apply(cs.hooks, cs.player, ToricToughnessPower, 3, applier=cs.player)
-        cs.player.powers["toric_toughness"].set_block(9)
-        inst2 = cs.player.powers["toric_toughness"]
-        assert inst2 is not inst1
+        cs.player.powers.instances("toric_toughness")[-1].set_block(9)
+        assert len(cs.player.powers.instances("toric_toughness")) == 2
 
         cs.player.block = 0
         cs.hooks.on_block_cleared(cs.player)
@@ -1113,13 +1118,11 @@ class TestPowerInstanceType:
         from sts2_rl.powers import PanachePower
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.player, PanachePower, 4)
-        inst1 = cs.player.powers["panache"]
         strike = make_card("strike")
         for _ in range(4):                      # 1 skipped (self) + 3 counted
             cs.hooks.on_card_played(strike)
         PowerCmd.apply(cs.hooks, cs.player, PanachePower, 4)
-        inst2 = cs.player.powers["panache"]
-        assert inst2 is not inst1
+        inst1, inst2 = cs.player.powers.instances("panache")
         assert inst1.cards_left == 2            # 5 - 3
         assert inst2.cards_left == 5            # fresh, its own play not yet skipped
 
@@ -1129,10 +1132,8 @@ class TestPowerInstanceType:
         from sts2_rl.powers import SandpitPower
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.enemy, SandpitPower, 4, applier=cs.enemy)
-        inst1 = cs.enemy.powers["sandpit"]
         PowerCmd.apply(cs.hooks, cs.enemy, SandpitPower, 2, applier=cs.enemy)
-        inst2 = cs.enemy.powers["sandpit"]
-        assert inst2 is not inst1
+        inst1, inst2 = cs.enemy.powers.instances("sandpit")
         assert inst1.amount == 4 and inst2.amount == 2
 
         cs.hooks.after_enemy_side_start()       # tick 1: 4->3, 2->1
@@ -1159,10 +1160,8 @@ class TestPowerInstanceType:
         from sts2_rl.powers import ThieveryPower
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.enemy, ThieveryPower, 20, applier=cs.enemy)
-        inst1 = cs.enemy.powers["thievery"]
         PowerCmd.apply(cs.hooks, cs.enemy, ThieveryPower, 10, applier=cs.enemy)
-        inst2 = cs.enemy.powers["thievery"]
-        assert inst2 is not inst1
+        inst1, inst2 = cs.enemy.powers.instances("thievery")
         assert inst1.amount == 20 and inst2.amount == 10
 
     def test_heist_two_applications_are_independent_amounts(self):
@@ -1170,10 +1169,8 @@ class TestPowerInstanceType:
         from sts2_rl.powers import HeistPower
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.enemy, HeistPower, 15, applier=cs.enemy)
-        inst1 = cs.enemy.powers["heist"]
         PowerCmd.apply(cs.hooks, cs.enemy, HeistPower, 25, applier=cs.enemy)
-        inst2 = cs.enemy.powers["heist"]
-        assert inst2 is not inst1
+        inst1, inst2 = cs.enemy.powers.instances("heist")
         assert inst1.amount == 15 and inst2.amount == 25
 
     def test_withering_presence_two_applications_have_independent_card_counters(self):
@@ -1181,19 +1178,16 @@ class TestPowerInstanceType:
         from sts2_rl.powers import WitheringPresencePower
         cs = fresh()
         PowerCmd.apply(cs.hooks, cs.enemy, WitheringPresencePower, 6, applier=cs.enemy)
-        inst1 = cs.enemy.powers["withering_presence"]
         PowerCmd.apply(cs.hooks, cs.enemy, WitheringPresencePower, 3, applier=cs.enemy)
-        inst2 = cs.enemy.powers["withering_presence"]
-        assert inst2 is not inst1
+        inst1, inst2 = cs.enemy.powers.instances("withering_presence")
         assert inst1._cards_left == 6 and inst2._cards_left == 3
 
-    def test_the_bomb_and_swipe_are_not_migrated_to_instance_type(self):
-        # power/the_bomb and power/swipe keep PowerInstanceType.NONE
-        # deliberately: each already reproduces the observable behaviour
-        # that matters (damage, deck reconciliation) via its own hand-rolled
-        # workaround, and routing them through the generic Instanced
-        # dispatch would silently break that workaround (see their
-        # docstrings). This pins the deliberate non-migration.
+    def test_every_c_sharp_instanced_power_declares_it(self):
+        """The two powers that used to hold a hand-rolled substitute for
+        instancing (The Bomb's `bombs` fuse list, Swipe's `stolen_cards`
+        bucket) declare the real dispatch now — those workarounds existed
+        only because `Creature.powers` was a dict with one slot per id.
+        C#: TheBombPower.cs:23, SwipePower.cs:23."""
         from sts2_rl.powers import PowerInstanceType, SwipePower, TheBombPower
-        assert TheBombPower.instance_type is PowerInstanceType.NONE
-        assert SwipePower.instance_type is PowerInstanceType.NONE
+        assert TheBombPower.instance_type is PowerInstanceType.INSTANCED
+        assert SwipePower.instance_type is PowerInstanceType.INSTANCED

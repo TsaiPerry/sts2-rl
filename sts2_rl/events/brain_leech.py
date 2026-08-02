@@ -39,11 +39,19 @@ class BrainLeech(Event):
         ]
 
     def _share_knowledge(self) -> None:
-        from ..rewards import RarityOddsType, create_reward_cards
+        from ..rewards import CardCreationFlags, RarityOddsType, create_reward_cards
 
+        # BrainLeech.cs:66 builds this screen through
+        # `CardCreationOptions.ForNonCombatWithDefaultOdds([Character.CardPool])`,
+        # which always ORs `NoUpgradeRoll` (CardCreationOptions.cs:139) — same
+        # as the RIP branch below (BrainLeech.cs:56) and every other
+        # `ForNonCombatWith*` factory call. Without it this screen took
+        # `2 * count` Rewards draws and could pre-upgrade a card
+        # AfterGenerated then upgrade it again.
         cards = create_reward_cards(
             self.run, RarityOddsType.REGULAR, count=_FROM_CHOICE_COUNT,
             mutate_pity=False,
+            extra_flags=CardCreationFlags.NO_UPGRADE_ROLL,
         )
         for card in self.run.select_cards("card_reward", cards,
                                           _CARD_CHOICE_COUNT):
@@ -52,9 +60,8 @@ class BrainLeech(Event):
 
     def _rip(self) -> None:
         from ..cards.pool import COLORLESS_POOL
-        from ..rewards import RarityOddsType, create_reward_cards
-
-        from ..rewards import CardRewardGroup, CombatRewards, apply_reward_modifiers
+        from ..rewards import (CardCreationFlags, CardRewardGroup, CombatRewards,
+                               RarityOddsType, apply_reward_modifiers)
         from ..rooms import RoomType
 
         self.run.lose_hp(_RIP_HP_LOSS)
@@ -68,16 +75,45 @@ class BrainLeech(Event):
         # sim's mid-event OfferCustom channel (the driver offers and clears it as
         # soon as the option returns), the same one Dense Vegetation's rest heal
         # uses.
+        #
+        # BrainLeech.cs:56 — `CardCreationOptions.ForNonCombatWithDefaultOdds(
+        # [ColorlessCardPool]).WithFlags(NoRarityModification |
+        # NoCardPoolModifications)`: Source=Other, so `CardFactory.RollForRarity`
+        # stays on the non-mutating `RollWithBaseOdds` path (CardCreationOptions.
+        # cs:150-153 sets Source=Other unconditionally; CardFactory.cs:244-260
+        # only mutates for Source==Encounter) — and `ForNonCombatWithDefaultOdds`
+        # itself always adds `NoUpgradeRoll` (CardCreationOptions.cs:139), on top
+        # of the two the call site adds. NEITHER overload ever sets
+        # `NoModifyHooks` — `modify_hooks=False` here (R13's fix, F-R13b / g7)
+        # was a stand-in for this different flag pair and wrongly suppressed the
+        # WHOLE `Hook.TryModifyCardRewardOptions[Late]` dispatch (CardFactory.
+        # cs:104), keeping Silken Tress / Silver Crucible / the eggs / Glitter
+        # off this screen.
+        #
+        # Building the group through `CardRewardGroup(...).populate()` — the
+        # pattern `_PotionCardRewardGroup` established for The Future of
+        # Potions (events/the_future_of_potions.py) — rather than a hand-rolled
+        # `create_reward_cards` call also carries `is_card_reward=True` onto the
+        # options those relics gate on (CardReward.cs:114-115), missing before
+        # on the very first draw, not just the reroll; and, critically, it
+        # carries `pool` / `odds_type` / `flags` onto the GROUP itself, so
+        # `CardReward.Reroll` (CardReward.cs:322-332) regenerates against the
+        # SAME options as the first draw (`RerollOptions = options.WithFlags(
+        # IsCardReward)` is the identical `options` the constructor was given,
+        # CardReward.cs:114-115) instead of falling back to
+        # `CardRewardGroup.populate`'s `pool is None` default (the sim's
+        # character-pool / mutating-pity path) — F-R13a / g6.
         groups = []
         for _ in range(_REWARD_COUNT):
-            # CardCreationFlags.NoRarityModification|NoCardPoolModifications.
-            cards = create_reward_cards(
-                self.run, RarityOddsType.REGULAR, count=3,
-                mutate_pity=False, modify_hooks=False,
-                pool=list(COLORLESS_POOL),
+            group = CardRewardGroup(
+                room_type=RoomType.MONSTER, count=3,
+                pool=tuple(COLORLESS_POOL), odds_type=RarityOddsType.REGULAR,
+                flags=(CardCreationFlags.NO_UPGRADE_ROLL
+                       | CardCreationFlags.NO_RARITY_MODIFICATION
+                       | CardCreationFlags.NO_CARD_POOL_MODIFICATIONS),
             )
-            groups.append(CardRewardGroup(cards=cards, room_type=RoomType.MONSTER,
-                                          count=3, populated=True))
+            group.populate(self.run)
+            groups.append(group)
         rewards = CombatRewards(room_type=RoomType.MONSTER, card_rewards=groups)
         # `RewardsCmd.OfferCustom` is `new RewardsSet(player).WithCustomRewards(
         # rewards).Offer()` (RewardsCmd.cs:47-50), whose Offer -> Generate

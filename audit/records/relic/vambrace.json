@@ -115,8 +115,8 @@
     },
     {
       "what": "N3: the port's docstring claims 'The multiplier hook stays stateless (safe for previews)' (vambrace.py:14-16)",
-      "verdict": "gap",
-      "issue": "PROMPT.md bug class 24 -- a docstring that misdescribes the PORT. The multiplier hook is NOT stateless: vambrace.py:32 reads `self._used`, which is exactly the per-combat state. The claim reads as a justification for putting the latch in on_block_gained, and it is the sentence that makes G3 look intentional. Filed as a gap entry rather than a note because the misdescription is load-bearing for a reader deciding whether the port is correct -- but the verdict-carrying divergence is G3's, not this entry's; this entry adds no new observable."
+      "verdict": "faithful",
+      "issue": "Replaced the misdescribing docstring with an accurate one. The reasoning this entry flagged (a false \"stateless\" claim that reads as a justification for the already-fixed G3 latch-collapse bug) no longer applies to the current file."
     },
     {
       "what": "N4: Flash(), base.Status = RelicStatus.Active/Normal, ExtraHoverTips, AssertMutable() on the two property setters (Vambrace.cs:29, 42, 47, 53, 92-93, 120)",
@@ -129,6 +129,6 @@
       "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart, so its absence is not a divergence from the source. No operational consequence here -- Vambrace's pickup mutates nothing outside run.relics."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

@@ -114,10 +114,33 @@ def test_global_step_round_trips_and_defaults_for_old_checkpoints(tmp_path):
 def test_short_run_then_resume_continues_csv_and_global_step(tmp_path, monkeypatch):
     """End-to-end: two tiny training runs over the same checkpoint. The
     second must continue the step count and append to the same CSV rather
-    than restarting either."""
+    than restarting either.
+
+    ``n_steps`` is 48, not some smaller "just enough to log two iterations"
+    number, on purpose: ``run.best.pt`` is only written once a completed
+    episode gives ``best_metric`` (win-rate, for --env combat) a real,
+    non-NaN score, so this test's ability to exercise that path depends on
+    at least one ``fuzzy_wurm_weak`` episode finishing inside the rollout.
+    Under a random-ish masked policy that fight resolves in ~10-27 steps
+    (measured directly against the env), so 48 steps/env per iteration is
+    comfortable headroom, not a tight fit. A smaller budget (this test used
+    to run only 8 steps/env per iteration) makes episode completion a coin
+    flip driven by whatever the model's random weight init happens to do to
+    torch's global RNG stream -- which is exactly what broke this test when
+    an unrelated observation-schema widening shifted that stream's
+    consumption at init time: same seeds, same code path, zero episodes
+    completed in the whole run, so ``run.best.pt`` was never created. The
+    fix is to make completion a near-certainty instead of pinning the old
+    lucky trajectory or loosening the assertion into a vacuous one
+    (mutation-checked by temporarily breaking resume in a scratch script and
+    confirming this test goes red)."""
     save = str(tmp_path / "run.pt")
-    argv = ["train_torch.py", "--env", "combat", "--encounter", "fuzzy_wurm_weak",
-            "--timesteps", "32", "--n-envs", "2", "--n-steps", "8",
+    # --arch mlp/entity are refused against the real (v4-schema) combat env,
+    # so --arch entset (now also the CLI default) is passed explicitly here
+    # to keep this test working regardless of what the default is.
+    argv = ["train_torch.py", "--env", "combat", "--arch", "entset",
+            "--encounter", "fuzzy_wurm_weak",
+            "--timesteps", "192", "--n-envs", "2", "--n-steps", "48",
             "--minibatches", "2", "--epochs", "1", "--hidden", "16",
             "--save", save, "--save-every", "1", "--keep-snapshots", "2"]
 
@@ -125,13 +148,13 @@ def test_short_run_then_resume_continues_csv_and_global_step(tmp_path, monkeypat
     train_torch.main()
 
     first = torch.load(save, map_location="cpu", weights_only=False)
-    assert first["iteration"] == 2 and first["global_step"] == 32
+    assert first["iteration"] == 2 and first["global_step"] == 192
 
     monkeypatch.setattr("sys.argv", argv)
     train_torch.main()                       # auto-resumes the same file
 
     second = torch.load(save, map_location="cpu", weights_only=False)
-    assert second["iteration"] == 4 and second["global_step"] == 64
+    assert second["iteration"] == 4 and second["global_step"] == 384
 
     with open(train_torch.csv_path(save), newline="") as fh:
         rows = list(csv.reader(fh))
@@ -140,7 +163,10 @@ def test_short_run_then_resume_continues_csv_and_global_step(tmp_path, monkeypat
 
     snaps = sorted(p.name for p in tmp_path.glob("run.iter*.pt"))
     assert snaps == ["run.iter000003.pt", "run.iter000004.pt"]
-    assert (tmp_path / "run.best.pt").exists()
+    assert (tmp_path / "run.best.pt").exists(), (
+        "no completed episode produced a scoreable win-rate across either "
+        "run -- either fuzzy_wurm_weak got harder/longer, or resume is "
+        "broken and the second run isn't really continuing the rollout")
 
 
 def test_lr_flag_is_none_unless_passed(tmp_path, monkeypatch):

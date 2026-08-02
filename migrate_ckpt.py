@@ -1,27 +1,26 @@
-"""Migrate an out-of-date run-scale checkpoint one schema hop forward.
+"""Formerly: migrate an out-of-date run-scale checkpoint one schema hop
+forward. As of the phase-1 schema bump (prompts/entity-obs-schema.md) THIS
+TOOL CANNOT MIGRATE ANYTHING — running it always exits with an error.
 
-    py migrate_ckpt.py runs/column.pt runs/column_migrated.pt
+The run observation moved from a flat array to an ``"f"``/``"i"`` Dict, a
+different Gym space type, and there is no v6 -> v7 weight migration for that
+change (see ``sts2_rl.checkpoints.check_checkpoint``, which now refuses every
+pre-v7 checkpoint before either migration function below could be reached).
+Both hops this tool used to offer are unreachable dead code kept only per
+CLAUDE.md §3 (this file doesn't delete pre-existing code it didn't write):
 
-The hop is chosen from the source checkpoint's own ``obs_schema`` stamp:
+  v3 → v4  sts2_rl.checkpoints.migrate_checkpoint — used to splice zero
+           columns for the new run.boss.identity / run.map.grid+meta
+           segments. No longer buildable: the segments it spliced against
+           were a flat-array layout.
 
-  v3 → v4  schema v4 added run.boss.identity and run.map.grid/meta (the act
-           boss and the whole act map) to the run observation. Those are pure
-           feature additions, so migration splices zero columns into each
-           trunk's first layer (and its Adam moments) at the new segments'
-           positions — the migrated model computes bit-identical logits and
-           values. See sts2_rl.checkpoints.migrate_checkpoint.
+  v5 → v6  sts2_rl.checkpoints.migrate_checkpoint_actions — used to append
+           zero rows to the policy head for the new out-of-combat potion
+           action block. No longer buildable: RUN_OBS_SCHEMA_VERSION moved
+           past its v6 target without that target being rebuilt.
 
-  v5 → v6  schema v6 changed no observation at all; it appended the
-           out-of-combat potion block to the END of the action layout
-           (run_env.POTION_BASE). Migration appends zero rows to the policy
-           head and its Adam moments and touches nothing else, so the value
-           function and the logits over every old action are preserved. See
-           sts2_rl.checkpoints.migrate_checkpoint_actions.
-
-v4 → v5 has no migration: it widened the leading phase segment, which shifts
-every later observation index. That hop is a retrain.
-
-The source checkpoint is never modified; the destination must not exist.
+If you are holding a schema 2-6 checkpoint, there is no lossless path
+forward for it. Start training over with --fresh.
 """
 from __future__ import annotations
 
@@ -35,14 +34,18 @@ from sts2_rl.checkpoints import migrate_checkpoint, migrate_checkpoint_actions
 
 def main() -> None:
     ap = argparse.ArgumentParser(
-        description="Migrate a run-scale checkpoint one schema hop forward "
-                    "(the source file is untouched).",
+        description="No checkpoint can be migrated any more (phase-1 schema "
+                    "bump, prompts/entity-obs-schema.md) — this always exits "
+                    "with an error explaining why. Kept for the error message "
+                    "only; see the module docstring. Start --fresh instead.",
     )
-    ap.add_argument("src", help="checkpoint to migrate (obs schema 3 or 5)")
-    ap.add_argument("dst", help="where to write the migrated checkpoint")
+    ap.add_argument("src", help="checkpoint to inspect (never migrated; the "
+                                "obs_schema stamp only decides which error "
+                                "you get)")
+    ap.add_argument("dst", help="unused — no destination is ever written")
     ap.add_argument("--card-obs", default="hybrid", choices=("hybrid", "features"),
-                    help="the card_obs the checkpoint was trained with "
-                         "(default: hybrid, the trainer's default)")
+                    help="unused — plumbed through to the dead migration "
+                         "functions for their own error messages only")
     args = ap.parse_args()
 
     if os.path.abspath(args.src) == os.path.abspath(args.dst):
@@ -50,25 +53,22 @@ def main() -> None:
     if os.path.exists(args.dst):
         ap.error(f"{args.dst} already exists; refusing to overwrite")
 
+    # Every branch below raises SystemExit — nothing is ever written to
+    # args.dst. schema 3/5 delegate to the (now-stub) migration functions so
+    # the error names the exact reason THAT hop is dead; anything else gets
+    # this tool's own message. Kept as a dispatch rather than one flat
+    # message so each stale schema still gets its most specific explanation.
     ckpt = torch.load(args.src, map_location="cpu", weights_only=False)
     schema = ckpt.get("obs_schema")
     if schema == 3:
-        migrated = migrate_checkpoint(ckpt, card_obs=args.card_obs)
+        migrate_checkpoint(ckpt, card_obs=args.card_obs)
     elif schema == 5:
-        migrated = migrate_checkpoint_actions(ckpt, card_obs=args.card_obs)
+        migrate_checkpoint_actions(ckpt, card_obs=args.card_obs)
     else:
         raise SystemExit(
-            f"no migration from obs schema {schema}; this tool knows v3 -> v4 "
-            f"and v5 -> v6 (v4 -> v5 shifted every observation index and is a "
-            f"retrain).")
-    torch.save(migrated, args.dst)
-    # ASCII only: Windows consoles often decode as cp1252.
-    print(f"{args.src} -> {args.dst}")
-    print(f"  arch {migrated.get('arch', 'mlp')}   env {migrated['env_kind']}   "
-          f"iteration {migrated.get('iteration', 0)}")
-    print(f"  obs_dim {ckpt['obs_dim']} -> {migrated['obs_dim']}   "
-          f"n_actions {ckpt['n_actions']} -> {migrated['n_actions']}   "
-          f"obs_schema {schema} -> {migrated['obs_schema']}")
+            f"no migration from obs schema {schema} (or any other schema — "
+            f"the phase-1 schema bump left no migration path onto the "
+            f"current one); start training over with --fresh.")
 
 
 if __name__ == "__main__":

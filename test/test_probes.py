@@ -34,7 +34,13 @@ def test_probe_is_well_formed(probe):
 
 @pytest.mark.parametrize("probe", PROBES, ids=lambda p: p.id)
 def test_probe_builds_are_deterministic(probe):
-    assert probe.build()._build_obs().tobytes() == probe.build()._build_obs().tobytes()
+    """``_build_obs()`` returns the v4 ``{"f": ndarray, "i": ndarray}`` dict
+    (OBS_SCHEMA.md Sec.2), not a flat array — hash both halves independently
+    so a divergence confined to just the int half (e.g. a vocab id) can't
+    hide behind an unchanged float half, or vice versa."""
+    a, b = probe.build()._build_obs(), probe.build()._build_obs()
+    assert a["f"].tobytes() == b["f"].tobytes()
+    assert a["i"].tobytes() == b["i"].tobytes()
 
 
 def test_oracle_aces_the_suite():

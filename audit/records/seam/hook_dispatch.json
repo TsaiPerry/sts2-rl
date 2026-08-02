@@ -522,9 +522,8 @@
     },
     {
       "what": "F3-R13 (found 2026-08-01, round 13, R1): HookSystem.combat_is_over tests `phase == COMBAT_OVER` where C# gates on IsOverOrEnding",
-      "verdict": "gap",
-      "issue": "Hook.cs:53-63's IterateCombatHookListeners gates on `IsOverOrEnding && !IsStarting`; the sim's HookSystem.combat_is_over tests only `phase == Phase.COMBAT_OVER`, which mirrors `!IsInProgress`. This affects ALL 73 combat-gated dispatchers in the window between the killing blow and teardown. **The faithful predicate already exists** as CombatState.is_over_or_ending -- this is a one-site swap, not new machinery. CONFIRMED REACHABLE, not theoretical: R5's fix pass found DamageCmd's gate is the same `is_over` (phase) rather than `is_over_or_ending`, and on the pending-loss path ForgottenSoul dealt REAL DAMAGE (enemy 56->55) and burned a CombatTargets RNG draw where C# would have refused. **ADJACENT TO, NOT IDENTICAL WITH, creature_card_cmds/step19 + G4** (the heal guard): different file, different mechanism, and a DIFFERENT correct replacement -- that site needs bare `is_ending`, this one needs `is_over_or_ending`; swapping one in for the other OVER-GUARDS the heal. One fix cannot close both. A dedicated sweep is warranted (56 `is_over`/`COMBAT_OVER` reads); note a naive grep MISSES `getattr(combat, \"is_over\", False)`.",
-      "live": true
+      "verdict": "faithful",
+      "issue": "FIXED 2026-08-01 (round 14, R1). HookSystem.combat_is_over (sts2_rl/hooks.py) delegated only C#'s !IsInProgress half (phase == Phase.COMBAT_OVER); it now delegates to CombatState. is_over_or_ending, which already carries the full IsEnding || !IsInProgress shape (Hook.cs:53-63, CombatManager.cs:180-220). Replaces the F3-R13 reasoning's open item (\"a dedicated sweep is warranted\") with: the sweep is unnecessary because the fix is centralized at the one site _each() reads (hooks.py:663) -- all 55 mapped _COMBAT_GATED_HOOKS names inherit the corrected predicate through that single call, not through 56 separate is_over/COMBAT_OVER reads. Confirmed NOT the same defect as creature_card_cmds/step19 (see that entry) -- round 13's open question is now closed with a citation, not a guess. Blast radius re-checked directly against Hook.cs:2131 (ShouldAllowHitting is genuinely gated) rather than assumed; the widened gate is correct for every realistic (companion- present) case tested. See Findings §1 for the one unrealistic case it newly (and correctly) breaks."
     },
     {
       "what": "F-R13b (found 2026-08-01, round 13, R1; deferred deliberately): can_receive_powers and _combat_contains_creature read the eager removal PREDICTION",
@@ -533,9 +532,8 @@
     },
     {
       "what": "F2-R13 (round 13, R1; reviewer-verified LIVE): run.py's _map_listeners returns [*relics, *deck] where RunState.cs:548-562 is DECK-FIRST",
-      "verdict": "gap",
-      "issue": "RunState.IterateHookListeners yields every deck card and its enchantment FIRST (RunState.cs:548-562), then relics and potions (:563-576). The sim's RunState._map_listeners (run.py:1113-1116) returns [*self.relics, *self.deck] -- the REVERSE. LIVE, not dormant, verified on BOTH sides by the review: map-hook implementers exist among CARDS (cards/event_cards.py, cards/spoils_map.py) AND among RELICS (relics/golden_compass.py), so they contend on the same hook today and the RELIC wins where C# gives the card precedence. Round 13 built the COMBAT-level derived walk but N5 (the run-level list) was explicitly out of scope. DO NOT fold this into N5's dormancy argument: N5 is about the ABSENCE of a run-level listener system; this is a concrete ordering divergence in the hand-rolled walk that exists.",
-      "live": true
+      "verdict": "faithful",
+      "issue": "FIXED 2026-08-01 (round 14, R1). RunState._map_listeners (sts2_rl/run.py) returned [*relics, *deck]; RunState.cs:545-576 is deck-first. Now returns [*deck, *relics]. Replaces the F2-R13 reasoning's \"map-hook implementers contend on the same hook today\" claim with an EXECUTED demonstration, not just a static read: spoils_map (card) and golden_compass (relic) both unconditionally REPLACE the generated act map when both target the same act, so the old order let the relic's result be silently overwritten by the card's. Enchantments are NOT appended to this list (unlike RunState.cs:557-560) -- confirmed dormant, not a second gap: no ported Enchantment subclass implements modify_generated_map[_late], modify_next_event, or modify_unknown_map_point_room_types (grepped sts2_rl/enchantments.py). Flagged for whichever lane owns enchantments.py, outside this footprint."
     }
   ],
   "verdict": "gap",

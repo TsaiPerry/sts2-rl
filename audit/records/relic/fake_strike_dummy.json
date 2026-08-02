@@ -77,8 +77,8 @@
     },
     "ModifyDamageAdditive": {
       "maps_to": "modify_damage_additive (fake_strike_dummy.py:24-33), dispatched by hooks.py:52-64 from DamageCmd.deal (cmds.py:56-57)",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. The hoisted-props half (N1) is CLOSED: the hook carries `props`, DamageCmd.deal runs the chain unconditionally (sts2_rl/hooks.py:185-208, sts2_rl/cmds.py:120-133) and sts2_rl/relics/fake_strike_dummy.py self-gates on `is_powered_attack(props)`, which is FakeStrikeDummy.cs:23-26. WHAT REMAINS is guard G1: FakeStrikeDummy.cs:35-38's fourth clause is an AND of two negatives -- decline only when the dealer is not the owner's creature AND the card is not the owner's -- and the port still narrows it to `dealer is self.player`, so the same Strike with dealer=None lands for 6 where C# gives 7."
+      "verdict": "faithful",
+      "issue": "Identical guard, identical fix, identical reasoning to `relic/strike_dummy` above — `FakeStrikeDummy.cs:35-38` is textually the same `dealer != Owner.Creature && cardSource.Owner != Owner` AND as StrikeDummy's, not a materially different fourth clause as the record's prose (\"fourth clause is an AND of two negatives\") suggested at first read — it is the SAME clause, just described independently in each record. Fixed in `relics/fake_strike_dummy.py` the same way. Pinned by `test_fake_strike_dummy_grants_bonus_with_no_dealer`. **Same stale-test fallout:** `test/test_r13_relic1.py::test_fake_strike_dummy_and_strike_dummy_miss_a_null_dealer_strike` (line 312-322) needs its final assertion changed from `assert with_none == base` to `assert with_none == base + 1 # FakeStrikeDummy.EXTRA_DAMAGE`."
     }
   },
   "guards": [

@@ -6,19 +6,23 @@ import numpy as np
 import pytest
 
 from sts2_rl.driver import DecisionKind
-from sts2_rl.full_env import N_CARDS, combat_action_count
+from sts2_rl.full_env import combat_action_count, combat_obs_segments_f, combat_obs_segments_i
 from sts2_rl.run_env import (
     CHOICE_BASE,
     CHOICE_SLOTS,
+    GOLD_LOG_FINE_DENOM,
     MAX_POTION_SLOTS,
+    MAX_SELECT_CANDIDATES,
     N_ACTIONS,
     N_COMBAT_ACTIONS,
     POTION_BASE,
     RUN_OBS_SCHEMA_VERSION,
     SELECT_BASE,
     STS2RunEnv,
-    run_obs_segments,
-    run_obs_slices,
+    _log1p_scale,
+    run_obs_layout,
+    run_obs_segments_f,
+    run_obs_segments_i,
 )
 
 _ENV = None
@@ -57,44 +61,71 @@ def test_action_layout():
     # run.map.grid/meta (boss + whole-map visibility); v5: DecisionKind gained
     # REWARD_RELIC (the take-or-skip relic offer, relic/_auto_keep), widening
     # the leading phase segment; v6: the out-of-combat potion block appended
-    # to the ACTION layout (potion/_any_time_usage) — the observation is
-    # byte-identical to v5.
-    assert RUN_OBS_SCHEMA_VERSION == 6
-    # Combat block sized for a Phial-Holster belt: 1 + 10×6 + 4×6 = 85.
-    assert N_COMBAT_ACTIONS == combat_action_count(MAX_POTION_SLOTS) == 85
-    assert CHOICE_BASE == 85
-    assert SELECT_BASE == 85 + CHOICE_SLOTS == 101
-    assert POTION_BASE == SELECT_BASE + 2 * N_CARDS
-    assert N_ACTIONS == POTION_BASE + MAX_POTION_SLOTS
+    # to the ACTION layout (potion/_any_time_usage); v7 (T5a+T5b,
+    # prompts/entity-obs-schema.md phase 1): the flat float Box observation
+    # becomes the {"f", "i"} Dict contract, the SELECT_CARDS (card id,
+    # upgraded)-PAIR block (2*N_CARDS wide, one FIRST-MATCH action per pair)
+    # is replaced by a per-CANDIDATE-index block (MAX_SELECT_CANDIDATES
+    # wide, R4 — see run_env.py's `_sorted_candidate_order`), and
+    # MAX_POTION_SLOTS widens from 4 to 10 (the true worst-case belt: base 3
+    # + Phial Holster + Potion Belt + Alchemical Coffer, T5b Task A); v8
+    # (defect fix, 2026-08-02): the embedded combat block's enemy row grew
+    # by one float (full_env.OBS_SCHEMA_VERSION 4->5, StatusIntent's card
+    # count) without this version moving — this is the action layout's own
+    # pin, unaffected by that widening (it lives in the observation), but
+    # the version bump is recorded here for the ledger; v9 (R3, 2026-08-02):
+    # same shape of bump — the embedded combat block grew again (per-enemy
+    # intent history), again unaffecting this action-layout pin, again
+    # recorded here for the ledger.
+    assert RUN_OBS_SCHEMA_VERSION == 9
+    # Combat block sized for the true worst-case belt: 1 + 10×6 + 10×6 = 121.
+    assert N_COMBAT_ACTIONS == combat_action_count(MAX_POTION_SLOTS) == 121
+    assert CHOICE_BASE == 121
+    assert SELECT_BASE == 121 + CHOICE_SLOTS == 137
+    assert POTION_BASE == SELECT_BASE + MAX_SELECT_CANDIDATES == 233
+    assert N_ACTIONS == POTION_BASE + MAX_POTION_SLOTS == 243
     env = shared_env()
     assert env.action_space.n == env.n_actions == N_ACTIONS
 
 
 def test_obs_segments_sum_to_declared_dim():
     env = shared_env()
-    segs = env.obs_segments()
-    assert sum(w for _, w in segs) == env.observation_space.shape[0]
-    # The named slice map tiles the vector exactly.
-    slices = env.obs_slices()
-    stops = sorted(s.stop for s in slices.values())
-    assert stops[-1] == env.observation_space.shape[0]
-    # run_obs_segments (module-level) is the same list minus the combat block.
-    assert segs[:-1] == run_obs_segments()
-    assert segs[-1][0] == "combat"
+    segs_f = env.obs_segments_f()
+    segs_i = env.obs_segments_i()
+    assert sum(w for _, w in segs_f) == env.observation_space["f"].shape[0]
+    assert sum(w for _, w in segs_i) == env.observation_space["i"].shape[0]
+    # The named slice map tiles each half exactly.
+    layout = run_obs_layout()
+    assert sorted(s.stop for s in layout.f_slices.values())[-1] == layout.f_dim
+    assert sorted(s.stop for s in layout.i_slices.values())[-1] == layout.i_dim
+    # run_obs_segments_f/i (module-level) are the same lists minus the
+    # trailing combat block that obs_segments_f/i() (and run_obs_layout)
+    # fold in under a "combat." prefix.
+    n_run_f = len(run_obs_segments_f())
+    n_run_i = len(run_obs_segments_i())
+    assert segs_f[:n_run_f] == run_obs_segments_f()
+    assert segs_i[:n_run_i] == run_obs_segments_i()
+    assert segs_f[n_run_f:] and all(n.startswith("combat.") for n, _ in segs_f[n_run_f:])
+    assert segs_i[n_run_i:] and all(n.startswith("combat.") for n, _ in segs_i[n_run_i:])
 
 
 def test_reset_obs_in_bounds():
     env = shared_env()
     obs, info = env.reset(seed=0)
-    assert obs.shape == env.observation_space.shape
-    assert obs.min() >= 0.0 and obs.max() <= 1.0
+    layout = run_obs_layout()
+    assert obs["f"].shape == (layout.f_dim,)
+    assert obs["i"].shape == (layout.i_dim,)
+    assert obs["f"].min() >= 0.0 and obs["f"].max() <= 1.0
+    assert obs["i"].min() >= 0
     assert info["phase"] == DecisionKind.EVENT.value   # Neow first
     # Neow: the event block is live and the phase one-hot says EVENT.
-    slices = env.obs_slices()
-    assert obs[slices["event.present"]][0] == 1.0
-    assert obs[slices["phase"]].sum() == 1.0
-    # Not in combat: the combat block is all zero.
-    assert not obs[slices["combat"]].any()
+    assert obs["f"][layout.f_slices["event.present"]][0] == 1.0
+    assert obs["f"][layout.f_slices["phase"]].sum() == 1.0
+    # Not in combat: every combat.* segment is PAD id / zero float.
+    for name, _w in combat_obs_segments_i():
+        assert not obs["i"][layout.i_slices[f"combat.{name}"]].any(), name
+    for name, _w in combat_obs_segments_f():
+        assert not obs["f"][layout.f_slices[f"combat.{name}"]].any(), name
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -106,7 +137,8 @@ def test_masked_random_episode_terminates():
     trajectory, info, obs = masked_random_episode(env, seed=1)
     assert "is_success" in info and "hp_left" in info
     assert info["floor"] >= 1
-    assert obs.min() >= 0.0 and obs.max() <= 1.0
+    assert obs["f"].min() >= 0.0 and obs["f"].max() <= 1.0
+    assert obs["i"].min() >= 0
 
 
 def test_seeded_episodes_are_deterministic():
@@ -126,7 +158,8 @@ def test_illegal_action_is_noop():
     illegal = int(np.flatnonzero(~mask)[0])
     obs2, reward, terminated, truncated, info = env.step(illegal)
     assert reward == 0.0 and not terminated
-    assert np.array_equal(obs, obs2)          # nothing advanced
+    np.testing.assert_array_equal(obs["f"], obs2["f"])   # nothing advanced
+    np.testing.assert_array_equal(obs["i"], obs2["i"])
     assert np.array_equal(mask, env.action_masks())
 
 
@@ -171,7 +204,7 @@ def test_phases_cover_the_run():
 def test_run_vitals_track_engine_state():
     env = shared_env()
     env.reset(seed=4)
-    slices = env.obs_slices()
+    layout = run_obs_layout()
     # Play a few steps, then check the vitals against the RunState.
     rng = np.random.default_rng(4)
     obs = None
@@ -180,19 +213,22 @@ def test_run_vitals_track_engine_state():
         obs, *_ = env.step(int(rng.choice(np.flatnonzero(mask))))
     run = env._run
     hp = max(0, run.hp)
-    assert obs[slices["run.hp_abs"]][0] == pytest.approx(min(1.0, hp / 100.0), abs=1e-6)
-    assert obs[slices["run.gold"]][0] == pytest.approx(min(1.0, run.gold / 100.0), abs=1e-6)
-    deck = obs[slices["run.deck"]]
-    assert deck.sum() > 0                      # the deck histogram is live
-    relics = obs[slices["run.relics"]]
-    assert relics.sum() == len(run.relics)     # Neow's pick is visible
+    f, i = obs["f"], obs["i"]
+    assert f[layout.f_slices["run.hp_abs"]][0] == pytest.approx(min(1.0, hp / 100.0), abs=1e-6)
+    # R6: run.gold is log1p-compressed, not clipped-linear.
+    assert f[layout.f_slices["run.gold"]][0] == pytest.approx(
+        _log1p_scale(run.gold, GOLD_LOG_FINE_DENOM), abs=1e-6)
+    deck_ids = i[layout.i_slices["run.deck.ids"]]
+    assert (deck_ids != 0).any()                          # the deck block is live
+    relic_ids = i[layout.i_slices["run.relics.ids"]]
+    assert int((relic_ids != 0).sum()) == len(run.relics)  # Neow's pick is visible
 
 
 def test_combat_block_live_in_combat():
     env = shared_env()
     rng = np.random.default_rng(5)
     obs, _ = env.reset(seed=5)
-    slices = env.obs_slices()
+    layout = run_obs_layout()
     for _ in range(5_000):
         if env._request is not None and env._request.kind == DecisionKind.COMBAT:
             break
@@ -200,9 +236,15 @@ def test_combat_block_live_in_combat():
         obs, _, term, trunc, _ = env.step(int(rng.choice(np.flatnonzero(mask))))
         assert not (term or trunc), "episode ended before reaching a combat"
     obs = env._build_obs()
-    combat = obs[slices["combat"]]
-    assert combat.any()                        # live combat features
-    assert obs[slices["phase"]][list(DecisionKind).index(DecisionKind.COMBAT)] == 1.0
+    live = (
+        any(obs["i"][layout.i_slices[f"combat.{name}"]].any()
+            for name, _w in combat_obs_segments_i())
+        or any(obs["f"][layout.f_slices[f"combat.{name}"]].any()
+               for name, _w in combat_obs_segments_f())
+    )
+    assert live, "combat block must carry live features once in combat"
+    phase = obs["f"][layout.f_slices["phase"]]
+    assert phase[list(DecisionKind).index(DecisionKind.COMBAT)] == 1.0
 
 
 class _InvincibleRunEnv(STS2RunEnv):
@@ -217,12 +259,12 @@ class _InvincibleRunEnv(STS2RunEnv):
 
 
 def test_invincible_env_run_reaches_act3_and_wins():
-    # Sweep seeds for a masked-random invincible run that beats the Glory boss.
-    # A win must land in act 3 (act_index 2), report is_success, carry a
-    # positive terminal reward (the win bonus), and keep the act-3 one-hot lit
-    # with obs still in [0, 1] (floor normalization never saturates).
+    # Sweep seeds for a masked-random invincible run that beats the Glory
+    # boss. A win must land in act 3 (act_index 2), report is_success, carry
+    # a positive terminal reward (the win bonus), and keep the act-3 one-hot
+    # lit with obs still in bounds (floor normalization never saturates).
     env = _InvincibleRunEnv()
-    slices = env.obs_slices()
+    layout = run_obs_layout()
     rng = np.random.default_rng(0)
     for seed in range(25):
         obs, info = env.reset(seed=seed)
@@ -234,10 +276,11 @@ def test_invincible_env_run_reaches_act3_and_wins():
             obs, reward, term, trunc, info = env.step(int(rng.choice(np.flatnonzero(mask))))
             max_act = max(max_act, info["act"])
             if info["act"] == 2:
-                onehot = obs[slices["run.act"]]
+                onehot = obs["f"][layout.f_slices["run.act"]]
                 assert onehot[2] == 1.0 and onehot.sum() == 1.0
                 saw_act3_onehot = True
-            assert obs.min() >= 0.0 and obs.max() <= 1.0
+            assert obs["f"].min() >= 0.0 and obs["f"].max() <= 1.0
+            assert obs["i"].min() >= 0
             if term or trunc:
                 break
         if info.get("is_success"):
@@ -248,7 +291,7 @@ def test_invincible_env_run_reaches_act3_and_wins():
     pytest.fail("no invincible env run won in 25 seeds")
 
 
-def test_select_phase_masks_pairs():
+def test_select_phase_masks_candidate_indices():
     # Force a run-level selection through the env: hunt a seed whose random
     # episode passes a SELECT_CARDS phase and check the mask geometry there.
     env = shared_env()
@@ -262,8 +305,14 @@ def test_select_phase_masks_pairs():
             if request.kind == DecisionKind.SELECT_CARDS:
                 mask = env.action_masks()
                 legal = np.flatnonzero(mask)
-                in_select = [a for a in legal if a >= SELECT_BASE]
-                assert in_select, "select phase must unmask card pairs"
+                # Bounded strictly to the SELECT block: the out-of-combat
+                # potion belt block sits immediately after it in the layout
+                # (POTION_BASE == SELECT_BASE + MAX_SELECT_CANDIDATES) and
+                # can ALSO be unmasked here (an AnyTime potion is usable
+                # from every screen) — `a >= SELECT_BASE` alone would wrongly
+                # fold those bits into "in_select" too.
+                in_select = [a for a in legal if SELECT_BASE <= a < POTION_BASE]
+                assert in_select, "select phase must unmask candidate-index actions"
                 assert len(in_select) <= len(request.candidates)
                 if request.skippable:
                     assert mask[CHOICE_BASE]

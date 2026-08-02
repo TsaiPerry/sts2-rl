@@ -15,7 +15,7 @@ from sts2_rl.curriculum_env import (
     random_column_types,
 )
 from sts2_rl.rooms import RoomType
-from sts2_rl.run_env import N_ACTIONS, run_obs_segments
+from sts2_rl.run_env import N_ACTIONS, run_obs_segments_f, run_obs_segments_i
 
 _ENV = None
 
@@ -242,9 +242,14 @@ def test_layout_matches_run_env():
     # Same action space and named obs layout as STS2RunEnv — checkpoints
     # must move freely between the two (the phase-2 handoff).
     assert env.action_space.n == env.n_actions == N_ACTIONS
-    segs = env.obs_segments()
-    assert segs[:-1] == run_obs_segments()
-    assert segs[-1][0] == "combat"
+    segs_f = env.obs_segments_f()
+    segs_i = env.obs_segments_i()
+    n_run_f = len(run_obs_segments_f())
+    n_run_i = len(run_obs_segments_i())
+    assert segs_f[:n_run_f] == run_obs_segments_f()
+    assert segs_i[:n_run_i] == run_obs_segments_i()
+    assert segs_f[n_run_f:] and all(n.startswith("combat.") for n, _ in segs_f[n_run_f:])
+    assert segs_i[n_run_i:] and all(n.startswith("combat.") for n, _ in segs_i[n_run_i:])
     env.reset(seed=0)
     assert isinstance(env._run, ColumnRunState)
 

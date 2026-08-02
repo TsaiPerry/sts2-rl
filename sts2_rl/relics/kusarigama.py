@@ -43,12 +43,14 @@ class Kusarigama(Relic):
             return
         self._attacks_this_turn += 1
         if self._attacks_this_turn % self.ATTACKS == 0:
-            living = self.living_enemies()
-            if not living:
+            # Kusarigama.cs:115: RunState.Rng.CombatTargets.NextItem(
+            # base.Owner.Creature.CombatState.HittableEnemies) -- the
+            # candidate set is HittableEnemies, not "every not-dead enemy".
+            candidates = self.hittable_enemies()
+            if not candidates:
                 return
             from ..cmds import DamageCmd
-            # Kusarigama.cs: RunState.Rng.CombatTargets.NextItem(HittableEnemies).
-            target = self.combat.combat_rng.targets.choice(living)
+            target = self.combat.combat_rng.targets.choice(candidates)
             DamageCmd.deal(
                 self.hooks, target, self.DAMAGE,
                 dealer=self.player, props=DamageProps.NON_CARD_UNPOWERED,

@@ -189,16 +189,11 @@ class Power:
     def _expire(self) -> None:
         """Remove this power from owner.powers and unregister from the hook system.
 
-        Identity-checked rather than a bare pop-by-id: a second application
-        of an Instanced/InstancedPerApplier power (power_cmd/G5) overwrites
-        the dict slot with a NEW instance while the one it replaced stays
-        independently hook-registered, still ticking toward its own expiry.
-        If THAT orphaned instance is the one expiring, a bare
-        `owner.powers.pop(self.id)` would delete the other, still-live
-        instance's dict entry instead of a no-op.
+        By identity (`Creature.RemovePowerInternal`, Creature.cs:641-650),
+        never by id: an Instanced power (power_cmd/G5) can have several live
+        instances on one creature, and only the one that expired may go.
         """
-        if self.owner.powers.get(self.id) is self:
-            del self.owner.powers[self.id]
+        self.owner.powers.discard(self)
         try:
             self.hooks.unregister(self)
         except ValueError:
@@ -819,7 +814,23 @@ class AggressionPower(Power):
         candidates = [c for c in player.discard_pile if c.card_type == CardType.ATTACK]
         if not candidates:
             return
-        chosen = combat._rng.sample(candidates, min(self.amount, len(candidates)))
+        # AggressionPower.cs:28 is `source.ToList().UnstableShuffle(Rng.
+        # CombatCardSelection).Take(Amount)` -- a Fisher-Yates shuffle of the
+        # WHOLE candidate list drawn from the dedicated CombatCardSelection
+        # stream, then the first Amount. `combat._rng.sample` was wrong on
+        # both axes: the shared unseeded rng instead of the named stream (a
+        # no-op difference in legacy mode, where `card_selection` IS
+        # `combat._rng`, but the ONLY named stream in parity mode), and
+        # `random.sample`'s reservoir algorithm instead of a full shuffle
+        # (different draw count, so even an agreeing pick leaves the stream
+        # in a different place). `combat.combat_rng.card_selection` is a
+        # `random.Random` in legacy mode and a `GameRandomAdapter` in parity
+        # mode; both expose `.shuffle()`, and the adapter's mirrors the
+        # game's top-down Fisher-Yates (rng.py:270-291).
+        rng = combat.combat_rng.card_selection
+        pool = list(candidates)
+        rng.shuffle(pool)
+        chosen = pool[: min(self.amount, len(pool))]
         for card in chosen:
             player.discard_pile.remove(card)
             player.hand.append(card)
@@ -1729,7 +1740,6 @@ class RingingPower(Power):
         applier: Creature | None = None,
     ) -> None:
         super().__init__(owner, amount, hooks, applier)
-        self._card_played_this_turn = False
         from .afflictions import RingingAffliction
         from .cmds import CardCmd
         for card in getattr(owner, "all_cards", ()):
@@ -1743,18 +1753,30 @@ class RingingPower(Power):
             CardCmd.afflict(card, RingingAffliction, 1)
 
     def should_play_card(self, card: Card, auto_play: bool = False) -> bool:
+        # RingingPower.cs:64-75 answers "has the owner played a card this
+        # turn" by querying History.CardPlaysStarted for entries that
+        # HappenedThisTurn -- a play STARTS (CardModel.cs:1930, before OnPlay
+        # runs) before it FINISHES (on_card_played, after resolution). A
+        # boolean set only from on_card_played -- the sim's old shape -- is
+        # still False while an OUTER card is mid-resolution, so a card
+        # auto-played from inside that resolution (Hellraiser on a nested
+        # draw, Mayhem, Stampede) sees "nothing played yet" and slips a
+        # Ringing block the game would have caught. Querying the history
+        # directly closes that window: the outer card's CardPlayStartedEntry
+        # already exists by the time the nested auto-play's ShouldPlay runs.
         from .afflictions import RingingAffliction
-        if isinstance(card.affliction, RingingAffliction):
-            return not self._card_played_this_turn
-        return True
-
-    def on_card_played(self, card: Card,
-                       is_auto_play: bool = False) -> None:
-        self._card_played_this_turn = True
-
-    def before_side_turn_start(self, player: Creature) -> None:
-        if player is self.owner:
-            self._card_played_this_turn = False
+        if not isinstance(card.affliction, RingingAffliction):
+            return True
+        combat = self.hooks.combat
+        if combat is None:
+            return True
+        # C# also filters on `e.CardPlay.Card.Owner.Creature == base.Owner`;
+        # omitted here because `Card` carries no owner back-reference in this
+        # single-player sim and the player (self.owner, since Ringing is
+        # always an enemy-applied PLAYER debuff) is the only creature that
+        # ever plays a card at all.
+        from .history import CardPlayStartedEntry
+        return not any(combat.history.of_type(CardPlayStartedEntry, this_turn=True))
 
     def after_player_turn_end(self, player: Creature) -> None:
         if player is self.owner:
@@ -2269,7 +2291,18 @@ class SmoggyPower(Power):
 class SkittishPower(Power):
     """The first time each turn a card attack deals unblocked damage to the
     owner, the owner gains N block (Phantasmal Gardener; mirrors
-    SkittishPower.AfterAttack — once per turn, unpowered block)."""
+    SkittishPower.AfterAttack — once per turn, unpowered block).
+
+    hook_dispatch/AfterAttack, power/skittish (round 14, LIVE): moved off
+    `on_damage_received` onto `after_attack`. SkittishPower.cs:56-68 fires
+    ONCE per AttackCommand, after every hit has resolved, and inspects only
+    the FIRST DamageResult whose Receiver is the owner
+    (`command.Results.SelectMany(...).FirstOrDefault(r => r.Receiver ==
+    Owner)`) — not every hit. The old per-hit `on_damage_received` version
+    granted the block after the FIRST qualifying hit of a multi-hit Attack
+    card, so later hits of that same card landed against block the game had
+    not granted yet (a Twin Strike under-dealt damage relative to the game
+    by exactly the granted block)."""
 
     id = "skittish"
     name = "Skittish"
@@ -2285,27 +2318,30 @@ class SkittishPower(Power):
         super().__init__(owner, amount, hooks, applier)
         self._blocked_this_turn = False
 
-    def on_damage_received(
-        self,
-        target: Creature,
-        amount: int,
-        dealer: Creature | None,
-        card: Card | None,
-        props: ValueProp = ValueProp.NONE,
-    ) -> None:
-        if (
-            target is self.owner
-            and not self._blocked_this_turn
-            and card is not None
-            and ValueProp.MOVE in props
-            and amount > 0
-            and not self.owner.is_dead
-        ):
-            self._blocked_this_turn = True
-            from .cmds import BlockCmd
-            BlockCmd.apply(
-                self.hooks, self.owner, self.amount, props=ValueProp.UNPOWERED
-            )
+    def after_attack(self, dealer: Creature, card: Card | None = None,
+                     results: list | None = None) -> None:
+        # `card is not None` is the sim's stand-in for `command.ModelSource
+        # is CardModel` — only a card-played attack brackets before_attack/
+        # after_attack with a card (combat.py's `_play_count_loop`, gated on
+        # `is_attack`), and every card-sourced attack already carries the
+        # MOVE flag (DamageProps.CARD / CARD_UNPOWERED both include Move),
+        # so this one test also stands in for
+        # `command.DamageProps.HasFlag(ValueProp.Move)`. No `is_dead` guard:
+        # CreatureCmd.GainBlock (BlockCmd.apply) has none either
+        # (CreatureCmd.cs:635-661) — C# does not special-case a dead owner
+        # here.
+        if self._blocked_this_turn or card is None or not results:
+            return
+        for receiver, unblocked in results:
+            if receiver is self.owner:
+                if unblocked != 0:
+                    self._blocked_this_turn = True
+                    from .cmds import BlockCmd
+                    BlockCmd.apply(
+                        self.hooks, self.owner, self.amount,
+                        props=ValueProp.UNPOWERED,
+                    )
+                break
 
     def after_player_turn_end(self, player: Creature) -> None:
         # End of the opposing (player) side's turn resets the once-per-turn gate.
@@ -2771,20 +2807,19 @@ class SwipePower(Power):
     of the stolen combat copy (the DeckVersion analogue); cards with no deck
     origin never come back (BeforeDeath's DeckVersion == null early-out).
 
-    NOT switched to `instance_type = PowerInstanceType.INSTANCED`
-    (PowerInstanceType.Instanced, SwipePower.cs:23; power_cmd/G5): each
-    steal bundles into this SAME instance's `stolen_cards` today because
-    `PowerCmd.apply`'s default (None) dispatch keeps finding it. Under the
-    generic Instanced dispatch each steal would instead start a fresh
-    instance with an empty `stolen_cards`, orphaning the earlier one(s) from
-    `target.powers` — and `RunState.finish_combat` (run.py) walks an escaped
-    hopper's deck-removal reconciliation through `enemy.powers.get("swipe")`
-    alone, so any steal but the last would silently stay in the run deck.
-    The current one-bucket approximation is what that walk depends on."""
+    `PowerInstanceType.Instanced` (SwipePower.cs:23), holding exactly ONE
+    `StolenCard` per instance (:17, :25-35): a second steal arms a second
+    power, it does not append to the first. This class used to keep a
+    `stolen_cards` LIST inside one `PowerInstanceType.NONE` power, because
+    `Creature.powers` was a dict with one slot per id and a fresh Instanced
+    application would have orphaned the earlier steal. `Creature.powers` is
+    C#'s ordered `List<PowerModel>` now, so every steal is reachable and the
+    one-bucket approximation is retired (`power_cmd/G5`)."""
 
     id = "swipe"
     name = "Swipe"
     power_type = PowerType.BUFF
+    instance_type = PowerInstanceType.INSTANCED
 
     def __init__(
         self,
@@ -2794,23 +2829,22 @@ class SwipePower(Power):
         applier: Creature | None = None,
     ) -> None:
         super().__init__(owner, amount, hooks, applier)
-        self.stolen_cards: list[Card] = []
+        self.stolen_card: Card | None = None
 
     def on_death(self, creature: Creature,
                  was_removal_prevented: bool = False) -> None:
         if creature is not self.owner:
             return
         combat = self.hooks.combat
-        if combat is None:
+        if combat is None or self.stolen_card is None:
             return
         from .rewards import RewardExtra
-        for card in self.stolen_cards:
-            origin = combat.deck_card_origins.get(id(card))
-            if origin is not None:
-                combat.pending_reward_extras.append(RewardExtra.of_card(origin))
+        origin = combat.deck_card_origins.get(id(self.stolen_card))
+        if origin is not None:
+            combat.pending_reward_extras.append(RewardExtra.of_card(origin))
 
     def hand_off_stolen_origins(self) -> None:
-        """Record this power's stolen cards' deck origins on the combat, so
+        """Record this power's stolen card's deck origin on the combat, so
         RunState.finish_combat can remove them from the run deck once this
         power is gone — the sim's own reconciliation-at-combat-end substitute
         for C#'s immediate `CardPileCmd.RemoveFromDeck` at steal time
@@ -2826,12 +2860,11 @@ class SwipePower(Power):
         `on_removed` call).
         """
         combat = self.hooks.combat
-        if combat is None:
+        if combat is None or self.stolen_card is None:
             return
-        for card in self.stolen_cards:
-            origin = combat.deck_card_origins.get(id(card))
-            if origin is not None:
-                combat.stolen_deck_origins.append(origin)
+        origin = combat.deck_card_origins.get(id(self.stolen_card))
+        if origin is not None:
+            combat.stolen_deck_origins.append(origin)
 
     def on_removed(self, owner: Creature) -> None:
         """AfterRemoved, awaited for each power a DEATH strips
@@ -4230,6 +4263,17 @@ class PainfulStabsPower(Power):
     def should_power_be_removed_after_owner_death(self) -> bool:
         return False   # PainfulStabsPower.cs:24-27
 
+    def should_remove_from_combat_after_death(self, creature: Creature) -> bool:
+        # PainfulStabsPower.cs:29-32 — same shape as Adaptable/Illusion (see
+        # AdaptablePower.should_remove_from_combat_after_death): the owner
+        # stays in combat as a corpse. Previously unimplemented; masked in
+        # practice because Test Subject always applies this alongside
+        # AdaptablePower (monsters/glory/test_subject.py), whose OR-veto in
+        # HookSystem.should_remove_from_combat_after_death already keeps the
+        # corpse. Ported so the retention does not depend on Adaptable
+        # remaining present.
+        return creature is not self.owner
+
     def after_attack(self, dealer: Creature, card: Card | None = None,
                      results: list | None = None) -> None:
         # PainfulStabsPower.cs:34-68 is AfterAttack: it groups the command's
@@ -4329,16 +4373,29 @@ class CalamityPower(Power):
     def on_card_played(self, card: Card,
                        is_auto_play: bool = False) -> None:
         from .cards import CardType
-        from .cards.pool import random_pool_cards
+        from .cards.pool import get_for_combat_parity, random_pool_cards
         from .cmds import CardPileCmd
         if card.card_type != CardType.ATTACK:
             return
         combat = self.hooks.combat
         if combat is None or combat.is_over:
             return
-        for new_card in random_pool_cards(
-            combat._rng, self.amount, CardType.ATTACK, pool=combat.card_pool
-        ):
+        # CalamityPower.cs:48-50 draws `CardFactory.GetForCombat(pool, Amount,
+        # Rng.CombatCardGeneration)` -- the named CombatCardGeneration stream,
+        # one NextItem per generated card. `random_pool_cards(combat._rng,
+        # ...)` is the legacy shared-rng path (kept for non-parity combats,
+        # byte-for-byte unchanged); `get_for_combat_parity` is the already-
+        # written parity port (used by Stoke the same way, cards/stoke.py:41-49).
+        crng = combat.combat_rng
+        if crng.is_parity:
+            new_cards = get_for_combat_parity(
+                crng.card_gen, self.amount, CardType.ATTACK, pool=combat.card_pool
+            )
+        else:
+            new_cards = random_pool_cards(
+                combat._rng, self.amount, CardType.ATTACK, pool=combat.card_pool
+            )
+        for new_card in new_cards:
             CardPileCmd.add_to_hand(self.hooks, combat.player, new_card)
 
 
@@ -4625,25 +4682,28 @@ class StratagemPower(Power):
 
 
 class TheBombPower(Power):
-    """After N turns, deal the stored damage to ALL enemies (mirrors
-    TheBombPower). The game instances the power (PowerInstanceType.Instanced)
-    so several bombs tick independently; the sim keeps a list of
-    (turns_left, damage) fuses inside one power, with `amount` showing the
-    shortest fuse.
+    """After N turns, deal the stored damage to ALL enemies (TheBombPower.cs).
 
-    NOT switched to `instance_type = PowerInstanceType.INSTANCED`
-    (power_cmd/G5): that dispatch skips `on_stack` entirely on a second
-    application, which is exactly the method this class's own bombs-list
-    already uses to reproduce independent-fuse damage correctly (below).
-    Routing it through the generic path would silence `on_stack` and lose
-    that workaround for no gain — the per-instance STATE that workaround
-    doesn't reproduce (one power_list entry where the game has two) is a
-    full_env.py observation-encoding limit the generic path doesn't fix
-    either, since it also only ever exposes the newest instance."""
+    `PowerInstanceType.Instanced` (TheBombPower.cs:23): every play of The Bomb
+    arms its OWN instance, and each one ticks, explodes and is removed
+    independently — `amount` is that instance's turns left (C#'s
+    `PowerStackType.Counter`) and `damage` is its own
+    `DynamicVars.Damage` (default 40, Unpowered), set by the card right after
+    applying it.
+
+    This class used to carry a `bombs` list of `(turns_left, damage)` fuses
+    inside ONE `PowerInstanceType.NONE` power, because `Creature.powers` was a
+    dict with one slot per id and could not hold two instances. That
+    workaround reproduced the damage correctly but not the state: the sim
+    showed one power where the game shows two, which is what `power_cmd/G5` /
+    `power/the_bomb/InstanceType` recorded. `Creature.powers` is C#'s ordered
+    `List<PowerModel>` now, so the real dispatch does the same job.
+    """
 
     id = "the_bomb"
     name = "The Bomb"
     power_type = PowerType.BUFF
+    instance_type = PowerInstanceType.INSTANCED
     DEFAULT_DAMAGE = 40
 
     def __init__(
@@ -4654,41 +4714,33 @@ class TheBombPower(Power):
         applier: Creature | None = None,
     ) -> None:
         super().__init__(owner, amount, hooks, applier)
-        self.bombs: list[list[int]] = [[amount, self.DEFAULT_DAMAGE]]
-
-    def on_stack(self, amount: int) -> None:
-        self.bombs.append([amount, self.DEFAULT_DAMAGE])
-        self.amount = min(turns for turns, _ in self.bombs)
+        self.damage: int = self.DEFAULT_DAMAGE
 
     def set_damage(self, damage: int) -> None:
-        """Set the newest bomb's damage (mirrors TheBombPower.SetDamage; the
-        card calls this right after applying the power)."""
-        self.bombs[-1][1] = damage
+        """`TheBombPower.SetDamage` (TheBombPower.cs:32-36) — this instance's
+        own damage; `Amount` is the turn counter, so the damage cannot live
+        there. The card calls this on the instance `PowerCmd.apply` returned."""
+        self.damage = damage
 
     def on_player_turn_end(self, player: Creature) -> None:
-        from .cmds import DamageCmd
+        """`BeforeSideTurnEnd` (TheBombPower.cs:38-57)."""
+        from .cmds import DamageCmd, PowerCmd
         from .valueprops import DamageProps
         if player is not self.owner:
             return
+        if self.amount > 1:                       # :44-48 PowerCmd.Decrement
+            PowerCmd.modify_amount(self.hooks, self, -1)
+            return
         combat = self.hooks.combat
-        exploding = [b for b in self.bombs if b[0] <= 1]
-        self.bombs = [b for b in self.bombs if b[0] > 1]
-        for bomb in self.bombs:
-            bomb[0] -= 1
-        for _, damage in exploding:
-            if combat is None or combat.is_over:
-                break
+        if combat is not None and not combat.is_over:
             for enemy in [e for e in combat.enemies if not e.is_gone]:
                 DamageCmd.deal(
-                    self.hooks, enemy, damage, dealer=self.owner,
+                    self.hooks, enemy, self.damage, dealer=self.owner,
                     props=DamageProps.NON_CARD_UNPOWERED,
                 )
             if combat._all_enemies_dead() and not combat.is_over:
                 combat._end_combat(player_won=True)
-        if not self.bombs:
-            self._expire()
-        else:
-            self.amount = min(turns for turns, _ in self.bombs)
+        self._expire()                            # :56 PowerCmd.Remove(this)
 
 
 class TheGambitPower(Power):

@@ -35,9 +35,8 @@ class InfernoCard(Card):
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cmds import PowerCmd
         from ..powers import InfernoPower
-        PowerCmd.apply(
+        power = PowerCmd.apply(
             ctx.hooks, ctx.player, InfernoPower, self._power_amount, applier=ctx.player
         )
-        power = ctx.player.powers.get("inferno")
         if power is not None:
             power.increment_self_damage()

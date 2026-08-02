@@ -42,6 +42,8 @@ from typing import Any, NamedTuple, Sequence
 
 import numpy as np
 
+from sts2_rl.tensor_obs import TensorObs
+
 
 # ── env construction ──────────────────────────────────────────────────────
 # Everything a worker needs to build its own envs, as one frozen (picklable,
@@ -94,13 +96,13 @@ def build_env(spec: EnvSpec):
 # ── one step's worth of batched results ───────────────────────────────────
 
 class StepBatch(NamedTuple):
-    obs: np.ndarray                    # (E, obs_dim) float32, post-auto-reset
+    obs: TensorObs                     # (E, f_dim)/(E, i_dim) halves, post-auto-reset
     rewards: np.ndarray                # (E,) float32, raw env reward
     terminated: np.ndarray             # (E,) bool
     truncated: np.ndarray              # (E,) bool
     masks: np.ndarray                  # (E, n_actions) bool, for `obs`
     successes: np.ndarray              # (E,) bool, info["is_success"] on done
-    final_obs: dict[int, np.ndarray]   # truncated envs only (see module docs)
+    final_obs: dict[int, TensorObs]    # truncated envs only (see module docs)
 
 
 # ── the shared implementation ─────────────────────────────────────────────
@@ -110,40 +112,49 @@ class _EnvGroup:
 
     def __init__(self, spec: EnvSpec, n_envs: int) -> None:
         self.envs = [build_env(spec) for _ in range(n_envs)]
-        self.obs_dim = int(self.envs[0].observation_space.shape[0])
+        obs_space = self.envs[0].observation_space
+        self.f_dim = int(obs_space["f"].shape[0])
+        self.i_dim = int(obs_space["i"].shape[0])
+        self.obs_dim = (self.f_dim, self.i_dim)
         self.n_actions = int(self.envs[0].action_space.n)
 
-    def reset(self, seeds: Sequence[int | None]) -> tuple[np.ndarray, np.ndarray]:
-        obs = np.empty((len(self.envs), self.obs_dim), np.float32)
+    def reset(self, seeds: Sequence[int | None]) -> tuple[TensorObs, np.ndarray]:
+        f = np.empty((len(self.envs), self.f_dim), np.float32)
+        i = np.empty((len(self.envs), self.i_dim), np.int32)
         masks = np.empty((len(self.envs), self.n_actions), bool)
-        for i, (env, seed) in enumerate(zip(self.envs, seeds)):
+        for idx, (env, seed) in enumerate(zip(self.envs, seeds)):
             o, _ = env.reset(seed=None if seed is None else int(seed))
-            obs[i] = o
-            masks[i] = env.action_masks()
-        return obs, masks
+            f[idx] = o["f"]
+            i[idx] = o["i"]
+            masks[idx] = env.action_masks()
+        return TensorObs(f, i), masks
 
     def step(self, actions: Sequence[int]) -> StepBatch:
         n = len(self.envs)
-        obs = np.empty((n, self.obs_dim), np.float32)
+        f = np.empty((n, self.f_dim), np.float32)
+        i = np.empty((n, self.i_dim), np.int32)
         masks = np.empty((n, self.n_actions), bool)
         rewards = np.empty(n, np.float32)
         terminated = np.zeros(n, bool)
         truncated = np.zeros(n, bool)
         successes = np.zeros(n, bool)
-        final_obs: dict[int, np.ndarray] = {}
-        for i, env in enumerate(self.envs):
-            o, r, term, trunc, info = env.step(int(actions[i]))
-            rewards[i] = r
-            terminated[i] = term
-            truncated[i] = trunc
+        final_obs: dict[int, TensorObs] = {}
+        for idx, env in enumerate(self.envs):
+            o, r, term, trunc, info = env.step(int(actions[idx]))
+            rewards[idx] = r
+            terminated[idx] = term
+            truncated[idx] = trunc
             if trunc and not term:
-                final_obs[i] = np.asarray(o, np.float32).copy()
+                final_obs[idx] = TensorObs(
+                    np.asarray(o["f"], np.float32).copy(),
+                    np.asarray(o["i"], np.int32).copy())
             if term or trunc:
-                successes[i] = bool(info.get("is_success"))
+                successes[idx] = bool(info.get("is_success"))
                 o, _ = env.reset()
-            obs[i] = o
-            masks[i] = env.action_masks()
-        return StepBatch(obs, rewards, terminated, truncated, masks,
+            f[idx] = o["f"]
+            i[idx] = o["i"]
+            masks[idx] = env.action_masks()
+        return StepBatch(TensorObs(f, i), rewards, terminated, truncated, masks,
                          successes, final_obs)
 
     def close(self) -> None:
@@ -163,7 +174,7 @@ class SerialVecEnv:
         self.obs_dim = self._group.obs_dim
         self.n_actions = self._group.n_actions
 
-    def reset(self, seeds: Sequence[int | None]) -> tuple[np.ndarray, np.ndarray]:
+    def reset(self, seeds: Sequence[int | None]) -> tuple[TensorObs, np.ndarray]:
         return self._group.reset(seeds)
 
     def step(self, actions: Sequence[int]) -> StepBatch:
@@ -269,21 +280,27 @@ class SubprocVecEnv:
 
     # -- interface --------------------------------------------------------
 
-    def reset(self, seeds: Sequence[int | None]) -> tuple[np.ndarray, np.ndarray]:
+    def reset(self, seeds: Sequence[int | None]) -> tuple[TensorObs, np.ndarray]:
         seeds = list(seeds)
         results = self._scatter_gather("reset", [seeds[sl] for sl in self._slices])
-        return (np.concatenate([o for o, _ in results]),
-                np.concatenate([m for _, m in results]))
+        obs = TensorObs(
+            np.concatenate([o.f for o, _ in results]),
+            np.concatenate([o.i for o, _ in results]),
+        )
+        return obs, np.concatenate([m for _, m in results])
 
     def step(self, actions: Sequence[int]) -> StepBatch:
         actions = np.asarray(actions)
         batches = self._scatter_gather("step", [actions[sl] for sl in self._slices])
-        final_obs: dict[int, np.ndarray] = {}
+        final_obs: dict[int, TensorObs] = {}
         for sl, batch in zip(self._slices, batches):
             for i, obs in batch.final_obs.items():
                 final_obs[sl.start + i] = obs
         return StepBatch(
-            obs=np.concatenate([b.obs for b in batches]),
+            obs=TensorObs(
+                np.concatenate([b.obs.f for b in batches]),
+                np.concatenate([b.obs.i for b in batches]),
+            ),
             rewards=np.concatenate([b.rewards for b in batches]),
             terminated=np.concatenate([b.terminated for b in batches]),
             truncated=np.concatenate([b.truncated for b in batches]),

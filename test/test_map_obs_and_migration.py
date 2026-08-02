@@ -1,326 +1,229 @@
-"""Schema v4's run.boss.identity / run.map.grid observation and the
-v3 → v4 checkpoint migration.
+"""Schema v7's run.boss.ids / run.map.grid observation, and what is left of
+the pre-v7 checkpoint-migration tooling.
 
-The migration tests fabricate a "v3" checkpoint by inverse-splicing (deleting
-the v4 columns from) a freshly built v4 model, so they need no saved fixture
-and no old code path: migrating it back must restore the exact weights with
-zeros in the new columns, and — the property that actually matters — the
-migrated model's outputs must be bit-identical and independent of the new
-feature ranges. A wrong offset in either splice space fails both checks.
+T7 (prompts/entity-obs-schema.md phase 1) judgment call, made deliberately
+and reported here rather than silently: the flat-`Box` -> `{"f", "i"}` `Dict`
+rewrite (run_env.py's own module comment, RUN_OBS_SCHEMA_VERSION history)
+states there is NO v6->v7 weight migration — a flat array and a two-leaf
+Dict are different Gym space TYPES, not a reshape of the same array — so
+`checkpoints.migrate_checkpoint` (v3->v4) and `migrate_checkpoint_actions`
+(v5->v6) are now UNREACHABLE from any real caller: nothing produces a
+schema 3-6 checkpoint anymore, and nothing downstream of v7 asks to migrate
+INTO a flat-Box target again. Per CLAUDE.md Sec.3 the project keeps that
+code in place rather than deleting it (checkpoints.py is T6's file, not
+this lane's).
+
+Verified empirically before deciding (see the T7 report for the exact
+repro), both functions were, briefly, not merely unreachable but actively
+BROKEN if called directly —
+
+  - `migrate_checkpoint` imported `run_obs_segments` from `run_env` at the
+    top of its body; phase 1 renamed that to `run_obs_segments_f`/`_i`, so
+    EVERY call, for EVERY input, raised `ImportError` before any of its own
+    validation ran.
+  - `migrate_checkpoint_actions` hard-coded `assert RUN_OBS_SCHEMA_VERSION
+    == 6`; phase 1 bumped that constant to 7 without updating the assert,
+    so a WELL-FORMED v5 checkpoint (the one case this function exists to
+    migrate) raised a bare `AssertionError` instead of completing the
+    migration.
+  - Both functions' own test fixtures (the old `_fabricate_v3`/`_fabricate_v5`
+    helpers) additionally no longer type-checked against the current
+    `make_model(spec, (f_dim, i_dim), n_actions)` contract, which expects a
+    2-tuple, not the flat `sum(...)` int those fixtures built.
+
+A follow-up lane (checkpoints.py owner) fixed the crash without resurrecting
+the migration: each function's env-kind/schema/shape guards still run and
+still behave exactly as designed for malformed input, but the one input each
+function exists to handle (a well-formed v3 or v5 checkpoint) now ends in an
+explicit `SystemExit` explaining the phase-1 bump left no schema to migrate
+onto, instead of an `ImportError`/`AssertionError` a caller would have to go
+read source to understand. `check_checkpoint`'s hint text was fixed to
+match: it no longer tells a schema-3 or schema-5 holder to run
+`migrate_ckpt.py` (which would now just hit the same honest refusal) — every
+stale schema is told plainly to start over with `--fresh`.
+
+Given all this, the fine-grained "restores weights / zeroes new columns /
+bit-identical outputs" tests that used to live here are DELETED, not
+rewritten — the property they protected (this migration is function-
+preserving) belongs to a mechanism that is not just dead but non-functional,
+and pinning it now would mean re-deriving the whole splice fixture against
+an obs_dim contract it predates, to protect code nothing in the current tree
+can reach. Kept instead: both functions' still-live guard rails (the part of
+their contract that isn't broken), their new honest-failure message for
+well-formed input, and — the property that actually matters post-v7 —
+`checkpoints.check_checkpoint` refusing every pre-v7 schema with a clear
+`SystemExit`, never a crash inside `load_state_dict`, widened from the old
+suite's two hardcoded schemas (3, 5) to every schema this project has
+shipped.
+
+The map/boss sections below are unrelated to migration and survive close to
+verbatim: `run.map.grid`/`run.map.meta` stayed float segments in v4 (OBS_
+SCHEMA.md Sec.2.2 — topology, not a frozen vocabulary), so only the
+obs-access idiom (the `{"f", "i"}` Dict plus `run_obs_layout()`'s named
+slices, replacing the old flat array and `env.obs_slices()`) needed
+updating.
 """
 from __future__ import annotations
 
+import random
+
 import numpy as np
 import pytest
-import torch
 
 from sts2_rl import run_env as RE
 from sts2_rl.checkpoints import (
     ModelSpec,
-    _V4_NEW_SEGMENTS,
-    _actor_head_key,
-    _new_column_blocks,
-    _segment_out_width,
     check_checkpoint,
-    make_model,
     migrate_checkpoint,
     migrate_checkpoint_actions,
-    model_obs_segments,
+    model_obs_layout,
 )
 from sts2_rl.curriculum_env import STS2CurriculumRunEnv
 from sts2_rl.rooms import _ACT_ROOMS_FACTORIES, act_rooms
 from sts2_rl.run_env import (
     MAP_GRID_NODE,
     MAP_GRID_ROWS,
-    MAX_POTION_SLOTS,
     N_ACTIONS,
+    RUN_OBS_SCHEMA_VERSION,
     STS2RunEnv,
-    run_obs_segments,
+    run_obs_layout,
 )
 
-_HIDDEN = (32,)          # small trunks keep the migration tests fast
+_HIDDEN = (32,)          # small trunk keeps the check_checkpoint tests fast
 
 
-# ── helpers ──────────────────────────────────────────────────────────────
-
-def _keep_mask(n_new_cols: int, blocks: list[tuple[int, int]]) -> torch.Tensor:
-    """Boolean mask over the NEW column space: True = pre-existing column."""
-    keep = torch.ones(n_new_cols, dtype=torch.bool)
-    shift = 0
-    for pos, width in blocks:
-        keep[pos + shift:pos + shift + width] = False
-        shift += width
-    return keep
+def _real_dims(spec: ModelSpec) -> tuple[int, int]:
+    f_segs, i_segs = model_obs_layout(spec)
+    return (sum(w for _, w in f_segs), sum(w for _, w in i_segs))
 
 
-def _fabricate_v3(arch: str) -> tuple[dict, int]:
-    """A synthetic v3 checkpoint: a v4 model with the new columns deleted
-    from both trunks' first layers and their Adam moments. Returns it with
-    the v4 obs_dim it should migrate back to."""
-    spec = ModelSpec(env_kind="column", arch=arch, hidden=_HIDDEN)
-    segments = model_obs_segments(spec)
-    obs_dim = sum(w for _, w in segments)
-    torch.manual_seed(7)
-    model = make_model(spec, obs_dim, N_ACTIONS)
-
-    width_fn = _segment_out_width if arch == "entity" else (lambda n, w: w)
-    blocks = _new_column_blocks(run_obs_segments(), width_fn)
-    # The obs_dim stamp is always flat-obs floats, whatever the arch.
-    added = sum(w for n, w in run_obs_segments() if n in _V4_NEW_SEGMENTS)
-
-    # Populate realistic Adam moments with one update.
-    optim = torch.optim.Adam(model.parameters())
-    obs = torch.rand(4, obs_dim)
-    mask = torch.ones(4, N_ACTIONS, dtype=torch.bool)
-    _, logp, ent, val = model.get_action_and_value(obs, mask)
-    (logp.sum() + ent.sum() + val.sum()).backward()
-    optim.step()
-
-    state = {k: v.clone() for k, v in model.state_dict().items()}
-    ostate = optim.state_dict()
-    names = [n for n, _ in model.named_parameters()]
-    for key in ("actor.0.weight", "critic.0.weight"):
-        keep = _keep_mask(state[key].shape[1], blocks)
-        state[key] = state[key][:, keep]
-        pstate = ostate["state"][names.index(key)]
-        for moment in ("exp_avg", "exp_avg_sq"):
-            pstate[moment] = pstate[moment][:, keep]
-    # A real v3 checkpoint's Adam state is keyed by the V3 parameter order,
-    # which differs for the entity arch (the monsters table used to be
-    # created later in the segment walk). Re-key so migration must remap.
-    if arch == "entity":
-        from sts2_rl.models import EntityActorCritic
-        old_segments = [(n, w) for n, w in segments
-                        if n not in _V4_NEW_SEGMENTS]
-        old_names = [n for n, _ in
-                     EntityActorCritic(old_segments, N_ACTIONS,
-                                       hidden=_HIDDEN).named_parameters()]
-        assert old_names != names       # the reorder this guards against
-        ostate["state"] = {
-            old_idx: ostate["state"][names.index(name)]
-            for old_idx, name in enumerate(old_names)
-            if names.index(name) in ostate["state"]
-        }
-
-    ckpt = {
-        "model": state, "optim": ostate, "iteration": 5, "global_step": 999,
-        "best_score": 1.5, "obs_dim": obs_dim - added, "n_actions": N_ACTIONS,
-        "hidden": _HIDDEN, "arch": arch, "obs_schema": 3, "env_kind": "column",
-    }
-    return ckpt, obs_dim
+# ── check_checkpoint: the property that actually matters post-v7 ─────────
 
 
-# ── migration ────────────────────────────────────────────────────────────
-
-@pytest.mark.parametrize("arch", ["mlp", "entity"])
-def test_migration_restores_weights_and_zeroes_new_columns(arch):
-    v3, obs_dim = _fabricate_v3(arch)
-    old_actor = v3["model"]["actor.0.weight"].clone()
-    migrated = migrate_checkpoint(v3)
-
-    assert migrated["obs_schema"] == 4
-    assert migrated["obs_dim"] == obs_dim
-    assert migrated["iteration"] == 5 and migrated["global_step"] == 999
-    assert v3["obs_schema"] == 3                     # input not mutated
-
-    width_fn = _segment_out_width if arch == "entity" else (lambda n, w: w)
-    blocks = _new_column_blocks(run_obs_segments(), width_fn)
-    new_w = migrated["model"]["actor.0.weight"]
-    keep = _keep_mask(new_w.shape[1], blocks)
-    assert torch.equal(new_w[:, keep], old_actor)
-    assert (new_w[:, ~keep] == 0).all()
-    for moment in ("exp_avg", "exp_avg_sq"):
-        for key in ("actor.0.weight", "critic.0.weight"):
-            names = [n for n, _ in
-                     make_model(ModelSpec("column", arch=arch, hidden=_HIDDEN),
-                                obs_dim, N_ACTIONS).named_parameters()]
-            m = migrated["optim"]["state"][names.index(key)][moment]
-            assert m.shape == migrated["model"][key].shape
-            assert (m[:, ~keep] == 0).all()
-
-
-@pytest.mark.parametrize("arch", ["mlp", "entity"])
-def test_migrated_model_ignores_the_new_features(arch):
-    """The output must be bit-identical no matter what the v4 segments hold —
-    the definition of function preservation, and a detector for any offset
-    error in either splice space."""
-    v3, obs_dim = _fabricate_v3(arch)
-    migrated = migrate_checkpoint(v3)
-    spec = ModelSpec(env_kind="column", arch=arch, hidden=_HIDDEN)
-    model = make_model(spec, obs_dim, N_ACTIONS)
-    model.load_state_dict(migrated["model"])
-    model.eval()
-
-    torch.manual_seed(1)
-    obs = torch.rand(8, obs_dim)
-    scrambled = obs.clone()
-    off = 0
-    for name, width in run_obs_segments():
-        if name in _V4_NEW_SEGMENTS:
-            scrambled[:, off:off + width] = torch.rand(8, width)
-        off += width
-    mask = torch.ones(8, N_ACTIONS, dtype=torch.bool)
-    with torch.no_grad():
-        assert torch.equal(model.action_logits(obs, mask),
-                           model.action_logits(scrambled, mask))
-        assert torch.equal(model.get_value(obs), model.get_value(scrambled))
-
-
-@pytest.mark.parametrize("arch", ["mlp", "entity"])
-def test_migrated_optimizer_state_loads_and_steps(arch):
-    v3, obs_dim = _fabricate_v3(arch)
-    migrated = migrate_checkpoint(v3)
-    model = make_model(ModelSpec("column", arch=arch, hidden=_HIDDEN),
-                       obs_dim, N_ACTIONS)
-    model.load_state_dict(migrated["model"])
-    optim = torch.optim.Adam(model.parameters())
-    optim.load_state_dict(migrated["optim"])
-    _, logp, ent, val = model.get_action_and_value(
-        torch.rand(2, obs_dim), torch.ones(2, N_ACTIONS, dtype=torch.bool))
-    (logp.sum() + ent.sum() + val.sum()).backward()
-    optim.step()                                     # no shape complaints
-
-
-def test_migration_refuses_wrong_schema_and_env():
-    v3, _ = _fabricate_v3("mlp")
-    with pytest.raises(SystemExit, match="schema 3"):
-        migrate_checkpoint({**v3, "obs_schema": 2})
-    with pytest.raises(SystemExit, match="run-scale"):
-        migrate_checkpoint({**v3, "env_kind": "combat"})
-
-
-def test_check_checkpoint_points_v3_users_at_the_migration():
-    v3, obs_dim = _fabricate_v3("mlp")
+@pytest.mark.parametrize("schema", [2, 3, 4, 5, 6])
+def test_check_checkpoint_refuses_every_pre_v7_schema_loudly(schema):
+    """There is no v6->v7 weight migration, so EVERY schema stamped before
+    v7 must dead-end in a clear, loud `SystemExit` — never a crash inside
+    `load_state_dict`. The pre-v7 suite only pinned this for schemas 3 and
+    5 (the two that used to have a real migration path); this widens it to
+    every schema the project has shipped, since none of them can reach v7
+    through any migration anymore."""
     spec = ModelSpec(env_kind="column", arch="mlp", hidden=_HIDDEN)
-    with pytest.raises(SystemExit, match="migrate_ckpt.py"):
-        check_checkpoint(v3, spec, obs_dim, N_ACTIONS)
+    obs_dim = _real_dims(spec)
+    ckpt = {"env_kind": "column", "obs_schema": schema, "arch": "mlp",
+            "obs_dim": obs_dim, "n_actions": N_ACTIONS, "hidden": _HIDDEN}
+    with pytest.raises(SystemExit):
+        check_checkpoint(ckpt, spec, obs_dim, N_ACTIONS)
 
 
-# ── v5 → v6: the out-of-combat potion action block ───────────────────────
-
-def _fabricate_v5(arch: str) -> tuple[dict, int]:
-    """A synthetic v5 checkpoint: the current model with the v6 potion block's
-    rows deleted from the policy head and its Adam moments. The observation is
-    identical across the bump, so only the head is narrower."""
-    spec = ModelSpec(env_kind="column", arch=arch, hidden=_HIDDEN)
-    obs_dim = sum(w for _, w in model_obs_segments(spec))
-    torch.manual_seed(11)
-    model = make_model(spec, obs_dim, N_ACTIONS)
-
-    optim = torch.optim.Adam(model.parameters())
-    _, logp, ent, val = model.get_action_and_value(
-        torch.rand(4, obs_dim), torch.ones(4, N_ACTIONS, dtype=torch.bool))
-    (logp.sum() + ent.sum() + val.sum()).backward()
-    optim.step()
-
-    state = {k: v.clone() for k, v in model.state_dict().items()}
-    ostate = optim.state_dict()
-    names = [n for n, _ in model.named_parameters()]
-    head_w = _actor_head_key(state)
-    head_b = head_w[:-len("weight")] + "bias"
-    keep = N_ACTIONS - MAX_POTION_SLOTS
-    for key in (head_w, head_b):
-        state[key] = state[key][:keep]
-        pstate = ostate["state"][names.index(key)]
-        for moment in ("exp_avg", "exp_avg_sq"):
-            pstate[moment] = pstate[moment][:keep]
-
-    ckpt = {
-        "model": state, "optim": ostate, "iteration": 12, "global_step": 4242,
-        "best_score": 2.5, "obs_dim": obs_dim, "n_actions": keep,
-        "hidden": _HIDDEN, "arch": arch, "obs_schema": 5, "env_kind": "column",
-    }
-    return ckpt, obs_dim
+def test_check_checkpoint_accepts_the_current_schema():
+    """Sanity check for the parametrized refusal above: pin that it is
+    keyed on the schema stamp specifically, not a fixture shape that would
+    raise for any input at all."""
+    spec = ModelSpec(env_kind="column", arch="mlp", hidden=_HIDDEN)
+    obs_dim = _real_dims(spec)
+    ckpt = {"env_kind": "column", "obs_schema": RUN_OBS_SCHEMA_VERSION, "arch": "mlp",
+            "obs_dim": obs_dim, "n_actions": N_ACTIONS, "hidden": _HIDDEN}
+    check_checkpoint(ckpt, spec, obs_dim, N_ACTIONS)   # must not raise
 
 
-@pytest.mark.parametrize("arch", ["mlp", "entity"])
-def test_action_migration_appends_zero_rows_and_keeps_everything_else(arch):
-    v5, obs_dim = _fabricate_v5(arch)
-    head_w = _actor_head_key(v5["model"])
-    head_b = head_w[:-len("weight")] + "bias"
-    old_head = v5["model"][head_w].clone()
-    old_critic = v5["model"]["critic.0.weight"].clone()
-
-    migrated = migrate_checkpoint_actions(v5)
-
-    assert migrated["obs_schema"] == 6
-    assert migrated["n_actions"] == N_ACTIONS
-    assert migrated["obs_dim"] == obs_dim          # observation untouched
-    assert migrated["iteration"] == 12 and migrated["global_step"] == 4242
-    assert v5["obs_schema"] == 5                   # input not mutated
-
-    new_head = migrated["model"][head_w]
-    assert new_head.shape == (N_ACTIONS, old_head.shape[1])
-    assert torch.equal(new_head[:-MAX_POTION_SLOTS], old_head)
-    assert (new_head[-MAX_POTION_SLOTS:] == 0).all()
-    assert (migrated["model"][head_b][-MAX_POTION_SLOTS:] == 0).all()
-    assert torch.equal(migrated["model"]["critic.0.weight"], old_critic)
+@pytest.mark.parametrize("schema", [3, 5])
+def test_check_checkpoint_hint_no_longer_names_a_migration_tool(schema):
+    """T7 follow-up: the hint used to tell a schema-3 or schema-5 holder to
+    run `py migrate_ckpt.py ...` — a tool that (see below) now always
+    fails. Promising it here would be actively wrong, so the message must
+    not name migrate_ckpt.py, or any of the sts2_rl.checkpoints migration
+    function names, and must say plainly that --fresh is the only path."""
+    spec = ModelSpec(env_kind="column", arch="mlp", hidden=_HIDDEN)
+    obs_dim = _real_dims(spec)
+    ckpt = {"env_kind": "column", "obs_schema": schema, "arch": "mlp",
+            "obs_dim": obs_dim, "n_actions": N_ACTIONS, "hidden": _HIDDEN}
+    with pytest.raises(SystemExit) as exc_info:
+        check_checkpoint(ckpt, spec, obs_dim, N_ACTIONS)
+    message = str(exc_info.value)
+    assert "migrate_ckpt.py" not in message
+    assert "migrate_checkpoint" not in message
+    assert "--fresh" in message
+    assert str(schema) in message   # still names what was found, per T6's style
 
 
-@pytest.mark.parametrize("arch", ["mlp", "entity"])
-def test_action_migration_preserves_the_old_policy_and_the_value(arch):
-    """The potion block is appended at the END of the layout, so every old
-    action keeps its index. With the new block masked off — every state the old
-    policy could reach holding no AnyTime potion — logits and values must be
-    bit-identical."""
-    v5, obs_dim = _fabricate_v5(arch)
-    spec = ModelSpec(env_kind="column", arch=arch, hidden=_HIDDEN)
-    old = make_model(spec, obs_dim, N_ACTIONS - MAX_POTION_SLOTS)
-    old.load_state_dict(v5["model"])
-    old.eval()
-
-    migrated = migrate_checkpoint_actions(v5)
-    new = make_model(spec, obs_dim, N_ACTIONS)
-    new.load_state_dict(migrated["model"])
-    new.eval()
-
-    torch.manual_seed(2)
-    obs = torch.rand(8, obs_dim)
-    old_mask = torch.ones(8, N_ACTIONS - MAX_POTION_SLOTS, dtype=torch.bool)
-    new_mask = torch.ones(8, N_ACTIONS, dtype=torch.bool)
-    new_mask[:, -MAX_POTION_SLOTS:] = False
-    with torch.no_grad():
-        assert torch.equal(old.action_logits(obs, old_mask),
-                           new.action_logits(obs, new_mask)[:, :-MAX_POTION_SLOTS])
-        assert torch.equal(old.get_value(obs), new.get_value(obs))
+# ── migrate_checkpoint_actions: the AssertionError this lane found (see the
+#    module docstring) was fixed in checkpoints.py (T6's file), and a later
+#    fix-pass (review item 3) reordered it further: the honest "no migration
+#    path" SystemExit now runs immediately after the env-kind/obs-schema
+#    guards, ahead of any shape check on the checkpoint's own n_actions — so
+#    a genuine v5 checkpoint gets the true reason, not a shape-mismatch
+#    message computed from today's (not v5's) MAX_POTION_SLOTS ──
 
 
-@pytest.mark.parametrize("arch", ["mlp", "entity"])
-def test_action_migrated_optimizer_state_loads_and_steps(arch):
-    v5, obs_dim = _fabricate_v5(arch)
-    migrated = migrate_checkpoint_actions(v5)
-    model = make_model(ModelSpec("column", arch=arch, hidden=_HIDDEN),
-                       obs_dim, N_ACTIONS)
-    model.load_state_dict(migrated["model"])
-    optim = torch.optim.Adam(model.parameters())
-    optim.load_state_dict(migrated["optim"])
-    _, logp, ent, val = model.get_action_and_value(
-        torch.rand(2, obs_dim), torch.ones(2, N_ACTIONS, dtype=torch.bool))
-    (logp.sum() + ent.sum() + val.sum()).backward()
-    optim.step()
-
-
-def test_action_migration_refuses_wrong_schema_and_env():
-    v5, _ = _fabricate_v5("mlp")
+def test_migrate_checkpoint_actions_refuses_wrong_schema_and_env():
+    """The env-kind and obs-schema guards both run BEFORE the unconditional
+    "no migration path" `SystemExit` (checkpoints.py), so they still behave
+    exactly as designed — bare dicts are enough, no fabricated
+    checkpoint/model needed, since neither guard inspects "model"/"optim"."""
     with pytest.raises(SystemExit, match="schema 5"):
-        migrate_checkpoint_actions({**v5, "obs_schema": 4})
+        migrate_checkpoint_actions({"env_kind": "column", "obs_schema": 4})
     with pytest.raises(SystemExit, match="run-scale"):
-        migrate_checkpoint_actions({**v5, "env_kind": "combat"})
+        migrate_checkpoint_actions({"env_kind": "combat", "obs_schema": 5})
 
 
-def test_check_checkpoint_points_v5_users_at_the_action_migration():
-    v5, obs_dim = _fabricate_v5("mlp")
-    spec = ModelSpec(env_kind="column", arch="mlp", hidden=_HIDDEN)
-    with pytest.raises(SystemExit, match="migrate_ckpt.py"):
-        check_checkpoint(v5, spec, obs_dim, N_ACTIONS)
+def test_migrate_checkpoint_refuses_wrong_schema_and_env():
+    """Same shape of guard as migrate_checkpoint_actions, for the v3 -> v4
+    function: env-kind and obs-schema checks run before the function ever
+    tries (and fails) to build anything, so malformed input still gets a
+    specific message, not the stale `ImportError` this lane found and the
+    checkpoints.py follow-up lane fixed."""
+    with pytest.raises(SystemExit, match="schema 3"):
+        migrate_checkpoint({"env_kind": "column", "obs_schema": 2})
+    with pytest.raises(SystemExit, match="run-scale"):
+        migrate_checkpoint({"env_kind": "combat", "obs_schema": 3})
+
+
+def test_migrate_checkpoint_well_formed_input_fails_honestly():
+    """The one case migrate_checkpoint exists to handle — a run-scale,
+    schema-3 checkpoint — used to raise `ImportError: cannot import name
+    'run_obs_segments'` (phase 1 renamed it to run_obs_segments_f/_i).
+    Pin the fix: a `SystemExit` that says plainly there is no migration
+    path, not an import crash a caller would have to go read source to
+    understand."""
+    ckpt = {"env_kind": "column", "obs_schema": 3}
+    with pytest.raises(SystemExit) as exc_info:
+        migrate_checkpoint(ckpt)
+    message = str(exc_info.value)
+    assert "unreachable" in message
+    assert "--fresh" in message
+    assert "ImportError" not in message
+
+
+def test_migrate_checkpoint_actions_well_formed_input_fails_honestly():
+    """The one case migrate_checkpoint_actions exists to handle — a
+    run-scale, schema-5 checkpoint — used to raise a bare `AssertionError`
+    from a stale `RUN_OBS_SCHEMA_VERSION == 6` check (the constant is 7
+    now). Pin the fix: a `SystemExit` that says plainly there is no
+    migration path. No `n_actions` in the fixture — the fix-pass reorder
+    (review item 3) put the honest raise BEFORE any shape check on it, so
+    the function no longer inspects it at all; the old fixture synthesized
+    a fake "v5 width" via `N_ACTIONS - MAX_POTION_SLOTS`, which is today's
+    formula (today's `MAX_POTION_SLOTS`), not the historical v5 one, so it
+    never actually exercised a real v5 value."""
+    ckpt = {"env_kind": "column", "obs_schema": 5}
+    with pytest.raises(SystemExit) as exc_info:
+        migrate_checkpoint_actions(ckpt)
+    message = str(exc_info.value)
+    assert "unreachable" in message
+    assert "--fresh" in message
 
 
 # ── the whole-map grid observation ───────────────────────────────────────
 
+
 def _grid_view(env, obs):
-    sl = env.obs_slices()
-    return obs[sl["run.map.grid"]].reshape(MAP_GRID_ROWS, RE._MAP_WIDTH,
-                                           MAP_GRID_NODE), obs[sl["run.map.meta"]]
+    layout = run_obs_layout()
+    f = obs["f"]
+    grid = f[layout.f_slices["run.map.grid"]].reshape(
+        MAP_GRID_ROWS, RE._MAP_WIDTH, MAP_GRID_NODE)
+    meta = f[layout.f_slices["run.map.meta"]]
+    return grid, meta
 
 
 def _assert_grid_matches(env, obs):
@@ -380,6 +283,7 @@ def test_grid_is_written_outside_map_decisions():
 
 # ── boss identity ────────────────────────────────────────────────────────
 
+
 def test_every_boss_declares_vocab_known_monster_classes():
     for act in _ACT_ROOMS_FACTORIES:
         rooms = act_rooms(act)
@@ -403,8 +307,8 @@ def test_boss_identity_is_visible_from_act_entry():
     obs, info = env.reset(seed=3)
     assert info["phase"] != "map"                     # known before any travel
     run = env._run
-    sl = env.obs_slices()
-    boss = obs[sl["run.boss.identity"]]
-    expected = {RE.MONSTER_INDEX[cls.__name__]
+    layout = run_obs_layout()
+    boss_ids = obs["i"][layout.i_slices["run.boss.ids"]]
+    expected = {RE.MONSTER_INDEX[cls.__name__] + 1
                 for cls in run.room_set.next_boss_encounter.monster_classes}
-    assert set(np.flatnonzero(boss)) == expected
+    assert {int(x) for x in boss_ids if x != 0} == expected

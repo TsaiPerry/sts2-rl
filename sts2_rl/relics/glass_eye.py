@@ -13,10 +13,17 @@ class GlassEye(Relic):
     NoRarityModification), 3, owner)` and all five ride ONE
     `RewardsCmd.OfferCustom` (GlassEye.cs:16-33). Uniform odds means
     CardFactory takes no rarity roll — the predicate narrows the pool and
-    `NextItem` picks out of it (CardFactory.cs:216-225) — but neither
-    NoUpgradeRoll nor NoModifyHooks is set, so every created card still takes
-    `RollForUpgrade` and every screen still fires
-    `Hook.TryModifyCardRewardOptions` (both passes).
+    `NextItem` picks out of it (CardFactory.cs:216-225).
+
+    `ForNonCombatWithUniformOdds` itself ORs `NoUpgradeRoll`
+    (CardCreationOptions.cs:160-163) on top of the `NoRarityModification`
+    GlassEye.cs:29 adds — R14 finding, corrected from an earlier round's
+    "neither is set" reading, which was wrong: it looked only at the visible
+    `.WithFlags(...)` call and missed the flag the factory method itself ORs
+    in. `NoModifyHooks` is genuinely absent, so every screen still fires
+    `Hook.TryModifyCardRewardOptions` (both passes), but each created card
+    skips `RollForUpgrade` and the Rewards draw inside it
+    (CardFactory.cs:98-102) — 15 draws across the five screens, not 30.
     """
 
     id = "glass_eye"
@@ -32,6 +39,7 @@ class GlassEye(Relic):
         from ..cards.base import _CARD_CLASSES
         from ..cards.pool import pool_card_ids, reward_pool_card_ids
         from ..rewards import (
+            CardCreationFlags,
             CardRewardGroup,
             CombatRewards,
             RarityOddsType,
@@ -65,6 +73,7 @@ class GlassEye(Relic):
                 odds_type=RarityOddsType.UNIFORM,
                 pool=matching,
                 count=min(self.CHOICES, len(matching)),
+                flags=CardCreationFlags.NO_UPGRADE_ROLL,
             ))
 
         # RewardsSet.GenerateWithoutOffering (RewardsSet.cs:125-147): populate

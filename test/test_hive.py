@@ -644,7 +644,8 @@ class TestThievingHopper:
         cs.end_turn()  # THIEVERY: steal + 17
         assert cs.player.hp == 80 - 17
         assert len(cs.player.all_cards) == total_before - 1
-        assert len(hopper.powers["swipe"].stolen_cards) == 1
+        assert len(hopper.powers.instances("swipe")) == 1   # one steal, one power
+        assert hopper.powers["swipe"].stolen_card is not None
 
     def test_steal_prefers_uncommon(self):
         cs = fresh_with(ThievingHopper)
@@ -653,7 +654,7 @@ class TestThievingHopper:
         cs.player.discard_pile.append(prize)
         cs.hooks.register(prize)
         cs.end_turn()
-        assert cs.enemy.powers["swipe"].stolen_cards == [prize]
+        assert cs.enemy.powers["swipe"].stolen_card is prize
 
     def test_steal_priorities_keep_every_clause(self):
         # ThievingHopper.cs:31-69 — four predicates: Uncommon, then
@@ -688,7 +689,7 @@ class TestThievingHopper:
         cs.player.discard_pile.append(prize)
         cs.hooks.register(prize)
         cs.end_turn()  # THIEVERY
-        assert cs.enemy.powers["swipe"].stolen_cards == [prize]
+        assert cs.enemy.powers["swipe"].stolen_card is prize
 
     def test_steal_leaves_an_imbued_card_for_last(self):
         # Tiers 1-3 all exclude Imbued, so the Basic starter deck outranks an
@@ -701,7 +702,7 @@ class TestThievingHopper:
         cs.player.discard_pile.append(charmed)
         cs.hooks.register(charmed)
         cs.end_turn()  # THIEVERY
-        assert cs.enemy.powers["swipe"].stolen_cards != [charmed]
+        assert cs.enemy.powers["swipe"].stolen_card is not charmed
 
     def test_full_route_ends_in_escape(self):
         cs = fresh_with(ThievingHopper)
@@ -770,7 +771,7 @@ class TestThievingHopper:
         combat = run.create_combat(enc, room_type=RoomType.MONSTER)
         combat.end_turn()  # THIEVERY: steal a card
         hopper = combat.enemy
-        stolen_copy = hopper.powers["swipe"].stolen_cards[0]
+        stolen_copy = hopper.powers["swipe"].stolen_card
         CreatureCmd.kill(combat.hooks, hopper)  # BeforeDeath fires
         deck_before = list(run.deck)
         run.finish_combat(combat, room_type=RoomType.MONSTER)

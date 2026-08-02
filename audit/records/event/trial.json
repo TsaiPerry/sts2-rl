@@ -236,11 +236,10 @@
     },
     {
       "what": "F-R13a (round 13): the reroll redraws from the CHARACTER pool, not the screen's own options (trial.py:109-110) -- identical to event/brain_leech",
-      "verdict": "gap",
-      "issue": "LIVE, pre-existing, previously unrecorded (round 13, R2 fix pass + review). C#'s CardReward stores RerollOptions alongside Options and rerolls against the SAME creation options (CardReward.cs:114-115, :148). The sim builds its group as CardRewardGroup(cards=..., populated=True) with NO pool and NO odds_type, so reroll() falls back to redrawing from the CHARACTER pool at MONSTER odds -- and MUTATES THE PITY COUNTER while doing so. EXECUTED by both lane and reviewer: a Colorless-only screen (volley/panache/impatience) becomes an Ironclad screen (armaments/stampede/true_grit) on reroll. The correct pattern now exists in the tree: _PotionCardRewardGroup (events/the_future_of_potions.py), built in round 13 -- carry pool + odds_type + flags on the group.",
-      "live": true
+      "verdict": "faithful",
+      "issue": "LIVE but for a DIFFERENT reason than recorded. The record's text is event/brain_leech/g6's wording copied verbatim (\"becomes an Ironclad screen on reroll\") -- that does not apply here: Nondescript Guilty's pool was already the un-overridden character pool before any reroll, so a reroll draws from the same pool either way (pinned by test_trial_ nondescript_guilty_reroll_pool_stays_the_character_pool -- this assertion holds even against the OLD code). The REAL defect, found by re-deriving both draws against Trial.cs:183 (ForNonCombatWithDefaultOdds, Source= Other): mutate_pity defaulted True (mutating pity) on the FIRST draw already, not just reroll -- worse than filed, since it corrupts the pity state on every visit regardless of Driftwood. Also found: is_card_reward was never set on the first draw either (same shape as g7, unfiled). FIXED via a new file-local `_NonCombatCardRewardGroup(CardRewardGroup)` subclass (trial.py) that hardcodes mutate_pity=False, since the base class's `pool is None` heuristic gives the wrong answer for a screen whose pool is un-overridden but still Source=Other. Pinned by test_trial_ nondescript_guilty_does_not_mutate_pity_on_first_draw_or_reroll and test_trial_nondescript_guilty_silken_tress_fires_on_first_draw. Replaced reasoning: the record's \"wrong pool\" mechanism does not hold for this event; the actual mechanism is \"wrong Source/mutate_pity\", present from the first draw onward."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

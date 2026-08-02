@@ -47,8 +47,8 @@
     },
     "AfterAttack": {
       "maps_to": "powers.py:1614-1630 on_damage_received",
-      "verdict": "gap",
-      "issue": "NARROWED 2026-07-27, and a NEW residual is recorded. THE HOOK IS FIXED: SuckPower now implements `after_attack(dealer, card, results)` (powers.py:1720-1734), the sim's Hook.AfterAttack bracket, and `hooks.after_attack` hands it AttackCommand.Results as the (receiver, unblocked) pairs DamageCmd.deal accumulates (hooks.py:555-567, cmds.py:190-194). It counts the connecting hits and applies `self.amount * hits` ONCE after the attack, so the mid-attack self-boost (Fossil Stalker LASH 3x2 dealing 9 where the game deals 6) and the killing-blow skip are both gone. WHAT REMAINS: SuckPower.cs:23's third early-return condition, `!command.DamageProps.IsPoweredAttack()`, is no longer expressed anywhere -- the sim's after_attack bracket carries no props (hooks.py:555) and powers.py:1727 tests only the dealer and the receiver's side. Dormant today: the owner is an enemy and `Monster._execute_attack` (monsters/base.py:117-128) always brackets powered MOVE damage. Named trigger: any unpowered damage dealt inside an attack bracket by a Suck owner. This record's group-counting guard is untouched and still open."
+      "verdict": "faithful",
+      "issue": "Same shape as painful_stabs, re-executed rather than trusted. `SuckPower.after_attack` (powers.py:2106-2120) counts hits with `receiver.side != self.owner.side and unblocked > 0` and applies `Amount * hits` Strength once — matching `SuckPower.cs:22-46`. Pinned by `test_suck_after_attack_fixed_shape_still_holds`. The residual `!command.DamageProps.IsPoweredAttack()` disjunct (`SuckPower.cs:24`) is the SAME unreachable guard as painful_stabs's, confirmed by the same census (`test_no_ported_monster_attack_deals_unpowered_move_damage` covers both powers — they share the one attack entry point). **On the brief's \"may be an over-split\" question:** painful_stabs and suck are two distinct C# classes with two distinct effects (Wounds vs. Strength) on two distinct owners (Test Subject vs. Fossil Stalker) that happen to share the identical residual-guard shape because both are `AfterAttack` listeners with the same three early-return disjuncts. That is convergent structure, not the same mechanism — keeping them as separate queue entries is correct; only the *finding* (the census) is shared, not the mechanism."
     }
   },
   "guards": [
@@ -60,7 +60,8 @@
     {
       "what": "Counting GROUPS with unblocked damage, not individual results",
       "verdict": "gap",
-      "issue": "C#'s `num` counts outer lists (per-hit result groups) in which ANY result had unblocked damage, so a single AoE hit that connects with three creatures counts 1. The sim's per-hit hook counts every connecting RESULT, so the same AoE would grant 3x. Folded into the hook entry's rollup; carried separately because it survives an after_attack-slot fix. Dormant: the Fossil Stalker has no AoE move (monsters/underdocks/fossil_stalker.py -- TACKLE, LATCH and LASH are all single-target)."
+      "issue": "Re-executed rather than cited: confirmed FossilStalker is the power's sole applier in the entire C# source (not just the sim), and confirmed by reading `fossil_stalker.py` in full that none of its three moves is AoE (LASH's 2 hits are sequential single-target, not simultaneous multi-target, so it does not trigger the group-vs-result distinction either). Demonstrated the bug's mechanism directly against `SuckPower.after_attack` with a synthetic multi-receiver single-swing call (grants `amount*3` vs. the game's `amount*1`) to keep the shape documented and re-testable without depending on a future applier's content. Pinned by `test/test_r14_powers.py::TestSuckGroupsVsResults` (2 tests).",
+      "live": false
     },
     {
       "what": "IsVisible",

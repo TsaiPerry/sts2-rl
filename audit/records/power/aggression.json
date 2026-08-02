@@ -37,8 +37,8 @@
     },
     "BeforeSideTurnStart": {
       "maps_to": "powers.py:504-519 AggressionPower.on_player_turn_start",
-      "verdict": "gap",
-      "issue": "The card selection uses the wrong RNG and the wrong shuffle. AggressionPower.cs:28 is `source.ToList().UnstableShuffle(Rng.CombatCardSelection).Take(Amount)` -- an UnstableShuffle drawn from the dedicated CombatCardSelection stream. powers.py:514 is `combat._rng.sample(candidates, min(self.amount, len(candidates)))`, i.e. Python's reservoir sampling on the shared unseeded combat rng. Two consequences: the stream is wrong, so an Aggression turn perturbs every later draw on the shared rng and consumes nothing from CombatCardSelection; and `random.sample` is a different algorithm from UnstableShuffle+Take, so even given the same stream position it selects different cards. Conformance-visible on any replay that plays Aggression -- this is the class of defect docs/superpowers/prompts/_shared-audit-contract.md's sibling seeds are graded on. The SLOT half is correct for once: C# uses BeforeSideTurnStart (pre-draw, CombatManager.cs:458) and the sim uses on_player_turn_start (pre-draw, player.py:169), which is exactly right and is what makes the moved Attacks part of the same turn's hand. The sim's on_player_turn_start (player.py:169) fires BEFORE the hand draw (player.py:171-186); C#'s side-turn-start dispatchers run at CombatManager.cs:458 (Before) and :522 (After), i.e. either side of SetupPlayerTurn at :514. EXECUTED: a spy records [on_player_turn_start hand=5, 4x on_card_drawn, on_player_turn_started hand=9]. Third-file citations, not hashed here."
+      "verdict": "faithful",
+      "issue": "FIXED, not just re-recorded. Replaced `combat._rng.sample(...) (shared unseeded rng, reservoir algorithm) with `combat.combat_rng.card_selection` + an in-place `.shuffle()` + slice — the named `CombatCardSelection` stream in parity mode, algorithmically matching `UnstableShuffle(...).Take(...)`. The record's reasoning was correct; only the verdict needed to move from open gap to fixed. Pinned by `test/test_r14_powers.py::TestAggression` (3 tests)."
     }
   },
   "guards": [
@@ -68,6 +68,6 @@
       "rationale": "powers.py:516-519 moves the card then upgrades, in the same order. The sim mutates the piles directly rather than through CardPileCmd, so no on_card_drawn / MaxCardsInHand handling fires -- the pile-verb question belongs to creature_card_cmds, not to this unit."
     }
   ],
-  "verdict": "gap",
+  "verdict": "faithful",
   "audited": "2026-07-26"
 }

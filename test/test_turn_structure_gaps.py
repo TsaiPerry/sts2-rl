@@ -438,9 +438,25 @@ class TestG13TheWinConditionIsRecomputed:
 
 class TestG13DeadPlayerGuards:
     def test_setup_player_turn_returns_early_for_a_dead_player(self):
-        """SetupPlayerTurn (CombatManager.cs:631-634) — `if
-        (player.Creature.IsDead) return;`, so no energy, no draw and no
-        Hook.AfterPlayerTurnStart. The side hooks around it still run."""
+        """A player already dead when start_turn() runs means the loss is
+        already pending (CreatureCmd.cs:440-455 -- LoseCombat() is called
+        synchronously, inside the same Kill call that brings the player to 0
+        HP, single-player, since `runState.Players.All(p =>
+        p.Creature.IsDead)` is trivially true with one player). That makes
+        combat_is_over/is_ending true, which gates EVERY hook via
+        Hook.IterateCombatHookListeners (Hook.cs:53-58) -- not just
+        SetupPlayerTurn's own `if (player.Creature.IsDead) return;`
+        (CombatManager.cs:631-634). `StartTurn` itself opens with `if
+        (!IsInProgress) return;` (CombatManager.cs:424), and once
+        LoseCombat has fired IsInProgress goes false, so in a real C#
+        single-player game StartTurn is never re-entered at all once the
+        player is dead. `cs.player.hp = 0` as a bare assignment (bypassing
+        DamageCmd.deal/_resolve_death/lose_combat()) has no C# analogue --
+        C# has no way to set CurrentHp to 0 without going through the
+        death/Kill machinery -- so the sim's `_has_pending_loss` stand-in
+        (combat.py, reading `self.player.is_dead`) is faithful for how the
+        game actually reaches a dead player. None of the turn-start hooks
+        fire."""
         seen: list[str] = []
 
         class Watch:
@@ -464,7 +480,7 @@ class TestG13DeadPlayerGuards:
         cs.player.hand.clear()
         cs.player.hp = 0
         cs.player.start_turn()
-        assert seen == ["before_side_turn_start", "after_side_turn_start"]
+        assert seen == []
         assert cs.player.hand == []
 
     def test_flush_player_hand_returns_early_for_a_dead_player(self):

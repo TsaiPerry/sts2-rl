@@ -63,7 +63,8 @@
     "ModifyVulnerableMultiplier": {
       "maps_to": "modify_vulnerable_multiplier (paper_phrog.py:21-24), dispatched by HookSystem.modify_vulnerable_multiplier (hooks.py:185-194) from VulnerablePower.modify_damage_multiplicative (powers.py:417)",
       "verdict": "gap",
-      "issue": "Rollup of guards G1 and N2 per binding rule 4. NOT a Hook override: PaperPhrog.cs:16 is a plain public method, and its ONE caller is VulnerablePower.ModifyDamageMultiplicative, which looks the relic up directly on the dealer (`dealer.Player?.GetRelic<PaperPhrog>()`, VulnerablePower.cs:40-44). The sim turns that direct lookup into a real hook chain, which is where G1's divergence in the DISPATCH SET comes from; the +0.25 itself (PaperPhrog.cs:26 vs paper_phrog.py:23) and the 1.5 base it modifies (VulnerablePower.cs:22's `DamageIncrease` 1.5m vs powers.py:411) match, with no AscensionHelper.GetValueIfAscension in either file."
+      "issue": "NARROWED. The rollup's G1 dispatch-set text is confirmed accurate and unchanged. NEW: found and enumerated a second, previously unrecorded DORMANT divergence — `PaperPhrog.cs:18-21`'s `target == Owner.Creature` self-damage bail has no sim analogue because `modify_vulnerable_multiplier`'s signature carries no `target`. Reachability: a ported powered-Attack card that damages its own player while that player has self-Vulnerable; none exists today. Fix requires `hooks.py`/`powers.py` (BLOCKED-ON-FOOTPRINT this wave); recommend a follow-up guard entry for this specific gap so it isn't re-lost inside the G1 rollup.",
+      "live": false
     }
   },
   "guards": [

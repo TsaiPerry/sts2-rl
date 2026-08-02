@@ -89,7 +89,8 @@
     "AfterRoomEntered": {
       "maps_to": "on_combat_start (stone_cracker.py:17-34)",
       "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. The shuffle half (G1) is CLOSED: sts2_rl/relics/stone_cracker.py now feeds actmap.stable_shuffle the pile in the game's top-at-index-0 orientation (`list(reversed(upgradable))`) with `key=_compare_to_key`, over crng.card_selection. WHAT REMAINS is guard G2: the C# hook is AfterRoomEntered, which CombatRoom.cs:228 fires one full dispatch BEFORE Hook.BeforeCombatStart, and the port still hangs the effect off `on_combat_start` -- the sim's BeforeCombatStart slot. Twelve ported relics share that mapping."
+      "issue": "Re-executed rather than re-derived. No staleness found in this entry's hooks-level text (already correctly narrowed to G2 only in round 3). G2's pool-wide census re-run against the current tree: still exactly two on_combat_start implementers touch the draw pile (stone_cracker, tea_of_discourtesy), on different RNG streams, order- independent. No fix landed.",
+      "live": false
     }
   },
   "guards": [

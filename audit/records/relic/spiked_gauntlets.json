@@ -64,7 +64,8 @@
     "TryModifyEnergyCostInCombat": {
       "maps_to": "modify_card_energy_cost (spiked_gauntlets.py:26-31), dispatched by HookSystem.modify_card_energy_cost (hooks.py:196-201) from combat.py:408 / :701 and previews.py:181",
       "verdict": "gap",
-      "issue": "Rollup of guards G1, G2 and G3 per binding rule 4. The arithmetic is right -- a Power card costs 1 more -- but the sim has no phase structure and no per-creature listener grouping, and this relic is the named ported witness for BOTH of audit/records/seam/hook_dispatch.json's gaps G2 and G3."
+      "issue": "REASONING REPLACED. G1 was already faithful before this round (Task 0, 2026-07-28, predates the audit's own G1 text). G2 FLIPS from dormant-gap to faithful this round: hooks.py's `_each`/`_PHASES` machinery now generalizes to modify_card_energy_cost, giving it a real plain-then-Late two-pass structure -- confirmed by reading HookSystem.modify_card_energy_cost's current source, and matching a test round 13's R8 lane already landed in test/test_r13_relic2.py. Only G3 (X-cost bail) remains open, re-confirmed dormant: still zero X-cost Power cards in the pool. Propose narrowing the hooks-level issue text to name G3 alone.",
+      "live": false
     }
   },
   "guards": [

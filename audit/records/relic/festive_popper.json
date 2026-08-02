@@ -64,7 +64,8 @@
     "AfterPlayerTurnStart": {
       "maps_to": "on_player_turn_started (festive_popper.py:21-28)",
       "verdict": "gap",
-      "issue": "STILL OPEN at G2 and G3. G1, the slot, is CLOSED: FestivePopper.cs declares AfterPlayerTurnStart and `on_player_turn_started` is now that hook alone -- the AfterSideTurnStart listeners it used to share a registration-ordered walk with are on the new `after_side_turn_start`, fired strictly later. WHAT REMAINS: G2, the enemy set built from a weaker predicate, and G3, the hand-rolled inline win check.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: Rollup of guards G1, G2 and G3 per binding rule 4. The effect's numbers are right -- DamageVar(9m, ValueProp.Unpowered) (FestivePopper.cs:17) vs DAMAGE = 9 at DamageProps.NON_CARD_UNPOWERED (festive_popper.py:19, :27), no AscensionHelper branch in the file, dealer = the player on both sides, turn 1 only -- but the hook slot is a step late (G1), the enemy set is built from a weaker predicate (G2), and the win check the source performs after the whole turn-start sequence is hand-rolled inline instead (G3)."
+      "issue": "G2 and G3 re-executed with fresh, independent derivations rather than inherited from round 13's test file (whose own witness for the adjacent G2 mechanism is currently red for the unrelated reason noted under charons_ashes). Both guards confirmed dormant on their own merits: G2 via the is_gone/is_reviving coincidence argument re-derived directly, G3 via a direct source read confirming the early _check_win() call is still the current code. No fix landed.",
+      "live": false
     }
   },
   "guards": [

@@ -150,6 +150,28 @@ _ROOM_BOUNDARY = frozenset(
 )
 
 
+def crystal_sphere_click_policy(cursor: "_CommandCursor"):
+    """A `RunState.crystal_sphere_clicks` policy that replays a recording's
+    `CrystalSphereClick {x} {y} {tool}` commands.
+
+    RunReplays records the minigame's spatial decision verbatim
+    (RunReplays/Commands/CrystalSphereClickCommand.cs, recorded by the
+    `CellClicked` prefix in Patches/CrystalSpherePatch.cs), so a replay does
+    not need a policy at all — the clicks are data, and the tool is the one
+    that was actually in effect at click time.
+
+    The lookahead is bounded by `_ROOM_BOUNDARY`: without it, a minigame with
+    no recorded clicks would scan forward and steal the clicks belonging to a
+    later crystal sphere. Falling short, it defers to the event's own
+    automated rule by returning None."""
+    def policy(game):
+        cmd = cursor.take_before("CrystalSphereClick", _ROOM_BOUNDARY)
+        if cmd is None or len(cmd.args) < 3:
+            return None
+        return (int(cmd.args[0]), int(cmd.args[1]), int(cmd.args[2]))
+    return policy
+
+
 @dataclass
 class ReplayResult:
     divergences: list[Divergence]
@@ -783,6 +805,9 @@ class ReplayRunner:
         # a wrong-stream bug (DETECTOR 1 / Task 5's tripwire gate).
         run.rng.seed(f"conformance:{rec.seed}")
         cursor = _CommandCursor(rec.commands)
+        # The Crystal Sphere minigame's cell clicks are recorded, so replay
+        # them instead of inventing them (see crystal_sphere_click_policy).
+        run.crystal_sphere_clicks = crystal_sphere_click_policy(cursor)
         driver = _ForceWinDriver(run, cursor, acts=acts, ascension=rec.ascension)
 
         run.start_run(acts=acts, ascension=rec.ascension)

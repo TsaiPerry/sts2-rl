@@ -14,6 +14,7 @@ and Cmds during resolution, and the `Phase` / `CombatResult` value types.
 from __future__ import annotations
 
 import random
+from collections import deque
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
@@ -23,7 +24,8 @@ from .cards import Card, CardRarity, CardType, make_card, TargetType
 from .cmds import DamageCmd
 from .history import CombatHistory
 from .hooks import HookSystem
-from .monsters import Encounter, Monster, FUZZY_WURM_ENCOUNTER
+from .monsters import Encounter, Monster, MoveType, FUZZY_WURM_ENCOUNTER
+from .monsters.base import IntentHistoryEntry, MAX_INTENT_HISTORY, intent_flags
 from .monsters.state_machine import STUN_STATE_ID
 from .player import PlayerCombatState
 from .potions import Potion
@@ -228,6 +230,13 @@ class CombatState:
         for _enemy in self.enemies:
             _enemy.net_id = self._net_id_counter
             self._net_id_counter += 1
+        # R3: per-enemy displayed-intent history, keyed by net_id (NOT list
+        # position — three encounters reorder a live enemy's slot mid-combat:
+        # `cmds.py`'s `sort_enemies_by_slot_name` and `living_fog.py`'s
+        # explicit insert index). A fresh dict per CombatState, so a new
+        # combat/episode never inherits a previous one's history. See
+        # `_record_intent_history` for the one place entries are appended.
+        self._intent_history: dict[int, deque] = {}
         # Parity: monster max HP is a game RNG roll on the Niche stream, unique per
         # side where possible (Creature.SetUniqueMonsterHpValue, CombatState.cs:240).
         # Legacy mode keeps the monsters' own random.Random().randint roll untouched.
@@ -546,7 +555,46 @@ class CombatState:
         for enemy in list(self.enemies):
             if enemy.is_gone and not enemy.retained_after_death:
                 continue
+            if enemy.performed_first_move:
+                # The intent this enemy is about to have rerolled is exactly
+                # the one that was displayed to the player for the turn that
+                # just ended (`performed_first_move` is only True once the
+                # enemy has actually acted on a rolled intent — see its own
+                # docstring) — so THIS is the single per-turn point where a
+                # displayed intent becomes settled history, right before it
+                # is superseded. Recording anywhere inside `current_intent`
+                # itself would fire on every read (including mid-turn reads
+                # for the live observation) and record values never held for
+                # a whole turn; recording after `_prepare_for_next_turn` would
+                # record the NEW intent instead of the one just superseded.
+                self._record_intent_history(enemy)
             self._prepare_for_next_turn(enemy)
+
+    def _record_intent_history(self, enemy: Monster) -> None:
+        """Append ``enemy``'s currently-displayed intent to its net_id-keyed
+        R3 history ring buffer (``MAX_INTENT_HISTORY`` entries, most-recent
+        first). See ``monsters.base.IntentHistoryEntry`` for why the preview
+        numbers are captured now rather than derived later from a stored
+        ``Intent``."""
+        if enemy.net_id is None:
+            return
+        from .previews import preview_incoming_damage
+        intent = enemy.current_intent
+        preview = preview_incoming_damage(self, enemy)
+        entry = IntentHistoryEntry(
+            flags=intent_flags(intent, enemy.stunned),
+            per_hit=preview.per_hit if preview is not None else None,
+            hits=preview.hits if preview is not None else None,
+            total=preview.total if preview is not None else None,
+            status_count=(
+                intent.status_count if intent.has(MoveType.STATUS_CARD) else None
+            ),
+        )
+        buf = self._intent_history.get(enemy.net_id)
+        if buf is None:
+            buf = deque(maxlen=MAX_INTENT_HISTORY)
+            self._intent_history[enemy.net_id] = buf
+        buf.appendleft(entry)
 
     def _execute_enemy_turn(self) -> None:
         self.current_side = "enemy"

@@ -72,10 +72,15 @@ class TorchPolicy:
         self.sample = sample
         self._generator = torch.Generator(device=device).manual_seed(seed) if sample else None
 
-    def __call__(self, env: Any, obs: np.ndarray, mask: np.ndarray) -> int:
+    def __call__(self, env: Any, obs: dict, mask: np.ndarray) -> int:
         import torch
 
-        obs_t = torch.as_tensor(obs, dtype=torch.float32, device=self.device).unsqueeze(0)
+        from .tensor_obs import TensorObs
+
+        # ``obs`` is the env's own {"f": ndarray, "i": ndarray} (OBS_SCHEMA.md
+        # §2); TensorObs.from_dict + a leading batch axis (obs[None]) is the
+        # single-step-inference mirror of train_torch.py's rollout loop.
+        obs_t = TensorObs.from_dict(obs, device=self.device)[None]
         mask_t = torch.as_tensor(np.asarray(mask), dtype=torch.bool, device=self.device).unsqueeze(0)
         with torch.no_grad():
             logits = self.model.action_logits(obs_t, mask_t)
@@ -111,10 +116,11 @@ def load_torch_policy(
     """
     from .checkpoints import load_agent
 
+    obs_dim = (env.observation_space["f"].shape[0], env.observation_space["i"].shape[0])
     model, ckpt = load_agent(
         path,
         env_kind=env_kind,
-        obs_dim=env.observation_space.shape[0],
+        obs_dim=obs_dim,
         n_actions=env.action_space.n,
         card_obs=card_obs,
         device=device,
@@ -122,15 +128,21 @@ def load_torch_policy(
     return TorchPolicy(model, device=device, sample=sample, seed=seed), ckpt
 
 
-def ablation_transform(card_obs: str = "hybrid") -> Callable[[np.ndarray], np.ndarray]:
+def ablation_transform(card_obs: str = "hybrid") -> Callable[[dict], dict]:
     """Zero the absolute-number/preview features of a raw observation — the
-    same impoverishment ``AblatedObsEnv`` applies inside the env."""
+    same impoverishment ``AblatedObsEnv`` applies inside the env.
+
+    ``numeric_obs_indices`` indexes ``obs["f"]`` only (OBS_SCHEMA.md §2: ids
+    in ``obs["i"]`` are categorical, never numeric-ablated) — this used to
+    index a flat obs array directly; the dict has to be copied one level
+    deeper than ``dict.copy()`` alone, or zeroing ``obs["f"]`` in place would
+    also mutate the caller's original array (the same reference)."""
     idx = numeric_obs_indices(card_obs)
 
-    def _transform(obs: np.ndarray) -> np.ndarray:
-        obs = obs.copy()
-        obs[idx] = 0.0
-        return obs
+    def _transform(obs: dict) -> dict:
+        f = obs["f"].copy()
+        f[idx] = 0.0
+        return {"f": f, "i": obs["i"]}
 
     return _transform
 
