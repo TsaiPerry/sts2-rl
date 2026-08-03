@@ -52,6 +52,7 @@ from sts2_rl.evaluation import (
     load_torch_policy,
     torch_policy,
 )
+from sts2_rl import models
 from sts2_rl.models import EntityActorCritic, EntitySetActorCritic, MaskedActorCritic
 from sts2_rl.run_env import masked_random_run_policy
 from sts2_rl.tensor_obs import TensorObs
@@ -73,6 +74,7 @@ def save_checkpoint(path, spec: ModelSpec, obs_dim: tuple[int, int], n_actions: 
             "n_actions": model.n_actions,
             "hidden": model.hidden,
             "arch": spec.arch,
+            "head_version": models.ENTSET_HEAD_VERSION,
             "obs_schema": obs_schema_version(spec),
             "env_kind": spec.env_kind,
         },

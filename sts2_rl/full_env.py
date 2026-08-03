@@ -88,6 +88,7 @@ spammy summons) are not targetable.
 """
 from __future__ import annotations
 
+import copy
 import random
 from functools import lru_cache
 from typing import Any, Callable, Sequence
@@ -111,8 +112,9 @@ from .player import PlayerCombatState
 from .potions import ALL_POTIONS, Potion, make_potion
 from .powers import ALL_POWERS
 from .relic_obs import relic_row
-from .relics import ALL_RELICS
+from .relics import ALL_RELICS, Relic
 from .selectors import scripted_card_selector
+from .snapshots import SnapshotDataset, build_start_state, load_snapshots
 from .vocab import capacity as vocab_capacity, frozen_ids
 from .previews import (
     card_base_damage,
@@ -1134,6 +1136,15 @@ def build_combat_obs(state: CombatState, card_obs: str = "hybrid") -> dict[str, 
     return {"f": buf.f.copy(), "i": buf.i.copy()}
 
 
+def _check_mutually_exclusive(a: object, b: object, message: str) -> None:
+    """Raise ``ValueError(message)`` iff both ``a`` and ``b`` are given
+    (not ``None``). Factored out of ``STS2FullCombatEnv.__init__`` so the
+    guard itself is one small, independently testable/monkeypatchable unit
+    rather than an inline conditional buried in a long constructor."""
+    if a is not None and b is not None:
+        raise ValueError(message)
+
+
 class STS2FullCombatEnv(gym.Env):
     metadata = {"render_modes": ["human"]}
 
@@ -1144,6 +1155,12 @@ class STS2FullCombatEnv(gym.Env):
         encounters: Sequence[Encounter] | None = None,
         deck: Sequence[str] | None = None,
         potions: Sequence[str] | None = None,
+        deck_cards: Sequence[Card] | None = None,
+        relics: Sequence[Relic] | None = None,
+        max_hp: int | None = None,
+        current_hp: int | None = None,
+        potion_slots: Sequence[str | None] | None = None,
+        snapshots: "SnapshotDataset | str | None" = None,
         card_obs: str = "hybrid",
         card_selector: Callable[[str, list[Card], int], list[Card]] | None = scripted_card_selector,
         reward_win: float = 1.0,
@@ -1156,6 +1173,27 @@ class STS2FullCombatEnv(gym.Env):
     ) -> None:
         super().__init__()
         _check_card_obs(card_obs)
+        _check_mutually_exclusive(deck, deck_cards, "pass either deck or deck_cards, not both")
+        _check_mutually_exclusive(potions, potion_slots, "pass either potions or potion_slots, not both")
+        if snapshots is not None:
+            # A snapshot supplies all six start-state facts itself (Task 2's
+            # `build_start_state`) -- every other start-state kwarg (the
+            # encounter pool included) would be silently ignored or would
+            # silently fight the snapshot for control, so this is a loud
+            # ValueError, not a "snapshots wins" precedence rule.
+            _conflicting = {
+                "encounter": encounter, "encounters": encounters,
+                "deck": deck, "potions": potions,
+                "deck_cards": deck_cards, "relics": relics,
+                "max_hp": max_hp, "current_hp": current_hp,
+                "potion_slots": potion_slots,
+            }
+            _bad = [name for name, value in _conflicting.items() if value is not None]
+            if _bad:
+                raise ValueError(
+                    "snapshots is mutually exclusive with "
+                    f"{_bad} -- a snapshot supplies all start-state facts itself"
+                )
 
         # Encounter pool to sample each reset.
         if encounter is not None:
@@ -1168,7 +1206,51 @@ class STS2FullCombatEnv(gym.Env):
             self._encounters = list(DEFAULT_ENCOUNTERS)
 
         self._deck_ids = list(deck) if deck is not None else list(DEFAULT_DECK_IDS)
+        # `deck_cards` is the full-fidelity alternative to `deck`: real `Card`
+        # instances (upgrade level / enchantment / affliction all survive)
+        # instead of bare ids. `None` means "use `deck_ids` via `make_card`",
+        # exactly like before this kwarg existed — the default path is
+        # unchanged. Kept as a TEMPLATE list; `_new_state` deep-copies it
+        # fresh every reset (see `_new_state`'s docstring) so one episode's
+        # in-combat mutations (an Armaments upgrade, a ticking enchantment)
+        # never leak into the next.
+        self._deck_cards_template: list[Card] | None = (
+            list(deck_cards) if deck_cards is not None else None
+        )
         self._potion_ids = list(potions) if potions is not None else []
+        # `potion_slots` is the slot-preserving alternative to `potions`:
+        # `None` entries are real gaps (belt slot 0 empty, slot 1 filled),
+        # not compacted away. `None` (the attribute) means "use
+        # `_potion_ids` via `make_potion`", the pre-existing behaviour.
+        # A `potion_slots` belt longer than 3 grows the `CombatState`/
+        # `PlayerCombatState` belt to match (`_new_state` passes
+        # `max_potions=len(potion_slots)`) so nothing beyond slot 3 is
+        # silently dropped on rebuild -- but the env's ACTION SPACE stays
+        # keyed on MAX_POTIONS=3 by design, so potions in slots 3+ become
+        # visible-in-obs but unactionable.
+        self._potion_slot_ids: list[str | None] | None = (
+            list(potion_slots) if potion_slots is not None else None
+        )
+        # Relic TEMPLATES: same copy-per-reset contract as `deck_cards` (a
+        # relic instance carries a mutable counter — Girya's lift count,
+        # etc. — that combat ticks).
+        self._relics_template: list[Relic] | None = list(relics) if relics is not None else None
+        self._max_hp = max_hp
+        self._current_hp = current_hp
+        # Snapshot mode: `snapshots` is either an already-loaded
+        # `SnapshotDataset` (kept as-is) or a path (str/Path), loaded LAZILY
+        # -- not here in `__init__` -- so that constructing the env (as
+        # `vec_env.build_env` does, once per worker process) never touches
+        # disk; the load happens on the first `reset()`, and only once
+        # (`self._snapshot_dataset` caches it). This is what lets the PATH
+        # form cross a `SubprocVecEnv` worker boundary: `EnvSpec` carries the
+        # path (a plain str, trivially picklable), never a live dataset of
+        # `Card`/`Relic` objects.
+        self._snapshot_mode = snapshots is not None
+        self._snapshot_dataset: SnapshotDataset | None = (
+            snapshots if isinstance(snapshots, SnapshotDataset) else None
+        )
+        self._snapshot_path = None if isinstance(snapshots, SnapshotDataset) else snapshots
         self._card_obs = card_obs
         self._card_selector = card_selector
         self._reward_win = reward_win
@@ -1187,6 +1269,12 @@ class STS2FullCombatEnv(gym.Env):
 
         self._state: CombatState | None = None
         self._rng = random.Random()
+        # Dedicated snapshot RNG (Locked decision 3): reset(seed=s) seeds
+        # this SEPARATELY from `self._rng`, as its own `random.Random(s)`
+        # instance. In non-snapshot mode nothing ever reads from it, so
+        # `self._rng`'s draw sequence -- and therefore every non-snapshot
+        # episode's dynamics -- is untouched by this attribute's existence.
+        self._snap_rng = random.Random()
         self._steps = 0
         self._encounter_start_hp = 1
 
@@ -1198,15 +1286,95 @@ class STS2FullCombatEnv(gym.Env):
     # Construction helpers
     # ------------------------------------------------------------------
 
+    def _snapshot_dataset_ref(self) -> SnapshotDataset:
+        """Lazily loads+caches the path form (a no-op once already a live
+        `SnapshotDataset`, or after the first call)."""
+        if self._snapshot_dataset is None:
+            self._snapshot_dataset = load_snapshots(self._snapshot_path)
+        return self._snapshot_dataset
+
     def _new_state(self, rng: random.Random) -> CombatState:
-        deck = [make_card(cid) for cid in self._deck_ids]
-        potions = [make_potion(pid) for pid in self._potion_ids] or None
-        encounter = rng.choice(self._encounters)
+        if self._snapshot_mode:
+            # `build_start_state` calls each Card/Relic's own `.rebuild()`
+            # (`make_card`/`make_relic` under the hood), so every field here
+            # is already a FRESH, unshared instance -- deep-copying again
+            # would be a needless second copy (and the whole point of
+            # avoiding it: large datasets, many resets). Two resets landing
+            # on the identical `Snapshot` object still get independent
+            # engine objects because `build_start_state` is called fresh
+            # every time, not because anything here deep-copies its output.
+            snap = self._snapshot_dataset_ref().sample(self._snap_rng)
+            start = build_start_state(snap)
+            deck = start["deck_cards"]
+            relics = start["relics"]
+            max_hp = start["max_hp"]
+            current_hp = start["current_hp"]
+            encounter = start["encounter"]
+            # `potion_slots` here is raw ids/None (build_start_state's
+            # contract matches the `potion_slots` kwarg exactly), so it goes
+            # through the same slot-preserving `make_potion` transform the
+            # `potion_slots` kwarg path below uses.
+            potions: list[Potion | None] | None = [
+                make_potion(pid) if pid is not None else None
+                for pid in start["potion_slots"]
+            ]
+            # The snapshot's `potion_slots` tuple length IS the belt size
+            # (see the comment above): thread it through as `max_potions`
+            # so a >3-slot snapshot belt survives `PlayerCombatState`
+            # (player.py:138), which otherwise clips to its 3-slot default.
+            max_potions: int | None = len(potions)
+        else:
+            # Deck: `deck_cards` templates are deep-copied fresh every reset
+            # (the same mechanism `RunState.create_combat` uses for its own
+            # deck, run.py:1582 — `copy.deepcopy`) so a combat's mutations
+            # (upgrades, afflictions, cost deltas) never leak into the next
+            # episode's template. The id-based `deck` path is untouched:
+            # `make_card` already returns a fresh instance per call.
+            if self._deck_cards_template is not None:
+                deck = copy.deepcopy(self._deck_cards_template)
+            else:
+                deck = [make_card(cid) for cid in self._deck_ids]
+
+            # Potions: `potion_slots` builds a fresh list positionally
+            # (`None` entries stay `None` = a real belt gap; ids become
+            # fresh `Potion` instances), which `CombatState`/
+            # `PlayerCombatState` already thread through slot-preserving
+            # (player.py:138 indexes by position, it does not compact). The
+            # id-based `potions` path is untouched.
+            if self._potion_slot_ids is not None:
+                potions = [
+                    make_potion(pid) if pid is not None else None
+                    for pid in self._potion_slot_ids
+                ]
+                # Same slot-size thread-through as the snapshot branch above:
+                # a >3-slot `potion_slots` kwarg must not get clipped back to
+                # 3 by `PlayerCombatState`'s default belt size.
+                max_potions = len(potions)
+            else:
+                potions = [make_potion(pid) for pid in self._potion_ids] or None
+                # Legacy `potions` kwarg / default path: untouched. No
+                # `max_potions` is passed, so `CombatState`/
+                # `PlayerCombatState` fall back to their own default (3) --
+                # byte-identical to pre-fix behaviour.
+                max_potions = None
+
+            # Relics: same deep-copy-per-reset contract as the deck (a relic
+            # instance carries mutable per-combat/per-run counters).
+            relics = (
+                copy.deepcopy(self._relics_template)
+                if self._relics_template is not None else None
+            )
+            max_hp = self._max_hp
+            current_hp = self._current_hp
+            encounter = rng.choice(self._encounters)
+
         # The selector goes in at construction so turn-1 selection effects
         # (e.g. Gambling Chip's mulligan) already see it.
         state = CombatState(
             starting_deck=deck, rng=rng, encounter=encounter, potions=potions,
             card_selector=self._card_selector,
+            relics=relics, max_hp=max_hp, current_hp=current_hp,
+            max_potions=max_potions,
         )
         return state
 
@@ -1218,6 +1386,10 @@ class STS2FullCombatEnv(gym.Env):
         super().reset(seed=seed)
         if seed is not None:
             self._rng = random.Random(seed)
+            # Dedicated, SEPARATE instance -- see Locked decision 3 and the
+            # `_snap_rng` attribute comment in `__init__`. Only ever read in
+            # snapshot mode, so this line changes zero draws on `self._rng`.
+            self._snap_rng = random.Random(seed)
         self._state = self._new_state(self._rng)
         self._encounter_start_hp = max(1, sum(e.max_hp for e in self._state.enemies))
         self._steps = 0

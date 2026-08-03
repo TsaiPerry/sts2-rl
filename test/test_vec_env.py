@@ -68,11 +68,21 @@ def test_split_is_even_and_total_preserving():
 
 
 def test_resolve_n_workers():
-    assert resolve_n_workers(8, 0) == 0            # the default: serial path
+    assert resolve_n_workers(8, 0) == 0            # explicit serial path
     assert resolve_n_workers(8, 4) == 4
     assert resolve_n_workers(4, 99) == 4           # never more workers than envs
     with pytest.raises(ValueError):
-        resolve_n_workers(8, -1)
+        resolve_n_workers(8, -2)
+
+
+def test_resolve_n_workers_auto_scales_with_env_count():
+    # -1 = auto: workers at training scale, serial for tiny (smoke/probe) runs.
+    from sts2_rl.vec_env import AUTO_N_WORKERS, AUTO_WORKER_MIN_ENVS
+
+    assert resolve_n_workers(AUTO_WORKER_MIN_ENVS, -1) == AUTO_N_WORKERS
+    assert resolve_n_workers(32, -1) == AUTO_N_WORKERS
+    assert resolve_n_workers(AUTO_WORKER_MIN_ENVS - 1, -1) == 0
+    assert resolve_n_workers(2, -1) == 0
 
 
 def test_make_vec_env_picks_the_serial_path_for_one_worker():

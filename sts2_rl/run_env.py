@@ -637,6 +637,7 @@ class STS2RunEnv(gym.Env):
         max_steps: int = 10_000,
         render_mode: str | None = None,
         character: str = DEFAULT_CHARACTER,
+        on_combat_start: "Callable[[RunState, Any], None] | None" = None,
     ) -> None:
         super().__init__()
         if card_obs not in ("hybrid", "features"):
@@ -657,6 +658,17 @@ class STS2RunEnv(gym.Env):
         self._act_reward = act_reward
         self._max_steps = max_steps
         self.render_mode = render_mode
+        # Harvest hook (phase 3, Task 4): threaded straight to the
+        # `RunDriver` this env constructs per-episode inside `reset()`'s
+        # `_drive` closure. The env is the only owner of that construction
+        # (the driver runs on a private greenlet `reset()` starts), so a
+        # caller outside this module — e.g. `harvest.py` — has no other way
+        # to observe `RunDriver.on_combat_start` (locked decision 4) firing;
+        # exposing it here is the smallest seam that doesn't require
+        # subclassing or monkeypatching a production object.  `None` (the
+        # default) means zero behavior change, same as the driver's own
+        # default.
+        self._on_combat_start = on_combat_start
 
         self.n_actions = N_ACTIONS
         self.action_space = spaces.Discrete(self.n_actions)
@@ -755,6 +767,7 @@ class STS2RunEnv(gym.Env):
                 acts=self._acts,
                 ascension=self._ascension,
                 include_neow=self._include_neow,
+                on_combat_start=self._on_combat_start,
             )
             return driver.play()
 

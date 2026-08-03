@@ -31,15 +31,24 @@ import pytest
 import torch
 
 import train_torch
+from sts2_rl import checkpoints, models
 from sts2_rl.checkpoints import ModelSpec, model_obs_layout, model_obs_segments
-from sts2_rl.full_env import STS2FullCombatEnv
-from sts2_rl.models import EntityActorCritic, EntitySetActorCritic, MaskedActorCritic
+from sts2_rl.full_env import MAX_POTIONS, STS2FullCombatEnv, combat_obs_layout
+from sts2_rl.models import (
+    EntityActorCritic,
+    EntitySetActorCritic,
+    MaskedActorCritic,
+    combat_action_layout,
+    run_action_layout,
+)
 from sts2_rl.run_env import N_ACTIONS as RUN_N_ACTIONS
 from sts2_rl.run_env import STS2RunEnv
 from sts2_rl.tensor_obs import TensorObs
 from sts2_rl.vocab import CAPACITIES
 
 COMBAT_N_ACTIONS = 79
+COMBAT_LAYOUT = combat_action_layout(MAX_POTIONS)
+RUN_LAYOUT = run_action_layout()
 
 
 def combat_segments() -> list[tuple[str, int]]:
@@ -279,7 +288,7 @@ def test_entset_builds_and_forwards_on_the_real_combat_layout():
     layout's actual segment names and widths agreeing with the ids the env
     really emits (`entset_segment_plan`'s own completeness check)."""
     f_segments, i_segments = model_obs_layout(ModelSpec("combat", arch="entset"))
-    model = EntitySetActorCritic(f_segments, i_segments, COMBAT_N_ACTIONS, hidden=(32,))
+    model = EntitySetActorCritic(f_segments, i_segments, COMBAT_N_ACTIONS, COMBAT_LAYOUT, hidden=(32,))
 
     env = STS2FullCombatEnv()
     obs, _info = env.reset(seed=0)
@@ -307,7 +316,7 @@ def test_entset_builds_and_forwards_on_the_real_run_layout():
     surgery fixture, so this exercises the SAME obs the trainer's own
     `envs.reset()` produces."""
     f_segments, i_segments = model_obs_layout(ModelSpec("run", arch="entset"))
-    model = EntitySetActorCritic(f_segments, i_segments, RUN_N_ACTIONS, hidden=(32,))
+    model = EntitySetActorCritic(f_segments, i_segments, RUN_N_ACTIONS, RUN_LAYOUT, hidden=(32,))
 
     env = STS2RunEnv()
     obs, _info = env.reset(seed=0)
@@ -328,7 +337,7 @@ def test_entset_batches_multiple_observations_independently():
     silently broadcast/aliased one env's obs onto another's mask would still
     produce the right SHAPES, so shape-only assertions can't catch this)."""
     f_segments, i_segments = model_obs_layout(ModelSpec("combat", arch="entset"))
-    model = EntitySetActorCritic(f_segments, i_segments, COMBAT_N_ACTIONS, hidden=(32,))
+    model = EntitySetActorCritic(f_segments, i_segments, COMBAT_N_ACTIONS, COMBAT_LAYOUT, hidden=(32,))
 
     env_a, env_b = STS2FullCombatEnv(), STS2FullCombatEnv()
     obs_a, _ = env_a.reset(seed=0)
@@ -361,7 +370,7 @@ def test_entset_embedding_tables_sized_to_capacities():
     every vocabulary kind, including the two v4 added (afflictions/
     enchantments) that `entity`'s frozen `EMBED_DIMS` never had."""
     f_segments, i_segments = model_obs_layout(ModelSpec("run", arch="entset"))
-    model = EntitySetActorCritic(f_segments, i_segments, RUN_N_ACTIONS, hidden=(32,))
+    model = EntitySetActorCritic(f_segments, i_segments, RUN_N_ACTIONS, RUN_LAYOUT, hidden=(32,))
     for enc in (model.actor_encoder, model.critic_encoder):
         for kind, cap in CAPACITIES.items():
             table = enc.tables[kind]
@@ -382,11 +391,24 @@ def test_entset_strictly_smaller_than_mlp_on_the_real_layout():
     builds zero embedding tables (see the degeneration test above) and is
     therefore not "smaller", just IDENTICAL. `entset` is the v4 arch that
     actually owns the embedding-compression property now, so this is where
-    the test moved rather than a value quietly dropped."""
+    the test moved rather than a value quietly dropped.
+
+    T7 brief (tied action head): the tied heads (two `PairPointerHead`
+    instances, each with their own fixed-size MLP) add a roughly
+    trunk-size-INDEPENDENT parameter cost on top of the encoder -- at the
+    tiny `hidden=(32,)` every other test in this file uses for speed, that
+    fixed cost actually pushes `entset` (153444 params) ABOVE `mlp`
+    (148816): measured directly, not assumed. The compression property is
+    real at the trunk width this project actually trains with
+    (`hidden=(256,256)`: entset 634916 < mlp 1321552, measured), so this
+    test moved to that width -- it was never about `hidden=(32,)` specifically,
+    that was just every other test's speed shortcut. Construction-only (no
+    forward), so the wider trunk costs nothing in test runtime."""
     f_segments, i_segments = model_obs_layout(ModelSpec("combat", arch="entset"))
     flat_dim = sum(w for _, w in f_segments) + sum(w for _, w in i_segments)
-    mlp = MaskedActorCritic(flat_dim, COMBAT_N_ACTIONS, hidden=(32,))
-    entset = EntitySetActorCritic(f_segments, i_segments, COMBAT_N_ACTIONS, hidden=(32,))
+    hidden = (256, 256)
+    mlp = MaskedActorCritic(flat_dim, COMBAT_N_ACTIONS, hidden=hidden)
+    entset = EntitySetActorCritic(f_segments, i_segments, COMBAT_N_ACTIONS, COMBAT_LAYOUT, hidden=hidden)
     n_mlp = sum(p.numel() for p in mlp.parameters())
     n_entset = sum(p.numel() for p in entset.parameters())
     assert n_entset < n_mlp
@@ -399,9 +421,9 @@ def test_entset_determinism_under_seed():
     f_segments, i_segments = model_obs_layout(ModelSpec("combat", arch="entset"))
 
     torch.manual_seed(7)
-    m1 = EntitySetActorCritic(f_segments, i_segments, COMBAT_N_ACTIONS, hidden=(32,))
+    m1 = EntitySetActorCritic(f_segments, i_segments, COMBAT_N_ACTIONS, COMBAT_LAYOUT, hidden=(32,))
     torch.manual_seed(7)
-    m2 = EntitySetActorCritic(f_segments, i_segments, COMBAT_N_ACTIONS, hidden=(32,))
+    m2 = EntitySetActorCritic(f_segments, i_segments, COMBAT_N_ACTIONS, COMBAT_LAYOUT, hidden=(32,))
 
     env = STS2FullCombatEnv()
     obs, _ = env.reset(seed=0)
@@ -442,7 +464,7 @@ def test_hand_block_is_visible_under_card_obs_features():
     in `hybrid`."""
     f_segments, i_segments = model_obs_layout(
         ModelSpec("combat", arch="entset", card_obs="features"))
-    model = EntitySetActorCritic(f_segments, i_segments, COMBAT_N_ACTIONS, hidden=(32,))
+    model = EntitySetActorCritic(f_segments, i_segments, COMBAT_N_ACTIONS, COMBAT_LAYOUT, hidden=(32,))
 
     env = STS2FullCombatEnv(card_obs="features")
     obs, _info = env.reset(seed=0)
@@ -467,7 +489,7 @@ def test_run_potions_empty_slot_is_visible():
     starts with an empty belt, so every one of its base slots is exactly
     this shape -- not a synthetic corner case."""
     f_segments, i_segments = model_obs_layout(ModelSpec("run", arch="entset"))
-    model = EntitySetActorCritic(f_segments, i_segments, RUN_N_ACTIONS, hidden=(32,))
+    model = EntitySetActorCritic(f_segments, i_segments, RUN_N_ACTIONS, RUN_LAYOUT, hidden=(32,))
 
     env = STS2RunEnv()
     obs, _info = env.reset(seed=0)
@@ -481,3 +503,329 @@ def test_run_potions_empty_slot_is_visible():
         "-- every empty belt slot's slot_exists float is being masked away "
         "because the mask only checks the (PAD, by design) potion id "
         "column")
+
+
+# ── head_version: honest checkpoint refusal for the tied action head ─────
+#
+# T7 rebuilt the entset action head IN PLACE -- same "entset" arch string,
+# same (obs_dim, n_actions, hidden) triple -- from a positional
+# `Linear(hidden, n_actions)` to the tied `ActionLayout` / `PairPointerHead`
+# design. A pre-T7 entset checkpoint's state_dict has no `actor.*` Linear
+# weight at all any more, so without a dedicated version stamp it would fail
+# with a raw `load_state_dict` key error instead of the honest "predates
+# this change, use --fresh" refusal this project's checkpoint gate is
+# supposed to give (ledger, round-2 gap 3). `ENTSET_HEAD_VERSION` is that
+# stamp; these tests pin the refusal ahead of `check_checkpoint`'s shape
+# check, so a stale head_version wins over a coincidentally-matching shape.
+
+
+def _entset_ckpt(tmp_path, *, head_version=None):
+    """A checkpoint_payload-shaped dict for a real combat entset model,
+    optionally overriding/omitting `head_version` -- mirrors the schema-999
+    monkeypatch fixture style (`test_make_model_refuses_future_v4_generation_schema`
+    above): build the real thing via train_torch, then mutate the one field
+    under test."""
+    args = _combat_args(tmp_path, "entset")
+    obs_dim = _combat_obs_dim()
+    model = train_torch.make_model(args, obs_dim, COMBAT_N_ACTIONS)
+    optimizer = torch.optim.Adam(model.parameters())
+    ckpt = train_torch.checkpoint_payload(model, optimizer, 1, args, global_step=0)
+    if head_version is None:
+        del ckpt["head_version"]
+    else:
+        ckpt["head_version"] = head_version
+    return ckpt, args, obs_dim
+
+
+def test_check_checkpoint_refuses_entset_payload_missing_head_version(tmp_path):
+    """Pre-stamp checkpoints (built before this field existed) carry no
+    `head_version` key at all -- `check_checkpoint` must treat that as
+    version 1 (the pre-T7 positional head) and refuse, naming both the
+    stored (1) and required (models.ENTSET_HEAD_VERSION) versions plus
+    --fresh."""
+    ckpt, args, obs_dim = _entset_ckpt(tmp_path, head_version=None)
+    with pytest.raises(SystemExit) as exc_info:
+        train_torch.check_checkpoint(ckpt, args, obs_dim, COMBAT_N_ACTIONS)
+    message = str(exc_info.value)
+    assert "1" in message
+    assert str(models.ENTSET_HEAD_VERSION) in message
+    assert "--fresh" in message
+
+
+def test_check_checkpoint_accepts_current_head_version(tmp_path):
+    """A checkpoint stamped with head_version=4 (R9's pair-feature play
+    head widening -- pinned as the literal ``models.ENTSET_HEAD_VERSION``
+    is defined to be) passes. Deliberately hardcoded rather than read live
+    off ``models.ENTSET_HEAD_VERSION``: reading the live constant on both
+    the stamp and the check side would make this test pass under ANY value
+    of the constant, including a regression that bumped it without meaning
+    to -- pinning the literal is what actually catches that (see the
+    report's mutation check: patching `ENTSET_HEAD_VERSION = 5` at runtime
+    must turn this test red)."""
+    ckpt, args, obs_dim = _entset_ckpt(tmp_path, head_version=4)
+    train_torch.check_checkpoint(ckpt, args, obs_dim, COMBAT_N_ACTIONS)   # must not raise
+
+
+def test_check_checkpoint_refuses_explicit_stale_head_version(tmp_path):
+    """Not just a missing-key default -- an explicit `head_version=3` (R8's
+    pointer-scored CHOICE/SELECT/belt-POTION structure, stamped once that
+    field existed but before R9's pair-feature play-head widening) is
+    refused too."""
+    ckpt, args, obs_dim = _entset_ckpt(tmp_path, head_version=3)
+    with pytest.raises(SystemExit):
+        train_torch.check_checkpoint(ckpt, args, obs_dim, COMBAT_N_ACTIONS)
+
+
+def test_check_checkpoint_head_version_refusal_wins_over_shape_mismatch(tmp_path):
+    """A checkpoint that is doubly wrong -- stale head_version AND a shape
+    tuple that no longer matches this run -- must fail on the honest
+    head_version message, not the shape one: the shape check runs later in
+    `check_checkpoint`, and a shape-only error would send someone chasing
+    `--hidden` instead of the real cause."""
+    ckpt, args, obs_dim = _entset_ckpt(tmp_path, head_version=None)
+    ckpt["hidden"] = (999,)   # now also fails the (obs_dim, n_actions, hidden) shape check
+    with pytest.raises(SystemExit) as exc_info:
+        train_torch.check_checkpoint(ckpt, args, obs_dim, COMBAT_N_ACTIONS)
+    message = str(exc_info.value)
+    assert "head_version" in message or "predates" in message
+    assert "(obs_dim, n_actions, hidden)" not in message
+
+
+def test_check_checkpoint_entset_roundtrip_via_real_agent(tmp_path):
+    """End-to-end per the brief: a freshly built entset agent's real
+    `checkpoints.make_model` output, run through `train_torch.checkpoint_payload`
+    and `check_checkpoint`, must be accepted -- importing train_torch has no
+    heavy side effects (this file already does so at module scope for every
+    other test above), so this uses the real function rather than
+    replicating its dict literally."""
+    args = _combat_args(tmp_path, "entset")
+    obs_dim = _combat_obs_dim()
+    model = checkpoints.make_model(train_torch.model_spec(args), obs_dim, COMBAT_N_ACTIONS)
+    optimizer = torch.optim.Adam(model.parameters())
+    ckpt = train_torch.checkpoint_payload(model, optimizer, 1, args, global_step=0)
+    assert ckpt["head_version"] == models.ENTSET_HEAD_VERSION
+    train_torch.check_checkpoint(ckpt, args, obs_dim, COMBAT_N_ACTIONS)   # must not raise
+
+
+# ── R10: --shared-encoder ─────────────────────────────────────────────────
+#
+# `EntitySetActorCritic` builds TWO independent `_EntsetEncoder`s (actor +
+# critic) -- every vocabulary table, every per-row projection, learned
+# twice. `shared_encoder=True` (threaded from `--shared-encoder`) makes
+# `self.actor_encoder is self.critic_encoder` ONE instance instead: the
+# sharing granularity the controller decided on is "one shared encoder
+# instance", not tables-only sharing (the fallback experiment nobody is
+# running today). The two trunks (`self.actor`/`self.critic`) and every
+# action head stay separate either way -- only the encoder is shared. The
+# throughput/stability A/B itself is run by the controller, not here; this
+# file only has to prove the flag builds the right graph and the checkpoint
+# contract is honest about which arm a checkpoint was trained as.
+
+
+def _combat_args_shared(tmp_path, *, shared_encoder: bool) -> Namespace:
+    args = _combat_args(tmp_path, "entset")
+    args.shared_encoder = shared_encoder
+    return args
+
+
+def test_shared_encoder_is_one_instance():
+    """`shared_encoder=True` -> `actor_encoder is critic_encoder`, ONE
+    encoder's worth of parameters, and the reduction versus the default
+    (two independent encoders) equals EXACTLY one encoder's parameter
+    count -- not "somewhat fewer", not "half, rounded" -- pins the sharing
+    is a clean swap of one whole encoder object, nothing more, nothing
+    less."""
+    f_segments, i_segments = model_obs_layout(ModelSpec("combat", arch="entset"))
+    separate = EntitySetActorCritic(
+        f_segments, i_segments, COMBAT_N_ACTIONS, COMBAT_LAYOUT, hidden=(32,))
+    shared = EntitySetActorCritic(
+        f_segments, i_segments, COMBAT_N_ACTIONS, COMBAT_LAYOUT, hidden=(32,),
+        shared_encoder=True)
+
+    assert shared.actor_encoder is shared.critic_encoder
+    assert separate.actor_encoder is not separate.critic_encoder
+
+    n_separate = sum(p.numel() for p in separate.parameters())
+    n_shared = sum(p.numel() for p in shared.parameters())
+    n_one_encoder = sum(p.numel() for p in separate.actor_encoder.parameters())
+    assert n_one_encoder > 0, "fixture sanity: the encoder has parameters"
+    assert n_shared < n_separate
+    assert n_separate - n_shared == n_one_encoder
+
+    # The shared encoder's own parameters must appear exactly ONCE in the
+    # module's state_dict -- a plain `self.critic_encoder = self.actor_
+    # encoder` would still register a SECOND "critic_encoder.*" copy of the
+    # same tensors (nn.Module.__setattr__ registers by NAME, not identity).
+    keys = list(shared.state_dict().keys())
+    assert any(k.startswith("actor_encoder.") for k in keys)
+    assert not any(k.startswith("critic_encoder.") for k in keys), (
+        "critic_encoder must not be separately registered when shared -- "
+        "found critic_encoder.* keys in state_dict() alongside "
+        "actor_encoder.*, meaning the same encoder's weights are being "
+        "saved twice under two names")
+
+
+def test_default_is_separate():
+    """Flag False (and the omitted default) must build two DISTINCT encoder
+    instances -- guards the default arm staying byte-compatible with pre-R10
+    behavior, the other half of the A/B this task exists to set up."""
+    f_segments, i_segments = model_obs_layout(ModelSpec("combat", arch="entset"))
+    default_omitted = EntitySetActorCritic(
+        f_segments, i_segments, COMBAT_N_ACTIONS, COMBAT_LAYOUT, hidden=(32,))
+    default_explicit = EntitySetActorCritic(
+        f_segments, i_segments, COMBAT_N_ACTIONS, COMBAT_LAYOUT, hidden=(32,),
+        shared_encoder=False)
+
+    for model in (default_omitted, default_explicit):
+        assert model.actor_encoder is not model.critic_encoder
+        keys = list(model.state_dict().keys())
+        assert any(k.startswith("actor_encoder.") for k in keys)
+        assert any(k.startswith("critic_encoder.") for k in keys)
+
+
+def test_equivariance_holds_shared():
+    """The hand-swap equivariance property (`test_tied_head_combat.py`'s
+    `test_hand_swap_equivariance`) must still hold on a SHARED-encoder
+    model: sharing the encoder object must not break the per-row pooling
+    symmetry the play head's pointer scoring depends on. Reuses that file's
+    fixture/helper functions (bare-module import -- `test/` shadows the
+    stdlib `test` package, so `from test_tied_head_combat import ...` is the
+    only import form that resolves to this repo's file, matching the
+    existing `test_enemy_side_per_side.py` -> `test_hook_order` precedent)
+    rather than re-deriving them, since duplicating hand-picked row-swap
+    machinery would risk silently drifting from the real thing it's
+    supposed to mirror."""
+    from test_tied_head_combat import (
+        MAX_ENEMIES,
+        MAX_HAND,
+        PLAY_BASE,
+        POTION_BASE,
+        _all_legal_mask,
+        _copy_obs,
+        _distinct_hand_pair,
+        _reset_env,
+        _swap_row,
+        _to_tobs,
+    )
+
+    f_segments, i_segments = model_obs_layout(ModelSpec("combat", arch="entset"))
+    model = EntitySetActorCritic(
+        f_segments, i_segments, COMBAT_N_ACTIONS, COMBAT_LAYOUT, hidden=(32,),
+        shared_encoder=True)
+    assert model.actor_encoder is model.critic_encoder   # fixture sanity
+
+    env, obs = _reset_env(seed=0)
+    h1, h2 = _distinct_hand_pair(obs)
+
+    layout_obs = combat_obs_layout()
+    obs_b = _copy_obs(obs)
+    _swap_row(obs_b["i"], layout_obs.i_slices["hand.ids"], MAX_HAND, h1, h2)
+    _swap_row(obs_b["f"], layout_obs.f_slices["hand.f"], MAX_HAND, h1, h2)
+    _swap_row(obs_b["f"], layout_obs.f_slices["damage_matrix"], MAX_HAND, h1, h2)
+
+    mask_all = _all_legal_mask(COMBAT_N_ACTIONS)
+    with torch.no_grad():
+        logits_a = model.action_logits(_to_tobs(obs), mask_all)[0]
+        logits_b = model.action_logits(_to_tobs(obs_b), mask_all)[0]
+
+    atol = 5e-4   # same bound as test_hand_swap_equivariance -- see its
+                  # docstring for the ctx-coupling residual this covers
+    for e in range(MAX_ENEMIES):
+        idx_h1 = PLAY_BASE + h1 * MAX_ENEMIES + e
+        idx_h2 = PLAY_BASE + h2 * MAX_ENEMIES + e
+        assert torch.allclose(logits_b[idx_h1], logits_a[idx_h2], atol=atol)
+        assert torch.allclose(logits_b[idx_h2], logits_a[idx_h1], atol=atol)
+    assert torch.allclose(logits_b[0], logits_a[0], atol=atol)
+    assert torch.allclose(logits_b[POTION_BASE:], logits_a[POTION_BASE:], atol=atol)
+
+
+def test_shared_encoder_checkpoint_roundtrips_and_rejects_mismatch(tmp_path):
+    """Checkpoint honesty for the flag (mirrors the head_version tests
+    above): a shared-arm checkpoint round-trips against a shared-arm run;
+    a shared-saved/separate-requested checkpoint (and vice versa) is
+    refused with a clear message naming --shared-encoder, BEFORE the
+    (obs_dim, n_actions, hidden) shape fallback; and a checkpoint with no
+    `shared_encoder` key at all (pre-R10) is treated as False, so it's
+    accepted by a separate-arm request and refused by a shared-arm one."""
+    obs_dim = _combat_obs_dim()
+
+    shared_args = _combat_args_shared(tmp_path, shared_encoder=True)
+    shared_model = checkpoints.make_model(
+        train_torch.model_spec(shared_args), obs_dim, COMBAT_N_ACTIONS)
+    optimizer = torch.optim.Adam(shared_model.parameters())
+    shared_ckpt = train_torch.checkpoint_payload(
+        shared_model, optimizer, 1, shared_args, global_step=0)
+    assert shared_ckpt["shared_encoder"] is True
+
+    # Round-trip: shared-saved, shared-requested.
+    train_torch.check_checkpoint(shared_ckpt, shared_args, obs_dim, COMBAT_N_ACTIONS)
+
+    separate_args = _combat_args_shared(tmp_path, shared_encoder=False)
+    separate_model = checkpoints.make_model(
+        train_torch.model_spec(separate_args), obs_dim, COMBAT_N_ACTIONS)
+    optimizer2 = torch.optim.Adam(separate_model.parameters())
+    separate_ckpt = train_torch.checkpoint_payload(
+        separate_model, optimizer2, 1, separate_args, global_step=0)
+    assert separate_ckpt["shared_encoder"] is False
+    train_torch.check_checkpoint(separate_ckpt, separate_args, obs_dim, COMBAT_N_ACTIONS)
+
+    # Mismatch: shared saved, separate requested.
+    with pytest.raises(SystemExit, match="shared_encoder|shared-encoder"):
+        train_torch.check_checkpoint(shared_ckpt, separate_args, obs_dim, COMBAT_N_ACTIONS)
+    # Mismatch: separate saved, shared requested.
+    with pytest.raises(SystemExit, match="shared_encoder|shared-encoder"):
+        train_torch.check_checkpoint(separate_ckpt, shared_args, obs_dim, COMBAT_N_ACTIONS)
+
+    # A doubly-wrong checkpoint (stale shared_encoder AND a bad shape) must
+    # fail on the honest shared_encoder message, not the shape one -- same
+    # "version gate wins over shape fallback" rule as head_version.
+    doubly_wrong = dict(shared_ckpt)
+    doubly_wrong["hidden"] = (999,)
+    with pytest.raises(SystemExit) as exc_info:
+        train_torch.check_checkpoint(doubly_wrong, separate_args, obs_dim, COMBAT_N_ACTIONS)
+    message = str(exc_info.value)
+    assert "shared_encoder" in message or "shared-encoder" in message
+    assert "(obs_dim, n_actions, hidden)" not in message
+
+    # Missing key (pre-R10 checkpoint) = False: accepted by a separate-arm
+    # request, refused by a shared-arm one.
+    legacy = dict(separate_ckpt)
+    del legacy["shared_encoder"]
+    train_torch.check_checkpoint(legacy, separate_args, obs_dim, COMBAT_N_ACTIONS)   # not raise
+    with pytest.raises(SystemExit, match="shared_encoder|shared-encoder"):
+        train_torch.check_checkpoint(legacy, shared_args, obs_dim, COMBAT_N_ACTIONS)
+
+    # And the round-tripped model actually loads and matches the identity
+    # property, not just the dict-level stamp.
+    reloaded = checkpoints.make_model(
+        train_torch.model_spec(shared_args), obs_dim, COMBAT_N_ACTIONS)
+    reloaded.load_state_dict(shared_ckpt["model"])
+    assert reloaded.actor_encoder is reloaded.critic_encoder
+
+
+def test_make_model_builds_shared_arm_for_combat_and_run(tmp_path):
+    """`make_model` threads `shared_encoder` for BOTH env families -- the
+    combat env and the run-scale (run/column) envs share one code path
+    through `checkpoints.make_model`, and R10 must not silently only wire
+    one of them. Layout/tiling assertions confirm the shared flag doesn't
+    perturb the action layout the encoder feeds -- sharing the encoder
+    OBJECT must not change what rows/blocks it produces."""
+    combat_obs_dim = _combat_obs_dim()
+    combat_spec = ModelSpec("combat", arch="entset", hidden=(32,), shared_encoder=True)
+    combat_model = checkpoints.make_model(combat_spec, combat_obs_dim, COMBAT_N_ACTIONS)
+    assert combat_model.actor_encoder is combat_model.critic_encoder
+    assert combat_model.action_layout.n_actions == COMBAT_N_ACTIONS
+
+    run_f_segments, run_i_segments = model_obs_layout(ModelSpec("run", arch="entset"))
+    run_obs_dim = (sum(w for _, w in run_f_segments), sum(w for _, w in run_i_segments))
+    run_spec = ModelSpec("run", arch="entset", hidden=(32,), shared_encoder=True)
+    run_model = checkpoints.make_model(run_spec, run_obs_dim, RUN_N_ACTIONS)
+    assert run_model.actor_encoder is run_model.critic_encoder
+    assert run_model.action_layout.n_actions == RUN_N_ACTIONS
+    assert run_model.action_layout == RUN_LAYOUT, (
+        "shared_encoder must not perturb the run action layout's tiling")
+
+    column_spec = ModelSpec("column", arch="entset", hidden=(32,), shared_encoder=True)
+    column_model = checkpoints.make_model(column_spec, run_obs_dim, RUN_N_ACTIONS)
+    assert column_model.actor_encoder is column_model.critic_encoder
+

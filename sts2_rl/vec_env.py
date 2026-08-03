@@ -60,6 +60,12 @@ class EnvSpec:
     enemy_hp_reward: float = 0.0              # combat only
     win_hp_bonus: float = 1.0                 # combat only
     branch_prob: float = 0.0                  # column only: anneal knob
+    # combat only (phase-3 Task 3, R11): a snapshot dataset PATH (never a
+    # live SnapshotDataset -- this whole dataclass must stay picklable, and
+    # a SnapshotDataset carries live Card/Relic instances). Each
+    # SubprocVecEnv worker loads it independently, process-locally, the
+    # first time it builds an env (STS2FullCombatEnv's own lazy-load).
+    start_snapshots: str | None = None
 
 
 def build_env(spec: EnvSpec):
@@ -90,6 +96,7 @@ def build_env(spec: EnvSpec):
         card_obs=spec.card_obs,
         enemy_hp_reward_scale=spec.enemy_hp_reward,
         win_hp_bonus=spec.win_hp_bonus,
+        snapshots=spec.start_snapshots,
     )
 
 
@@ -331,19 +338,34 @@ class SubprocVecEnv:
 
 # ── selection ─────────────────────────────────────────────────────────────
 
-def resolve_n_workers(n_envs: int, requested: int) -> int:
-    """``--n-workers``: 0 = in-process (the default), N = that many processes.
+#: ``resolve_n_workers`` auto mode picks this many workers for
+#: training-scale runs (measured optimum of the arms tried; see docstring).
+AUTO_N_WORKERS = 4
 
-    Workers default OFF because they don't pay for themselves: profiled
-    2026-07-18, env stepping is ~15% of an iteration (act-time inference 46%,
-    PPO update 39%), and 8 workers parallelize it only 1.51× — pipe transport
-    of the 117 KB observation eats the rest. That is ~4% end-to-end, against a
-    3.3s spawn cost and one engine copy per worker. Reach for this when the
-    balance shifts (cheaper inference, or much more expensive envs) — and
-    re-measure rather than assuming.
+#: Auto mode stays serial below this many envs: tiny runs (smoke tests,
+#: probes) would pay the ~3s spawn cost and one engine copy per worker for
+#: seconds of stepping.
+AUTO_WORKER_MIN_ENVS = 16
+
+
+def resolve_n_workers(n_envs: int, requested: int) -> int:
+    """``--n-workers``: -1 = auto (the default), 0 = in-process, N = N procs.
+
+    Workers used to default OFF on the strength of a 2026-07-18 profile
+    (117 KB float observations, env stepping ~15% of an iteration, workers
+    worth ~4% end-to-end). Both inputs died: the integer schema cut the
+    payload to ~9 KB (combat) / ~25 KB (run), and the obs builders were
+    vectorized. Re-measured 2026-08-02 (RTX 3070, cuda, entset, 32 envs,
+    paired seeds 1/2/3, identical win rates across arms): combat 522 -> 818
+    sps with 4 workers (+57%), column 319 -> 453 (+42%); at 8 envs the win
+    shrinks to ~+18%. Auto therefore uses ``AUTO_N_WORKERS`` processes at
+    ``AUTO_WORKER_MIN_ENVS``+ envs and stays serial below that, where spawn
+    cost and per-worker engine copies outweigh seconds of stepping.
     """
+    if requested == -1:
+        requested = AUTO_N_WORKERS if n_envs >= AUTO_WORKER_MIN_ENVS else 0
     if requested < 0:
-        raise ValueError("--n-workers cannot be negative")
+        raise ValueError("--n-workers must be -1 (auto), 0 (serial), or > 0")
     return min(requested, n_envs)
 
 

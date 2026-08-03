@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\underdocks\\living_fog.py",
-    "sha256": "bac03221109e2aab80cf4090ae2ee030caa79bf7536b937033f11324e3efa0e4"
+    "sha256": "5557042291918858f39100f1cc6d99a39e97782f350ae092db2ec45e0340878a"
   },
   "hooks": {
     "MinInitialHp": {
@@ -72,6 +72,12 @@
       "rationale": "LivingFog.cs:78-82 attacks then applies SmoggyPower 1 to `targets`; living_fog.py:80-84 attacks then applies it to ctx.player. Same order, same amount; the targets-vs-player difference is multiplayer-only."
     },
     {
+      "what": "GasBomb's EXPLODE_MOVE is a DeathBlowIntent, and only carried MoveType.DEATH_BLOW",
+      "verdict": "faithful",
+      "issue": "Closed 2026-08-02: living_fog.py:51-52 now constructs `Intent(MoveType.DEATH_BLOW, damage=_EXPLODE_DMG, also=(MoveType.ATTACK,))`. WAS: `also` was empty, so `intent.has(MoveType.ATTACK)` read False for GasBomb's EXPLODE_MOVE. `DeathBlowIntent` (game src\\Core\\MonsterMoves\\Intents\\DeathBlowIntent.cs:10) is a `SingleAttackIntent` (:8 of SingleAttackIntent.cs) which is an `AttackIntent` (:8 of AttackIntent.cs); its own `IntentType` override returns `IntentType.DeathBlow`, not `IntentType.Attack` (DeathBlowIntent.cs:16), but `MonsterModel.IntendsToAttack` (MonsterModel.cs:241-245) explicitly ORs `IntentType.Attack` and `IntentType.DeathBlow` together for gameplay purposes, and that predicate gates `GoForTheEyes.OnPlay`'s Weak application (`src\\Core\\Models\\Cards\\GoForTheEyes.cs:49-52`: `if (cardPlay.Target.Monster.IntendsToAttack) { await PowerCmd.Apply<WeakPower>(...) }`) and its glow-gold targeting hint (`GoForTheEyes.cs:22-27`, `HittableEnemies.Any(e => e.Monster?.IntendsToAttack ?? false)`). It is also a real `AttackIntent` by C# class hierarchy, so `NIntent.cs:135`'s `intent is AttackIntent attackIntent` check renders its damage number like any other attack. Before the fix, playing Go For The Eyes into a GasBomb whose intent is EXPLODE never applied Weak and the observation's attack flag / damage preview for that intent were blank -- silently wrong both for the card's real effect and for the RL observation. Found by an RL task, not by this record's own audit (both were previously verdicted faithful without checking `also=`); see the sibling guard entry that swept for further sites of the same class.",
+      "rationale": "EXECUTED: `test/test_combat_obs_v4.py` gained a real Living Fog encounter test driving GasBomb to EXPLODE_MOVE and asserting the observation's attack flag/damage preview are populated; full suite green at 4399 passed / 6 xfailed / 0 failed after the fix. Confirmed independently by reading `DeathBlowIntent.cs`, `SingleAttackIntent.cs`, `AttackIntent.cs`, `MonsterModel.cs:241-245`, `GoForTheEyes.cs:22-27,49-52` and `NIntent.cs:135` in the game source, and `living_fog.py:38-56` in the sim, on 2026-08-02."
+    },
+    {
       "what": "PROMPT.md bug-class sweep",
       "verdict": "faithful",
       "rationale": "All 29 PROMPT.md bug classes checked against this unit. Class 6: no branch state. Class 10: BloatAmount is the only field and never changes. Class 20 (a hook dispatched from the wrong SITE) is the class this unit's gap is closest to and the reason the spawn was traced through CreatureCmd.Add's ENCLOSING call rather than just read locally - which is how the SortEnemiesBySlotName call at CombatManager.cs:850 was found. Class 21: answered in monster/gas_bomb."
@@ -98,6 +104,36 @@
     {
       "path": "src\\Core\\Combat\\CombatState.cs",
       "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\MonsterModel.cs",
+      "sha256": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Cards\\GoForTheEyes.cs",
+      "sha256": "426aca07edb6612416de2ee38a8e19d3bf3ec01ed1cfa3226648afde5ccce2bb",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\MonsterMoves\\Intents\\DeathBlowIntent.cs",
+      "sha256": "09f5894168ab0cae4943a7dabd752c55aa844aefc613566e2cd837d6cbbbe82a",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\MonsterMoves\\Intents\\SingleAttackIntent.cs",
+      "sha256": "46df819021c729f3bbdc98295360a1b78275b25ae42e304298a54a1330dfdbff",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\MonsterMoves\\Intents\\AttackIntent.cs",
+      "sha256": "4fcc072d4957ee7664c5ec292bf67a809c43846a0481b15cece51d706b905ad0",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Nodes\\Combat\\NIntent.cs",
+      "sha256": "f9742feb21dd7c2395ae12db9ead46b3951de9a45ed87c9869d13a866535a5fb",
       "side": "game"
     },
     {

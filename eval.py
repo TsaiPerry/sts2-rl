@@ -35,8 +35,11 @@ import numpy as np
 from sts2_rl import STS2CombatEnv, STS2FullCombatEnv
 from sts2_rl.full_env import AblatedObsEnv
 from sts2_rl.evaluation import (
+    EVAL_SEEDS,
+    PairedRunDelta,
     RunEvalReport,
     ablation_transform,
+    compare_runs,
     evaluate_probes,
     evaluate_run,
     evaluate_win_rate,
@@ -279,6 +282,58 @@ def evaluate_run_scale(
               + (f"  ({report.truncated} truncated)" if report.truncated else ""))
 
 
+def compare_checkpoints(
+    ckpt_a: str,
+    ckpt_b: str,
+    env_kind: str,
+    n_episodes: int,
+    acts: list[str] | None,
+    sample: bool,
+    device: str,
+) -> None:
+    """``--compare``: paired-seed A/B of two run-scale checkpoints on the
+    SAME ``EVAL_SEEDS`` slice — per-seed floor/win/hp deltas plus the
+    aggregate the CLI table needs (evaluation.compare_runs)."""
+
+    def make_policy(path: str):
+        # A fresh env is only needed to read obs_dim/n_actions for the load
+        # check; compare_runs supplies the env each arm actually plays on.
+        env = make_run_env(env_kind, acts)
+        policy, ckpt = load_torch_policy(
+            path, env_kind=env_kind, env=env, device=device, sample=sample)
+        return policy, ckpt
+
+    # Loaded once per arm and reused for that arm's whole seed sweep — see
+    # compare_runs' docstring: greedy TorchPolicy carries no advancing state,
+    # so a `lambda: policy` factory (not a fresh load per seed) is safe and
+    # avoids reloading the checkpoint 200 times.
+    policy_a, ckpt_a_data = make_policy(ckpt_a)
+    policy_b, ckpt_b_data = make_policy(ckpt_b)
+
+    seeds = EVAL_SEEDS[:n_episodes]
+    delta: PairedRunDelta = compare_runs(
+        lambda: policy_a, lambda: policy_b,
+        seeds=seeds, env_factory=lambda: make_run_env(env_kind, acts))
+
+    name_a = label(ckpt_a, ckpt_a_data)
+    name_b = label(ckpt_b, ckpt_b_data)
+    print(f"\npaired-seed A/B on {len(seeds)} seeds, {env_kind!r} env\n"
+          f"  A = {name_a}\n  B = {name_b}\n")
+    header = f"{'seed':>6} {'floor_a':>7} {'floor_b':>7} {'delta':>6} {'win_a':>6} {'win_b':>6} {'hp_a':>5} {'hp_b':>5}"
+    print(header)
+    print("-" * len(header))
+    for i, s in enumerate(delta.seeds):
+        d = delta.floor_deltas[i]
+        print(f"{s:>6} {delta.floors_a[i]:>7} {delta.floors_b[i]:>7} {d:>+6} "
+              f"{str(delta.wins_a[i]):>6} {str(delta.wins_b[i]):>6} "
+              f"{delta.hp_a[i]:>5} {delta.hp_b[i]:>5}")
+
+    print(f"\nmean floor delta   : {delta.mean_floor_delta:+.2f}")
+    print(f"median floor delta : {delta.median_floor_delta:+.1f}")
+    print(f"win delta (B - A)  : {delta.win_delta:+d}")
+    print(f"better/worse/tie   : {delta.better}/{delta.worse}/{delta.tie}")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("model", nargs="?", default=None,
@@ -303,9 +358,31 @@ if __name__ == "__main__":
                         help="torch checkpoints: sample from the policy instead of "
                              "acting greedily (still deterministic given --seed)")
     parser.add_argument("--device", default="cpu", help="torch checkpoints (default: cpu)")
+    parser.add_argument("--compare", nargs=2, metavar=("CKPT_A", "CKPT_B"), default=None,
+                        help="paired-seed A/B of two run-scale checkpoints on EVAL_SEEDS "
+                             "(--env run/column only); prints per-seed floor/win/hp deltas "
+                             "plus aggregate mean/median delta and better/worse/tie counts. "
+                             "--episodes N uses the first N of EVAL_SEEDS (default: all 200)")
     args = parser.parse_args()
 
-    if args.env in RUN_SCALE:
+    if args.compare is not None:
+        if args.env not in RUN_SCALE:
+            parser.error(f"--compare needs --env run or column (the run-scale envs), got {args.env!r}")
+        if args.model is not None:
+            parser.error("--compare takes two checkpoints of its own; drop the positional model arg")
+        if args.baselines:
+            parser.error("--compare has no baseline row (it's a two-arm A/B, not a report table)")
+        if args.ablated:
+            parser.error("--ablated applies to --env full only")
+        for path in args.compare:
+            if not is_torch_checkpoint(path):
+                parser.error(f"--compare evaluates train_torch.py checkpoints (*.pt), got {path!r}")
+        # EVAL_SEEDS[:n] clips at 200 automatically, so the plain --episodes
+        # default (1000) already means "all of EVAL_SEEDS" with no sentinel
+        # needed.
+        compare_checkpoints(args.compare[0], args.compare[1], args.env, args.episodes,
+                            args.acts, args.sample, args.device)
+    elif args.env in RUN_SCALE:
         if args.model is None and not args.baselines:
             parser.error(f"--env {args.env} needs a model, --baselines, or both")
         if args.model is not None and not is_torch_checkpoint(args.model):

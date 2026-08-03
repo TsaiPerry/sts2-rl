@@ -43,6 +43,17 @@ class ModelSpec:
                                          # the only arch make_model still
                                          # builds against the v4/v7 envs
     hidden: tuple[int, ...] = (256, 256)
+    shared_encoder: bool = False        # R10: entset only -- one shared
+                                         # `_EntsetEncoder` instance for both
+                                         # actor and critic instead of two
+                                         # independent ones. Orthogonal to
+                                         # `arch`/`ENTSET_HEAD_VERSION`: it
+                                         # changes which encoder object gets
+                                         # constructed, not the head
+                                         # structure, so it is stamped and
+                                         # checked as its own field rather
+                                         # than folded into the head-version
+                                         # bump (see check_checkpoint below).
 
 
 def obs_schema_version(spec: ModelSpec) -> int:
@@ -181,8 +192,23 @@ def make_model(spec: ModelSpec, obs_dim: tuple[int, int], n_actions: int):
                 f"segment layout sums to (f={seg_f}, i={seg_i}) but the env "
                 f"emits (f={f_dim}, i={i_dim}); model_obs_layout is out of "
                 f"sync with the env.")
+        # T7 brief (tied action head): the combat env's block gets a pointer
+        # layout over hand/enemies/potion rows; the run-scale envs' embedded
+        # combat block gets the SAME pointer layout (sized to the belt's
+        # true worst case, MAX_POTION_SLOTS) plus positional CHOICE/SELECT/
+        # belt-POTION ranges. Nothing else about this factory's guards
+        # changes.
+        from .models import combat_action_layout, run_action_layout
+
+        if spec.env_kind in RUN_SCALE_ENVS:
+            action_layout = run_action_layout()
+        else:
+            from .full_env import MAX_POTIONS
+
+            action_layout = combat_action_layout(MAX_POTIONS)
         return EntitySetActorCritic(
-            f_segments, i_segments, n_actions, hidden=tuple(spec.hidden))
+            f_segments, i_segments, n_actions, action_layout,
+            hidden=tuple(spec.hidden), shared_encoder=spec.shared_encoder)
     if spec.arch == "entity":
         segments = model_obs_segments(spec)
         seg_dim = sum(w for _, w in segments)
@@ -240,6 +266,49 @@ def check_checkpoint(ckpt: dict, spec: ModelSpec,
             f"checkpoint arch {ckpt_arch!r} != this run's --arch {spec.arch!r}; "
             f"there is no weight migration between architectures — pick the "
             f"matching --arch or start --fresh.")
+    if ckpt_arch == "entset":
+        # T7 (tied action head): the entset head's parameter STRUCTURE
+        # changed in place -- same arch string, same (obs_dim, n_actions,
+        # hidden) triple -- so a stale checkpoint would otherwise sail past
+        # every check above and die inside `load_state_dict` with a raw key
+        # error instead of an honest refusal (this project's recorded rule:
+        # the version gate must catch this, a shape/key mismatch is only the
+        # fallback -- ledger, round-2 gap 3). Checked BEFORE the shape
+        # comparison below so a checkpoint that is ALSO shape-stale still
+        # gets the true reason first. mlp/entity payloads never carry this
+        # key and are refused earlier (arch mismatch or the v4-generation
+        # guard), so this branch never fires for them.
+        from . import models
+
+        ckpt_head_version = ckpt.get("head_version", 1)   # pre-stamp = version 1
+        if ckpt_head_version != models.ENTSET_HEAD_VERSION:
+            raise SystemExit(
+                f"checkpoint head_version {ckpt_head_version} != current "
+                f"{models.ENTSET_HEAD_VERSION}; this checkpoint predates the "
+                f"phase-2 tied action head -- there is no weight migration "
+                f"for it, start training over with --fresh.")
+        # R10: `shared_encoder` changes whether the checkpoint's state_dict
+        # has ONE `actor_encoder.*` key set (critic_encoder shares it) or
+        # TWO independent `actor_encoder.*`/`critic_encoder.*` sets -- a
+        # structural difference `load_state_dict` would otherwise surface as
+        # a cryptic missing/unexpected-key error rather than the honest
+        # refusal this project's checkpoint gate is supposed to give (same
+        # "the version gate must catch this, a shape/key mismatch is only
+        # the fallback" rule as `head_version` above). This is a SEPARATE
+        # stamp, not folded into `ENTSET_HEAD_VERSION` -- the flag is
+        # orthogonal to the tied action head's structure, it only changes
+        # which encoder OBJECT the actor and critic point at. Missing key =
+        # False (pre-R10 checkpoints were all built with two independent
+        # encoders).
+        ckpt_shared_encoder = ckpt.get("shared_encoder", False)
+        if ckpt_shared_encoder != spec.shared_encoder:
+            raise SystemExit(
+                f"checkpoint shared_encoder={ckpt_shared_encoder} != this "
+                f"run's --shared-encoder={spec.shared_encoder}; the actor "
+                f"and critic encoders are structurally different objects "
+                f"between the two arms (one shared instance vs two "
+                f"independent ones) -- there is no weight migration between "
+                f"them, match --shared-encoder or start --fresh.")
     shape = (ckpt.get("obs_dim"), ckpt.get("n_actions"), tuple(ckpt.get("hidden", ())))
     want = (obs_dim, n_actions, tuple(spec.hidden))
     if shape != want:
@@ -262,6 +331,7 @@ def spec_from_checkpoint(ckpt: dict, env_kind: str,
         card_obs=card_obs,
         arch=ckpt.get("arch", "mlp"),
         hidden=tuple(ckpt.get("hidden", ())),
+        shared_encoder=ckpt.get("shared_encoder", False),
     )
 
 

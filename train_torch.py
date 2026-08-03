@@ -38,9 +38,11 @@ the torso in ``models.py``; change the observation in ``full_env.py``. The loop
 only depends on the ``sts2_rl.vec_env`` interface and the model's three
 methods.
 
-Envs step in-process by default; ``--n-workers N`` moves them to N worker
-processes (``sts2_rl.vec_env``), which is currently worth only ~4% — the loop
-stays lockstep-synchronous and produces identical rollouts either way.
+Envs step in ``--n-workers`` processes — the default (-1, auto) uses 4
+workers at training-scale env counts and the in-process serial path for
+small runs (measured 2026-08-02: +57% sps combat / +42% column at 32 envs;
+``sts2_rl.vec_env.resolve_n_workers`` has the numbers). The loop stays
+lockstep-synchronous and produces identical rollouts either way.
 
 Runs on CPU by default. For --arch mlp that is usually the fast choice: a
 256x256 MLP over 8 Python-stepped envs is bottlenecked on env stepping and
@@ -63,7 +65,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from sts2_rl import checkpoints
+from sts2_rl import checkpoints, models
 from sts2_rl.checkpoints import ModelSpec
 from sts2_rl.tensor_obs import TensorObs
 from sts2_rl.vec_env import EnvSpec, make_vec_env, resolve_n_workers
@@ -105,6 +107,18 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--encounter", default=None,
                     help="combat env only: Overgrowth encounter key to fix "
                          "(default: sample the whole act)")
+    ap.add_argument("--start-snapshots", default=None,
+                    help="combat env only: path to a JSONL mid-run "
+                         "start-state dataset (sts2_rl.snapshots), sampled "
+                         "at every reset instead of the synthetic default "
+                         "start (fresh basic deck, no relics, full HP, "
+                         "empty belt). Mutually exclusive with --encounter "
+                         "(the snapshot supplies the encounter too). "
+                         "Recorded in the checkpoint's args on every save; "
+                         "a resume without this flag drops back to "
+                         "synthetic starts, and a resume WITH a different "
+                         "path legitimately swaps datasets -- no refusal "
+                         "logic on mismatch")
     ap.add_argument("--card-obs", choices=["hybrid", "features"], default="hybrid")
     ap.add_argument("--arch", choices=["mlp", "entity", "entset"], default="entset",
                     help="entset (default) = EntitySetActorCritic, the "
@@ -161,11 +175,11 @@ def parse_args() -> argparse.Namespace:
                     help=f"parallel envs (default: {DEFAULT_N_ENVS}). Left as "
                          f"None when unset so a resume keeps the checkpoint's "
                          f"rollout geometry instead of silently reverting it")
-    ap.add_argument("--n-workers", type=int, default=0,
-                    help="processes to step envs in (default 0: in-process). "
-                         "Env stepping is ~15%% of an iteration and workers "
-                         "parallelize it ~1.5x, so this is worth ~4%% today — "
-                         "measure before turning it on. The layout is a "
+    ap.add_argument("--n-workers", type=int, default=-1,
+                    help="processes to step envs in (default -1: auto — 4 "
+                         "workers at 16+ envs, serial below; measured "
+                         "2026-08-02 at +57%%/+42%% sps combat/column at 32 "
+                         "envs). 0 forces in-process. The layout is a "
                          "runtime detail: seeding, rollouts and checkpoints "
                          "are identical at any worker count")
     ap.add_argument("--n-steps", type=int, default=None,
@@ -221,6 +235,13 @@ def parse_args() -> argparse.Namespace:
                          "again reproduces the pre-migration model exactly, "
                          "which isolates whether that segment is what "
                          "destabilised a resume")
+    ap.add_argument("--shared-encoder", action="store_true",
+                    help="--arch entset only: build ONE _EntsetEncoder "
+                         "instance shared by the actor and critic instead "
+                         "of two independent ones (R10 A/B) -- the two "
+                         "trunks/heads stay separate either way. Checkpoints "
+                         "stamp this and refuse a mismatched reload; there "
+                         "is no weight migration between the two arms")
     ap.add_argument("--hidden", type=int, nargs="+", default=[256, 256])
     args = ap.parse_args()
     if args.save is None:
@@ -248,6 +269,12 @@ def parse_args() -> argparse.Namespace:
         args.best_metric = "ep_ret" if args.env == "column" else "win"
     if args.env != "combat" and args.encounter:
         raise SystemExit("--encounter applies to --env combat only.")
+    if args.env != "combat" and args.start_snapshots:
+        raise SystemExit("--start-snapshots applies to --env combat only.")
+    if args.encounter and args.start_snapshots:
+        raise SystemExit(
+            "--encounter and --start-snapshots are mutually exclusive "
+            "(a snapshot supplies the encounter too).")
     if args.env == "combat" and args.acts:
         raise SystemExit("--acts applies to the run-scale envs only.")
     if args.branch_prob and args.env != "column":
@@ -337,6 +364,7 @@ def env_spec(args: argparse.Namespace) -> EnvSpec:
         enemy_hp_reward=args.enemy_hp_reward,
         win_hp_bonus=args.win_hp_bonus,
         branch_prob=args.branch_prob,
+        start_snapshots=getattr(args, "start_snapshots", None),
     )
 
 
@@ -348,6 +376,12 @@ def model_spec(args: argparse.Namespace) -> ModelSpec:
         card_obs=args.card_obs,
         arch=args.arch,
         hidden=tuple(args.hidden),
+        # getattr, not args.shared_encoder: several test fixtures build a
+        # bare argparse.Namespace() by hand without every CLI flag (this
+        # file's own real parse_args() always sets it via the --shared-
+        # encoder store_true default of False, so this only matters off the
+        # real CLI path).
+        shared_encoder=getattr(args, "shared_encoder", False),
     )
 
 
@@ -814,12 +848,21 @@ def checkpoint_payload(agent: nn.Module, optimizer, iteration: int, args,
         "n_actions": agent.n_actions,
         "hidden": agent.hidden,
         "arch": args.arch,
+        "head_version": models.ENTSET_HEAD_VERSION,
+        "shared_encoder": getattr(args, "shared_encoder", False),
         "obs_schema": env_obs_schema(args),
         "env_kind": args.env,
         # Not part of the model — recorded so a resume reproduces the batch
         # that trained these weights, and so the file says which one that was.
         "n_envs": args.n_envs,
         "n_steps": args.n_steps,
+        # Phase-3 Task 3 (R11): which snapshot dataset (if any) trained
+        # these weights. No refusal logic on a mismatched resume — a
+        # resumed run may legitimately swap datasets or drop back to
+        # synthetic starts (getattr: test fixtures may hand a bare
+        # Namespace without every CLI flag, same pattern as shared_encoder
+        # above).
+        "start_snapshots": getattr(args, "start_snapshots", None),
     }
 
 

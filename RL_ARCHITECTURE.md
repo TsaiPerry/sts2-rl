@@ -43,27 +43,36 @@ available energy, and living-enemy targets. End-turn is always legal.
 
 ### Observation
 
-A large flat `Box` in `[0, 1]`, schema v2, built in `_build_obs`. The design
-principle: *the agent sees everything a human sees, with absolute numbers so
-lethal math is computable.* Every HP-like quantity is encoded on a shared dual
-scale (`/100` fine + `/500` coarse via `_abs2`). Segments (mapped by name in
-`obs_segments`):
+A two-leaf `spaces.Dict({"f": float32 Box, "i": int32 Box})` — the
+integer/entity contract of **`OBS_SCHEMA.md`**, which is the normative
+description (padding rule `id == 0`, segment tables, admissibility rule).
+Combat schema 6 (`f` 1677 / `i` 606); the run envs embed the combat block
+under a `combat.` prefix (run schema 9, `f` 4710 / `i` 1464). The design
+principle is unchanged: *the agent sees everything a human sees — and
+nothing a human cannot* (§6's display-path rule), with absolute numbers so
+lethal math is computable. The `damage_matrix` segment stays a H×E float
+grid aligned 1:1 with the play actions.
 
-- **Player vitals** — HP (ratio + absolute), block, energy, strength/dexterity,
-  pile sizes, telegraphed incoming damage, history scalars, and the full
-  `ALL_POWERS` vocabulary (presence + signed amount at two scales).
-- **Hand rows** (one per slot) — card identity one-hot + engineered features
-  (effective energy cost, type/target flags, base/effective damage & block).
-- **Enemy rows** (one per slot) — absolute vitals, 9 intent flags, the intent's
-  attack run through the full damage pipeline via `previews.py`, enemy identity
-  one-hot, power vocabulary.
-- **Damage matrix** — a H×E grid aligned 1:1 with the play actions: the exact
-  modified per-hit damage each card would deal to each enemy.
-- **Potion rows** + **pile histograms** (order-agnostic base/upgraded card
-  counts for the draw / discard / exhaust piles).
+Both halves keep named `(segment, width)` maps (`combat_obs_segments_f/_i`,
+`run_obs_segments_f/_i`); `--zero-segments`, the segment plans in
+`models.py` and the pin tests all address the observation by segment name.
 
-The obs dimension is **measured once** at construction (by building a throwaway
-combat), so the declared space can never drift from `_build_obs`.
+### Start state (R11 — mid-run snapshot distribution)
+
+By default every combat episode starts from the fixed 13-card deck, zero
+relics, full HP and the Act-1 non-boss pool. `STS2FullCombatEnv` also
+accepts the rich start-state kwargs `CombatState` always supported
+(`relics`, `max_hp` / `current_hp`, `deck_cards` with upgrades /
+enchantments / afflictions, a gap-preserving `potion_slots` belt), and —
+the point of the plumbing — `snapshots=`: a dataset of
+`(deck, relics, hp, potions, act, encounter)` snapshots harvested from
+run-env episodes (`sts2_rl/snapshots.py`, JSONL), sampled at every
+`reset()` from a dedicated RNG so the combat stream itself is untouched.
+`harvest.py` produces datasets (masked-random by default, `--checkpoint`
+for a trained policy; watchdog-armed, per-step repro log, no
+timeout-and-continue by design), and `train_torch.py --start-snapshots
+PATH` trains the cheap env on the hard env's state distribution. Datasets
+cross worker boundaries as paths, loaded per-process.
 
 ### Reward
 
@@ -76,26 +85,86 @@ the turn.
 
 ## Layer 2 — `models.py`: the network
 
-`MaskedActorCritic` is a deliberately plain MLP baseline — **separate** actor
-and critic trunks (no shared torso), each a `Tanh` MLP with orthogonal init (the
-standard PPO recipe: `sqrt(2)` gain on hidden layers, `0.01` on the policy head
-for a near-uniform initial policy, `1.0` on the value head).
+The live architecture is **`entset`** (`EntitySetActorCritic`), the only arch
+buildable against the modern Dict observation — `mlp` (`MaskedActorCritic`)
+and `entity` (`EntityActorCritic`) are frozen v3-era baselines that
+`checkpoints.make_model` refuses against combat schema ≥ 4 / run schema ≥ 7
+(a per-`env_kind` *threshold*, so a future bump cannot silently disable the
+refusal).
 
-The key method is `_dist`: it computes action logits, then
+**Encoder** (`_EntsetEncoder`, one instance each for actor and critic): one
+`nn.Embedding(capacity + 1, dim, padding_idx=0)` per vocabulary kind (9
+tables — cards, relics, powers, monsters, potions, events, purposes,
+afflictions, enchantments; rows from `vocab.CAPACITIES`, so porting content
+appends rows instead of reshaping weights). Each `.ids` row block concats
+its embeddings with its paired floats, projects through a shared
+`Linear(row_in, block_dim=32) + tanh`, multiplies by the presence mask
+(id ≠ 0, OR any-float-nonzero — PAD rows become exact zero vectors) and
+sum-pools over rows. `.f`-only segments pass through raw. `encode(obs)`
+returns both the pooled vector and the per-row features
+(`dict[logical_block_name, (cap, block_dim)]`) — the tied head reads the
+rows; the critic reads only the pooled vector.
+
+**Tied action head (phase 2, `ENTSET_HEAD_VERSION = 2`).** The actor trunk
+is a feature MLP (`hidden = (256, 256)`, Tanh, orthogonal init) whose output
+`ctx` feeds per-block heads assembled by an explicit `ActionLayout`
+(`combat_action_layout` / `run_action_layout` — every base offset imported
+live from `full_env` / `run_env`, validated to tile `n_actions` exactly at
+construction):
+
+- **end turn** — `Linear(ctx, 1)`;
+- **play block** — a `PairPointerHead` (`action_heads.py`) scoring every
+  (hand row, enemy row) pair `[src; tgt; proj(ctx); pair] → MLP → logit`,
+  row-major `h*MAX_ENEMIES + e`, exactly the env's action grid. The 7
+  `pair` features (R9) are the `damage_matrix` cell for that exact
+  (card, enemy) pair plus the enemy's incoming-preview floats — the head
+  that picks the action sees the number that decides it;
+- **potion block** — a second, independent `PairPointerHead` over
+  (potion row, enemy row) pairs (no pair features);
+- **run-env SELECT and belt-POTION blocks** — `PointerHead`s over the
+  `select.candidates` / `run.potions` rows (R8), replacing their
+  positional Linears: each option scored from its own content;
+- **run-env CHOICE block** — a positional `Linear(ctx, 16)` base plus
+  additive, presence-gated content overlays (R8): reward-card rows, shop
+  card/relic/potion rows, the shop-removal cost floats and the `map{m}`
+  option floats each score the CHOICE slot they occupy (offsets pinned by
+  a `driver.py` census). A PAD row contributes exactly 0.0, so
+  out-of-phase overlays are inert. EVENT / REST / SELECT_OPTION /
+  REWARD_POTION options carry no content rows in the observation and stay
+  purely positional — by decision, not omission.
+
+`--shared-encoder` (R10, measured and kept) builds ONE encoder serving
+actor and critic; the default stays separate. A/B on paired seeds: +2.4%
+sps, no stability regression at the probe budget.
+
+Because the pair heads read the same mask-multiplied entity rows the
+observation encoder computes, the policy scores *cards*, not hand slots —
+swapping two hand rows provably permutes the corresponding play logits
+(pinned by equivariance tests in `test/test_tied_head_combat.py` /
+`_run.py`, with a positional-baseline sanity test proving the property can
+fail).
+
+The key method is unchanged: `_dist` computes action logits, then
 `masked_fill(~mask, -1e8)` drives illegal actions to ~0 probability *before*
-building the `Categorical`. This guarantees the distribution the agent **acts
-under** and the one the **update scores** are identical — exactly what a
-hand-rolled PPO must get right.
-
-This file is the single swap point: to upgrade to embeddings / attention over
-per-entity tokens, only `models.py` changes.
+building the `Categorical`. This guarantees the distribution the agent
+**acts under** and the one the **update scores** are identical — exactly
+what a hand-rolled PPO must get right. `get_value` / `get_action_and_value`
+keep their signatures, so `train_torch.py` never moved through the phase-2
+restructure.
 
 ---
 
 ## Layer 3 — `train_torch.py`: the PPO loop
 
-A single-file, hand-vectorized PPO over `--n-envs` synchronous envs (default 8).
-Standard CleanRL-style structure:
+A single-file, hand-vectorized PPO over `--n-envs` synchronous envs.
+Envs step through `sts2_rl/vec_env.py` — `--n-workers` defaults to auto:
+4 subprocess workers at 16+ envs, the in-process serial path below that
+(measured 2026-08-02 on the integer schema: +57% sps combat / +42% column
+at 32 envs, worker arms bit-equivalent in training behavior; the old "~4%,
+leave off" verdict died with the 117 KB float payload). An auxiliary
+critic-side win-prediction head (R13) was built, A/B-measured on paired
+seeds, and **deleted on a null result** — the numbers live in the phase-3
+ledger. Standard CleanRL-style structure:
 
 1. **Rollout** — for `n_steps` (512), stack each env's obs + mask, call
    `get_action_and_value` under `no_grad`, step all envs. Buffers are
@@ -114,9 +183,11 @@ Standard CleanRL-style structure:
    (`--ent-coef-final`) can decay linearly across the invocation's iterations;
    a resume restarts either schedule over its own `--timesteps` budget.
 
-Checkpoints stamp `OBS_SCHEMA_VERSION`, and `--resume` refuses to load if the
-schema changed — a guard against silently loading a model against an
-incompatible observation layout.
+Checkpoints stamp `OBS_SCHEMA_VERSION` **and `head_version`
+(`models.ENTSET_HEAD_VERSION`)**; `--resume` refuses a changed schema, and an
+entset checkpoint predating the phase-2 tied head (stored version < 2,
+missing key = 1) is refused with an honest "use `--fresh`" message *before*
+the shape check can produce a confusing fallback error.
 
 ---
 
@@ -144,6 +215,21 @@ or samples from it under a seeded generator. Two evaluators sit on top:
 `evaluate_run` for the run-scale ones, which reports max floor reached, acts
 reached, the death-floor distribution and decisions per episode. Win rate alone
 can't rank two run-scale checkpoints while both sit near zero; floors can.
+
+Two run-scale additions (phase 3):
+
+- **Run micro-probes** (`sts2_rl/run_probes.py`) — fixed scenarios with one
+  clearly-right decision (rest at critical HP, buy the dominant shop
+  removal, take the on-curve reward card), built by pinning a `RunState`
+  through a `_make_run_state` override and scored on the resulting run
+  state, `probes.py`-style. A scripted oracle scores 1.0 and an
+  anti-oracle 0.0 by construction, so the checks are proven to
+  discriminate.
+- **Paired-seed A/B** (`evaluation.compare_runs`, `eval.py --compare A B`)
+  — both checkpoints play the same fixed seed list (`EVAL_SEEDS`), and the
+  report is per-seed deltas plus better/worse/tie counts, not two
+  aggregate means on different seeds — which is how a real regression
+  hides inside run-to-run variance.
 
 ---
 

@@ -331,6 +331,129 @@ def evaluate_run(
     )
 
 
+# ── Paired-seed A/B ──────────────────────────────────────────────────────────
+
+
+EVAL_SEEDS: tuple[int, ...] = tuple(range(1000, 1200))
+"""Canonical fixed seed set for paired-seed A/B comparisons (phase 3 eval
+rider). Any 200 seeds would do; this range just needs to be checked in once
+so two comparisons run on the same seeds without re-deriving them."""
+
+
+@dataclass(frozen=True)
+class PairedRunDelta:
+    """Per-seed outcomes of two policies on the SAME seed list, plus the
+    minimal aggregates a CLI report needs. ``b`` is conventionally "new" /
+    "candidate" and ``a`` is "baseline", so every delta is ``b - a``
+    (positive = B did better)."""
+
+    seeds: tuple[int, ...]
+    floors_a: tuple[int, ...]
+    floors_b: tuple[int, ...]
+    wins_a: tuple[bool, ...]
+    wins_b: tuple[bool, ...]
+    hp_a: tuple[int, ...]
+    hp_b: tuple[int, ...]
+
+    @property
+    def floor_deltas(self) -> tuple[int, ...]:
+        return tuple(b - a for a, b in zip(self.floors_a, self.floors_b))
+
+    @property
+    def hp_deltas(self) -> tuple[int, ...]:
+        return tuple(b - a for a, b in zip(self.hp_a, self.hp_b))
+
+    @property
+    def mean_floor_delta(self) -> float:
+        return float(np.mean(self.floor_deltas)) if self.floor_deltas else 0.0
+
+    @property
+    def median_floor_delta(self) -> float:
+        return float(np.median(self.floor_deltas)) if self.floor_deltas else 0.0
+
+    @property
+    def win_delta(self) -> int:
+        """wins_b - wins_a, aggregate (not per-seed — a win is boolean)."""
+        return sum(self.wins_b) - sum(self.wins_a)
+
+    @property
+    def better(self) -> int:
+        """Seeds where B reached a strictly higher floor than A."""
+        return sum(1 for d in self.floor_deltas if d > 0)
+
+    @property
+    def worse(self) -> int:
+        return sum(1 for d in self.floor_deltas if d < 0)
+
+    @property
+    def tie(self) -> int:
+        return sum(1 for d in self.floor_deltas if d == 0)
+
+
+def compare_runs(
+    policy_a: Callable[[], Policy],
+    policy_b: Callable[[], Policy],
+    *,
+    seeds: Sequence[int] = EVAL_SEEDS,
+    env_factory: Callable[[], Any] | None = None,
+) -> PairedRunDelta:
+    """Paired-seed A/B over the run-scale envs: both arms play the SAME
+    seed list and the per-seed results are diffed.
+
+    ``policy_a``/``policy_b`` are FACTORIES (``() -> Policy``), not policy
+    instances. ``evaluate_run``'s determinism guarantee (inv-D §2,
+    empirically verified) holds for one continuous sweep started from a
+    *freshly constructed* policy — this function evaluates each arm as one
+    such sweep across ``seeds`` (via repeated ``episodes=1`` calls, proven
+    equivalent to a single ``episodes=len(seeds)`` call for a reused
+    env+policy pair). If callers passed the *same policy instance* to both
+    arms, a stateful policy would leak the first arm's RNG state into the
+    second arm's identical-seed run — e.g. ``masked_random_policy``/
+    ``masked_random_run_policy`` close over an RNG that advances every
+    call, so re-using one instance for arm B would silently NOT reproduce
+    arm A's per-seed sequence even under the same seed list. Factories sidestep
+    that: pass ``lambda: masked_random_run_policy(random.Random(7))`` (fresh
+    RNG per arm) or ``lambda: torch_policy(model, seed=7)`` (greedy
+    ``TorchPolicy`` is stateless anyway; ``sample=True`` needs the fresh
+    generator the factory gives it). The regression test below is exactly
+    this contract: the SAME factory passed to both arms (each call producing
+    an independently-seeded, behaviorally-identical policy) must yield zero
+    deltas on every seed.
+
+    ``env_factory`` defaults to a fresh ``STS2RunEnv()`` per arm (one env
+    instance reused across that arm's ``seeds`` via ``reset()``, not
+    recreated per seed — reset() fully reseeds, so this is behaviorally
+    identical to a fresh env per seed but cheaper).
+    """
+    if env_factory is None:
+        from .run_env import STS2RunEnv
+
+        env_factory = STS2RunEnv
+
+    def _sweep(make_policy: Callable[[], Policy]):
+        policy = make_policy()
+        env = env_factory()
+        floors: list[int] = []
+        wins: list[bool] = []
+        hp: list[int] = []
+        for s in seeds:
+            report = evaluate_run(policy, episodes=1, seed=s, env=env)
+            floors.append(report.floors[0])
+            wins.append(report.victories[0])
+            hp.append(report.hp_left[0])
+        return tuple(floors), tuple(wins), tuple(hp)
+
+    floors_a, wins_a, hp_a = _sweep(policy_a)
+    floors_b, wins_b, hp_b = _sweep(policy_b)
+
+    return PairedRunDelta(
+        seeds=tuple(seeds),
+        floors_a=floors_a, floors_b=floors_b,
+        wins_a=wins_a, wins_b=wins_b,
+        hp_a=hp_a, hp_b=hp_b,
+    )
+
+
 # ── Probe accuracy ────────────────────────────────────────────────────────────
 
 

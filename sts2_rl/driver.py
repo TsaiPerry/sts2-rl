@@ -327,6 +327,7 @@ class RunDriver:
         ascension: int = 0,
         include_neow: bool = True,
         include_ancients: bool = True,
+        on_combat_start: "Callable[[RunState, Encounter], None] | None" = None,
     ) -> None:
         self.run = run
         self._ask_fn = ask
@@ -334,6 +335,12 @@ class RunDriver:
         self._ascension = ascension
         self._include_neow = include_neow
         self._include_ancients = include_ancients
+        # Harvest hook (phase 3, R11, locked decision 4): fired in
+        # `_run_combat` immediately after `create_combat`, before the first
+        # decision of that combat is asked. `None` (the default) is a
+        # complete no-op — every existing caller that doesn't pass this
+        # kwarg gets byte-identical behavior.
+        self.on_combat_start = on_combat_start
         self.decisions = 0
         # act name -> the shared ancients allotted to it this run (filled by
         # play() via _roll_shared_ancients, mirroring GenerateRooms).
@@ -498,6 +505,8 @@ class RunDriver:
     def _run_combat(self, encounter: "Encounter", room_type) -> "CombatState":
         run = self.run
         combat = run.create_combat(encounter, room_type=room_type)
+        if self.on_combat_start is not None:
+            self.on_combat_start(run, encounter)
         self._combat = combat
         try:
             while not combat.is_over:

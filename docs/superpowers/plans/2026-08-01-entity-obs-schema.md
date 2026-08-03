@@ -2097,3 +2097,269 @@ floor_state.py`, whose 2 failures are a missing `933T39V18D/floor_49` fixture �
 an environment gap, never counted). Baseline at phase-1 close was 4389.
 
 **Staged, never committed** (CLAUDE.md §4); `HEAD` unchanged at `206c9bd`.
+
+---
+
+# Phase 2 — the tied action head (CORE SHIPPED 2026-08-02)
+
+Plan: `docs/superpowers/plans/2026-08-02-entity-obs-schema-phase2.md`;
+execution ledger `.superpowers/sdd/progress-obs-phase2.md`. Riders R8–R10
+follow separately; this section records the core.
+
+## What the prompt got wrong, established before writing any code
+
+Two read-only investigation lanes corrected the prompt's premises:
+
+- **The "encoder" half of phase 2 already existed.** `_EntsetEncoder` has
+  had embeddings-per-vocab-kind + per-row projections + masked sum-pooling
+  since phase 1. There is **no einsum in the live path** (the prompt's "the
+  current einsum is already the right set operation" points at the frozen
+  `entity` arch's `_SegmentEncoder`, not `entset`). Phase 2's encoder work
+  was one refactor: `encode()` now returns the per-row features alongside
+  the pooled vector, mask-multiplied so PAD rows are exact zero vectors.
+- **There was no tie to "extend".** Every arch scored actions with one
+  positional `nn.Linear(hidden, n_actions)`; the tied head is new
+  architecture, not a formalization.
+- The combat block is **121 actions inside the run envs** (10 belt slots),
+  79 only standalone; untargeted cards fold onto the first living enemy as
+  a canonical dummy target; R4's SELECT block is run-env-only (combat's
+  mid-play selections are scripted, never RL actions).
+
+## Decisions (controller, recorded so they are not re-litigated)
+
+1. **`entset` evolved in place — no fourth arch string.** Nothing has been
+   trained for real, so the retrain is already owed; a new arch string
+   would only duplicate guard/test surface. Honest refusal of stale scratch
+   checkpoints comes from `ENTSET_HEAD_VERSION = 2` (`models.py`), stamped
+   into payloads by `checkpoint_payload` and checked by `check_checkpoint`
+   BEFORE the shape fallback (missing key = 1 = the positional-head era),
+   with the "--fresh" message. Same honesty rule as round-2 gap 3.
+2. **Core ties the combat block only** — end-turn scalar head, play pairs
+   (hand × enemies), potion pairs (belt × enemies, a SECOND independent
+   `PairPointerHead`) — in both envs (the run env's `combat.*` rows strip
+   to the same logical keys). CHOICE(16)/SELECT(96)/belt-POTION(10) remain
+   positional `Linear(ctx, width)` until R8.
+3. **Untargeted cards keep the fold-to-first-living-enemy convention**; the
+   pair head sees the folded enemy row and the card features carry target
+   type. No learned null-target vector. Revisit only if R9's pair features
+   make the dummy target actively misleading.
+4. **Exposed rows are mask-multiplied** — PAD row = zero vector, which is
+   also what makes the equivariance tests exact.
+5. **`action_layout` is a REQUIRED constructor argument** — a positional
+   fallback default is the same defect class as round-2 gap 4 (a safety
+   behavior that lapses silently).
+6. **Critic untouched** (own encoder, pooled → value). Sharing is R10's
+   measured question.
+
+## What shipped
+
+- `models.py`: `_EntsetEncoder.encode()` (pooled bit-identical to the old
+  forward — pinned by `torch.equal` test); `ActionLayout` +
+  `_validate_action_layout` (tiling asserted at construction: 1+60+18=79
+  combat, 121+16+96+10=243 run; block names checked against the segment
+  plan at construction, not first forward); tied head assembly;
+  `combat_action_layout`/`run_action_layout` (all offsets imported live
+  from `full_env`/`run_env`, never re-declared).
+- `action_heads.py` (new): `PairPointerHead` — `[src; tgt; tanh(proj(ctx));
+  pair?] → 64-MLP → logit`, row-major `src*T + tgt` matching
+  `decode_combat_action`.
+- `checkpoints.py`: `make_model` threads the right layout per `env_kind`;
+  head_version refusal.
+- Tests (+31 net): `test_entset_rows.py`, `test_action_heads.py`,
+  `test_tied_head_combat.py` (incl. hand-swap and enemy-swap equivariance —
+  the enemy swap permutes `enemies.*`, per-slot `enemy{e}.powers.*`,
+  `enemy{e}.intent_history.f` AND the damage-matrix columns — plus a
+  positional-baseline sanity test proving the property CAN fail, and a
+  batched no-crosstalk test), `test_tied_head_run.py` (combat-phase
+  hand-swap on a run obs leaves CHOICE/SELECT/belt logits unchanged),
+  head_version guard tests, and `test_train_smoke.py` driving the REAL
+  `train_torch.main()` (combat + run, ~4.5 s total, gradient assertions on
+  every head + an embedding table, mutation-checked).
+
+## The defects the process caught this round
+
+- **Zero-init bias made the PAD-zero test a tautology** (Task 1 lane):
+  `_layer_init` zeroes biases, so an absent row projects to zero regardless
+  of masking. The test forces a nonzero bias first; the unmasked-rows
+  mutant now fails it. The generic lesson: an invariant test can pass for a
+  reason unrelated to the invariant — mutation-check at a NON-DEFAULT point
+  in parameter space.
+- **A tautological version-guard test draft** (Task 5 lane, self-caught):
+  asserting `payload.head_version == models.ENTSET_HEAD_VERSION` with both
+  sides read live passes under any mutation; the shipped test hardcodes the
+  literal `2`.
+- **Mutation (b) — potion logits routed through the play head — was
+  initially undetected by every test** (Task 3+4 lane): the equivariance
+  suite never cross-compares play and potion outputs. A construction-time
+  assertion (separate instances, differing params) now pins it.
+- The PPO smoke test needed the combat belt SEEDED (`potions=` kwarg via
+  monkeypatch): a fresh combat env has an empty belt, so the potion block
+  is permanently masked and its gradient assertion unwinnable — an
+  empty-belt default that would otherwise have let the potion head ship
+  untested forever.
+
+## PPO contract — untouched, verified
+
+`get_value(obs) -> (batch,)`, `get_action_and_value(obs, mask, action=None)
+-> (action, logp, entropy, value)`, `_MASK_FILL` after the trunk,
+`obs_dim`/`n_actions`/`hidden` attributes — `train_torch.py` unmodified
+except `checkpoint_payload` gaining `head_version`. Observation schemas
+unchanged (combat 6, run 9); no bump needed — this was a pure model-side
+change, exactly as the phase-2-is-free argument predicted.
+
+## Suite trajectory (controller-measured after every wave)
+
+4399 → 4411 (wave 1: encoder rows + PairPointerHead) → 4419 (tied head both
+envs) → **4427** (head_version guard + PPO smoke + batched no-crosstalk).
+0 failures at every gate.
+
+**Staged, never committed**; `HEAD` unchanged at `206c9bd`.
+
+## Riders R8–R10 (SHIPPED later the same day)
+
+**R8 — content scoring for run decisions** (`ENTSET_HEAD_VERSION` 2 → 3).
+Entry-gated on a read-only `driver.py` census that pinned the CHOICE-slot ↔
+observation-row mapping (scratchpad report `r8-choice-mapping.md`; the
+load-bearing fact: SHOP options are 0-6 cards / 7-9 relics / 10-12 potions /
+13 removal / 14 leave, and sold-out slots stay in place as PAD rows — the
+mapping is positionally stable). What shipped: `PointerHead` +
+`FloatPointerHead` (`action_heads.py`), both presence-gated so a PAD row
+contributes EXACTLY 0.0 (gating computed on the raw input before any bias
+can leak); SELECT(96) and belt-POTION(10) blocks REPLACED by pointer heads
+over `select.candidates` / `run.potions` rows; CHOICE(16) keeps its
+positional Linear plus ADDITIVE overlays — reward.cards rows → slots 0-2,
+shop rows → 0-12, shop.removal floats → 13, map{0..6} floats → 0-6.
+**EVENT / REST / SELECT_OPTION / REWARD_POTION stay positional by
+decision** — the census confirmed they have no per-option content rows, and
+the project prompt's own R8 list omits them. The shared-offset overlays
+(reward/shop/map all start at slot 0) lean on the DecisionKind-exclusivity
+invariant (exactly one kind's rows are non-PAD per decision) — documented
+in `run_action_layout`'s docstring, not statically provable.
+
+**R9 — pair features in the play head** (`ENTSET_HEAD_VERSION` 3 → 4).
+`pair_dim = 7`: the `damage_matrix` segment reshaped `(10, 6, 1)` — the
+number that decides the play, now visible to the head that picks it — plus
+each enemy's incoming-preview floats (`enemies.f[18:24]`) broadcast across
+the hand axis. Segments are named in
+`ActionLayout.play_pair_feature_segments` (so the run env resolves the
+`combat.`-prefixed names without model-body string games). The richer
+per-pair `(per_hit, hits, total, post_block)` tuple does NOT exist at pair
+granularity and was deliberately not built. Two honest test adjustments,
+both reviewer-validated: the equivariance atol widened 1e-5 → 5e-4 because
+`damage_matrix` was ALREADY a raw ctx feature pre-R9 (measured residual
+~2e-5, >20× margin), and the axis-confusion mutant class is additionally
+shape-fatal because the play grid is non-square (10 × 6).
+
+**R10 — shared encoder, measured and KEPT.** `--shared-encoder` builds one
+`_EntsetEncoder` serving actor and critic (separate trunks stay); stamped
+into checkpoints and refused on mismatch (same honest-refusal pattern as
+`head_version`; no version bump — the flag is orthogonal and stamped
+separately). Within-stack A/B, both arms identical but for the flag
+(combat env, cuda, 8 envs × 128 steps × 16 384 timesteps, paired seeds
+1/2/3):
+
+```
+separate: sps 318/330/321 (mean 323)   win 0.94-0.97   ep_ret 1.10-1.18
+shared:   sps 328/336/328 (mean 331)   win 0.96-0.98   ep_ret 1.09-1.16
+```
+
+Shared won throughput on all three paired seeds (+2.4% mean) with no
+stability regression at that budget, so the flag stays; the default remains
+separate. The win is small because the encoder is not the dominant cost at
+this batch size — recorded as measured, not oversold. (Also incidental but
+worth keeping: the probe runs reach ~0.95 win rate on the default combat
+distribution in 16k steps — the tied head demonstrably trains.)
+
+Suite: 4427 → **4444** (R8) → **4449** (R9) → **4455** (R10 arm). 0
+failures at every gate. Execution detail, per-task review verdicts, the
+minor-findings roll-up and one recorded process breach (Task 10's lane
+mutation-tested by editing tracked files and restoring — outcome verified
+byte-clean, method against the rules) live in
+`.superpowers/sdd/progress-obs-phase2.md`.
+
+**Staged, never committed**; `HEAD` unchanged at `206c9bd`.
+
+## Phase 3 — training/curriculum riders (SHIPPED 2026-08-02, same day)
+
+Plan: `2026-08-02-entity-obs-schema-phase3.md`; execution ledger:
+`.superpowers/sdd/progress-obs-phase3.md`. Baseline re-verified 4455/6/0
+on the new HEAD `2dc0445` (Perry committed the pre-phase-2 batch; phase-2
+work stayed staged on top). No schema, layout or head-version change
+anywhere in phase 3.
+
+**R11 — mid-run start-state distribution (Tasks 1–5).**
+`STS2FullCombatEnv` gained the pass-through `CombatState` always had
+(`relics`, `max_hp`/`current_hp`, instance-fidelity `deck_cards`,
+gap-preserving `potion_slots`) — the combat env had been running zero-relic
+episodes despite R1's obs rows. `sts2_rl/snapshots.py` defines the JSONL
+snapshot contract (cards as id+upgraded+enchantment+affliction(+amount),
+relics as id+counter — flag-state loss for ~20 flag relics is a pinned,
+test-documented limitation — slotted belts, encounter id, provenance) and
+an all-acts `encounter_registry`. `RunDriver.on_combat_start` +
+`harvest.py` (watchdog-armed, per-step repro log, dies loudly on a hang —
+never truncate-and-continue) harvest run-env combats;
+`--start-snapshots PATH` trains combat on the harvested distribution,
+sampled from a dedicated RNG (combat stream untouched; datasets cross
+worker boundaries as paths). Initial dataset: 400 masked-random episodes →
+1237 snapshots (hp 3–91, decks 8–18, 37 encounters, 255 upgraded cards;
+all act 0 — regenerate with `--checkpoint` once one exists). The R12 smoke
+caught a real R11 defect after per-task review had passed: the registry
+was missing event-spawned encounters (`dense_vegetation_event`); fixed +
+completeness-tested against `events.__all__` (the first completeness test
+was itself tautological — caught by the reviewer fabricating an export),
+all 1237 snapshots rebuild.
+
+**R12 — workers re-measured (Task 9).** Investigation refuted the spec's
+premise: `SubprocVecEnv`/`--n-workers` already shipped, off by default on
+a 2026-07-18 profile (117 KB payload, "~4%"). Re-measured on the integer
+schema (cuda, 32 envs, paired seeds 1/2/3, win rates identical across
+arms):
+
+```
+combat 32e: w0 522  w2 688 (+32%)  w4 818 (+57%)
+column 32e: w0 319  w2 398 (+25%)  w4 453 (+42%)
+8e context: combat +18%, column +17% (w4)
+```
+
+Decision gate met on both env kinds, all seeds → `--n-workers` now
+defaults to auto (4 workers at 16+ envs, serial below so smoke tests and
+probes stay in-process); the stale docstring math was replaced with these
+numbers.
+
+**R13 — aux win head: built, measured, deleted (Tasks 8+10).** Flag-gated
+critic-trunk BCE win-prediction head (backward-filled labels, truncation
+masked, empty-mask guard), byte-identical off-path, honest checkpoint
+refusal. Paired-seed A/B vs the R12 w0 arms (identical config, one
+variable): combat final win off 0.93/0.92/0.95 vs on 0.92/0.89/0.88 —
+off wins 3/3; column ep_ret on +0.07/+0.02/+0.49 — inside seed variance.
+Null result → **code deleted per the spec's own instruction**, numbers
+recorded here and in the phase-3 ledger. (One review loop mattered: the
+lane had hung the head off the pooled encoder output claiming byte-identity
+forced it; the reviewer proved `self.critic[:-1]` slicing reaches the
+literal spec.)
+
+**Evaluation rider (Tasks 6–7).** `run_probes.py`: three
+dominant-option run scenarios (rest-at-critical-HP, shop-removal,
+on-curve reward card) via `_make_run_state` overrides, oracle 1.0 /
+anti-oracle 0.0 gates (a shop-probe check that read true mid-purchase was
+caught in review — the oracle gate had been a false positive there).
+`evaluation.compare_runs` + `eval.py --compare`: fixed `EVAL_SEEDS`
+(1000–1199), per-seed floor/win/hp deltas, better/worse/tie counts,
+policy factories per arm so RNG state can't leak across arms.
+
+Suite: 4455 → **4496** (W1: Tasks 1/2/6/7) → **4515** (W2: 3/4) →
+**4526** (W3: 8) → **4518** (W4: R13 removal −11, auto-worker +2,
+registry +2). 0 failures at every gate. Fix loops: Task 2 (lossy-relic
+pin + completeness assertion, then event encounters ×2), Task 6 (shop
+oracle gate), Task 8 (critic-trunk placement + empty-mask test). All
+staged, never committed.
+
+Final whole-branch review (strongest model, own suite run 4518/6/0):
+one Important — snapshot/kwarg potion belts wider than 3 slots silently
+truncated at rebuild (`max_potions` never passed; 53/1237 dataset
+snapshots had 4-5 slots, none yet with a potion in slot 3+) — fixed
+(pass-through both branches; slots 3+ are visible-but-unactionable by
+design since the action space stays keyed on MAX_POTIONS=3), reviewer
+re-verified live, verdict READY. Four minors deferred with rationale in
+the phase-3 ledger. Final suite: **4521 passed / 6 xfailed / 0 failed**.
+Staged, never committed.

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\underdocks\\waterfall_giant.py",
-    "sha256": "7a56cdc2b7100662f13350de2c6f3738989bb9b2501903c2a72ebebaf81de08c"
+    "sha256": "e6c5e252de92b5f178b27d139625e4dd93cadfd19aac5ab25c9756c0cffad237"
   },
   "hooks": {
     "MinInitialHp": {
@@ -102,6 +102,12 @@
       "rationale": "Presentation only (SHARED-FINDINGS section 4; monster_state_machine N2/N5). The sim models no audio, animation, spine skins, asset preloading or Bestiary, so there is nothing mechanical to port. IncrementBuildUpAnimationTrack (WaterfallGiant.cs:315-329) is wholly inside `if (TestMode.IsOff)` and its whole body is a music parameter, an SFX parameter and a SpineAnimation track. PROMPT.md class 18 was applied: the shipping arm is the IsOff one (TestMode.TurnOnInternal has no caller), so the counter does advance in a real run -- but its only readers are ShouldFadeAfterDeath (:157) and the animation track, both presentation. Nothing mechanical depends on it, which is why the sim carries no counterpart."
     },
     {
+      "what": "EXPLODE_MOVE's DeathBlowIntent only carried MoveType.DEATH_BLOW",
+      "verdict": "faithful",
+      "issue": "Closed 2026-08-02: waterfall_giant.py:85-87 now constructs `lambda: Intent(MoveType.DEATH_BLOW, damage=self._steam_eruption_dmg, also=(MoveType.ATTACK,))`. WAS: `also` was empty. Same class as `monster/living_fog`'s sibling guard: `DeathBlowIntent` (game src\\Core\\MonsterMoves\\Intents\\DeathBlowIntent.cs:10) is a `SingleAttackIntent` : `AttackIntent`, but its `IntentType` override is `IntentType.DeathBlow` (:16), not `.Attack`; `MonsterModel.IntendsToAttack` (MonsterModel.cs:241-245) explicitly ORs the two IntentTypes together, and that predicate gates `GoForTheEyes.OnPlay`'s Weak application and glow-gold targeting hint (GoForTheEyes.cs:22-27,49-52). `NIntent.cs:135`'s `intent is AttackIntent` check also renders EXPLODE_MOVE's damage number like any other attack, by C# class hierarchy rather than the enum. Before the fix, Go For The Eyes into an about-to-EXPLODE giant never applied Weak, and the observation's attack flag / damage preview for EXPLODE_MOVE were blank. Found by an RL task, not by this record's original audit (which verdicted GenerateMoveStateMachine faithful without checking `also=` against `MonsterModel.IntendsToAttack`).",
+      "rationale": "EXECUTED: `test/test_combat_obs_v4.py` gained a real Waterfall Giant encounter test driving it to EXPLODE_MOVE and asserting the observation's attack flag/damage preview are populated; full suite green at 4399 passed / 6 xfailed / 0 failed after the fix. Confirmed independently by reading `DeathBlowIntent.cs`, `SingleAttackIntent.cs`, `AttackIntent.cs`, `MonsterModel.cs:241-245`, `GoForTheEyes.cs:22-27,49-52` and `NIntent.cs:135` in the game source, and `waterfall_giant.py:73-88` in the sim, on 2026-08-02. **Sweep for further sites of the same class, EXECUTED 2026-08-02**: `grep -rn \"DeathBlow\" --include=*.cs` over the whole game source finds exactly two `new DeathBlowIntent(` call sites in the entire game -- `src\\Core\\Models\\Monsters\\GasBomb.cs:62` and `src\\Core\\Models\\Monsters\\WaterfallGiant.cs:204` -- matching the sim's exactly two `Intent(MoveType.DEATH_BLOW, ...)` sites (`grep -rn \"MoveType.DEATH_BLOW\" sts2_rl/monsters`: living_fog.py and waterfall_giant.py only), both now fixed. Widened further: `grep -rn \"IntentType\\.\" --include=*.cs src` excluding the Intents directory's own class declarations returns exactly one hit in the whole game -- `MonsterModel.cs:244`'s `IntendsToAttack` -- so `IntendsToAttack` is the ONLY predicate anywhere in the game that composes two distinct `IntentType` enum values; there is no second OR-of-intent-types predicate to miss. Separately, `grep -n \"class .*Intent\"` over `src\\Core\\MonsterMoves\\Intents\\` shows `DeathBlowIntent : SingleAttackIntent : AttackIntent` is the ONLY intent subclass in the game that inherits through another concrete intent type rather than descending directly from `AbstractIntent` (`MultiAttackIntent`/`SingleAttackIntent` also extend `AttackIntent`, but their own `IntentType` is already `.Attack`, so the sim's plain `MoveType.ATTACK` already covers them with no `also=` needed) -- confirmed via `grep -rn \"is AttackIntent\\|is StatusIntent\" --include=*.cs src`, which finds only `NIntent.cs:135`'s single dual check. Conclusion: DeathBlow was not one instance of a wider undetected class -- it IS the whole class, both of its two instances are now fixed, and there is no third `also=`-composition predicate in the game for anything else in `sts2_rl/monsters/**` to have missed. Found none, not merely did-not-look."
+    },
+    {
       "what": "no RandomBranchState -- AddBranch bug class not applicable",
       "verdict": "faithful",
       "rationale": "Executed (monster_probes_b04.py branches): waterfall_giant builds no RandomBranchState on either side. Checked against the AddBranch overload table (monster_state_machine step 13): no overload takes a weight as an int, so a positional transliteration can convert a repeat limit into a weight (seam G1's bug class)."
@@ -134,6 +140,46 @@
       "path": "src\\Core\\Models\\Powers\\DoomPower.cs",
       "sha256": "5daf80a135d0c8001bb20c9827e7430f87c10908c24879730d7623bdc189e312",
       "side": "game"
+    },
+    {
+      "path": "src\\Core\\Entities\\Creatures\\Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Cards\\GoForTheEyes.cs",
+      "sha256": "426aca07edb6612416de2ee38a8e19d3bf3ec01ed1cfa3226648afde5ccce2bb",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Monsters\\GasBomb.cs",
+      "sha256": "00513f0c88b5bbc866fd68fdc481aa49bbd018be2e8e9edc638f891d9041be0d",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\MonsterMoves\\Intents\\DeathBlowIntent.cs",
+      "sha256": "09f5894168ab0cae4943a7dabd752c55aa844aefc613566e2cd837d6cbbbe82a",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\MonsterMoves\\Intents\\SingleAttackIntent.cs",
+      "sha256": "46df819021c729f3bbdc98295360a1b78275b25ae42e304298a54a1330dfdbff",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\MonsterMoves\\Intents\\AttackIntent.cs",
+      "sha256": "4fcc072d4957ee7664c5ec292bf67a809c43846a0481b15cece51d706b905ad0",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Nodes\\Combat\\NIntent.cs",
+      "sha256": "f9742feb21dd7c2395ae12db9ead46b3951de9a45ed87c9869d13a866535a5fb",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\monsters\\underdocks\\living_fog.py",
+      "sha256": "5557042291918858f39100f1cc6d99a39e97782f350ae092db2ec45e0340878a",
+      "side": "sim"
     },
     {
       "path": "sts2_rl\\powers.py",
