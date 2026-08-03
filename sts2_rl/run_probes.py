@@ -161,6 +161,15 @@ def _rested_and_healed(env: STS2RunEnv) -> bool:
 # MerchantCardRemovalEntry.BASE_COST — the first-visit removal price
 # (75 + 25 * removals_used, removals_used == 0 on a fresh run).
 SHOP_REMOVAL_GOLD = 75
+# A cheap, deliberately-wrong purchase left affordable at all_entries[0] (the
+# first `card_entries` slot — always index 0, strictly below the removal's
+# index: MerchantInventory.all_entries appends card_removal_entry LAST, so
+# the removal is never the lowest-indexed legal action here). Priced so
+# SHOP_TRAP_GOLD + SHOP_REMOVAL_GOLD > SHOP_REMOVAL_GOLD's own gold budget —
+# buying the trap first permanently prices the removal out, defeating a
+# lowest-legal-index (argmin) policy without making the probe unsolvable for
+# a policy that reads the screen (the oracle skips straight to the removal).
+SHOP_TRAP_GOLD = 40
 
 
 def _build_shop_removal() -> _RunProbeEnv:
@@ -175,15 +184,26 @@ def _build_shop_removal() -> _RunProbeEnv:
         f"run_probes: expected a SHOP decision, got {request!r}"
     )
     inventory = request.shop
-    # Scenario engineering, not gameplay: price every non-removal slot out of
-    # reach so the removal is the only stocked-and-affordable entry —
-    # mirrors probes.py's direct post-reset CombatState mutation, applied to
-    # the shop object build() already reached instead of re-plumbing
-    # MerchantInventory generation. The removal's own cost is left exactly
-    # as the source computes it (no jitter on card removal — shop.py's own
-    # docstring: "Cost climbs 75 + 25 x removals used").
-    for entry in [*inventory.card_entries, *inventory.relic_entries, *inventory.potion_entries]:
+    removal = inventory.card_removal_entry
+    trap = inventory.card_entries[0]
+    assert inventory.all_entries[-1] is removal, (
+        "run_probes: expected the removal entry last in all_entries"
+    )
+    assert inventory.all_entries[0] is trap, (
+        "run_probes: expected a card entry first in all_entries"
+    )
+    # Scenario engineering, not gameplay: price every slot but the trap and
+    # the removal out of reach — mirrors probes.py's direct post-reset
+    # CombatState mutation, applied to the shop object build() already
+    # reached instead of re-plumbing MerchantInventory generation. The
+    # removal's own cost is left exactly as the source computes it (no
+    # jitter on card removal — shop.py's own docstring: "Cost climbs 75 +
+    # 25 x removals used").
+    for entry in inventory.all_entries:
+        if entry is removal:
+            continue
         entry._cost = 10 ** 9
+    trap._cost = SHOP_TRAP_GOLD
     return env
 
 
@@ -195,15 +215,34 @@ def _removal_bought(env: STS2RunEnv) -> bool:
     # run to be back at the SHOP decision — i.e. the purchase fully resolved
     # — without adding kind-tracking to the shared `run_run_probe` runner
     # (see module docstring on why that stays out of the runner itself).
+    #
+    # `gold == 0` additionally proves the trap (SHOP_TRAP_GOLD, legal at a
+    # LOWER action index than the removal) was never bought: the run starts
+    # with exactly SHOP_REMOVAL_GOLD gold, so the only way to reach 0 is
+    # spending it all on the removal in one purchase — buying the trap first
+    # (leaving SHOP_REMOVAL_GOLD - SHOP_TRAP_GOLD, too little for the
+    # removal) can never also reach card_shop_removals_used >= 1, but this
+    # makes the "gold spent only on the removal" requirement explicit rather
+    # than relying on that arithmetic coincidence alone.
     request = getattr(env, "_request", None)
     at_shop = request is not None and request.kind == DecisionKind.SHOP
-    return at_shop and env._run.card_shop_removals_used >= 1
+    return (
+        at_shop
+        and env._run.card_shop_removals_used >= 1
+        and env._run.gold == 0
+    )
 
 
 # ── Probe (c): card reward, one on-curve pick vs traps ─────────────────────
 
 REWARD_ON_CURVE_ID = "iron_wave"
 REWARD_TRAP_IDS = ("clash", "bloodletting")
+# Offer order == action index order (CombatRewards.cards is a plain list
+# view onto CardRewardGroup.cards, own_actions() is range(n+1) over it — no
+# shuffle anywhere in between; verified empirically, see the report), so
+# pinning `iron_wave` in the MIDDLE of this tuple keeps its correct action
+# index (1) away from both extremes a constant-index policy could exploit.
+REWARD_OFFER_IDS = (REWARD_TRAP_IDS[0], REWARD_ON_CURVE_ID, REWARD_TRAP_IDS[1])
 
 
 def _build_card_reward() -> _RunProbeEnv:
@@ -213,7 +252,7 @@ def _build_card_reward() -> _RunProbeEnv:
         run_kwargs=dict(
             hp=REST_MAX_HP - 10,
             max_hp=REST_MAX_HP,
-            reward_card_ids=(REWARD_ON_CURVE_ID, *REWARD_TRAP_IDS),
+            reward_card_ids=REWARD_OFFER_IDS,
         ),
     )
     env.reset(seed=0)
@@ -228,6 +267,10 @@ def _build_card_reward() -> _RunProbeEnv:
     request = env._request
     assert request is not None and request.kind == DecisionKind.REWARD_CARD, (
         f"run_probes: expected a REWARD_CARD decision, got {request!r}"
+    )
+    ids = [c.id for c in request.rewards.cards]
+    assert ids == list(REWARD_OFFER_IDS), (
+        f"run_probes: expected the reward offer in tuple order, got {ids!r}"
     )
     return env
 
@@ -258,15 +301,19 @@ RUN_PROBES: tuple[RunProbe, ...] = (
     ),
     RunProbe(
         "shop_removal_dominant",
-        "Exactly 75 gold at a shop where every other slot is priced out: "
-        "buy the removal — it is the only stocked, affordable purchase.",
+        "Exactly 75 gold at a shop where a cheap (40g) card is affordable at "
+        "a LOWER action index than the removal and every other slot is "
+        "priced out: buy the removal, not the cheap card — the two together "
+        "cost more than the 75g on hand, so grabbing the cheap card first "
+        "permanently prices the removal out.",
         _build_shop_removal,
         _removal_bought,
     ),
     RunProbe(
         "card_reward_on_curve",
-        "A pinned 3-card reward (iron_wave vs clash/bloodletting): take the "
-        "on-curve pick, not a trap.",
+        "A pinned 3-card reward with the on-curve pick in the MIDDLE slot "
+        "(clash, iron_wave, bloodletting): take iron_wave, not a trap at "
+        "either end.",
         _build_card_reward,
         _on_curve_card_added,
     ),

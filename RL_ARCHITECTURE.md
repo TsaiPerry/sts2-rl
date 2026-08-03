@@ -105,7 +105,7 @@ returns both the pooled vector and the per-row features
 (`dict[logical_block_name, (cap, block_dim)]`) — the tied head reads the
 rows; the critic reads only the pooled vector.
 
-**Tied action head (phase 2, `ENTSET_HEAD_VERSION = 2`).** The actor trunk
+**Tied action head (phase 2, `ENTSET_HEAD_VERSION = 4`).** The actor trunk
 is a feature MLP (`hidden = (256, 256)`, Tanh, orthogonal init) whose output
 `ctx` feeds per-block heads assembled by an explicit `ActionLayout`
 (`combat_action_layout` / `run_action_layout` — every base offset imported
@@ -185,9 +185,10 @@ ledger. Standard CleanRL-style structure:
 
 Checkpoints stamp `OBS_SCHEMA_VERSION` **and `head_version`
 (`models.ENTSET_HEAD_VERSION`)**; `--resume` refuses a changed schema, and an
-entset checkpoint predating the phase-2 tied head (stored version < 2,
-missing key = 1) is refused with an honest "use `--fresh`" message *before*
-the shape check can produce a confusing fallback error.
+entset checkpoint whose stored version differs from the current constant
+(`!=`, not a floor — a missing key reads as version 1) is refused with an
+honest "use `--fresh`" message *before* the shape check can produce a
+confusing fallback error.
 
 ---
 

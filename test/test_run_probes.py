@@ -18,7 +18,10 @@ from sts2_rl.run_env import CHOICE_BASE, SELECT_BASE
 from sts2_rl.run_probes import (
     RUN_PROBES,
     REWARD_ON_CURVE_ID,
+    REWARD_OFFER_IDS,
     REWARD_TRAP_IDS,
+    SHOP_REMOVAL_GOLD,
+    SHOP_TRAP_GOLD,
     run_probe_accuracy,
     run_run_probe,
     run_run_probes,
@@ -156,3 +159,71 @@ def test_run_probes_and_accuracy_agree():
     results = run_run_probes(_scripted_oracle)
     assert results == [True] * len(RUN_PROBES)
     assert run_probe_accuracy(_scripted_oracle, RUN_PROBES) == 1.0
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Premise checks: the ordering claims the scenario design leans on
+# (offer order == action index order; the shop's card-removal entry is NOT
+# the lowest-indexed legal purchase) are asserted at build() time already
+# (see run_probes.py), but pinned here too as an explicit, named premise —
+# not something a probe redesign should silently stop guaranteeing.
+# ═════════════════════════════════════════════════════════════════════════
+
+
+def test_reward_offer_order_is_tuple_order_with_on_curve_in_the_middle():
+    probe = next(p for p in RUN_PROBES if p.id == "card_reward_on_curve")
+    env = probe.build()
+    ids = [c.id for c in env._request.rewards.cards]
+    assert ids == list(REWARD_OFFER_IDS)
+    assert ids.index(REWARD_ON_CURVE_ID) not in (0, len(ids) - 1), (
+        "on-curve pick must sit away from both index extremes"
+    )
+
+
+def test_shop_removal_is_not_the_lowest_legal_index():
+    probe = next(p for p in RUN_PROBES if p.id == "shop_removal_dominant")
+    env = probe.build()
+    request = env._request
+    entries = request.shop.all_entries
+    removal_idx = entries.index(request.shop.card_removal_entry)
+    legal = request.own_actions()
+    assert len(legal) >= 2, "expected the trap plus the removal to both be legal"
+    assert min(legal) != removal_idx, "removal must not be the lowest legal index"
+    assert max(legal) != removal_idx, "removal must not be the highest legal index"
+    # The affordability math the scenario leans on: one gold budget, can't
+    # cover both the trap and the removal.
+    assert SHOP_TRAP_GOLD + SHOP_REMOVAL_GOLD > SHOP_REMOVAL_GOLD > SHOP_TRAP_GOLD
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Anti-index-bias gate: neither "always pick the lowest legal action" nor
+# "always pick the highest legal action" may ace the suite (the defect this
+# fix lane closes — the previous scenarios put every correct answer at the
+# lowest legal index of its screen, so `first_legal` scored 3/3).
+# ═════════════════════════════════════════════════════════════════════════
+
+
+def _first_legal(env, obs, mask) -> int:
+    return int(np.flatnonzero(mask).min())
+
+
+def _last_legal(env, obs, mask) -> int:
+    return int(np.flatnonzero(mask).max())
+
+
+def test_first_legal_policy_does_not_ace_the_suite():
+    assert run_probe_accuracy(_first_legal) < 1.0
+
+
+def test_last_legal_policy_does_not_ace_the_suite():
+    assert run_probe_accuracy(_last_legal) < 1.0
+
+
+def test_constant_index_policies_fail_the_reward_and_shop_probes():
+    # The two probes this fix lane redesigned must each individually resist
+    # both extremes — the aggregate gate above could in principle be
+    # satisfied by one probe compensating for another.
+    redesigned = [p for p in RUN_PROBES if p.id in ("shop_removal_dominant", "card_reward_on_curve")]
+    for probe in redesigned:
+        assert not run_run_probe(probe, _first_legal), f"{probe.id}: first-legal must not pass"
+        assert not run_run_probe(probe, _last_legal), f"{probe.id}: last-legal must not pass"

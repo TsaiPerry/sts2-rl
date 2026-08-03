@@ -4,10 +4,11 @@ The trainer steps ``--n-envs`` envs per timestep. Model inference is already
 batched across them; env stepping is pure Python and single-core, and this
 module can hand whole envs to worker *processes* to parallelize it.
 
-**It is off by default, and usually should be** — see
-:func:`resolve_n_workers` for the numbers. Env stepping is a small slice of an
-iteration, so parallelizing it moves the needle ~4%. The machinery is here
-because the profile will shift, not because it currently pays.
+**It is on by default at scale** — ``--n-workers -1`` (auto) resolves to
+:data:`AUTO_N_WORKERS` subprocess workers at :data:`AUTO_WORKER_MIN_ENVS`+
+envs and stays serial below that; see :func:`resolve_n_workers` for the
+2026-08-02 numbers (+57% sps combat / +42% column at 32 envs). The old
+"~4%, leave off" verdict predates the integer obs schema and is dead.
 
 Two implementations behind one interface:
 
