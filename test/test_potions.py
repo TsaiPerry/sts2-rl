@@ -728,13 +728,81 @@ class TestAnyTimeUsage:
         assert len(run.held_potions) == 1
 
     def test_foul_potion_drives_the_merchant_off_for_a_hundred_gold(self):
-        # FoulPotion.cs:79-88 — the MerchantRoom arm.
+        # FoulPotion.cs:79-88 — the MerchantRoom arm. The room has to BE the
+        # shop: PassesCustomUsabilityCheck refuses the drink anywhere else
+        # (the test used to drink it in no room at all).
+        from sts2_rl.rooms import RoomType
+
         run = self._run("foul_potion")
+        run.current_room_type = RoomType.SHOP
         gold = run.gold
         assert not run.merchant_driven_off
         assert run.use_potion(0)
         assert run.merchant_driven_off
         assert run.gold == gold + 100
+
+
+class TestFoulPotionUsabilityCheck:
+    """`PotionModel.PassesCustomUsabilityCheck` (PotionModel.cs:158-164) and
+    its one override, `FoulPotion` (FoulPotion.cs:51-68). The sim had no such
+    gate at all, so the drink went through in any room — paying 100 gold and
+    flipping `merchant_driven_off` where the game refuses outright.
+
+    Queue entry: potion_pipeline/G1 (== potion/foul_potion/G1).
+    """
+
+    def _run(self):
+        from sts2_rl.potions import make_potion
+        from sts2_rl.run import RunState
+
+        run = RunState(rng=random.Random(0))
+        run.potions[0] = make_potion("foul_potion")
+        return run
+
+    def test_the_default_gate_is_true_for_every_other_potion(self):
+        from sts2_rl.potions import _POTION_CLASSES, make_potion
+
+        for pid in _POTION_CLASSES:
+            if pid == "foul_potion":
+                continue
+            assert make_potion(pid).passes_custom_usability_check(run=self._run())
+
+    def test_refused_on_the_map_and_at_a_rest_site(self):
+        from sts2_rl.rooms import RoomType
+
+        for room in (None, RoomType.REST_SITE, RoomType.MONSTER,
+                     RoomType.TREASURE, RoomType.EVENT):
+            run = self._run()
+            run.current_room_type = room
+            assert not run.use_potion(0), room
+            assert run.held_potions and not run.merchant_driven_off
+            assert run.gold == run.character.starting_gold
+
+    def test_allowed_at_a_shop_until_the_merchant_is_driven_off(self):
+        from sts2_rl.rooms import RoomType
+
+        run = self._run()
+        run.current_room_type = RoomType.SHOP
+        potion = run.potions[0]
+        assert potion.passes_custom_usability_check(run=run)
+        run.merchant_driven_off = True
+        assert not potion.passes_custom_usability_check(run=run)
+
+    def test_allowed_during_the_fake_merchant_event(self):
+        from sts2_rl.events import make_event
+        from sts2_rl.rooms import RoomType
+
+        run = self._run()
+        run.current_room_type = RoomType.EVENT
+        run.current_event = make_event("fake_merchant", run)
+        assert run.potions[0].passes_custom_usability_check(run=run)
+
+    def test_in_combat_it_always_passes(self):
+        from sts2_rl.potions import make_potion
+
+        combat = CombatState(rng=random.Random(0))
+        assert make_potion("foul_potion").passes_custom_usability_check(
+            combat=combat)
 
 
 # ══════════════════════════════════════════════════════════════════════════

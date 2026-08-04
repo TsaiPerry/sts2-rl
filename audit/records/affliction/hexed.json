@@ -1,0 +1,80 @@
+{
+  "unit": "affliction/hexed",
+  "game_source": {
+    "path": "src\\Core\\Models\\Afflictions\\Hexed.cs",
+    "sha256": "8e5285643e5b594aa10eafebfbba15d02b46d8baf99226fda8b0a33a0710f824"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\afflictions.py",
+    "sha256": "0bf0219fa3a2c37393c5091497f87360b5e530297f6fd117d2fee78918f3cf81"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/AfflictionModel.cs",
+      "sha256": "8aee0ce0b30603c24b325ed4c02aa67e1c2182817b163a0e85a03a195df03e41",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/HexPower.cs",
+      "sha256": "feaef7aa442f007a8be314e0f02dcfb9bf2aa4ee2c9a313d0d87bc39fa55f574",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/CreatureCmd.cs",
+      "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Players/Player.cs",
+      "sha256": "ffde0e9e7ef543bcf6a41016f76ce0e7c1924a64aeb351fde03e64ddba0022fe",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Combat/CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    }
+  ],
+  "hooks": {
+    "ExtraHoverTips": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Hexed.cs:15 returns a single-element list wrapping `HoverTipFactory.FromKeyword(CardKeyword.Ethereal)` — a UI hover-tooltip entry explaining the Ethereal keyword this affliction confers. Purely presentational (AfflictionModel.HoverTips concatenates `ExtraHoverTips` onto the base `HoverTip`, AfflictionModel.cs:154-165), no game-state reader. `HexedAffliction` (afflictions.py) has no hover-tip concept at all. Same disposition as the base `ExtraHoverTips` default (`Array.Empty<IHoverTip>()`, AfflictionModel.cs:144) that the other five non-Tainted afflictions leave untouched."
+    },
+    "AfterCardEnteredCombat": {
+      "maps_to": "(nothing)",
+      "verdict": "gap",
+      "issue": "UNPORTED. Hexed.cs:17-27 overrides `AfterCardEnteredCombat`: when ITS OWN card (`card != base.Card -> return`) enters combat and the owner creature no longer `HasPower<HexPower>()`, it self-clears (`CardCmd.ClearAffliction(base.Card)`). This is Hexed's one piece of real logic and the seam-level machinery for it is faithful (`audit/records/seam/hook_dispatch.json` guard G6: card-affliction listener registration is wired and verified — CombatState.cs:456-465 emits a card's Affliction as a listener immediately after its own card), but the CONTENT is missing: `HexedAffliction` (afflictions.py) defines zero hook methods (confirmed by `py audit/tools/dormancy_probes.py affliction-hooks`, re-run today: 0 of 7 sim Affliction subclasses implement any HookSystem hook), so nothing in the sim performs this self-clear. Re-derived from first principles rather than copied from G6's own note, because G6 only asserts the WIRING works and does not itself audit whether the behavior is reachable: HexPower's own removal path (AfterDeath, HexPower.cs:55-60) already sweeps every Hexed affliction off `AllCards` whenever the APPLIER dies (`!wasRemovalPrevented && creature == base.Applier -> PowerCmd.Remove(this)` -> AfterRemoved's sweep), and the sole ported applier (Spectral Knight, `sts2_rl/monsters/glory/knights.py`, one instance per KNIGHTS_ELITE encounter, no escape/retreat move) always dies before a normal combat can end in a player win — so by the time any ordinary `Player.AfterCombatEnd` -> `Creature.RemoveAllPowersInternalExcept()` silent strip (Player.cs:833-838, Creature.cs:503-507/658-670 — which fires NO `AfterRemoved` for any power it strips, in EITHER engine) could run, HexPower has already self-removed via the explicit path and no Hexed affliction survives to leak. Hexed's own AfterCardEnteredCombat exists precisely as the backstop for the case that silent-strip bypass WOULD otherwise create (a stale Hexed affliction surviving into a later `AfterCardEnteredCombat`, e.g. a card re-entering a NEXT combat, or a mid-combat card COPY carrying a cloned Hexed instance per CardModel.DeepCloneFields, CardModel.cs:1210-1214/1218-1239) — but that case does not occur with today's content, because the only applier always dies first.",
+      "live": false
+    }
+  },
+  "guards": [
+    {
+      "what": "stacking",
+      "maps_to": "Hexed overrides no `IsStackable`, inheriting AfflictionModel's default `False` (AfflictionModel.cs:127-130); `HexedAffliction` (afflictions.py) leaves the base `is_stackable = False` unoverridden. `HexPower.cs:32/:77` and every card-affliction call inside `HexPower.__init__` / `HexPower.on_card_entered_combat` / `HexPower._afflict` (powers.py) both gate on `card.Affliction == null` / `card.affliction is None`, so a Hexed card is never re-Hexed and never overwritten by a different affliction either.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "duration / decay + player-vs-creature scope, and death handling",
+      "maps_to": "Hexed afflicts the PLAYER's own cards (no monster deck exists), applied by an enemy (Spectral Knight). Removal is APPLIER-death-gated, not turn-gated: HexPower.AfterDeath (HexPower.cs:55-60) removes the power (and, via AfterRemoved, every Hexed affliction) specifically `when creature == base.Applier`, i.e. when the Spectral Knight itself dies — not on any side-turn boundary, unlike Bound/Entangled/Ringing/Smog. Mirrored faithfully by `power/hex` (powers.py), already audited: rollup `deliberate-divergence` (the Ethereal-keyword grant is save/restore instead of live-computed, harmless for the single ported source) with every AfterApplied/AfterCardEnteredCombat/AfterDeath/AfterRemoved entry independently `faithful`, including the AfterDeath entry this guard leans on. Not re-derived, cited for the death-handling half of this brief's request.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the AfterCardEnteredCombat gap's reachability enumeration — executed, not argued (bug class per GAP-QUEUE.md's 'On dormancy' standing lesson: an enumeration outranks a claim)",
+      "maps_to": "`py audit/tools/dormancy_probes.py affliction-hooks` (0 of 7 sim Affliction subclasses implement any hook) and `... cs-affliction-hooks` (1 of 10 C# affliction files overrides an AbstractModel hook: Hexed.cs / AfterCardEnteredCombat), both re-run 2026-08-03 with unchanged results. Sole applier enumeration: `grep -rln HexPower sts2_rl/monsters/` returns exactly `sts2_rl/monsters/glory/knights.py`, whose `SpectralKnight.build_machine` has no escape/retreat branch (verified by reading the file) — the Hex debuff's own docstring states outright \"The Hex lifts when the Spectral Knight dies,\" and KNIGHTS_ELITE fields exactly one instance. A combat can only end in player victory with every enemy dead, so the applier's own death (and HexPower's explicit self-removal through it) always precedes the ordinary `AfterCombatEnd` power-strip. Trigger for making this live: a second HexPower applier that can survive to a player win (an escape move, a revival power per PROMPT.md bug class 21, or a future encounter), OR a card-copy effect that clones a still-Hexed card while HexPower is active and the owner later loses HexPower some OTHER way than the applier's own death.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-08-03"
+}

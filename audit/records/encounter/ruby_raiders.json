@@ -1,0 +1,63 @@
+{
+  "unit": "encounter/ruby_raiders",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\RubyRaidersNormal.cs",
+    "sha256": "efb51d40e497518608145bb46d54f4570d56c754aa70a0ad23ff41d995de13c2"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\ruby_raiders.py",
+    "sha256": "ef2c1c3d27aaf4d62e1e0018c70e08a8af171dde015416e6f499c7bc71b9b2f1"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms normal_keys",
+      "verdict": "faithful"
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "none -- the sim has no per-encounter monster-preview member",
+      "verdict": "deliberate-divergence",
+      "rationale": "Same zero-cost finding as overgrowth_crawlers/AllPossibleMonsters."
+    },
+    "GenerateMonsters": {
+      "maps_to": "sts2_rl/monsters/overgrowth/ruby_raiders.py:RubyRaidersEncounter.create_monsters (parity branch, selection_rng is not None)",
+      "verdict": "faithful",
+      "note": "C# GenerateMonsters loops 3 times: each iteration filters _raiderValidCounts.Keys down to raiders not yet fully used (each valid count is 1, so effectively 'not yet chosen'), then base.Rng.NextItem(items) picks one -- 3 draws, without replacement, in declaration order Axe/Assassin/Brute/Crossbow/Tracker. The sim's parity path builds the identical candidate-filter-then-draw loop against _ALL_RAIDERS (same 5-class order) and calls selection_rng.next_item. Executed witness (py audit/tools/encounter_probes_e2.py parity-draw-counts, seed 12345): roster=['BruteRubyRaider','AssassinRubyRaider','AxeRubyRaider'], draws=3 -- 3 distinct raiders, 3 draws, matching the C# shape exactly. See the guards entry below for the non-parity (legacy) path, which is a separate, real divergence."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "structural: Encounter is never registered with HookSystem",
+      "verdict": "faithful"
+    },
+    "Tags": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms tags -- \"ruby_raiders\" is absent",
+      "verdict": "faithful",
+      "note": "No Tags override in C# (default empty)."
+    },
+    "IsWeak": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms -- \"ruby_raiders\" is absent from weak_keys",
+      "verdict": "faithful"
+    },
+    "ShouldGiveRewards": {
+      "maps_to": "sts2_rl/monsters/base.py:Encounter.should_give_rewards (default True)",
+      "verdict": "faithful"
+    },
+    "MinGoldReward": {
+      "maps_to": "sts2_rl/rewards.py:GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20)",
+      "verdict": "faithful",
+      "note": "No override in C#; Poverty multiplier out of scope, not applied in roll_gold_reward."
+    },
+    "MaxGoldReward": {
+      "maps_to": "sts2_rl/rewards.py:GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20)",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "Encounter Rng independence outside parity (default/legacy) mode",
+      "mechanism": "encounter/_legacy_shared_selection_rng",
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-08-03 (gap-fix pass). `RunState.create_combat` now builds the per-encounter Rng on BOTH paths: with a string seed from `rng_set.seed` as before, and without one from a run seed derived at construction (`run.derive_encounter_seed`, a hash of the shared generator's STATE, so it consumes no draw and shifts no other legacy stream). `create_monsters`' `selection_rng=None` arm is therefore unreachable from any production call site, and the composition no longer moves when the shared stream does — executed in test/test_encounter_selection_rng.py (test_the_composition_does_not_move_with_the_shared_stream) and by audit/tools/encounter_probes_e2.py legacy-shared-stream.\n\nWHAT THE GAP SAID: EncounterModel.Rng's own doc comment: it is a per-encounter Rng kept independent of the run's centralized RNG precisely so its state never has to be tracked once the encounter is over. The sim only builds that independent stream when a string seed is present (RunState.create_combat in sts2_rl/run.py, via the make_encounter_rng helper, gated on self.rng_set is not None); with no string seed (every RL training/eval env -- grepped run_env.py, full_env.py and train_torch.py for string_seed, zero hits in any of the three), CombatState passes encounter_selection_rng=None, and RubyRaidersEncounter.create_monsters falls back to `rng.sample(_ALL_RAIDERS, 3)` on the SAME random.Random object CombatRng.legacy() also hands out for shuffle/monster_ai/card_gen/targets/energy/potion_gen (sts2_rl/combat_rng.py). Executed witness: py audit/tools/encounter_probes_e2.py legacy-shared-stream shows `combat._rng is combat_rng.monster_ai is combat_rng.shuffle: True` for a bare CombatState(encounter=RUBY_RAIDERS_NORMAL). So in the sim's default configuration the game's isolation guarantee does not hold: a raider draw and, say, a monster AI branch pick share one stream, and any change to monster AI shifts every later composition-style draw and vice versa -- exactly the shape the campaign brief calls out. This is documented in the sim's own code as an intentional legacy/parity split (combat_rng.py's module docstring says as much), but it is nonetheless a real, currently-exercised divergence from the C# on the path every training run actually takes. It does NOT explain the 89U conformance seed's act-1 divergence: 89U is string-seeded, so its replay takes the correct parity branch (verified: GenerateMonsters's own faithful verdict above covers that branch). live=true because the legacy branch is the sim's actual default, not a hypothetical. Shared across every RNG-drawing GenerateMonsters in this batch (slimes_normal, slimes_weak, slithering_strangler carry the same guard) -- file once as one mechanism per PROMPT.md's family guidance."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-08-03"
+}

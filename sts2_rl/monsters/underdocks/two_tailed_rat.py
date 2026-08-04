@@ -23,7 +23,6 @@ _SCREECH_FRAIL = 1
 _SUMMON_CHANCE = 0.75
 _OTHER_WEIGHT_WHEN_SUMMONABLE = 1.0 / 12.0
 _BACKUP_LIMIT = 3
-_SLOTS = 5
 
 
 class TwoTailedRat(MachineMonster):
@@ -104,7 +103,10 @@ class TwoTailedRat(MachineMonster):
         if self.call_for_backup_count >= _BACKUP_LIMIT:
             return False
         live = self._live_rats()
-        if len(live) >= _SLOTS:  # no free slot
+        # TwoTailedRat.cs:204 — the gate is the ROW, not a headcount:
+        # `string.IsNullOrEmpty(Encounter?.GetNextSlot(CombatState))`.
+        combat = self._hooks.combat
+        if not combat.encounter.get_next_slot(combat):
             return False
         # Never two rats telegraphing a summon at once.
         for rat in live:
@@ -128,8 +130,17 @@ class TwoTailedRat(MachineMonster):
 
     def _call_for_backup(self, ctx: CombatCtx) -> None:
         from ...cmds import CreatureCmd
-        if len(self._live_rats()) < _SLOTS:
-            CreatureCmd.add(ctx.hooks, TwoTailedRat(ctx.hooks, self._rng))
+        # TwoTailedRat.cs:180-185 — the free slot is taken off the END of the
+        # row (`Slots.LastOrDefault(free, string.Empty)`), and an empty result
+        # (the row is full) skips the summon entirely. The three starting rats
+        # sit in third/fourth/fifth, so the first backup takes "second" and
+        # `CreatureCmd.Add`'s slot re-sort seats it AHEAD of all of them.
+        next_slot = ctx.combat.encounter.last_free_slot(ctx.combat)
+        if next_slot:
+            CreatureCmd.add(
+                ctx.hooks, TwoTailedRat(ctx.hooks, self._rng),
+                slot_name=next_slot,
+            )
         # All rats (including the newcomer) share the summon count.
         rats = self._live_rats()
         new_count = max(r.call_for_backup_count for r in rats) + 1
@@ -158,4 +169,13 @@ class TwoTailedRatsEncounter(Encounter):
         ]
 
 
-TWO_TAILED_RATS_NORMAL = TwoTailedRatsEncounter(id="two_tailed_rats_normal")
+TWO_TAILED_RATS_NORMAL = TwoTailedRatsEncounter(
+    id="two_tailed_rats_normal",
+    # TwoTailedRatsNormal.cs:12 declares a FIVE-name row and GenerateMonsters
+    # (:36-41) seats the three starting rats in Slots[2..4] — third/fourth/
+    # fifth — leaving "first"/"second" free for CALL_FOR_BACKUP, which takes
+    # them off the END of the row and so seats each summon AHEAD of the
+    # starting three.
+    slots=("first", "second", "third", "fourth", "fifth"),
+    monster_slots=("third", "fourth", "fifth"),
+)

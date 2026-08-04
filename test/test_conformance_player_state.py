@@ -84,12 +84,34 @@ def test_resync_lets_full_run_replay_without_cascade_death():
 SEEDS = ["89U21BV1TZ", "933T39V18D",
          "DJDCSAQZNR", "L081UMJX4M", "QRWCVDPZN5", "TZEKRYTSNT"]
 
-# Task 6 convergence gate. Only 89U21BV1TZ is an IRONCLAD run — the single
+# Task 6 convergence gate. Two of the six seeds are IRONCLAD runs — the single
 # character this sim models (run.py: "This single-character sim is Ironclad";
-# start_run always grants burning_blood + ironclad_starting_deck()). It is
-# xfail(strict=False) until its full act-1+2 run reaches zero player-state
-# divergence, gated on per-seed combat-parity convergence (ongoing SP3 Task 9);
-# as it converges it flips to XPASS, drop its mark then.
+# start_run always grants burning_blood + ironclad_starting_deck()) — and BOTH
+# NOW PASS OUTRIGHT through act 2, so neither carries a mark any more. They
+# converged on 2026-08-03 when the two REPLAY-HARNESS bugs behind the act-2
+# wall were fixed:
+#
+#   1. `combat_card_db.py` reconstructed `NetCombatCardDb` ids post-draw
+#      instead of stamping them as cards were ADDED, so 89U's turn-1 generated
+#      cards (Blessed Antler's 3 Dazed into the draw pile at BeforeHandDraw,
+#      Vexing Puzzlebox's card into the hand after the draw) got the wrong ids
+#      and `PlayCard 26` resolved to a Dazed. 89U act-2 forced_combats 8 -> 5.
+#   2. `StableShuffle`'s stabilizing sort is `List<T>.Sort()`, an UNSTABLE
+#      introsort, and the sim used Python's stable `list.sort`. Two identical
+#      un-upgraded Forgotten Rituals came out of a 20-plus-card turn-4
+#      reshuffle in the opposite order from the game, so `PlayCard 12` named
+#      the twin still in the draw pile. Ported in `sts2_rl/dotnet_sort.py`;
+#      89U act-2 forced_combats 5 -> 0, and 933T's last force-win (its Test
+#      Subject boss) and its room-593 `Inferno+` mismatch went with it.
+#
+# Measured after both, three identical runs: both seeds reach the act-2 boss
+# with forced_combats=0, matching final-boundary HP/max-HP and no stream-counter
+# divergence; 933T39V18D also reaches zero per-command mismatches, and
+# 89U21BV1TZ reaches zero divergent floors under per-floor triage. (933T's
+# per-floor triage still flags floors 47/49 — that path runs resync ON, which
+# pins to floor-ENTRY snapshots and disagrees with this gate by construction;
+# see the queue's `resync_floors` open-work item.) Anything that reopens the
+# assertions below is a regression, which is what dropping the marks asserts.
 #
 # The other four seeds are DIFFERENT, un-ported characters (Regent / Silent /
 # Necrobinder / Defect). None of their starting cards or relics exist in the
@@ -99,20 +121,6 @@ SEEDS = ["89U21BV1TZ", "933T39V18D",
 # converge without porting whole characters, so they stay permanently xfail
 # with the accurate reason. (See memory sp3-seeds-are-5-characters.)
 _XFAIL_CONVERGENCE = {
-    "89U21BV1TZ": "reaches act-2 boss; act-0 boundary green, all three max-HP "
-                  "checkpoints green except act 2 (-4, the deck's Feed never "
-                  "lands a kill while act-2 fights force-win). Remaining: "
-                  "act-1 hp +3, act-2 hp +74 (forced=9, act-2 combat parity "
-                  "incomplete), a Shops counter div (168/140, act-2 merchant) "
-                  "and 4 combat-stream counter divs.",
-    "933T39V18D": "2nd Ironclad run (ascension 0); acts 0 and 1 are FULLY "
-                  "green (forced=0, every SP2 + combat counter exact) and act "
-                  "2 is down to forced=1 (the Test Subject boss) with all "
-                  "max-HP checkpoints green. Earliest remaining divergence: "
-                  "the Mecha Knight elite's turn-4 boundary (floor_49 line "
-                  "578, enemy 151 vs 148 — Mercury Hourglass / InfernoPower "
-                  "turn-start ordering), which carries act-1 hp +5, act-2 hp "
-                  "+13 and 4 combat-stream counter divs.",
     "DJDCSAQZNR": "un-ported character (CHARACTER.REGENT); sim is Ironclad-only "
                   "so the wrong starting deck/relics make the whole run diverge.",
     "L081UMJX4M": "un-ported character (CHARACTER.SILENT); sim is Ironclad-only "
@@ -125,8 +133,9 @@ _XFAIL_CONVERGENCE = {
 
 
 @pytest.mark.parametrize("seed", [
-    pytest.param(s, marks=pytest.mark.xfail(reason=_XFAIL_CONVERGENCE[s],
-                                            strict=False))
+    pytest.param(s, marks=(
+        [pytest.mark.xfail(reason=_XFAIL_CONVERGENCE[s], strict=False)]
+        if s in _XFAIL_CONVERGENCE else []))
     for s in SEEDS
 ])
 def test_full_run_player_state_parity(seed):
@@ -147,3 +156,33 @@ def test_full_run_player_state_parity(seed):
     combat_counter_divs = [d for d in result.combat_divergences
                            if d.command_index == -1]
     assert combat_counter_divs == [], "\n".join(str(d) for d in combat_counter_divs)
+
+
+def test_the_curse_of_knowledge_choice_is_taken_from_the_recording():
+    """`CardSelectCmd.FromChooseACardScreen` mid-move — Knowledge Demon's
+    Curse of Knowledge (KnowledgeDemon.cs:183) — is recorded as
+    `SelectCardFromScreen N`, not as a grid pick.
+
+    The replay driver only understood `SelectGridCard`/`SelectHandCards` at
+    that seam, so the choice resolved to NOTHING: no Disintegration/MindRot
+    power was applied, and the recorded command was then dispatched into an
+    empty `_pending_screen_cards` and dropped. That is the whole of the 89U
+    act-1 boundary divergence this test pins (rng_streams/G7): the sim ended
+    act 1 six HP up because it never took the curse.
+
+    Ground truth for the fight is the save's own per-room
+    `map_point_history` (act 1's last point: damage_taken 18, hp_healed 6,
+    63 -> 51).
+    """
+    seed = "89U21BV1TZ"
+    b = REC / seed / "floor_49"
+    rec = parse_recording(b / "actions.sts2replay")
+    oracle = parse_save(b / "run.save")
+    result = ReplayRunner(rec, oracle).run(
+        stop_after_act=1,
+        player_checkpoints=player_checkpoints(seed),
+        resync_player=False)
+    hp_divs = [d for d in result.divergences
+               if d.stream in ("player_hp", "player_max_hp")]
+    assert hp_divs == [], "\n".join(str(d) for d in hp_divs)
+    assert result.forced_combats == 0

@@ -142,13 +142,10 @@ def test_legacy_monster_hp_rolls_random_without_niche_stream():
 
 def test_enemy_by_target_id_maps_slots_and_names():
     from sts2_rl.conformance.combat_driver import ReplayCombatDriver, enemy_display_name
-    from sts2_rl.combat_card_db import CombatCardDb
 
     rs = RunRngSet("target-id-seed")
-    combat = CombatState(rng_set=rs, encounter=SLIMES_NORMAL)
-    card_db = CombatCardDb()
-    card_db.start(combat)
-    driver = ReplayCombatDriver(combat, cursor=None, card_db=card_db)
+    combat = CombatState(rng_set=rs, encounter=SLIMES_NORMAL, track_card_ids=True)
+    driver = ReplayCombatDriver(combat, cursor=None, card_db=combat.card_db)
 
     # SlimesNormalEncounter always creates [TwigSlimeM, LeafSlimeM, small0, small1].
     expected_names = {"Twig Slime (M)", "Leaf Slime (M)", "Twig Slime (S)", "Leaf Slime (S)"}
@@ -159,6 +156,30 @@ def test_enemy_by_target_id_maps_slots_and_names():
     # tid=1 is always the fixed-first TwigSlimeM slot (encounter order).
     assert enemy_display_name(driver.enemy_by_target_id(1)) == "Twig Slime (M)"
     assert enemy_display_name(driver.enemy_by_target_id(2)) == "Leaf Slime (M)"
+
+
+def test_wither_display_name_uses_the_fake_upgrade_level():
+    """`Wither.Title` (Wither.cs:16-27) appends `+{FakeUpgradeLevel}`, not the
+    ordinary upgrade level — which for Wither is permanently 0
+    (`MaxUpgradeLevel => 0`, :41) because it grows via `FakeUpgrade()` (:60-64).
+
+    The comparator read `upgrade_level` only, so a correctly fake-upgraded
+    Wither rendered as "Wither" against the recording's "Wither+1" and was
+    reported as a hand divergence — 89U21BV1TZ's last 14 per-command
+    mismatches, all of them spurious."""
+    from sts2_rl.conformance.combat_driver import card_display_name
+    from sts2_rl.cards import make_card
+
+    w = make_card("wither")
+    assert card_display_name(w) == "Wither"
+    w.fake_upgrade()
+    assert card_display_name(w) == "Wither+1"
+    w.fake_upgrade()
+    assert card_display_name(w) == "Wither+2"
+    # An ordinary card is unaffected: '+' per level, not '+N'.
+    bash = make_card("bash")
+    bash.upgrade()
+    assert card_display_name(bash) == "Bash+"
 
 
 def test_auto_played_card_targets_on_the_combat_targets_stream():
@@ -183,15 +204,12 @@ def test_enemies_annotation_keeps_a_retained_corpse():
     # Decimillipede's ReattachPower), so a withered segment still shows in a
     # recording's `Enemies:` list, at 0 HP. Ordinary corpses drop out.
     from sts2_rl.conformance.combat_driver import ReplayCombatDriver
-    from sts2_rl.combat_card_db import CombatCardDb
     from sts2_rl.cmds import DamageCmd
     from sts2_rl.monsters.hive import DECIMILLIPEDE_ELITE
 
     combat = CombatState(rng_set=RunRngSet("retained-corpse"),
-                         encounter=DECIMILLIPEDE_ELITE)
-    card_db = CombatCardDb()
-    card_db.start(combat)
-    driver = ReplayCombatDriver(combat, cursor=None, card_db=card_db)
+                         encounter=DECIMILLIPEDE_ELITE, track_card_ids=True)
+    driver = ReplayCombatDriver(combat, cursor=None, card_db=combat.card_db)
 
     victim = combat.enemies[1]
     DamageCmd.deal(combat.hooks, victim, 999, dealer=combat.player)
@@ -202,8 +220,8 @@ def test_enemies_annotation_keeps_a_retained_corpse():
 
     # A creature with no such power leaves the annotation entirely.
     plain = CombatState(rng_set=RunRngSet("retained-corpse"),
-                        encounter=FUZZY_WURM_ENCOUNTER)
-    plain_driver = ReplayCombatDriver(plain, cursor=None, card_db=CombatCardDb())
+                        encounter=FUZZY_WURM_ENCOUNTER, track_card_ids=True)
+    plain_driver = ReplayCombatDriver(plain, cursor=None, card_db=plain.card_db)
     DamageCmd.deal(plain.hooks, plain.enemies[0], 999, dealer=plain.player)
     assert plain_driver._live_enemy_states() == []
 
@@ -233,13 +251,11 @@ def test_driver_reports_unknown_card_id_instead_of_crashing():
     from sts2_rl.conformance.combat_driver import ReplayCombatDriver
     from sts2_rl.conformance.recording import Command
     from sts2_rl.conformance.runner import _CommandCursor
-    from sts2_rl.combat_card_db import CombatCardDb
 
-    combat = CombatState(rng_set=RunRngSet("unknown-id"), encounter=FUZZY_WURM_ENCOUNTER)
-    card_db = CombatCardDb()
-    card_db.start(combat)
+    combat = CombatState(rng_set=RunRngSet("unknown-id"),
+                         encounter=FUZZY_WURM_ENCOUNTER, track_card_ids=True)
     cursor = _CommandCursor([Command("PlayCard", ["99999"], "", None, 1)])
-    driver = ReplayCombatDriver(combat, cursor, card_db)
+    driver = ReplayCombatDriver(combat, cursor, combat.card_db)
 
     divergences = driver.play()  # must not raise
     assert len(divergences) == 1
@@ -254,17 +270,15 @@ def test_driver_reports_resolved_card_not_in_hand():
     from sts2_rl.conformance.combat_driver import ReplayCombatDriver
     from sts2_rl.conformance.recording import Command
     from sts2_rl.conformance.runner import _CommandCursor
-    from sts2_rl.combat_card_db import CombatCardDb
 
-    combat = CombatState(rng_set=RunRngSet("in-draw"), encounter=FUZZY_WURM_ENCOUNTER)
-    card_db = CombatCardDb()
-    card_db.start(combat)
+    combat = CombatState(rng_set=RunRngSet("in-draw"),
+                         encounter=FUZZY_WURM_ENCOUNTER, track_card_ids=True)
     # A card sitting in the draw pile (not the hand) resolves via the db but is
     # absent from the live hand.
     draw_card = combat.player.draw_pile[0]
-    cid = card_db.id_of(draw_card)
+    cid = combat.card_db.id_of(draw_card)
     cursor = _CommandCursor([Command("PlayCard", [str(cid)], "", None, 1)])
-    driver = ReplayCombatDriver(combat, cursor, card_db)
+    driver = ReplayCombatDriver(combat, cursor, combat.card_db)
 
     divergences = driver.play()  # must not raise
     assert len(divergences) == 1
@@ -282,7 +296,6 @@ def drive_first_fight(rec):
     fight's divergences. Mirrors ReplayRunner.run()'s map-walk setup (seeded
     RunState, injected Neow relics) but stops as soon as the first combat has
     been driven -- there is no need to finish the whole run for this check."""
-    from sts2_rl.combat_card_db import CombatCardDb
     from sts2_rl.conformance.combat_driver import ReplayCombatDriver
     from sts2_rl.conformance.runner import _CommandCursor, _ForceWinDriver, relic_key, short_act_name
     from sts2_rl.conformance.save import parse_save
@@ -301,11 +314,10 @@ def drive_first_fight(rec):
             if result["divergences"] is not None:
                 return super()._run_combat(encounter, room_type)
             run_ = self.run
-            combat = run_.create_combat(encounter, room_type=room_type)
+            combat = run_.create_combat(encounter, room_type=room_type,
+                                        track_card_ids=True)
             self._combat = combat
-            card_db = CombatCardDb()
-            card_db.start(combat)
-            replay_driver = ReplayCombatDriver(combat, self._cursor, card_db)
+            replay_driver = ReplayCombatDriver(combat, self._cursor, combat.card_db)
             result["divergences"] = replay_driver.play()
             self._combat = None
             return combat

@@ -41,17 +41,17 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "3caf6a189d109feb62c5ab57f03028277542a8bf12311898e7445be27ce199b2",
       "side": "sim"
     }
   ],
@@ -109,8 +109,9 @@
     },
     {
       "what": "BR-relic_trader (blast radius): the grab-bag-runs-dry state. RanwidTheElder.cs:113, :121 and :131 call `RelicFactory.PullNextRelicFromFront(base.Owner).ToMutable()` with no null check at all, so an empty bag is an NRE in the source",
-      "verdict": "gap",
-      "issue": "ALREADY RECORDED as the relic_trader record's grab-bag guard (rule 3, not re-verdicted): events/ranwid_the_elder.py:62-64 guards with `if relic is not None`, silently granting fewer relics than the option promised where the game would crash. DORMANT, with the same concrete trigger relic_trader names: fewer relics left in the bag than the branch pulls (1, 1 or 2 here). IsAllowed guarantees only that the player OWNS a tradable relic, not that the bag is stocked, but exhausting a 200+ relic bag inside one run does not happen with ported content. Recorded so the sim's defensive guard is not mistaken for the source's shape."
+      "verdict": "faithful",
+      "issue": "Closed 2026-08-03, and the REASONING WAS WRONG BEFORE THE FIX, not merely stale: this entry recorded 'an empty bag is an NRE in the source', and it never could be -- `PullNextRelicFromFront` substitutes `FallbackRelic` (the Circlet) exactly where the entry expected a null. The real divergence was the sim's, and it was the one the entry described as defensive: `pull_relic_from_front` returned None on a dry bag and `events/ranwid_the_elder.py`'s `if relic is not None` then granted FEWER relics than the option promised. With the fallback ported the sim hands out a Circlet like the game does, the guard is dead code rather than a divergence, and the shared mechanism is closed at event/welcome_to_wongos' EV-11.",
+      "maps_to": "`RelicFactory.PullNextRelicFromFront` cannot return null -- it ends `?? FallbackRelic` (RelicFactory.cs:47) -- so RanwidTheElder.cs:113/:121/:131 calling `.ToMutable()` on the result is safe, and a dry bag hands the player a Circlet rather than crashing. `RunState.pull_relic_from_front` (sts2_rl/run.py) returns the Circlet on the same condition, so the sim grants the same count of relics the option promises."
     },
     {
       "what": "BeforeEventStarted / OnEventFinished setting `Owner.CanRemovePotions = false/true` (RanwidTheElder.cs:40-49), which events/ranwid_the_elder.py:25 declares unmodelled",
@@ -128,6 +129,6 @@
       "rationale": "presentation only: every one is a title, a description or a hover-tip list for the two dynamic rows. The sim names the options POTION / GOLD / RELIC and lets the driver read the chosen potion and relic off the captured closure, so no game state depends on the strings."
     }
   ],
-  "verdict": "gap",
-  "audited": "2026-07-26"
+  "verdict": "waiver",
+  "audited": "2026-08-03"
 }

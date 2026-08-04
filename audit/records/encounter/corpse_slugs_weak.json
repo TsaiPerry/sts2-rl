@@ -1,0 +1,99 @@
+{
+  "unit": "encounter/corpse_slugs_weak",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\CorpseSlugsWeak.cs",
+    "sha256": "c4eb2f309e39d1d41141c5f504bc341037bc65f0f0a6b0bd357cee21b1d182b7"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\underdocks\\corpse_slug.py",
+    "sha256": "b873b3a979b575466f583359a215dfb4d10b5d9c7289f0684bfbb4b86168ffab"
+  },
+  "hooks": {
+    "Tags": {
+      "maps_to": "rooms.py `_underdocks_rooms().tags[\"corpse_slugs_weak\"]`",
+      "verdict": "faithful",
+      "rationale": "EncounterTag.Slugs (EncounterModel.cs's `Tags` override on this unit). The sim represents tag membership as a `tags` dict keyed by encounter id (sts2_rl/rooms.py's `_underdocks_rooms`, entry `\"corpse_slugs_weak\": (\"slugs\",)`) rather than a per-encounter attribute -- a representational difference consumed by the act's grab-bag picker (`_add_without_repeating_tags` / `_shares_tags`, rooms.py:237-256), which is `seam/rooms_and_map`'s mechanism, cross-referenced here rather than re-verdicted. Content is correct: corpse_slugs_weak carries exactly the one tag the C# declares."
+    },
+    "RoomType": {
+      "maps_to": "rooms.py `_underdocks_rooms()`'s pool bucket",
+      "verdict": "faithful",
+      "rationale": "RoomType.Monster. The sim represents room-type membership by pool bucket rather than a per-encounter attribute: `sts2_rl/rooms.py`'s `_underdocks_rooms()` places `\"corpse_slugs_weak\"` in `weak_keys`, which `seam/rooms_and_map` (the picker) and `rewards.GOLD_REWARD_RANGES` (keyed by `RoomType.MONSTER`, see the gold-ladder guard) both key off. EXECUTED: `grep -n '\"corpse_slugs_weak\"' sts2_rl/rooms.py` -- present exactly once, in `weak_keys`."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "sts2_rl/vocab.json's `monsters` list",
+      "verdict": "faithful",
+      "rationale": "The sim has no `Encounter.all_possible_monsters` field; the purpose this member serves (every monster class the encounter can ever field, including summons, for the obs vocabulary / bestiary-style previews) is served by `sts2_rl/vocab.json`'s `monsters` list, which every monster class the roster registers is checked into regardless of whether it starts on the field. EXECUTED: `py -c \"import json; m=json.load(open('sts2_rl/vocab.json'))['monsters']; print([c for c in ['CorpseSlug'] if c not in m])\"` -> `[]` (all present)."
+    },
+    "GenerateMonsters": {
+      "maps_to": "CorpseSlugsEncounter.create_monsters (corpse_slug.py:79-91)",
+      "verdict": "faithful",
+      "rationale": "C# (this unit's .cs, GenerateMonsters): builds 2 `CorpseSlug.ToMutable()` instances (roster count and ORDER: 2x CorpseSlug, matches -- same monster class repeated, order is immaterial since all 2 are the same class), all with a NULL slot, then calls `CorpseSlug.EnsureCorpseSlugsStartWithDifferentMoves(monsters, base.Rng)` (CorpseSlug.cs:135-144) which draws exactly ONE `rng.NextInt(3)` and staggers each slug's `StarterMoveIdx` by +1 from that single draw (`num % 3`, `num++` per slug, in list order). Sim `CorpseSlugsEncounter.create_monsters` (corpse_slug.py:79-91): `start = selection_rng.next_int(3)` (ONE draw) then `[CorpseSlug(hooks, rng, starter_move_idx=(start+i)%3) for i in range(2)]` -- identical stagger formula, identical single draw. EXECUTED: `py audit/tools/encounter_probes_e7.py corpse-slug-draws` confirms 1 draw and 2 monsters for both corpse_slugs_normal (count=3) and corpse_slugs_weak (count=2). Slot: both null on every element (C#'s tuples carry a null string; sim's `monster_slots` defaults to `()`, so `slot_name` is never set) -- matches. Draw is on `base.Rng`/`selection_rng`, the per-encounter stream in parity mode (see the Rng-independence guard); construction itself (`ToMutable()` / `CorpseSlug.__init__`) draws nothing from that stream on either side (HP is a separate, later Niche roll -- monsters/base.py's own docstring), so the C#'s draw-AFTER-construction vs the sim's draw-BEFORE-construction textual ordering is inert: neither side's construction touches the stream the draw is on."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "n/a -- Encounter has no hook-listener interface",
+      "verdict": "faithful",
+      "rationale": "`EncounterModel.ShouldReceiveCombatHooks => false` (EncounterModel.cs:39), not overridden by this unit. The sim's `Encounter` (monsters/base.py) is a plain dataclass with no `on_*`/hook-listener interface at all -- it is never registered with `HookSystem` (grep `hooks.register` across sts2_rl/: only `Creature.__init__`/`Monster.__init__` call it) -- so it architecturally cannot receive a combat hook, matching the false default by construction rather than by an explicit flag. Faithful."
+    },
+    "IsWeak": {
+      "maps_to": "rooms.py `_underdocks_rooms().weak_keys`",
+      "verdict": "faithful",
+      "rationale": "CorpseSlugsWeak.cs:17: `IsWeak => true`. The sim represents \"weak\" by pool membership (`weak_keys` in `_underdocks_rooms()`, rooms.py:129-132) rather than a boolean attribute; `seam/rooms_and_map` owns the act-opening picker that consumes it. EXECUTED: `\"corpse_slugs_weak\" in act_rooms(\"underdocks\").weak_keys` -> True, and absent from `normal_keys`/`elite_keys`/`boss_keys`."
+    }
+  },
+  "guards": [
+    {
+      "what": "Gold reward ladder (MinGoldReward/MaxGoldReward, inherited from EncounterModel -- not overridden by this unit)",
+      "verdict": "faithful",
+      "rationale": "EncounterModel.cs:64-100: RoomType.Monster -> 10-20, Elite -> 35-45, Boss -> 100-100 (both bounds equal), times AscensionHelper.PovertyAscensionGoldMultiplier under Poverty. sts2_rl/rewards.py:170-174's `GOLD_REWARD_RANGES` pins the identical non-ascension triple `{MONSTER: (10, 20), ELITE: (35, 45), BOSS: (100, 100)}`; rewards.py's own module docstring (line 32) states ascension/Poverty scaling is out of scope, matching this audit's own scope line (`PROMPT.md` Scope section: 'Ascension values: out of scope'). This unit passes no `min_gold`/`max_gold` override to its sim `Encounter`, so `generate_combat_rewards` (rewards.py:885-887) falls through to the room-type default range -- matching the C#'s own inheritance of the base ladder."
+    },
+    {
+      "what": "Per-encounter Rng independence (EncounterModel.cs:41-49's own doc comment: the encounter's Rng is independent of the run's centralized Rng, safe because its state need not survive past the encounter)",
+      "verdict": "faithful",
+      "rationale": "Stream IDENTITY (which Rng object, how it is seeded) is `seam/rng_streams`'s mechanism, not this record's -- cited, not re-verdicted, per PROMPT.md rule 3 and this batch's brief. What IS this record's to check: does the sim's draw actually land on that independent per-encounter Rng rather than a shared/run-level one? `sts2_rl/run.py:1609-1613`'s `create_combat` builds `encounter_selection_rng` via `make_encounter_rng(seed, total_floor, encounter.entry)` (rng.py, verdicted faithful by seam/rng_streams step 21) whenever `self.rng_set is not None` (parity mode -- string- seeded runs, the conformance/replay path) and threads it into `CombatState`/`Encounter.create_monsters` as `selection_rng` (combat.py:222-223). In that mode the draw this record verdicts lands on the correct independent stream. When `rng_set is None` (legacy mode -- `run.py:1609`'s own comment: 'Legacy runs pass None and keep their random.Random composition draws', the RL-training path: `grep -n rng_set sts2_rl/run_env.py` returns zero hits, so training never sets it), `selection_rng` is None and the draw falls back to the shared legacy `random.Random` -- the game's independence guarantee is not honoured in that mode. This is the SAME sim-wide, already-documented parity-vs-legacy split every other RNG consumer in this codebase carries (seam/rng_streams's own G2-adjacent discussion of `CombatRng`'s legacy fallback), not a defect specific to this encounter, and it does not affect the conformance/replay path this campaign's own symptom (89U21BV1TZ) is measured against. Checked per this batch's brief instruction; not filed as a new gap."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-08-03",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Models\\EncounterModel.cs",
+      "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Monsters\\CorpseSlug.cs",
+      "sha256": "a37ff6a434242dd59ddee338cb0fead116b59efa989113011cbc164bdc8306c5",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/vocab.json",
+      "sha256": "bf3f75ef04a22eef5001af8ff6991494ffed16c9ab2d0a7b0a957997a05a678b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rng.py",
+      "sha256": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "3caf6a189d109feb62c5ab57f03028277542a8bf12311898e7445be27ce199b2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
+      "side": "sim"
+    }
+  ]
+}

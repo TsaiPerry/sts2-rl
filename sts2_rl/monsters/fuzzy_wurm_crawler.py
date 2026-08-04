@@ -56,4 +56,6 @@ class FuzzyWurmCrawler(Monster):
 FUZZY_WURM_ENCOUNTER = Encounter(
     id="fuzzy_wurm_crawler",
     monster_classes=[FuzzyWurmCrawler],
+    # C# class FuzzyWurmCrawlerWeak — the sim id drops the tier.
+    entry_slug="FUZZY_WURM_CRAWLER_WEAK",
 )

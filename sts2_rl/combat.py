@@ -137,6 +137,7 @@ class CombatState:
         player_gold: int = 0,
         encounter_selection_rng=None,
         character=None,
+        track_card_ids: bool = False,
     ) -> None:
         # The character fighting this combat (CombatManager reaches it as
         # `Owner.Character`). In-combat card generation draws from
@@ -215,12 +216,31 @@ class CombatState:
                 card.enchantment.reset()
                 card.enchantment.combat = self
                 self.hooks.register(card.enchantment)
+        # `NetCombatCardDb` (combat_card_db.py) — the replay harness's card
+        # oracle, and THIS is the game's own instant for starting it:
+        # `CombatManager.SetUpCombat` calls `NetCombatCardDb.Instance.
+        # StartCombat` at CombatManager.cs:372, immediately after every
+        # player's `PopulateCombatState` (:370) cloned the deck into the draw
+        # pile and randomized it — which `PlayerCombatState.__init__` has just
+        # finished doing — and BEFORE the `AddCreature` loop below, before
+        # `Hook.BeforeCombatStart` and long before `StartTurn`'s opening draw.
+        # Cards generated later are stamped AS THEY ARE ADDED
+        # (`CardPileCmd._enter_combat`), never reconstructed afterwards.
+        #
+        # Off unless asked for: nothing in normal play or RL training reads a
+        # card id, and the conformance runner is the only caller that does.
+        self.card_db = None
+        if track_card_ids:
+            from .combat_card_db import CombatCardDb
+            self.card_db = CombatCardDb(self)
         # `CombatState.Encounter` — kept because it is not just provenance:
         # `SortEnemiesBySlotName` reads `Encounter.Slots` to order the enemy list
         # (CombatState.cs:495-501) and the summoners read it to pick their slot.
         self.encounter: Encounter = encounter or FUZZY_WURM_ENCOUNTER
-        self.enemies: list[Monster] = self.encounter.create_monsters(
-            self.hooks, self._rng, encounter_selection_rng
+        self.enemies: list[Monster] = self.encounter.seat_in_slots(
+            self.encounter.create_monsters(
+                self.hooks, self._rng, encounter_selection_rng
+            )
         )
         # Stable creature ids (CombatState.CombatId): the player is 0, initial
         # enemies get 1..N in creation order, mid-combat spawns continue the
@@ -1584,6 +1604,13 @@ class CombatState:
         # PotionUsage.Automatic potions have no manual use (the game disables
         # the Use button, NPotionPopup.cs:131) — only their own hook fires them.
         if potion.automatic:
+            return False
+        # `PotionModel.PassesCustomUsabilityCheck` (PotionModel.cs:158-164),
+        # the same gate `RunState.use_potion` consults. True for every potion
+        # in combat today — Foul Potion, the source's only override, opens
+        # with `if (CombatManager.Instance.IsInProgress) return true` — but
+        # the check belongs at both call sites, as it is in the game.
+        if not potion.passes_custom_usability_check(combat=self):
             return False
 
         # PotionModel.OnUseWrapper starts with RemoveBeforeUse: the slot is

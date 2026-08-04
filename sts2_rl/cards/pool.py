@@ -247,6 +247,21 @@ def get_distinct_for_combat_parity(
     return [make_card(card_id) for card_id in ids[:count]]
 
 
+# The status card pool (StatusCardPool.cs:19-34), in the source's declaration
+# order — which is NOT alphabetical: Wither sits between Infection and Slimed.
+# The order is parity-critical for the same reason the character pools' is: a
+# transform indexes into the filtered candidate list IN POOL ORDER, so
+# alphabetizing moves Wither four slots and shifts Slimed/Soot/Toxic/Void down
+# one each. Debris and Void are not ported yet, which shifts the indices after
+# them on its own — a separate, unfiled content gap, not this ordering one.
+# FranticEscape and Soot are kept here for completeness and filtered out of
+# generation by CanBeGeneratedInCombat, exactly as in the game.
+STATUS_POOL: tuple[str, ...] = (
+    "beckon", "burn", "dazed", "frantic_escape", "infection", "wither",
+    "slimed", "soot", "toxic", "wound",
+)
+
+
 # Transform rarities: everything except Basic/Ancient/Token/Event/... —
 # a normal transform lands on a Common/Uncommon/Rare card.
 _TRANSFORM_RARITIES = (CardRarity.COMMON, CardRarity.UNCOMMON, CardRarity.RARE)
@@ -270,11 +285,11 @@ def transform_options_in_combat(
     if card.card_type == CardType.CURSE:
         pool, rarity_filter = CURSE_POOL, False
     elif card.card_type == CardType.STATUS:
-        pool = tuple(
-            cid for cid, c in sorted(_CARD_CLASSES.items())
-            if c.card_type == CardType.STATUS
-        )
-        rarity_filter = False
+        # `CardModel.Pool` resolves a STATUS card to StatusCardPool, whose
+        # declared order this preserves. It used to be rebuilt as
+        # `sorted(_CARD_CLASSES)` filtered to STATUS, which both alphabetized
+        # the row and swept in statuses that are not pool members at all.
+        pool, rarity_filter = STATUS_POOL, False
     elif card.card_type == CardType.QUEST or card.rarity in (
         CardRarity.EVENT, CardRarity.ANCIENT, CardRarity.TOKEN
     ):

@@ -1,0 +1,51 @@
+{
+  "unit": "encounter/mysterious_knight_event",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\MysteriousKnightEventEncounter.cs",
+    "sha256": "1a52b0b1b121fe2033471bb2d4d93941ac0dee5f2bb2dae8b7a5eadde2c6d07a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\hive\\flail_knight.py",
+    "sha256": "becbe219001dd78582bdba64cbdbf1184546b597a655b3d586caef6b721e32a4"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/EncounterModel.cs",
+      "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Monsters/FlailKnight.cs",
+      "sha256": "7e5158dd5559c57156fee1ff9be34600d656ddb42a1bc0de61ef1207fe9b089b",
+      "side": "game"
+    }
+  ],
+  "hooks": {
+    "RoomType": {
+      "maps_to": "driver.py's Event fight path (`_run_event`) always calls `_run_combat(event.pending_encounter, RoomType.MONSTER)`, matching MysteriousKnightEventEncounter.cs:9's `RoomType.Monster`. This unit is reached via TheLanternKey (events/the_lantern_key.py), a Combat-layout event (`is_combat_layout=True`): the encounter is generated at ROOM ENTRY (`generate_internal_combat_state` -> `_combat_layout.pregenerate_monster_hp`), mirroring `EventRoom.EnterInternal`/`GenerateInternalCombatState` (EventModel.cs:383-403) calling `GenerateMonstersWithSlots` before any option is chosen; the FIGHT option then reuses that generated state (`internal_combat_encounter`) rather than generating a second one, mirroring `EnterCombatWithoutExitingEvent`'s `ShouldCreateCombat = LayoutType != Combat` (EventModel.cs:624-628). Confirmed the encounter is constructed once per room-visit, not re-seeded on FIGHT.",
+      "verdict": "faithful"
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "no explicit sim field (whole-tree grep is empty, see battleworn_dummy_event); `MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER.monster_classes = [MysteriousKnight]` already equals the C# superset `{MysteriousKnight}` (MysteriousKnightEventEncounter.cs:11) exactly.",
+      "verdict": "deliberate-divergence",
+      "rationale": "No sim representation of the concept, but a single-class non-branching roster IS its own superset here, so nothing is lost."
+    },
+    "GenerateMonsters": {
+      "maps_to": "base `Encounter.create_monsters` (monsters/base.py), unmodified by MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER (flail_knight.py:97-100). Roster: 1 MysteriousKnight, matching MysteriousKnightEventEncounter.cs:13-16's single-element list. Order/count: trivial (one element). Draw count: BOTH sides draw zero from any Rng in this method (no `base.Rng` call in the C# body). MysteriousKnight's own construction-time buffs -- StrengthPower 6 / PlatingPower 6 -- are applied directly in `MysteriousKnight.__init__` (flail_knight.py:89-94) via `PowerCmd.apply`, matching `MysteriousKnight.AfterAddedToRoom`'s `PowerCmd.Apply<StrengthPower>(...,6m,...)` / `PowerCmd.Apply<PlatingPower>(...,6m,...)` (MysteriousKnight.cs:13-14) exactly in amount. FlailKnight base stats (HP 101, FLAIL 9x2, RAM 15, WAR_CHANT +3 Str, opening move RAM, branch weights/repeat-caps) read against FlailKnight.cs:32-56 -- all non-ascension values and the RandomBranchState CannotRepeat/CanRepeatXTimes(max=2) shapes match; this is monster-tier territory but was read in full because MysteriousKnight IS this encounter's only monster.",
+      "verdict": "faithful"
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "EncounterModel.ShouldReceiveCombatHooks => false (EncounterModel.cs:39, inherited, not re-overridden). The sim never registers an Encounter as a hook listener anywhere (checked every `hooks.register(` call site in the repo).",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "encounter/_entry_slug_mismatch: `MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER.entry` = `MYSTERIOUS_KNIGHT_EVENT` (from `id=\"mysterious_knight_event\"`), but the game's real `Id.Entry` for `MysteriousKnightEventEncounter` is `MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER` (`StringHelper.Slugify(type.Name)` via `ModelDb.GetEntry`) -- the sim's id drops the '_ENCOUNTER' suffix. This is the encounter this batch confirmed is a Combat-layout event, so the wrong entry string is fed to `_combat_layout.pregenerate_monster_hp`'s `make_encounter_rng(seed, floor, encounter.entry)` call at ROOM ENTRY, not only at fight time. Executed: `py audit/tools/encounter_probes_e9.py entry-slug-mismatch` prints MISMATCH.",
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-08-03 (gap-fix pass). `Encounter` gained an explicit `entry_slug` field and `Encounter.entry` returns it when set, so this unit seeds `make_encounter_rng` with the game's real `ModelId.Entry` while keeping its sim id. A mechanical sweep of ALL 87 sim encounters against `src/Core/Models/Encounters/*.cs` (audit/tools/encounter_entry_sweep.py) found two more the unit batches had not checked — `fuzzy_wurm_crawler` (FuzzyWurmCrawlerWeak) and `overgrowth_crawlers_normal` (OvergrowthCrawlers) — and now reports MATCH for every one. Pinned by test/test_encounter_entry_slugs.py.\n\nWHAT THE GAP SAID: Same mechanism as `battleworn_dummy_event/G1` and (LIVE) `punch_off_event/G1`. Dormant here because MysteriousKnightEventEncounter.GenerateMonsters (via the base `Encounter.create_monsters` this unit uses unmodified) draws zero values from the per-encounter Rng regardless of which entry string seeded it; `py audit/tools/encounter_probes_e9.py dormant-4-zero-draws` confirms the sim's `create_monsters` output (class, slot_name, HP) is byte-identical under two unrelated seeds."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-08-03"
+}

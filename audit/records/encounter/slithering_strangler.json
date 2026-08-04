@@ -1,0 +1,63 @@
+{
+  "unit": "encounter/slithering_strangler",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\SlitheringStranglerNormal.cs",
+    "sha256": "1af7c46608c9701eae1723d222a9fe3c987d313f64875696c9daf205a351fd6f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\slithering_strangler.py",
+    "sha256": "8e0893bdecbd3aa8f7e314ae9657fe3dfa61f1b140f217299d10c12b504891ed"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms normal_keys",
+      "verdict": "faithful"
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "none -- the sim has no per-encounter monster-preview member",
+      "verdict": "deliberate-divergence",
+      "rationale": "Same zero-cost finding as overgrowth_crawlers/AllPossibleMonsters."
+    },
+    "GenerateMonsters": {
+      "maps_to": "sts2_rl/monsters/overgrowth/slithering_strangler.py:SlitheringStranglerEncounter.create_monsters (parity branch, selection_rng is not None)",
+      "verdict": "faithful",
+      "note": "C# draws one NextItem over the 3-value SecondaryEnemyType enum (declaration order SnappingJaxfruit/MediumSlime/SmallSlimes) to pick a branch: SnappingJaxfruit costs 0 further draws (a fixed monster); MediumSlime costs 1 draw over _mediumSlimes ([Leaf,Twig]); SmallSlimes costs 2 draws over _smallSlimes -- WITH replacement (both NextItem calls read the same 2-element array with no removal, so duplicates are possible, e.g. two Leaf). Every branch appends SlitheringStrangler last. The sim's parity branch mirrors this exactly via a `pick()` helper wrapping selection_rng.next_item, including the with-replacement SmallSlimes double-draw (`secondary = [pick(smalls)(...), pick(smalls)(...)]`, no removal between the two). Executed witness (seed 12345): roster=['TwigSlimeM','SlitheringStrangler'], draws=2 -- the MediumSlime branch (1 secondary draw + 1 branch-select draw = 2), SlitheringStrangler always last. Draw count is correctly variable by branch (1 for SnappingJaxfruit, 2 for MediumSlime, 3 for SmallSlimes) in both C# and sim. See the guards entry below for the non-parity (legacy) path."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "structural: Encounter is never registered with HookSystem",
+      "verdict": "faithful"
+    },
+    "Tags": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms tags -- \"slithering_strangler\" is absent",
+      "verdict": "faithful",
+      "note": "No Tags override in C# (default empty)."
+    },
+    "IsWeak": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms -- \"slithering_strangler\" is absent from weak_keys",
+      "verdict": "faithful"
+    },
+    "ShouldGiveRewards": {
+      "maps_to": "sts2_rl/monsters/base.py:Encounter.should_give_rewards (default True)",
+      "verdict": "faithful"
+    },
+    "MinGoldReward": {
+      "maps_to": "sts2_rl/rewards.py:GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20)",
+      "verdict": "faithful",
+      "note": "Poverty multiplier out of scope, not applied in roll_gold_reward."
+    },
+    "MaxGoldReward": {
+      "maps_to": "sts2_rl/rewards.py:GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20)",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "Encounter Rng independence outside parity (default/legacy) mode",
+      "mechanism": "encounter/_legacy_shared_selection_rng",
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-08-03 (gap-fix pass). `RunState.create_combat` now builds the per-encounter Rng on BOTH paths: with a string seed from `rng_set.seed` as before, and without one from a run seed derived at construction (`run.derive_encounter_seed`, a hash of the shared generator's STATE, so it consumes no draw and shifts no other legacy stream). `create_monsters`' `selection_rng=None` arm is therefore unreachable from any production call site, and the composition no longer moves when the shared stream does — executed in test/test_encounter_selection_rng.py (test_the_composition_does_not_move_with_the_shared_stream) and by audit/tools/encounter_probes_e2.py legacy-shared-stream.\n\nWHAT THE GAP SAID: Same mechanism as ruby_raiders' guard (full rationale there). With no string seed, SlitheringStranglerEncounter.create_monsters's `pick()` helper falls back to `rng.choice(items)` on the shared combat_rng.legacy() stream for the branch-select and the secondary-monster picks alike. Executed witness: py audit/tools/encounter_probes_e2.py legacy-shared-stream confirms the shared-object identity for CombatState(encounter=SLITHERING_STRANGLER_NORMAL). Does not explain the 89U conformance divergence (89U's replay takes the correct parity branch, verdicted faithful above)."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-08-03"
+}

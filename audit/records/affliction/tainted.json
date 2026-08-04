@@ -1,0 +1,64 @@
+{
+  "unit": "affliction/tainted",
+  "game_source": {
+    "path": "src\\Core\\Models\\Afflictions\\Tainted.cs",
+    "sha256": "5174e931345568425ba072f474868281ba624aef7fe4a951f85805fdf83bf534"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\afflictions.py",
+    "sha256": "0bf0219fa3a2c37393c5091497f87360b5e530297f6fd117d2fee78918f3cf81"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/AfflictionModel.cs",
+      "sha256": "8aee0ce0b30603c24b325ed4c02aa67e1c2182817b163a0e85a03a195df03e41",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/TaintedPower.cs",
+      "sha256": "8fe1472f3568d306ad521e2a7b10df4c45dcc74c40ca40192805e08eac1c9d64",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/VitalSparkPower.cs",
+      "sha256": "a38f842d4de1fa70c3f268f1df8c168290b3b66b87cfbb11736999a5821db1fe",
+      "side": "game"
+    }
+  ],
+  "hooks": {
+    "IsStackable": {
+      "maps_to": "TaintedAffliction.is_stackable = True (afflictions.py)",
+      "verdict": "faithful",
+      "rationale": "Tainted.cs:9 `IsStackable => true`. Matches exactly. Per the sim's own docstring this is DORMANT on ported content for the same reason as Galvanized's: VitalSparkPower never re-applies through `CardCmd.afflict`'s stacking branch — its BeforeCombatStart/AfterCardEnteredCombat both gate on `card.affliction is None` first — instead syncing the amount directly via `AfterPowerAmountChanged` (VitalSparkPower.cs:66-79, ported as `power/vital_spark`'s AfterPowerAmountChanged entry, already `gap`-verdicted there and not re-derived here). Ported for fidelity regardless of today's reachability."
+    },
+    "HasExtraCardText": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Tainted.cs:11 `HasExtraCardText => true` only unlocks the UI `DynamicExtraCardText` LocString (AfflictionModel.cs:44-54). No sim reader exists or is needed; same disposition as the other five HasExtraCardText overrides in this kind."
+    },
+    "ExtraHoverTips": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Tainted.cs:13 returns `HoverTipFactory.FromPowerWithPowerHoverTips<TaintedPower>(base.Amount)` — a UI hover tooltip describing the TaintedPower debuff a played Tainted card grants, parameterized by amount. Purely presentational (feeds AfflictionModel.HoverTips, AfflictionModel.cs:154-165); no sim counterpart or reader needed. Same disposition as affliction/hexed's ExtraHoverTips."
+    },
+    "CanAfflictCardType": {
+      "maps_to": "TaintedAffliction.can_afflict_card_type (afflictions.py) returns `card_type == CardType.SKILL`",
+      "verdict": "faithful",
+      "rationale": "Tainted.cs:16-19 restricts to `CardType.Skill`. Exact match, and the sim's override correctly participates in `Affliction.can_afflict` (afflictions.py), the sim's port of `AfflictionModel.CanAfflict` (AfflictionModel.cs:190-205) — Tainted and Galvanized are the ONLY two afflictions the game restricts by card type (Galvanized via its APPLIER'S own CardType.Power filter at the affliction site rather than an override; Tainted via this override), and the sim's per-kind override placement matches which mechanism the game actually uses for each."
+    }
+  },
+  "guards": [
+    {
+      "what": "trigger + power reference (context, not re-derived) — note TWO powers are involved, and the affliction's own kind (Tainted) is applied by a DIFFERENT power than the one named after it",
+      "maps_to": "VitalSparkPower (the APPLIER, granted by Infested Prism — `sts2_rl/monsters/hive/infested_prism.py`, confirmed ported) afflicts Skill cards with Tainted at BeforeCombatStart (VitalSparkPower.cs:22-29) and AfterCardEnteredCombat (:31-36); its AfterCardPlayed (:38-45) grants the PLAYER a SEPARATE debuff power, TaintedPower (the take-more-damage-this-turn effect), whenever a Tainted-carrying card resolves. TaintedPower itself (`affliction/tainted`'s namesake but a distinct mechanism) only reads `base.Amount` for its `ModifyDamageAdditive` and self-expires on the enemy side's turn end (TaintedPower.cs:29-35). Mirrored by `power/vital_spark` (applier, `gap` — three entries, all on VitalSparkPower's own BeforeCombatStart/AfterRemoved/AfterPowerAmountChanged, none touching the affliction's own overrides audited here) and `power/tainted` (the granted debuff, `deliberate-divergence`, every entry independently closed). Not re-derived here.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "duration / decay + player-vs-creature scope",
+      "maps_to": "The TAINTED AFFLICTION (on the card) has no explicit sweep in either engine's VitalSparkPower — it persists on its Skill card for as long as the card exists, same shape as Galvanized (no turn-boundary clear). VitalSparkPower.AfterRemoved (VitalSparkPower.cs:57-72) DOES sweep every Tainted affliction, but only when VitalSparkPower itself is removed (applier death via the standard death-strip path, or combat end); no per-turn clear exists independent of that. Card-scoped to the player's own Skill cards (no monster deck exists).",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-08-03"
+}

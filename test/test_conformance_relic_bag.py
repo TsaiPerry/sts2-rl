@@ -36,6 +36,7 @@ from sts2_rl.relic_pools import (
     SHARED_RELIC_POOL,
     populate_relic_grab_bags,
 )
+from sts2_rl.relics import ALL_RELICS, RelicRarity
 from sts2_rl.rng import RunRngSet
 from sts2_rl.run import RunState
 
@@ -141,3 +142,66 @@ def test_treasure_chest_relic_rolls_on_the_treasure_room_relics_stream():
     assert first == chest()          # deterministic from the seed alone
     assert first[1] == 1             # exactly the one rarity NextFloat
     assert isinstance(RunRngSet("x").treasure_room_relics.counter, int)
+
+
+def test_pull_relic_from_back_shop_rarity_uses_the_parity_bag():
+    """relic_pools/step7 (audit/records/seam/relic_pools.json): a shop's
+    dedicated Shop-rarity relic slot must draw from the SAME per-player bag
+    reward/chest pulls use. `RelicFactory.PullNextRelicFromBack(player,
+    rarity, filter)` always calls `player.RelicGrabBag.PullFromBack(rarity,
+    ...)` -- the identical `GetAvailableDeque` used by `PullFromFront` --
+    regardless of `rarity` (RelicFactory.cs:73-78; RelicGrabBag.cs:156-173).
+    `MerchantRelicEntry.FillSlot` passes `RelicRarity.Shop` through that same
+    call with no special-casing (MerchantRelicEntry.cs:39). There is no
+    separate per-shop `RelicGrabBag` anywhere in the decompiled game.
+
+    Before the fix, `run.pull_relic_from_back(SHOP, ...)` routed instead to
+    `RunState._get_shop_relic_bag()` -- a bag built by independently
+    rescanning ALL_RELICS and reshuffling on the legacy shared `run.rng`,
+    never touching the UpFront-seeded, game-faithful `Shop` deque already
+    sitting in `run.player_relic_bag['Shop']` / `run.relic_grab_bag`. That
+    left the real deque un-consumed and handed out a relic the game's RNG
+    stream never actually produced at that position -- the root cause of the
+    `933T39V18D` conformance seed's floor-24 shop divergence (gold 146 vs
+    365: the recorded `BuyRelic Miniature Tent` purchase is silently skipped
+    because the sim's shop stock doesn't contain it)."""
+    run = RunState(string_seed="933T39V18D")
+    shop_deque = run.player_relic_bag["Shop"]
+    expected_id = shop_deque[-1].split(".", 1)[-1].lower()  # PullFromBack: the deque's back
+    before = len(run.relic_grab_bag)
+
+    pulled = run.pull_relic_from_back(RelicRarity.SHOP, set())
+
+    assert pulled is not None
+    assert pulled.id == expected_id, (
+        "expected the back-pull to take the actual back of the UpFront-"
+        "populated Shop deque, not a relic from a disconnected bag "
+        f"(got {pulled.id!r}, expected {expected_id!r})")
+    assert len(run.relic_grab_bag) == before - 1, (
+        "the parity-populated relic_grab_bag must shrink by one on a Shop "
+        "pull -- it must be the bag actually consumed")
+    assert run._shop_relic_bag is None, (
+        "the disconnected legacy _get_shop_relic_bag() must never be built "
+        "on the SP2 parity path")
+
+
+def test_pull_relic_from_back_escalates_and_falls_back_to_circlet():
+    """relic_pools/step6: `RelicFactory.PullNextRelicFromBack` shares
+    `GetAvailableDeque`'s escalation ladder (Shop -> Common -> Uncommon ->
+    Rare) with `PullNextRelicFromFront`, and the same `?? FallbackRelic`
+    (Circlet) guard when the ladder runs out (RelicFactory.cs:47,75). An
+    exhausted rarity must climb to the next one and ultimately fall back to
+    Circlet, never return bare `None` (which left a shop slot visibly empty
+    where the game always shows a purchasable relic)."""
+    run = RunState(string_seed="933T_BACKPULL_LADDER_PROBE")
+    for rid in [r for r in list(run.relic_grab_bag)
+                if ALL_RELICS[r].rarity == RelicRarity.RARE]:
+        run.relic_grab_bag.remove(rid)
+    assert not any(ALL_RELICS[r].rarity == RelicRarity.RARE
+                   for r in run.relic_grab_bag), "Rare deque not actually drained"
+
+    pulled = run.pull_relic_from_back(RelicRarity.RARE, set())
+
+    assert pulled is not None and pulled.id == "circlet", (
+        "an exhausted Rare deque must climb the (empty, ladder-ending) rest "
+        "and fall back to a Circlet, not return None")

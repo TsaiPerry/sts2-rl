@@ -16,8 +16,14 @@ SHARED_EVENTS pool every act's queue carries — every act ModelDb ships is
 wired into the run layer.
 
 Deviations from the source, documented per the repo convention: no
-unlock/epoch gating, no tutorial first-run "?" overrides, no boss
-discovery-order override, and no run-level hooks on the unknown-odds rolls.
+unlock/epoch gating, no tutorial first-run "?" overrides, and no run-level
+hooks on the unknown-odds rolls.
+
+`ApplyDiscoveryOrderModifications` (the boss override and Overgrowth's
+first-run lineup) IS ported — see `RoomSet.apply_discovery_order_modifications`
+— but it reads a profile the sim does not otherwise model, and the default
+profile (`UnlockState.VETERAN`, everything seen) makes it a no-op. That
+default is the deviation now, not the missing code.
 """
 from __future__ import annotations
 
@@ -68,6 +74,16 @@ class ActRooms:
     # rolled at its starting node, uniformly from these plus any shared
     # ancients the run allotted this act. Act-1 acts always roll Neow.
     ancient_keys: tuple[str, ...] = ()
+    # `ActModel.BossDiscoveryOrder` — the order a profile is SHOWN this act's
+    # bosses in. `ApplyDiscoveryOrderModifications` overrides the rolled boss
+    # with the first entry the profile has not seen, so a fresh profile always
+    # fights them in this order regardless of the roll.
+    boss_discovery_order: tuple[str, ...] = ()
+    # `ApplyActDiscoveryOrderModifications`'s first-run swaps, as
+    # (queue-name, index, encounter/event key) triples in source order. Only
+    # Overgrowth has a non-empty body (Overgrowth.cs:110-127); the other three
+    # acts' overrides are empty methods.
+    first_run_swaps: tuple[tuple[str, int, str], ...] = ()
 
     def encounters(self) -> dict[str, Encounter]:
         """The act's ENCOUNTERS registry (imported lazily)."""
@@ -84,6 +100,36 @@ class ActRooms:
 SHARED_ANCIENTS: tuple[str, ...] = ("darv",)
 
 
+@dataclass(frozen=True)
+class UnlockState:
+    """`UnlockState` (Core/Unlocks/UnlockState.cs) — the PROFILE's history,
+    which outlives any one run.
+
+    Only the two members the room layer reads are ported:
+    `HasSeenEncounter(encounter)` (:128-131, a membership test on the seen-ids
+    set) and `NumberOfRuns` (:52). They gate
+    `ActModel.ApplyDiscoveryOrderModifications` — see
+    `RoomSet.apply_discovery_order_modifications`.
+
+    `VETERAN` is the default every RunState uses, and it is a CHOICE, not a
+    port: a profile that has seen every encounter and played before makes both
+    modifications no-ops, which is exactly what the sim did before the
+    mechanism existed. It is not the neutral option — a fresh profile pins
+    each act's first-listed boss — so a fixture that knows its recording's
+    profile history should pass its own.
+    """
+
+    encounters_seen: frozenset[str] | None = None   # None = "has seen all"
+    number_of_runs: int = 1
+
+    def has_seen_encounter(self, key: str) -> bool:
+        return self.encounters_seen is None or key in self.encounters_seen
+
+
+UnlockState.VETERAN = UnlockState()
+UnlockState.FRESH = UnlockState(encounters_seen=frozenset(), number_of_runs=0)
+
+
 def _overgrowth_rooms() -> ActRooms:
     from .events import OVERGROWTH_EVENTS
 
@@ -91,8 +137,10 @@ def _overgrowth_rooms() -> ActRooms:
         name="overgrowth",
         # Game order: AllEncounters (Overgrowth.GenerateAllEncounters,
         # alphabetical-by-class) filtered by RoomType/IsWeak. The first-run
-        # ApplyActDiscoveryOrderModifications swap order is deliberately NOT
-        # used (tutorial mods are off for real runs — see the module docstring).
+        # ApplyActDiscoveryOrderModifications lineup is `first_run_swaps`
+        # below; it applies to a zero-run PROFILE, not to a "tutorial mode" —
+        # `ShouldApplyTutorialModifications` is TRUE for ordinary play, which
+        # this comment used to have backwards.
         weak_keys=(
             "fuzzy_wurm_weak", "nibbits_weak", "shrinker_beetle_weak",
             "slimes_weak",
@@ -105,6 +153,24 @@ def _overgrowth_rooms() -> ActRooms:
         ),
         elite_keys=("bygone_effigy", "byrdonis", "phrog_parasite"),
         boss_keys=("ceremonial_beast", "the_kin", "vantom"),
+        # Overgrowth.cs:19-24.
+        boss_discovery_order=("vantom", "ceremonial_beast", "the_kin"),
+        # Overgrowth.cs:112-126 — the only non-empty
+        # ApplyActDiscoveryOrderModifications in the game, and it fires only
+        # on a profile with zero completed runs.
+        first_run_swaps=(
+            ("normal", 0, "nibbits_weak"),
+            ("normal", 1, "slimes_weak"),
+            ("normal", 2, "shrinker_beetle_weak"),
+            ("normal", 3, "inklets_normal"),
+            ("normal", 4, "mawler_normal"),
+            ("normal", 5, "ruby_raiders"),
+            ("normal", 6, "nibbits_normal"),
+            ("event", 0, "byrdonis_nest"),
+            ("event", 1, "sapphire_seed"),
+            ("elite", 0, "byrdonis"),
+            ("elite", 1, "phrog_parasite"),
+        ),
         # EncounterTag values from src/Core/Models/Encounters/*.cs.
         tags={
             "fuzzy_wurm_weak": ("crawler",),
@@ -137,6 +203,10 @@ def _underdocks_rooms() -> ActRooms:
         ),
         elite_keys=("phantasmal_gardeners", "skulking_colony", "terror_eel"),
         boss_keys=("lagavulin_matriarch", "soul_fysh", "waterfall_giant"),
+        # Underdocks.cs:15-20.
+        boss_discovery_order=(
+            "waterfall_giant", "soul_fysh", "lagavulin_matriarch",
+        ),
         tags={
             "corpse_slugs_weak": ("slugs",),
             "corpse_slugs_normal": ("slugs",),
@@ -164,6 +234,10 @@ def _hive_rooms() -> ActRooms:
         ),
         elite_keys=("decimillipede", "entomancer", "infested_prisms"),
         boss_keys=("kaiser_crab", "knowledge_demon", "the_insatiable"),
+        # Hive.cs:17-22.
+        boss_discovery_order=(
+            "the_insatiable", "knowledge_demon", "kaiser_crab",
+        ),
         tags={
             "bowlbugs_weak": ("workers",),
             "bowlbugs_normal": ("workers",),
@@ -194,6 +268,8 @@ def _glory_rooms() -> ActRooms:
         ),
         elite_keys=("knights", "mecha_knight", "soul_nexus"),
         boss_keys=("aeonglass", "queen", "test_subject"),
+        # Glory.cs:16-21.
+        boss_discovery_order=("queen", "test_subject", "aeonglass"),
         # EncounterTag values from src/Core/Models/Encounters/*.cs: the two
         # Scrolls of Biting variants share EncounterTag.Scrolls, Knights carries
         # EncounterTag.Knights (everything else is untagged).
@@ -233,6 +309,23 @@ def act_rooms(name: str) -> ActRooms:
 
 
 # ── Grab-bag draws (ActModel.AddWithoutRepeatingTags) ────────────────────
+
+def _swap_to_or_create_at_index(queue: list[str], index: int, key: str) -> None:
+    """`RoomSet.SwapToOrCreateAtIndex` (RoomSet.cs:177-192) — move the entry
+    already in the queue to `index`, SWAPPING whatever sat there into its old
+    slot; if the queue does not hold it at all, overwrite `index` with it.
+
+    A queue too short for `index` is not a case the game can hit (its lists are
+    pre-sized) and would be an IndexError here; the guard keeps a short sim
+    queue from crashing map generation."""
+    if index >= len(queue):
+        return
+    if key in queue:
+        found = queue.index(key)
+        queue[found], queue[index] = queue[index], queue[found]
+    else:
+        queue[index] = key
+
 
 def _shares_tags(rooms: ActRooms, a: str | None, b: str | None) -> bool:
     if a is None or b is None:
@@ -295,6 +388,7 @@ class RoomSet:
         num_weak: int,
         has_second_boss: bool = False,
         ancient_pool: tuple[str, ...] = (),
+        unlock_state: "UnlockState | None" = None,
     ) -> RoomSet:
         """ActModel.GenerateRooms (+ RunManager's DoubleBoss second boss).
 
@@ -323,6 +417,13 @@ class RoomSet:
             room_set._generate_legacy(
                 rng, num_rooms, num_weak, has_second_boss
             )
+        # RunManager.GenerateRooms:678-684 — the pass runs immediately after
+        # GenerateRooms for each act, and its gate
+        # (`ShouldApplyTutorialModifications`) is TRUE for every ordinary
+        # single-player Standard run. It draws no RNG, so it cannot shift a
+        # stream regardless of what it changes.
+        room_set.apply_discovery_order_modifications(
+            unlock_state or UnlockState.VETERAN)
         return room_set
 
     def _generate_parity(
@@ -401,6 +502,41 @@ class RoomSet:
             self.second_boss_key = (
                 rng.choice(others) if others else self.boss_key
             )
+
+    def apply_discovery_order_modifications(self, unlock: UnlockState) -> None:
+        """`ActModel.ApplyDiscoveryOrderModifications` (ActModel.cs:404-416).
+
+        Two parts, in this order:
+
+        1. The rolled boss is REPLACED by the first entry of
+           `BossDiscoveryOrder` the profile has not seen — so a profile with an
+           unseen boss in this act fights that one no matter what the UpFront
+           roll produced. The roll still happened (and still consumed its
+           draw); only the result is overwritten.
+        2. `ApplyActDiscoveryOrderModifications`, which is an empty method for
+           three of the four acts and, for Overgrowth, a fixed opening lineup
+           applied only when `NumberOfRuns == 0` (Overgrowth.cs:110-127).
+
+        `RunManager.ShouldApplyTutorialModifications` reads like a tutorial-only
+        exception and is not one: its body checks only
+        `ForceDiscoveryOrderModifications`, `TestMode.IsOn` and
+        `GameMode != Standard` (RunManager.cs:698-717), so it defaults TRUE for
+        ordinary play. What actually makes this a no-op for most runs is the
+        PROFILE — see `UnlockState.VETERAN`, the sim's default.
+        """
+        for key in self.rooms.boss_discovery_order:
+            if not unlock.has_seen_encounter(key):
+                self.boss_key = key
+                break
+        if unlock.number_of_runs != 0:
+            return
+        queues = {
+            "normal": self.normal_keys,
+            "elite": self.elite_keys,
+            "event": self.event_ids,
+        }
+        for queue_name, index, key in self.rooms.first_run_swaps:
+            _swap_to_or_create_at_index(queues[queue_name], index, key)
 
     # ── Next-room accessors (consume with mark_visited) ─────────────────
 

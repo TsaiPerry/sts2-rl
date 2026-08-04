@@ -142,22 +142,25 @@ class CrystalSphere(Event):
         no row. Every item is handed the EVENT's Rng, not the player's Rewards
         stream.
 
-        DRAW ORDER. `ToReward` is not where most of the randomness lives.
-        Only `CrystalSpherePotion` rolls at construction (`rng.NextItem`,
-        CrystalSpherePotion.cs:36); a CardReward merely builds its options and
-        a RelicReward merely stores the rng. Their draws happen later, in
-        `RewardsSet.GenerateWithoutOffering`'s populate sweep — after both
-        ModifyRewards passes (RewardsSet.cs:137-143). So the order here is:
-        every potion roll in reveal order, then `apply_reward_modifiers`
-        (hooks, then the card-group populate sweep), then the relic pull.
+        DRAW ORDER, and it is two passes, not one. `ToReward` is not where
+        most of the randomness lives: only `CrystalSpherePotion` rolls at
+        construction (`rng.NextItem`, CrystalSpherePotion.cs:36); a CardReward
+        merely builds its options and a RelicReward merely stores the rng.
+        Their draws happen in `GenerateWithoutOffering`'s FIRST loop —
+        `foreach (Reward reward in Rewards) reward.Populate()`
+        (RewardsSet.cs:130-134) — which walks ONE ordered list, in reveal
+        order, and runs BEFORE Hook.ModifyRewards; only rewards a hook ADDED
+        populate afterwards (`Rewards.Except(second)`, :136-142). So the order
+        is: every potion roll in reveal order, then every card group's options
+        and the relic pull interleaved in reveal order, then the hook passes.
 
-        RESIDUAL CAVEAT: in C# the populate sweep walks ONE ordered reward
-        list, so a relic revealed before a card item populates before it. The
-        sim's `CombatRewards` has no unified reward list — cards and relics
-        are separate collections — so the relic pull is done after the card
-        sweep unconditionally. That is the one draw-order divergence left in
-        this port, and it only shows when the relic and at least one card item
-        are revealed together."""
+        `CombatRewards` has no unified reward list — cards and relics are
+        separate collections — so the reveal order is carried by a list built
+        in pass 1 and walked in pass 2. `RelicReward.Populate` is
+        the grab-bag PULL, not the obtain: the take-or-skip screen
+        (`run.offer_relic`) belongs to `Offer()`, after the hooks, and a
+        declined relic has still left the bag (RelicReward.cs:74-91,
+        109-123)."""
         from ..rewards import CombatRewards, apply_reward_modifiers
         from ..rooms import RoomType
 
@@ -168,29 +171,44 @@ class CrystalSphere(Event):
         # behind it (RewardsSet.cs:106-110), same as brain_leech's Rip and
         # the_future_of_potions' screen. `room_type` only labels the screen.
         rewards = CombatRewards(room_type=RoomType.MONSTER)
-        has_relic = False
+        # Pass 1 — `revealed.Select(r => r.ToReward(owner, rng))`: one row per
+        # item, in reveal order, and the potion is the only kind that rolls
+        # here. `_populate` keeps the reveal order the reward collections lose.
+        populate: list[tuple[str, object]] = []
         for item in revealed:
             if item.kind is ItemKind.GOLD:
                 rewards.gold += _BIG_GOLD if item.is_big else _SMALL_GOLD
             elif item.kind is ItemKind.POTION:
                 rewards.potions.append(self._roll_potion(item.rarity))
             elif item.kind is ItemKind.CARD:
-                rewards.card_rewards.append(self._card_group(item.rarity))
+                group = self._card_group(item.rarity)
+                rewards.card_rewards.append(group)
+                populate.append(("card", group))
             elif item.kind is ItemKind.RELIC:
-                has_relic = True
+                populate.append(("relic", None))
         if rewards.gold:
             self.run.gain_gold(rewards.gold)
-        # Hook passes, then the card groups draw their options — the sweep
-        # this function already models (rewards.py, RewardsSet.cs:137-143).
+        # Pass 2 — GenerateWithoutOffering's first loop (RewardsSet.cs:130-134),
+        # in reveal order and BEFORE the hooks: a card group draws its three
+        # options, a relic reward pulls from the grab bag. The pull spends a
+        # bag slot whether or not the offer is then taken (RelicReward.cs:
+        # 74-91), which is why it is here and the offer is not.
+        pulled = []
+        for kind, group in populate:
+            if kind == "card":
+                group.populate(self.run)
+            else:
+                relic = self.run.pull_relic_from_front(rarity_rng=er)
+                if relic is not None:
+                    rewards.relics.append(relic)
+                    pulled.append(relic)
+        # Both ModifyRewards passes, then the sweep that populates only what a
+        # hook ADDED (`Rewards.Except(second)`, :136-142) — our own rows are
+        # populated already, so it walks past them.
         apply_reward_modifiers(self.run, rewards)
-        if has_relic:
-            # `RelicReward.Populate` -> `PullNextRelicFromFront(player,
-            # rngOverride)`. The pull spends a grab-bag slot whether or not the
-            # offer is then taken (RelicReward.cs:74-91).
-            relic = self.run.pull_relic_from_front(rarity_rng=er)
-            if relic is not None:
-                rewards.relics.append(relic)
-                self.run.offer_relic(relic)
+        # `RelicReward.OnSelect` -> RelicCmd.Obtain, at screen time.
+        for relic in pulled:
+            self.run.offer_relic(relic)
         self.pending_rewards = rewards
 
     def _roll_potion(self, rarity: str):

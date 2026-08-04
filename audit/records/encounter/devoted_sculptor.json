@@ -1,0 +1,100 @@
+{
+  "unit": "encounter/devoted_sculptor",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\DevotedSculptorWeak.cs",
+    "sha256": "e46cf3766ebe52ea3552d73a748b9d2c4fc9d7d2b21c4f080f16243f7e7cb3c4"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\glory\\devoted_sculptor.py",
+    "sha256": "8d8ec4a9c27320cc9457cc2223bd49063be46d5d5db1fbe732fc8a63ccfb1a8c"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "rooms.py:187-189 `weak_keys=(\"devoted_sculptor\", ...)` (glory ActRooms)",
+      "verdict": "deliberate-divergence",
+      "rationale": "DevotedSculptorWeak.cs:9 `RoomType => RoomType.Monster` (the WEAK encounters are still room-type Monster; weakness is a separate axis, see IsWeak below). Modeled structurally by pool membership -- `devoted_sculptor` is in `weak_keys`, which `RoomSet._generate_parity`/`_generate_legacy` (rooms.py:339-347, :382-390) draws from for the act's FIRST `num_weak` normal-slot rooms before falling back to `normal_keys`, and both pools feed the same `normal_keys`/`next_normal_encounter` accessor -- so the room TYPE (Monster, for gold-ladder purposes) is identical whether the room came from the weak or the regular bag. One shared mechanism across this batch; see `encounter/_room_type_and_weak` in the report."
+    },
+    "IsWeak": {
+      "maps_to": "rooms.py:339-347 RoomSet._generate_parity's `num_weak`-gated weak_keys draw (and its `_generate_legacy` twin at :382-390)",
+      "verdict": "deliberate-divergence",
+      "rationale": "DevotedSculptorWeak.cs:11 `IsWeak => true`. The sim's `Encounter` dataclass has no `is_weak` field at all -- weakness is modeled by which POOL an encounter id is drawn from during act-room generation (the first `num_weak` normal-slot picks come from `rooms.weak_keys`, the rest from `rooms.normal_keys`), not by a flag on the encounter object itself. `devoted_sculptor` is listed ONLY in `weak_keys` (rooms.py:187-189), never in `normal_keys`, so it can only ever be drawn during the act-opening weak window, matching `IsWeak`'s real effect (`grep -rn IsWeak src/Core` shows it gates the act's opening-fight selection, the same job `num_weak` performs here). Same observable, different architecture -- filed under the shared `encounter/_room_type_and_weak` mechanism, since `RoomType` and `IsWeak` are both facts the sim recovers from the SAME pool-membership structure rather than per-encounter fields."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "no sim counterpart",
+      "verdict": "gap",
+      "live": false,
+      "issue": "DevotedSculptorWeak.cs:13 returns a single-element list with `DevotedSculptor`. Shared finding, filed once under `encounter/_all_possible_monsters` (see `encounter/aeonglass` for the full enumeration of the three game-side debug/UI consumers; dormant, no sim counterpart to any of them)."
+    },
+    "GenerateMonsters": {
+      "maps_to": "monsters/base.py:408-416 Encounter.create_monsters + DEVOTED_SCULPTOR_WEAK (devoted_sculptor.py:48-51)",
+      "verdict": "faithful",
+      "rationale": "ROSTER: DevotedSculptorWeak.cs:15-18 returns exactly one `(DevotedSculptor, null)` pair; `DEVOTED_SCULPTOR_WEAK = Encounter(id=\"devoted_sculptor_weak\", monster_classes=[DevotedSculptor])` (devoted_sculptor.py:48-51) -- one monster, same class. ORDER: trivially matches. SLOT: C# passes `null`; the sim's `monster_slots` default `()` leaves `slot_name=None` too -- matches. DRAW COUNT: zero on both sides -- `DevotedSculptorWeak.GenerateMonsters` never touches `base.Rng`, and the sim's fixed-composition path draws nothing (monsters/base.py:408-411)."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "no sim counterpart (by absence)",
+      "verdict": "faithful",
+      "rationale": "`EncounterModel.ShouldReceiveCombatHooks => false` (EncounterModel.cs:39), not overridden. The sim's `Encounter` dataclass is never registered with `HookSystem` -- never a hook listener on either side."
+    }
+  },
+  "guards": [
+    {
+      "what": "Draw count / stream independence of the per-encounter Rng",
+      "verdict": "faithful",
+      "rationale": "Zero draws in GenerateMonsters (see above)."
+    },
+    {
+      "what": "The Niche HP-roll (DevotedSculptor has min_hp==max_hp==162, degenerate range, single enemy)",
+      "verdict": "faithful",
+      "rationale": "Same shape as `encounter/aeonglass`'s check: `hashSet={162}`, `Count<=0` false so `NextItem` fires -- one draw on the game side; `candidates=[162]`, `niche.next_int_range(0,1)` -- one draw on the sim side (combat.py:402-422). Matches."
+    },
+    {
+      "what": "Gold-ladder inheritance",
+      "verdict": "faithful",
+      "rationale": "DevotedSculptorWeak overrides neither `MinGoldReward` nor `MaxGoldReward`, so it inherits the base `RoomType.Monster` ladder (10-20, EncounterModel.cs:64-100). `DEVOTED_SCULPTOR_WEAK` passes neither `min_gold` nor `max_gold` (both default `None`, devoted_sculptor.py:48-51), so `rewards.py`'s combat-rewards path falls through to `GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20)` (rewards.py:171), matching exactly. The Poverty-ascension multiplier the base ladder applies (EncounterModel.cs:75-78, :94-97) is explicitly out of scope per PROMPT.md's ascension policy and `rewards.py`'s own docstring (\"non-ascension values only\")."
+    },
+    {
+      "what": "ShouldGiveRewards inheritance",
+      "verdict": "faithful",
+      "rationale": "DevotedSculptorWeak does not override `ShouldGiveRewards` (base default `true`, EncounterModel.cs:62). `DEVOTED_SCULPTOR_WEAK` does not pass `should_give_rewards` (default `True`, monsters/base.py:360). Matches."
+    },
+    {
+      "what": "Reachability",
+      "verdict": "faithful",
+      "rationale": "rooms.py:187-189 lists `devoted_sculptor` in Glory's `weak_keys`, and `DEVOTED_SCULPTOR_WEAK` is registered in `sts2_rl/monsters/glory/__init__.py`'s `ENCOUNTERS` dict (line 58)."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-08-03",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Models\\EncounterModel.cs",
+      "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Entities\\Creatures\\Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\monsters\\base.py",
+      "sha256": "424336cf4fb7be8026278b7a34af428082d8487fb57f25c3565311fe5c993388",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\combat.py",
+      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\rewards.py",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
+      "side": "sim"
+    }
+  ]
+}

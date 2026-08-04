@@ -373,6 +373,12 @@ class Encounter:
     # `(MonsterModel, string?)` pairs `GenerateMonsters` returns
     # (FabricatorNormal.cs:46-49, OvicopterNormal.cs:36-39). None = unslotted.
     monster_slots: tuple[str | None, ...] = ()
+    # `ModelId.Entry` where it is NOT `id.upper()` — see the `entry` property.
+    # Nine sim ids are not their C# class name's slug (the sim drops tier
+    # suffixes, and the event-wired encounters drop `_ENCOUNTER` entirely);
+    # each of those declares the real slug here. Pinned for all 87 encounters
+    # by test/test_encounter_entry_slugs.py.
+    entry_slug: str | None = None
 
     def get_next_slot(self, combat) -> str:
         """`EncounterModel.GetNextSlot` (EncounterModel.cs:245-248) —
@@ -385,32 +391,89 @@ class Encounter:
         The Fabricator never reaches it because CanFabricate caps the bots at 4,
         but the value is reproduced rather than smoothed over.
         """
-        occupied = {c.slot_name for c in combat.enemies}
-        return next((s for s in self.slots if s not in occupied), "")
+        return next((s for s in self.slots if s not in self._occupied(combat)), "")
 
     def last_free_slot(self, combat) -> str | None:
         """`Slots.LastOrDefault(s => Enemies.All(c => c.SlotName != s))`
         (Ovicopter.cs:87) — the OTHER end of the row, and with no default
         argument, so a full row yields None and the caller's `if (text != null)`
         skips the spawn entirely (Ovicopter.cs:88)."""
-        occupied = {c.slot_name for c in combat.enemies}
+        occupied = self._occupied(combat)
         return next((s for s in reversed(self.slots) if s not in occupied), None)
+
+    @staticmethod
+    def _occupied(combat) -> set:
+        """The slot names `Enemies` currently holds.
+
+        Both free-slot queries scan `CombatState.Enemies`, and a dead creature
+        has already left that list (`CombatState.RemoveCreature`,
+        CombatState.cs:287-290) — so its slot is free again for the next
+        summon. The sim keeps corpses in `combat.enemies` instead of removing
+        them, so the membership test is `is_removed_from_combat`, the same
+        predicate `fabricator.py:55` and `queen.py:201` use for their own
+        `Enemies` scans.
+        """
+        return {c.slot_name for c in combat.enemies
+                if not c.is_removed_from_combat}
 
     @property
     def entry(self) -> str:
         """The game's ModelId.Entry (StringHelper.Slugify of the encounter
         class name — UPPER_SNAKE_CASE), used to seed the per-encounter monster-
-        selection Rng (EncounterModel.GenerateMonstersWithSlots). The sim's
-        lowercase `id` is that slug lowercased, so upper-casing recovers it for
-        every encounter whose id matches its class-name slug."""
-        return self.id.upper()
+        selection Rng (EncounterModel.GenerateMonstersWithSlots) and, through
+        it, the pre-generated monster HP for the room.
+
+        `id.upper()` recovers it for the 78 encounters whose sim id IS their
+        class-name slug. It does NOT for the other nine, which is a wrong KEY
+        into a faithful formula — every draw off the resulting stream
+        disagrees with the game's from the first one. Those nine set
+        `entry_slug` explicitly, and the sweep test asserts that no tenth
+        appears: a sim id is only allowed to differ from a real C# encounter
+        class slug when `entry_slug` supplies the real one.
+        """
+        return self.entry_slug or self.id.upper()
+
+    def calculate_gold_proportion(self, combat) -> float:
+        """`EncounterModel.CalculateGoldProportion` (EncounterModel.cs:373-376)
+        — `1 - EscapedCreatures.Count / SpawnedEnemies.Count`, the share of the
+        encounter that was killed rather than let go. `CombatRoom.OnCombatEnded`
+        reads it once and `RewardsSet` scales the MONSTER gold range by it
+        (RewardsSet.cs:225-227), skipping the reward entirely at 0.
+
+        The two counts are deliberately different shapes and are ported that
+        way: `EscapedCreatures` is a list of CREATURES
+        (`CombatState.CreatureEscaped`, CombatState.cs:266-270), while
+        `SpawnedEnemies` is deduplicated by canonical MonsterModel
+        (`OnCreatureSpawned`, EncounterModel.cs:402-412) — so three Two-Tailed
+        Rats count as ONE spawned enemy. The sim keeps every creature it ever
+        added in `combat.enemies` (corpses and escapees included), which is
+        what both counts read.
+        """
+        spawned = {type(e) for e in combat.enemies}
+        if not spawned:
+            return 1.0
+        escaped = sum(1 for e in combat.enemies if e.escaped)
+        return 1.0 - escaped / len(spawned)
+
+    def seat_in_slots(self, monsters: list[Monster]) -> list[Monster]:
+        """Apply `monster_slots` positionally.
+
+        `GenerateMonstersWithSlots` hands CombatState.CreateCreature the slot
+        alongside the model, so a seeded monster arrives already seated.
+
+        `CombatState.__init__` applies this to whatever `create_monsters`
+        returns, so the seventeen encounters that OVERRIDE `create_monsters`
+        get seated too — a summon that consults the row
+        (`get_next_slot`/`last_free_slot`) reads occupancy off exactly these
+        `slot_name`s, and an override that quietly skipped the seating would
+        make the row look empty. Idempotent, so the base implementation below
+        may also call it.
+        """
+        for monster, slot in zip(monsters, self.monster_slots):
+            monster.slot_name = slot
+        return monsters
 
     def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
         # Fixed composition draws no RNG, so the parity selection_rng (when
         # present) is simply unused here.
-        monsters = [cls(hooks, rng) for cls in self.monster_classes]
-        # `GenerateMonstersWithSlots` hands CombatState.CreateCreature the slot
-        # alongside the model, so a seeded monster arrives already seated.
-        for monster, slot in zip(monsters, self.monster_slots):
-            monster.slot_name = slot
-        return monsters
+        return self.seat_in_slots([cls(hooks, rng) for cls in self.monster_classes])

@@ -1,0 +1,55 @@
+{
+  "unit": "enchantment/momentum",
+  "game_source": {
+    "path": "src\\Core\\Models\\Enchantments\\Momentum.cs",
+    "sha256": "fdfcdc593cd17473289558ceca7f8da2b080f30d1371847f49615dae7ef549de"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\enchantments.py",
+    "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0"
+  },
+  "hooks": {
+    "HasExtraCardText": {
+      "maps_to": "nothing, and nothing is required: `HasExtraCardText => true` (Momentum.cs:11) selects a localisation string for the card face. The sim has no card-text model at all, which is why every enchantment record in this tier verdicts the display properties the same way.",
+      "verdict": "waiver",
+      "rationale": "Display-only. The sim has no card-face text and no amount badge, so there is nothing for either flag to select; the tier waives every presentation property on the same ground (see enchantment/sharp's ShowAmount)."
+    },
+    "ShowAmount": {
+      "maps_to": "nothing -- `ShowAmount => true` (Momentum.cs:13) is the display flag for the amount badge. Same waiver as the rest of the tier (see enchantment/sharp's ShowAmount).",
+      "verdict": "waiver",
+      "rationale": "Display-only. The sim has no card-face text and no amount badge, so there is nothing for either flag to select; the tier waives every presentation property on the same ground (see enchantment/sharp's ShowAmount)."
+    },
+    "CanEnchantCardType": {
+      "maps_to": "`MomentumEnchantment.can_enchant` (sts2_rl/enchantments.py) is `super().can_enchant(card) and card.card_type == CardType.ATTACK`, matching `CanEnchantCardType(cardType) => cardType == CardType.Attack` (Momentum.cs:31-34). The base half is `EnchantmentModel.CanEnchant` (no Status/Curse/Quest card, no unplayable deck card, one enchantment per card), which the sim's `Enchantment.can_enchant` already models. Pinned by test_shared_enchantments.py::test_momentum_only_enchants_attacks.",
+      "verdict": "faithful"
+    },
+    "OnPlay": {
+      "maps_to": "`MomentumEnchantment.on_play` is `self.extra_damage += self.amount`, matching `ExtraDamage += base.Amount` (Momentum.cs:36-40). The SLOT is right too, and it is the load-bearing half: `CardModel.OnPlayWrapper` runs the card's own OnPlay (CardModel.cs:1931) before the enchantment's (:1937-1945), and the sim calls `card.enchantment.on_play(...)` at combat.py:1166 after `card.on_play(...)` at :1149/:1154 -- so the play that raises the counter is not the play that benefits. Pinned by test_momentum_pays_out_from_the_second_play_on (6, 11, 16 over three Strikes at amount 5).",
+      "verdict": "faithful"
+    },
+    "EnchantDamageAdditive": {
+      "maps_to": "`MomentumEnchantment.enchant_damage_additive` returns `self.extra_damage` when `is_powered_attack(props)` and 0 otherwise, matching `if (!props.IsPoweredAttack()) return 0m; return ExtraDamage;` (Momentum.cs:42-48). Not a hook on either side: DamageCmd applies the source card's enchantment directly (Hook.cs:1487-1499), which is how the sim's damage path reaches it.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "the ExtraDamage counter is per-COMBAT, not per-run -- the growth must not survive the combat that built it",
+      "maps_to": "`_extraDamage` is a private field of the enchantment instance and nothing in the source ever resets it (`grep -rn 'ExtraDamage' src/Core --include=*.cs` finds only the DynamicVar type of the same name). It is per-combat all the same, structurally: `PopulateCombatState` clones every deck card into the draw pile (Player.cs:802-811), the clone's enchantment comes from `ClonePreservingMutability` (CardModel.cs:1204-1209), and the DECK copy never plays -- so each combat starts from the deck version's untouched counter. The sim reaches the same place by the same shape: `RunState.create_combat` deep-copies the deck (sts2_rl/run.py). Pinned by test_momentum_starts_each_combat_at_zero, which plays the enchanted Strike twice in each of two combats and asserts 6, 11, 6, 11.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "a mid-combat card COPY carries the accumulated counter, not just the Amount",
+      "maps_to": "`ClonePreservingMutability` is `AbstractModel.MutableClone`, a MemberwiseClone, so every field of the enchantment rides along -- including `_extraDamage`. The sim's base `Enchantment.clone_preserving_mutability` copies only `amount` and `disabled`, so Momentum overrides it to carry `extra_damage`. Reachable with ported content: Momentum enchants Attacks and Anger is an Attack that copies itself on play (cards/anger.py), as does the Trash Heap's copy. Pinned by test_a_card_copy_carries_momentums_accumulated_bonus.",
+      "verdict": "faithful",
+      "issue": "NOTED for the tier, not a gap here: the base helper copying two named fields where C# does a memberwise clone is a shape that will bite the next enchantment with private state. Momentum is the first one to have any -- the other 19 keep everything in `amount`/`disabled` -- so there is nothing else to fix today."
+    },
+    {
+      "what": "the sole granter: Punch Dagger's pickup screen",
+      "maps_to": "`PunchDagger.AfterObtained` (PunchDagger.cs:24-33) builds a `CardSelectorPrefs(EnchantSelectionPrompt, 1)` -- the one-count ctor sets MinSelect == MaxSelect == 1 (CardSelectorPrefs.cs:62-66), so the pick is mandatory, not skippable -- runs `CardSelectCmd.FromDeckForEnchantment(owner, canonicalMomentum, 5, prefs)` and enchants the result with `DynamicVar(\"Momentum\", 5m)` (:15-19). `sts2_rl/relics/punch_dagger.py`'s `after_obtained` is that: filter the deck by `MomentumEnchantment.can_enchant`, `run.select_cards('enchant', candidates, 1)`, attach at amount 5. There is NO shuffle here, unlike Royal Stamp's Niche shuffle, so the screen is built in deck order and the pickup costs no RNG draw. `CardCmd.Preview` on the tail is presentation. Pinned by test_punch_dagger_enchants_a_deck_attack_with_momentum_5 and by test_reward_dispatch_and_relic_stubs.py::test_punch_dagger_enchants_a_deck_attack_now_that_momentum_is_ported.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-08-03"
+}

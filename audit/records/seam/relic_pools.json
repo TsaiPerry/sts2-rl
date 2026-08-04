@@ -1,0 +1,416 @@
+{
+  "unit": "seam/relic_pools",
+  "game_sources": [
+    {
+      "path": "src/Core/Runs/RelicGrabBag.cs",
+      "sha256": "9bb001cbc618f21cebaf7ceb324812010972d92b7a6ed043f268e56fce5a541c"
+    },
+    {
+      "path": "src/Core/Factories/RelicFactory.cs",
+      "sha256": "7bbd2464ae72129712f40d3a660c1f7bf61ed8bf16b8718a355fbf1c5e2b8143"
+    },
+    {
+      "path": "src/Core/Factories/CardFactory.cs",
+      "sha256": "69bba37c3d0ea3efc423264dd796fc4d22a49dcff3290c56ba9813365e8030dd"
+    },
+    {
+      "path": "src/Core/Factories/PotionFactory.cs",
+      "sha256": "1687ca4ceedeb04089122f8ff673cc33639873e98f210e5b6cd0dbc40c5b3aa3"
+    },
+    {
+      "path": "src/Core/Commands/RelicCmd.cs",
+      "sha256": "7da9c58b87b37e212a85f1541883d0e627d081c561d6b833ed2e1f89e69c3e51"
+    },
+    {
+      "path": "src/Core/Commands/RelicSelectCmd.cs",
+      "sha256": "bf5ce759dce6d3d8fb9e14c49894bd87e2d4f58d10ee84d2f58eec3dfa5f8173"
+    },
+    {
+      "path": "src/Core/Models/RelicPools/DefectRelicPool.cs",
+      "sha256": "7aeec878f1ab59c9562eb840979a176f5b6c05630734b60eb2a3622eede63350"
+    },
+    {
+      "path": "src/Core/Models/RelicPools/DeprecatedRelicPool.cs",
+      "sha256": "8af555d92d64c7b8e9bd61685b81a451bc56bb5a84521581601ac205d6f5fc54"
+    },
+    {
+      "path": "src/Core/Models/RelicPools/EventRelicPool.cs",
+      "sha256": "99d1c871cb65b6c33b3ee344e3d17da35757af7e0dd0e87144cf62cc2699da8e"
+    },
+    {
+      "path": "src/Core/Models/RelicPools/FallbackRelicPool.cs",
+      "sha256": "8bb2a5cec8ad31cea5cc5aad1060a8a30a743f183064058272f6d55c3f31e70c"
+    },
+    {
+      "path": "src/Core/Models/RelicPools/IroncladRelicPool.cs",
+      "sha256": "ffa0c9d2b863b52d90d1e9b9538c84686648a76028cea993e6e6a3104757996a"
+    },
+    {
+      "path": "src/Core/Models/RelicPools/NecrobinderRelicPool.cs",
+      "sha256": "be065b21255bcd29af569390779f581284a0190bfcd24829a9459b8c66998917"
+    },
+    {
+      "path": "src/Core/Models/RelicPools/RegentRelicPool.cs",
+      "sha256": "48d4931088430560df0e1f985b905b3681cd36c308ef9dfaa1e7497ca2e62043"
+    },
+    {
+      "path": "src/Core/Models/RelicPools/SharedRelicPool.cs",
+      "sha256": "ed20fba34a6508cef299f8ec06bea5051e28760dbc064649ea45dfc487f7fee0"
+    },
+    {
+      "path": "src/Core/Models/RelicPools/SilentRelicPool.cs",
+      "sha256": "7a3bf63956fbcc7e1398e93f4e093a4adb0b63b988909e899fce3a791da9194b"
+    },
+    {
+      "path": "src/Core/Models/CardPools/ColorlessCardPool.cs",
+      "sha256": "01865e9eaeccd2a1b45ad6feae2688c23389d53870fb168dda0ee1b1c2ba27ba"
+    },
+    {
+      "path": "src/Core/Models/CardPools/CurseCardPool.cs",
+      "sha256": "88d4ec635a79b86980e7d8f273b19e3c04ab7b00157ff98c898ac8aeed5034a6"
+    },
+    {
+      "path": "src/Core/Models/CardPools/DefectCardPool.cs",
+      "sha256": "71ec770134c44391afb6ed371e7f01df241df4f823b8c986d1a4e4373379ce0d"
+    },
+    {
+      "path": "src/Core/Models/CardPools/DeprecatedCardPool.cs",
+      "sha256": "e24dc8a63b4a5af63b551b83e12c6a46c5db15ffa5a67645a345720376fe15f9"
+    },
+    {
+      "path": "src/Core/Models/CardPools/EventCardPool.cs",
+      "sha256": "40322b81505c397f2e340f43db86e2cf52edc07d424c0dda812ab88efb84a6dd"
+    },
+    {
+      "path": "src/Core/Models/CardPools/IroncladCardPool.cs",
+      "sha256": "d1f2e7ea34f6d123c8c6807f24c3176e732b04f9c2e1676b04042b4bd250cd5e"
+    },
+    {
+      "path": "src/Core/Models/CardPools/MockCardPool.cs",
+      "sha256": "4e38387a4d2a9f96b619359e55a7b6dc20d0ed42bec15d0b6b0c4c2aacbda745"
+    },
+    {
+      "path": "src/Core/Models/CardPools/NecrobinderCardPool.cs",
+      "sha256": "a7f08e0b901a2f7a6939b1cc6019a7aff2c92fcd0b02a48ec81cb7434f34fc3c"
+    },
+    {
+      "path": "src/Core/Models/CardPools/QuestCardPool.cs",
+      "sha256": "75b75fda45ad4ae8ad7b2dcdb653445cac8e00cee36adee09f6b48c8ff99967a"
+    },
+    {
+      "path": "src/Core/Models/CardPools/RegentCardPool.cs",
+      "sha256": "bf2710dde6424a97ffbf1d1a6d10273185b768e931d57b702c5cf091f56abe4f"
+    },
+    {
+      "path": "src/Core/Models/CardPools/SilentCardPool.cs",
+      "sha256": "6cc052941594705dcb883ddd8b31452f5a5fb2312eca914021b812799fa53091"
+    },
+    {
+      "path": "src/Core/Models/CardPools/StatusCardPool.cs",
+      "sha256": "d4ab4465ae80c8a30ef8326f471b4c315e7bf5e7e1a3c5b54c976f19c9e47f27"
+    },
+    {
+      "path": "src/Core/Models/CardPools/TokenCardPool.cs",
+      "sha256": "02b5d0421aec743c4b691b1d466bf56c335b59d8b793304b2a1eb2b48ea43963"
+    },
+    {
+      "path": "src/Core/Models/PotionPools/DefectPotionPool.cs",
+      "sha256": "68f4abaf6a78b0eb33ec57b24acaee0195842f5b963bd64c240dd72726d9e6ce"
+    },
+    {
+      "path": "src/Core/Models/PotionPools/DeprecatedPotionPool.cs",
+      "sha256": "3e05aeeddcf6a56a98e8a4415453262c33966ea8639170b3cc08d348b8936e0e"
+    },
+    {
+      "path": "src/Core/Models/PotionPools/EventPotionPool.cs",
+      "sha256": "b264bf82c9eba2e613354a735ba719b8e1bfa94a7deed913ff49a6f19f2a203b"
+    },
+    {
+      "path": "src/Core/Models/PotionPools/IroncladPotionPool.cs",
+      "sha256": "4594ab398b7199a81f61b423e4a12f8b5e5832edfa450b864511c9e542e7c187"
+    },
+    {
+      "path": "src/Core/Models/PotionPools/MockPotionPool.cs",
+      "sha256": "93e7586324af2f9699957a5d56b9f1eec35481d63fa85cbef0936b23907c3ab9"
+    },
+    {
+      "path": "src/Core/Models/PotionPools/NecrobinderPotionPool.cs",
+      "sha256": "3611bc6b6b9ba00ddc8961e10e39d3d800ca3db79075a014e769beec5f7f5ecf"
+    },
+    {
+      "path": "src/Core/Models/PotionPools/RegentPotionPool.cs",
+      "sha256": "cc5ffe9d0f5b09d65bff530d8193667d1d149c183e1e49ae586ea3b6945f4d44"
+    },
+    {
+      "path": "src/Core/Models/PotionPools/SharedPotionPool.cs",
+      "sha256": "2e2d2d53b81772047dc6fd22e6f55d69a2792ac8d22fffd46977eb508b8b6c52"
+    },
+    {
+      "path": "src/Core/Models/PotionPools/SilentPotionPool.cs",
+      "sha256": "82087e8002478846db5991b1d21d92df117c08f9f2129ef64dadefd5a375d917"
+    },
+    {
+      "path": "src/Core/Models/PotionPools/TokenPotionPool.cs",
+      "sha256": "c18dae4f664433d76ebeb1f439f4a966f964bb8388a328cf15afc13e905b8768"
+    }
+  ],
+  "sim_sources": [
+    {
+      "path": "sts2_rl/relic_pools.py",
+      "sha256": "9b154acbbf60e149f0081eb586c0faaacc6a459bfb173ff52dc2ce859d5b925a"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "d3a31cbdd8277a5ea1c3ea274d295ca22ca3b431a6a6eec5abc0aa6b06e81fad"
+    },
+    {
+      "path": "sts2_rl/cards/pool.py",
+      "sha256": "0e7260041e0b6693c08bf4aa4ddbb8743311d7fd72d6212fdc7c7d358a7c5030"
+    }
+  ],
+  "extra_sources": [
+    {
+      "path": "src/Core/Entities/Players/Player.cs",
+      "sha256": "ffde0e9e7ef543bcf6a41016f76ce0e7c1924a64aeb351fde03e64ddba0022fe",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RunState.cs",
+      "sha256": "19d266c5ddcdd3d3812190330c69527f70625dc10f357f970a1f38e9423f526c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/NullRunState.cs",
+      "sha256": "a0029454ccabb788d29d1a68e807ad7f2f1458843c2e0bbaa29ec299fae7a891",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Merchant/MerchantRelicEntry.cs",
+      "sha256": "ebe0469c4f681214cab8dc440ba9bd60c7935d0974f75c3cfea61efaf3f434dc",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Merchant/MerchantEntry.cs",
+      "sha256": "dbd59a15346ec9afcd5bf0a4a980985ff5d02d8f34d8a8ff2281e70c8f45ccf4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/RelicModel.cs",
+      "sha256": "82d29bc5857bbf1dadaf26a6d55dbb05c19af0067bf8a642dd6d225999303f7b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/ToxicEgg.cs",
+      "sha256": "5199ee81e31f3273550d0fddf884df69a6d876df34c3b94f5105c5e946701d60",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/MoltenEgg.cs",
+      "sha256": "b706622e797a32ba54e62bc05f71c67d7ace9f29254ba5111f49dbf14ac04571",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/FrozenEgg.cs",
+      "sha256": "09fdd62baaf545bfb544722d07a921db4cf406726cf327e636db96706efb7ceb",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/SwordOfStone.cs",
+      "sha256": "11452dd2cd6b4d9abbde417cbd02bf12f33af28c271482fab5c6216866ecfec5",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/TouchOfOrobas.cs",
+      "sha256": "383244ea3be8742267dbe023d6cbc59f19fcc2cbd062bec34acd04d9a965bc7c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/RanwidTheElder.cs",
+      "sha256": "3471ba50086f4bf759eab58569fcadc35b44e2bfae983c7f8ab7ddb83ca21c2c",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Events/RelicTrader.cs",
+      "sha256": "d5aec2da5f9924b5b170dd0542898e2774f7024f7d969ec128219c8ef7076b35",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Potions/FairyInABottle.cs",
+      "sha256": "f1cf24bf8230d51b14d9d105ff39690e9ba85c2cc8ceaccb3dae000dbf13911b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Potions/FruitJuice.cs",
+      "sha256": "63737f83ad6ff0565a4257ab7236060b35767a176d27c841cdb832860d2106d1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Potions/RegenPotion.cs",
+      "sha256": "0adeee5f2055e46ed5a38b3be6ff5b8bfbe91e7a902505a00ebbe31aaa8529c6",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RunManager.cs",
+      "sha256": "c5dea3e235eaf54f48d1189d7a68d368bea59f44e42567874d7c880f0b409899",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "3caf6a189d109feb62c5ab57f03028277542a8bf12311898e7445be27ce199b2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/shop.py",
+      "sha256": "89c0628c5a3e7ef69a3db1b56315b3d861c14a2fa5ea01dd6aba3153f5becc3d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/_eggs.py",
+      "sha256": "cd60f1cee6043d72cf3f6fa56180bca7c5dcd4757826a3bb1ad2d151014f2c1a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/toxic_egg.py",
+      "sha256": "59e7bb9098485e8e0427dd8e1b66fb07a24d8ec054ce963d377513792270db74",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/sword_of_stone.py",
+      "sha256": "b4dca93d4aed173769499a42575f7417a50baac84be4c11d63f8a9177481898d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/touch_of_orobas.py",
+      "sha256": "06e266d3d240b157532c4f15ccdf8ab3e625f8d81b098f68dce9d105646e0a7d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/conformance/idmap.py",
+      "sha256": "f879967895bf0be9050a2c63804961714370d5d3ef9af9b4a89bdd34c75747df",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/conformance/runner.py",
+      "sha256": "b5b14f28e5cff1acfb3d4528d4c34fd1c83ee217173edf0461caab0e4489931d",
+      "side": "sim"
+    }
+  ],
+  "steps": [
+    {
+      "what": "1. RelicGrabBag.Populate(Player, Rng): bucket every relic from SharedRelicPool union the character's own RelicPool whose Rarity is Common/Uncommon/Rare/Shop into per-rarity deques, UnstableShuffle each deque separately (RelicGrabBag.cs:16-22,69-92).",
+      "verdict": "faithful",
+      "maps_to": "The parity path: relic_pools.populate_relic_grab_bags' player half (sts2_rl/relic_pools.py), which builds SHARED_RELIC_POOL + character_pool filtered to BAG_RARITIES = {Common,Uncommon,Rare,Shop} and shuffles each rarity bucket with rng.shuffle on the run's UpFront stream, then run.py's RunState.__init__ re-seats self.relic_grab_bag from those deques. Independently re-derived against SharedRelicPool.cs (118 relics) and IroncladRelicPool.cs (8 relics) in full: exact order, membership and rarity match for all 126, zero discrepancies. The LEGACY (no string_seed) path builds a differently-sourced merged bag (see guard G5) which omits Shop rarity -- recorded there, not here, since the parity path is faithful."
+    },
+    {
+      "what": "2. RelicGrabBag.Populate(IEnumerable<RelicModel>, Rng): the RUN-LEVEL SharedRelicGrabBag population, ALL 6 relic rarities unfiltered (no _rarities.Contains check on this overload), called once at RunManager.InitializeNewRun (RelicGrabBag.cs:94-114; RunManager.cs:447).",
+      "verdict": "faithful",
+      "maps_to": "relic_pools.populate_relic_grab_bags' shared half: SHARED_RELIC_POOL bucketed by its literal (id, rarity) pairs with no rarity filter, each bucket shuffled on the same UpFront stream -- matching the source's unfiltered overload."
+    },
+    {
+      "what": "3. RelicFactory.RollRarity: one Rng.NextFloat, < 0.5 Common, < 0.83 Uncommon, else Rare -- a FIXED threshold with no ascension dependency and no per-run drift (RelicFactory.cs:80-94).",
+      "verdict": "faithful",
+      "maps_to": "run.roll_relic_rarity (sts2_rl/run.py): identical thresholds, drawing rng.next_float() on a game Rng (parity) or rng.random() on random.Random (legacy). Confirmed there is no PlayerOdds-style pity/drift analogue for relic rarity anywhere in RelicFactory.cs, unlike CardFactory's card-rarity odds (which are `rewards`'s subject)."
+    },
+    {
+      "what": "4. RelicFactory.PullNextRelicFromFront -> GetAvailableDeque's escalation ladder: Shop -> Common -> Uncommon -> Rare -> None, climbing only while the current rarity's deque has nothing passing the filter, never falling to a rarity BELOW the one requested (RelicGrabBag.cs:218-243, switch at :229-235).",
+      "verdict": "faithful",
+      "maps_to": "run.pull_relic_from_front + the module-level _NEXT_RARITY dict (sts2_rl/run.py). RE-DERIVES relic/circlet/g4's first finding independently against today's RelicGrabBag.cs: CONFIRMED, no divergence from that record's reading of the ladder itself. Pinned by test_relics.py::TestCircletIsTheFallbackRelic (cited by relic/circlet.json)."
+    },
+    {
+      "what": "5. GetAvailableDeque's `_refreshAllowed` refill branch: when the target rarity's deque is empty AND the bag's `_refreshAllowed` flag is set, RefreshRarity repopulates that rarity's deque from `_originalRelics` BEFORE the ladder climbs (RelicGrabBag.cs:222-226, RefreshRarity at :325-343).",
+      "verdict": "gap",
+      "live": false,
+      "issue": "RE-DERIVES relic/circlet/g4's second finding, and CORRECTS its reachability framing -- see the report's cross-record-disagreement section; relic/circlet.json is not edited. `player.RelicGrabBag` -- the ONLY bag GetAvailableDeque/PullFromFront/PullFromBack/HasAvailableRelics are ever called on anywhere in the decompiled game -- is built exclusively via the parameterless `RelicGrabBag()` ctor at BOTH of Player's construction sites (Player.cs:301-306 CreateForNewRun; Player.cs:314-322 FromSerializable, which calls RelicGrabBag.FromSerializable -> the same parameterless ctor), so it is ALWAYS refreshAllowed=false. The only refreshAllowed:true instances are RunState.SharedRelicGrabBag (RunState.cs:276 and :311, inside CreateShared) -- confirmed by a full-repo grep this is NOT a per-shop bag (there is no such class); it is the run-level bag used for multiplayer relic-choice bookkeeping. NullRunState.cs:100's menu/test stub is refreshAllowed:false regardless. SharedRelicGrabBag itself is NEVER the subject of GetAvailableDeque/PullFromFront/PullFromBack/HasAvailableRelics anywhere in the decompiled tree -- every one of its ~10 call sites (RelicCmd.cs:44, RelicFactory.cs:48/76, CombatStateSynchronizer.cs, RunManager.cs, three Modifiers/*.cs, RunState.cs itself) is .Remove()/.Populate()/.ToSerializable()/.LoadFromSerializable()/the property getter. CONCLUSION: the branch is dead in EVERY mode (singleplayer AND multiplayer), not merely dormant pending an exhausted rarity within a still-reachable path. Sim has no refill/refresh equivalent at all, which is therefore faithful-by-vacuity rather than an open question. Executable witness: `py audit/tools/relic_pool_probes.py refresh-allowed-dead`."
+    },
+    {
+      "what": "6. RelicFactory.PullNextRelicFromBack -> the SAME GetAvailableDeque (identical ladder), pulling from the back of the deque; the caller's `?? FallbackRelic` guarantees a real relic (worst case Circlet) is ALWAYS returned, never null (RelicFactory.cs:59-78; RelicGrabBag.cs:156-173).",
+      "verdict": "faithful",
+      "issue": "PRE-FIX (kept for history): run.pull_relic_from_back (sts2_rl/run.py) implements NEITHER the escalation ladder NOR the Circlet fallback that pull_relic_from_front (step 4) has: an exhausted rarity returns bare `None` instead of climbing to the next rarity and, failing that, Circlet. Executed: `py audit/tools/relic_pool_probes.py back-pull-ladder` -- with the Rare deque fully drained, pull_relic_from_front(RARE) correctly returns circlet while pull_relic_from_back(RARE, set()) returns None. LIVE: shop.py's MerchantRelicEntry stocks its two rolled-rarity slots (Common/Uncommon/Rare) via run.pull_relic_from_back on every shop visit (shop.py `_populate_relics`/`_restock`); an exhausted rarity leaves the sim's shop slot visibly EMPTY (`is_stocked=False`) where the game always shows a purchasable relic.",
+      "closed": "2026-08-03",
+      "fix": "run.pull_relic_from_back (sts2_rl/run.py) now shares the escalation ladder and `?? FallbackRelic` (Circlet) guard that pull_relic_from_front (step 4) has: an exhausted rarity climbs to the next one via the same _NEXT_RARITY table, ending in a Circlet rather than bare None. Fixed in the same edit as step 7 -- both findings were the SAME never-fully-ported method (pull_relic_from_back), not independent bugs. Witness (now asserting the FIXED behavior): `py audit/tools/relic_pool_probes.py back-pull-ladder` -- with the Rare deque fully drained, both pull_relic_from_front(RARE) and pull_relic_from_back(RARE, set()) now return circlet. Regression test: test/test_conformance_relic_bag.py::test_pull_relic_from_back_escalates_and_falls_back_to_circlet."
+    },
+    {
+      "what": "7. The shop's dedicated Shop-rarity relic slot: MerchantRelicEntry(rarity=RelicRarity.Shop) -> RelicFactory.PullNextRelicFromBack(player, Shop, IsAllowedInShops) -> player.RelicGrabBag.PullFromBack(Shop, ...) -- THE SAME per-player bag object step 1's Populate(Player,Rng) filled alongside Common/Uncommon/Rare (MerchantRelicEntry.cs:28,37-39,76; RelicGrabBag.cs:69-92).",
+      "verdict": "faithful",
+      "issue": "PRE-FIX (kept for history): shop.py's `_populate_relics`/`MerchantRelicEntry._restock` call run.pull_relic_from_back(RelicRarity.SHOP, blacklist), which run.py's pull_relic_from_back routes -- for rarity==SHOP specifically -- to run._get_shop_relic_bag() instead of the merged run.relic_grab_bag / run.player_relic_bag['Shop'] deque. `_get_shop_relic_bag()` independently rescans ALL_RELICS from scratch and reshuffles on run.rng (the legacy shared random.Random, NOT PlayerRng/RunRngSet), lazily on first shop visit -- completely bypassing the properly UpFront-populated, correctly-shuffled Shop deque that already sits inside run.player_relic_bag['Shop'] (26 relics for a fully-unlocked Ironclad run) and the flattened run.relic_grab_bag. Executed: `py audit/tools/relic_pool_probes.py shop-rarity-misroute` -- run.relic_grab_bag (122 relics, 26 Shop-rarity, from the UpFront-seeded parity population) is UNCHANGED in length before and after a Shop-rarity back-pull, and the relic the shop actually hands out (punch_dagger in the probe's seed) is left sitting, unconsumed, inside the very bag that should have supplied it. Reachable on EVERY shop visit -- shop.py's `_populate_relics` always requests exactly one Shop-rarity slot, and shop rooms are real, non-stub ported content.",
+      "closed": "2026-08-03",
+      "fix": "run.pull_relic_from_back (sts2_rl/run.py) no longer special-cases RelicRarity.SHOP to RunState._get_shop_relic_bag(); on the SP2 parity path (self.player_relic_bag is not None) EVERY rarity, Shop included, now pulls from self.relic_grab_bag -- the same UpFront-seeded bag pull_relic_from_front uses -- with the escalation ladder from step 6's fix. The legacy (no string_seed) path keeps _get_shop_relic_bag() for Shop rarity specifically, since its relic_grab_bag never contains Shop-rarity relics at all (relic_pools/guard4, a separate, still-open, dormant gap in that path's run-init population step -- touching it would change every legacy run's initial-shuffle RNG draw count, so it was deliberately left alone). Executed witness (now asserting the FIXED behavior): `py audit/tools/relic_pool_probes.py shop-rarity-misroute` -- the parity-populated run.relic_grab_bag now shrinks by exactly one on a Shop-rarity back-pull and the pulled relic is gone from it; run._shop_relic_bag is confirmed never built on the parity path. Regression test: test/test_conformance_relic_bag.py::test_pull_relic_from_back_shop_rarity_uses_the_parity_bag. Consequence measured against the 933T39V18D conformance seed: the floor-24 and floor-29 shop gold divergences (recorded BuyRelic purchases silently skipped because the wrong stock was offered) are both gone -- tools/converge_triage.py 933T39V18D floor_49 2 now reports 3 divergent floors (34/47/49) instead of 5, with no floor_gold divergence anywhere in the run. The seed's act-1 (+12) / act-2 (+13) player-HP boundary divergences are UNCHANGED by this fix -- they trace to floor 34, a separate, still-open, not-yet-diagnosed divergence this task did not chase (see test/test_conformance_player_state.py's xfail reason)."
+    },
+    {
+      "what": "8. RelicGrabBag.HasAvailableRelics: loops over all 4 bag rarities (Common/Uncommon/Rare/Shop), true the moment ANY of them still has a relic passing the filter; also checks _mpFallbackDequeue (RelicGrabBag.cs:44-58).",
+      "verdict": "gap",
+      "live": false,
+      "issue": "run.has_available_relics (sts2_rl/run.py) is `bool(self.relic_grab_bag)`. Faithful in the PARITY path, where relic_grab_bag includes Shop-rarity relics (step 1). In the LEGACY (no string_seed) path, run.py's module-level `_BAG_RARITIES` constant omits Shop entirely from the scan that seeds self.relic_grab_bag (see guard G5), and Shop-rarity relics live only in the separate `_get_shop_relic_bag()` that has_available_relics never consults -- so a legacy run that has exhausted every Common/Uncommon/Rare relic while a Shop-rarity one remains under-reports availability. Two ported consumers: events/luminous_choir.py's appearance gate and relics/shovel.py's effect gate. DORMANT: not executed -- draining the entire Common/Uncommon/Rare bag within one run is an extreme-length scenario I did not construct a witness for; recorded with the concrete trigger rather than claimed live without one."
+    },
+    {
+      "what": "9. RelicCmd.Obtain: AddRelicInternal, remove the granted relic from both grab bags unless IsStackable, mark FloorAddedToDeck, `await relic.AfterObtained()` (RelicCmd.cs:22-55).",
+      "verdict": "faithful",
+      "maps_to": "run.add_relic (sts2_rl/run.py) appends and calls relic.after_obtained(self); the grab-bag removal is already performed inline at each pull call site (pull_relic_from_front/back both `.remove()` the picked id before returning it), so a granted relic cannot reappear -- the same net effect as RelicCmd.Obtain's explicit removal step for non-stackable relics."
+    },
+    {
+      "what": "10. RelicCmd.Remove/Replace/Melt: Remove awaits `relic.AfterRemoved()`; Replace removes the original and re-Obtains the replacement AT THE ORIGINAL'S LIST INDEX (preserving relic-list position); Melt marks the relic melted and also awaits AfterRemoved (RelicCmd.cs:61-93).",
+      "verdict": "deliberate-divergence",
+      "rationale": "The sim has no shared RelicCmd-equivalent command -- every removal site is a bare `run.relics.remove(...)` (events/ranwid_the_elder.py, events/relic_trader.py, relics/toy_box.py, conformance/runner.py). This is faithful-by-vacuity for AfterRemoved: `grep -rn \"override.*Task AfterRemoved\" src/Core/Models/Relics` returns ZERO matches -- no relic in the entire decompiled game overrides it, so its base no-op body means the sim's omission diverges from nothing observable. For Replace specifically: its two real C# callers (SwordOfStone.cs:48, TouchOfOrobas.cs:160) ARE ported, and BOTH preserve the index exactly as RelicCmd.Replace does -- `run.relics[run.relics.index(old)] = new` followed by `new.after_obtained(run)` (relics/sword_of_stone.py, relics/touch_of_orobas.py) -- verified by reading both files against their C# counterparts. For the plain-Remove sites: checked the C# behind both ported consumers (RanwidTheElder.cs:128, RelicTrader.cs:148-149) and confirmed BOTH use Remove+Obtain-with-default-index (i.e. append), matching the sim's remove+append exactly -- Ranwid/Relic Trader were NOT Replace calls in the source either, so no index-preservation was ever expected there. No currently-ported content is observably affected by the absence of a shared command."
+    },
+    {
+      "what": "11. RelicSelectCmd.FromChooseARelicScreen: reserves a multiplayer choice id, shows the local screen (or waits for a remote player's choice), returns the picked RelicModel or null (RelicSelectCmd.cs:18-52).",
+      "verdict": "waiver",
+      "rationale": "ShouldSelectLocalRelic's branch (RelicSelectCmd.cs:18-25) is multiplayer/replay-network plumbing around a real single-player choice, per relic_pools.md's item 4. The underlying single-player DECISION (which relic, from a shown list) belongs to and is verdicted by whichever event/room record consumes it (e.g. a Choose-a-Relic-shaped event), not duplicated here -- this seam claims only the pool/factory/command machinery those choices draw from."
+    },
+    {
+      "what": "12. PotionFactory.CreateRandomPotion(s)(OutOfCombat/InCombat): one Rng.NextFloat rarity roll (Rare<=0.10, Uncommon<=0.35, else Common) then Rng.NextItem over that rarity's bucket of Character.PotionPool union SharedPotionPool; the in-combat variant additionally excludes CanBeGeneratedInCombat=false potions (PotionFactory.cs:14-88).",
+      "verdict": "faithful",
+      "maps_to": "potion_pools.py's roll_potion_rarity / generate_random_potion(s)(_in_combat) / NOT_GENERATED_IN_COMBAT. Independently re-derived: SharedPotionPool.cs (45 potions) and IroncladPotionPool.cs (3, via Ironclad4Epoch.Potions) read in full against _SHARED_RAW_POOL/_IRONCLAD_RAW_POOL -- zero discrepancies in order, membership or rarity across all 48. The 3 CanBeGeneratedInCombat=false overrides game-wide (FairyInABottle.cs:19, FruitJuice.cs:20, RegenPotion.cs:22, confirmed by grepping every file under Models/Potions/) are exactly NOT_GENERATED_IN_COMBAT's 3 entries."
+    },
+    {
+      "what": "13. CardFactory's pool-composition legs: FilterForCombat (drops Basic/Ancient/Event rarity and CanBeGeneratedInCombat=false, CardFactory.cs:159-162) and GetDefaultTransformationOptions (Quest cards and Event/Ancient/Token rarities transform via ColorlessCardPool; every other card transforms via its OWN CardModel.Pool, CardFactory.cs:170-212).",
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-08-03 (gap-fix pass). `cards/pool.py` now declares `STATUS_POOL` in StatusCardPool.cs:19-34's own order (Wither sixth, between Infection and Slimed) and `transform_options_in_combat`'s STATUS branch uses it instead of rebuilding the row from `sorted(_CARD_CLASSES)` — which both alphabetized it and swept in four sim statuses (mind_rot/sloth/disintegration/waste_away) that are not StatusCardPool members at all. Debris and Void remain unported, which shifts the indices after them on its own; that is a separate content gap, not this ordering one. Tests: test/test_card_generation_pool.py::TestStatusTransformKeepsTheDeclaredPoolOrder.\n\nWHAT THE GAP SAID: cards/pool.py's pool_card_ids/transform_options_in_combat. IroncladCardPool.cs (87 minus Tank/DemonicShield), ColorlessCardPool.cs (64 minus the 11 named multiplayer-only cards) and CurseCardPool.cs (18) all match IRONCLAD_POOL/COLORLESS_POOL/CURSE_POOL exactly in order and membership -- zero discrepancies, and both multiplayer-only exclusion lists are exact and complete against a game-wide census of all 21 MultiplayerConstraint.MultiplayerOnly cards. The ONE real divergence: for a STATUS-type card, CardModel.Pool resolves to StatusCardPool (confirmed: Dazed.cs and Slimed.cs are declared only inside StatusCardPool.GenerateAllCards), whose declared order (StatusCardPool.cs:22-33 -- Beckon, Burn, Dazed, Debris, FranticEscape, Infection, Wither, Slimed, Soot, Toxic, Void, Wound) is NOT alphabetical, but transform_options_in_combat's STATUS branch (cards/pool.py) builds its candidate list via `sorted(_CARD_CLASSES.items())` -- Wither moves from game-index 6 to alphabetized-index 10, and Slimed/Soot/Toxic/Void each shift down one slot, so a given rng.NextItem draw index can pick a different replacement card than the game would. LIVE: transform_options_in_combat's only in-combat caller is CardCmd.transform_to_random (cmds.py), reached only from the ported EntropyPower.on_player_turn_started (powers.py), which selects randomly over the ENTIRE HAND with no type filter (CardSelectCmd.from_hand, predicate=None) -- a Status card (Dazed/Wound/Slimed/Burn, all ported) can legitimately be in an Ironclad player's hand when the ported Entropy card/power fires."
+    },
+    {
+      "what": "14. The three egg relics' three call sites: TryModifyCardRewardOptionsLate (reward offer), ModifyMerchantCardCreationResults (shop stock), TryModifyCardBeingAddedToDeck (every other deck-add route) -- Toxic upgrades Skill, Frozen upgrades Power, Molten upgrades Attack (ToxicEgg.cs:21-61 and its two siblings, MoltenEgg.cs, FrozenEgg.cs).",
+      "verdict": "faithful",
+      "maps_to": "relics/_eggs.py's EggRelic.modify_card_reward_options_late / modify_merchant_card_results / modify_card_being_added_to_deck, wired at all three call sites: rewards.py's Late pass (the second of Hook.TryModifyCardRewardOptions's two complete listener passes), shop.py's _apply_merchant_card_hooks (run per merchant card entry right after creation), and run.py's two deck-add sites (add_card_to_deck and the clone/transform path). `_applies` gates on card.is_upgradable before calling card.upgrade(), avoiding the unguarded-upgrade trap other ports have hit; ONLY_UNUPGRADED correctly restricts MoltenEgg.cs:56's already-upgraded-Attack exclusion to Molten alone, matching that Toxic/Frozen do not share it."
+    },
+    {
+      "what": "15. Placeholder potions (_ParityPotion / make_pool_potion) and the belt resync (idmap.sim_potion_id, conformance/runner.py's _resync_potions).",
+      "verdict": "faithful",
+      "issue": "Does NOT change pool composition or draw counts. generate_random_potion(s)(_in_combat) always build real classes via _make/_POTION_CLASSES over the same POTION_POOL rosters verdicted in step 12; test_every_pooled_potion_is_implemented (test/test_potions.py) confirms 100% of POTION_POOL's 48 ids resolve to a real class today, so _ParityPotion is never actually constructed by any DRAWING path. It exists purely as a resync-time safety net for a save-recorded id that is in the pool's rarity table (_POOL_RARITY) yet somehow lacks a class -- a state that does not currently occur -- and idmap.sim_potion_id returns None outright (leaving the belt slot empty, not filled by a placeholder) for any cross-character potion id outside the pool entirely."
+    }
+  ],
+  "guards": [
+    {
+      "what": "GrabBag.cs (Core/Helpers/GrabBag.cs), the generic weighted-pop primitive, is NOT what RelicGrabBag uses despite the similar name.",
+      "verdict": "faithful",
+      "rationale": "RelicGrabBag.cs read in full: GetAvailableDeque/RefreshRarity/both Populate overloads use List<RelicModel>.UnstableShuffle plus a linear front/back scan-and-RemoveAt; GrabBag<T> is never referenced anywhere in the file. Re-confirms the wiring task's own finding (audit/seams/relic_pools.md) against today's source rather than inheriting it unchecked. GrabBag<T>'s real caller is ActModel's tag-safe encounter/event picking (AddWithoutRepeatingTags), claimed by rooms_and_map, not here."
+    },
+    {
+      "what": "Relic pool literal composition and order -- SharedRelicPool.cs (118 relics) and IroncladRelicPool.cs (8 relics) vs SHARED_RELIC_POOL / IRONCLAD_RELIC_POOL.",
+      "verdict": "faithful",
+      "issue": "Independently re-derived, not inherited: both C# files read in full, cross-referencing every relic's Rarity against its own Models/Relics/<Name>.cs file. Exact order, membership and rarity match for all 126 relics -- zero discrepancies. FallbackRelicPool.cs (the pool CLASS, distinct from RelicFactory.FallbackRelic) confirmed dead code: only 3 references game-wide, all model-registry bookkeeping (ModelDb.cs, AbstractModelSubtypes.cs), never a pull source for any gameplay path -- the sim's direct-Circlet FALLBACK_RELIC_ID approach is the correct port target, not a FallbackRelicPool-shaped one. The other 7 relic pool files (Defect/Necrobinder/Regent/Silent character pools, DeprecatedRelicPool, EventRelicPool) census-checked and confirmed out of the Ironclad-only sim's current scope."
+    },
+    {
+      "what": "Card pool literal composition and order -- IroncladCardPool.cs, ColorlessCardPool.cs, CurseCardPool.cs vs IRONCLAD_POOL, COLORLESS_POOL, CURSE_POOL.",
+      "verdict": "faithful",
+      "issue": "Zero discrepancies in order or membership for all three pools once each pool's own MultiplayerConstraint.MultiplayerOnly cards are excluded (Tank/DemonicShield for Ironclad; the 11 named cards for Colorless). Both exclusion lists verified exact and complete against a game-wide grep of all 21 MultiplayerOnly cards -- no Ironclad/Colorless card is missing from its pool's exclusion list, and none of the 9 other-character MultiplayerOnly cards was wrongly excluded. The one real card-pool divergence found (StatusCardPool's declared order vs the sim's alphabetization) is filed at step 13, not duplicated here."
+    },
+    {
+      "what": "Potion pool literal composition and order -- SharedPotionPool.cs (45) and IroncladPotionPool.cs (3) vs _SHARED_RAW_POOL / _IRONCLAD_RAW_POOL.",
+      "verdict": "faithful",
+      "issue": "Zero discrepancies (order, membership, rarity) across all 48 potions. The other 8 potion pool files (Defect/Necrobinder/Regent/Silent character pools; Deprecated/Event/Mock/Token) census-checked: each carries either a different character's gate or a rarity value (None/Event/Token) outside {Common,Uncommon,Rare}, the only values PotionFactory's reward/shop roll ever draws -- confirmed genuinely out of scope, none should be folded into the shared/Ironclad-visible roster."
+    },
+    {
+      "what": "The LEGACY (no string_seed) relic grab bag's rarity filter omits Shop, unlike Populate(Player,Rng)'s 4-rarity filter and unlike the PARITY path's own BAG_RARITIES.",
+      "verdict": "gap",
+      "live": false,
+      "issue": "run.py's module-level `_BAG_RARITIES = (RelicRarity.COMMON, RelicRarity.UNCOMMON, RelicRarity.RARE)` (no SHOP) seeds RunState.__init__'s legacy self.relic_grab_bag scan over ALL_RELICS -- a narrower filter than RelicGrabBag.Populate(Player,Rng)'s _rarities = {Common,Uncommon,Rare,Shop} (RelicGrabBag.cs:16-22) and than relic_pools.py's own BAG_RARITIES (which DOES include \"Shop\"). Only the legacy (RL-training, no string_seed) path is affected -- the parity path is faithful (step 1). The composition-level root cause of step 8's has_available_relics under-report; recorded once here rather than duplicated."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-08-03"
+}

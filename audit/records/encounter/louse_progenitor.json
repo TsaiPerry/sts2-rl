@@ -1,0 +1,52 @@
+{
+  "unit": "encounter/louse_progenitor",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\LouseProgenitorNormal.cs",
+    "sha256": "4af07974b384c17388a0c14b235e122e9c0a8cb468617d238a1fc842bcebc910"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\hive\\louse_progenitor.py",
+    "sha256": "cec3386fb7ecf3d49dbbd2184110f19bd5451ac645d663e125609d99abfb40d5"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "sts2_rl/rooms.py _hive_rooms().normal_keys includes 'louse_progenitor' (rooms.py)",
+      "verdict": "faithful",
+      "rationale": "LouseProgenitorNormal.cs:9 RoomType => Monster. 'louse_progenitor' sits in hive's normal_keys only (never weak_keys/elite_keys/boss_keys), matching Monster. Cross-ref seam/rooms_and_map (unaudited) for how the runtime room_type argument at reward time is actually resolved from the map layer; this record verifies only the per-encounter value."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation/bestiary only (ActModel.cs:169, NBestiary.cs:194 -- see knowledge_demon's identical finding, not re-derived per-unit). C# value is [LouseProgenitor] (1 element), matching GenerateMonsters' own roster. The sim has no per-encounter monster-vocabulary counterpart and is headless (no bestiary), costing nothing observable."
+    },
+    "GenerateMonsters": {
+      "maps_to": "LOUSE_PROGENITOR_NORMAL = Encounter(id='louse_progenitor_normal', monster_classes=[LouseProgenitor]) (louse_progenitor.py:69-72)",
+      "verdict": "faithful",
+      "rationale": "LouseProgenitorNormal.cs:13-16 returns a fixed single-element list, (LouseProgenitor, null) -- roster {LouseProgenitor}x1, slot null, ZERO Rng draws. Encounter.create_monsters (sts2_rl/monsters/base.py) with monster_slots=() builds [LouseProgenitor(hooks, rng)], drawing nothing for selection -- roster, order (trivial) and draw count (0) all match; slot_name stays None on both sides."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "sts2_rl/monsters/base.py Encounter (never passed to HookSystem.register)",
+      "verdict": "faithful",
+      "rationale": "EncounterModel.cs:39 => false. The sim's Encounter is never registered with the HookSystem (grep -rn 'register(.*encounter' sts2_rl/ -- no matches); only the created LouseProgenitor Monster registers itself. Matches the C# default, uncontested by this unit."
+    }
+  },
+  "guards": [
+    {
+      "what": "Min/MaxGoldReward inheritance (RoomType.Monster ladder, non-Poverty)",
+      "verdict": "faithful",
+      "rationale": "Not overridden; inherits EncounterModel.cs:64-81's Monster => (10, 20). sts2_rl/rewards.py GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20) -- exact match (`py audit/tools/encounter_probes_e4.py gold-ladder`). Poverty multiplier out of scope per PROMPT.md; rewards.py confirms non-ascension values only."
+    },
+    {
+      "what": "ShouldGiveRewards / IsWeak inheritance (defaults true / false)",
+      "verdict": "faithful",
+      "rationale": "Neither overridden in C#. LOUSE_PROGENITOR_NORMAL passes no should_give_rewards= (keeps Encounter's default True); 'louse_progenitor' is absent from every weak_keys tuple in rooms.py, matching IsWeak=>false."
+    },
+    {
+      "what": "Per-encounter Rng independence",
+      "verdict": "faithful",
+      "rationale": "GenerateMonsters draws ZERO values on either side (see GenerateMonsters hook) -- no draw exists here to misattribute to a shared stream. Stream seeding itself is seam/rng_streams' mechanism, not re-derived here."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-08-03"
+}

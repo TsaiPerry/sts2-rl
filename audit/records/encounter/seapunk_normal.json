@@ -1,0 +1,95 @@
+{
+  "unit": "encounter/seapunk_normal",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\SeapunkNormal.cs",
+    "sha256": "154b09253e63de6ad0e125281263515366418c2caa899e53f2a3e3eb488c5477"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\underdocks\\seapunk.py",
+    "sha256": "0fcaa8b12589c4ebcc21f0b5e52b9f57b6f841aa582bdc2d0f4ada25e1bb4b18"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/ActModel.cs",
+      "sha256": "158831cf2c7b7887f2242fa5751fad3ceeb5c8913fbc89d41451645bd822cc9b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/EncounterModel.cs",
+      "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/ModelDb.cs",
+      "sha256": "3ce833579b24f71f74fc5a5d9118ee5eec3030eae07a19de90a38dd7449273d6",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/Screens/Bestiary/NBestiary.cs",
+      "sha256": "e5bf63632335d834f61d57c951775a428ecb1a27f98a56bf790675e9bd3aba79",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "4ba9a145147eb29e6f42a10acb70986873bf1bb12d47a12ef764a423572f312f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/base.py",
+      "sha256": "424336cf4fb7be8026278b7a34af428082d8487fb57f25c3565311fe5c993388",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "3caf6a189d109feb62c5ab57f03028277542a8bf12311898e7445be27ce199b2",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "RoomType": {
+      "maps_to": "RoomType.Monster (SeapunkNormal.cs:10). Sim equivalent: 'seapunk_normal' is listed in ActRooms.normal_keys for underdocks (rooms.py:133-137), the structural stand-in for RoomType.Monster -- it also drives the MinGoldReward/MaxGoldReward ladder (see guards) via CombatState.room_type, set at combat creation from the same pool membership (run.py:1415-1421).",
+      "verdict": "faithful"
+    },
+    "Tags": {
+      "maps_to": "EncounterTag.Seapunk (SeapunkNormal.cs:12). Sim: ActRooms.tags['seapunk_normal'] = ('seapunk',) (rooms.py:144), matching 'seapunk_weak' (rooms.py:143) so the two never repeat back-to-back. The tag lives on the room-layer registry rather than on the Encounter object itself (Encounter has no tags field, monsters/base.py:352-375); the picker mechanism that consumes it (GrabBag-style no-repeat-tag selection) is seam/rooms_and_map's subject, not re-verdicted here -- only the VALUE is checked and it matches.",
+      "verdict": "faithful"
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "[Seapunk, CalcifiedCultist] (SeapunkNormal.cs:14-18). Its only two C# consumers are NBestiary.cs:194 (the Bestiary screen) and ActModel.AllMonsters/ModelDb.Monsters (ActModel.cs:169, ModelDb.cs:177 -- asset-preload dedup across an act), both presentation/infrastructure with no headless equivalent. The sim's nearest functional analog is full_env.py's global MONSTER_IDS vocabulary (full_env.py:252-269), which enumerates every registered Monster subclass regardless of per-encounter membership, so nothing an observation could need is missing for want of a per-encounter AllPossibleMonsters.",
+      "verdict": "waiver",
+      "rationale": "Bestiary display and asset preload have no headless counterpart in this sim; the global MONSTER_IDS vocabulary already makes every monster identity representable, so the narrower per-encounter listing costs nothing observable."
+    },
+    "GenerateMonsters": {
+      "maps_to": "SeapunkNormal.cs:20-27 returns [(CalcifiedCultist, null), (Seapunk, null)] -- 2 monsters, cultist first, both unslotted, 0 Rng draws. Sim: seapunk.py:67-70, Encounter(id='seapunk_normal', monster_classes=[CalcifiedCultist, Seapunk]) -- same 2 classes in the same order, 0 draws (Encounter.create_monsters, monsters/base.py:408-416, only rolls each monster's per-instance HP off the shared combat rng, mirroring CombatState.CreateCreature's parity Niche roll, not a GenerateMonsters-level draw -- the C# body itself calls no Rng method). Roster, order, slot-nullness and draw count (0) all match element-for-element.",
+      "verdict": "faithful"
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "EncounterModel.cs:39, `=> false`. Sim: Encounter instances are never registered with HookSystem -- CombatState.__init__ (combat.py:170-232) registers the player, every deck card (plus its affliction/enchantment), and every Monster (Monster.__init__, monsters/base.py:296-297), but never `self.encounter`. The encounter is not a hook listener in either implementation.",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: MinGoldReward/MaxGoldReward + ShouldGiveRewards (both inherited defaults, not overridden by SeapunkNormal)",
+      "verdict": "faithful",
+      "rationale": "RoomType.Monster -> (10, 20) gold, non-ascension branch (EncounterModel.cs:64-81/83-100; Poverty's 0.75x multiplier is ascension scope, out of the audit contract, and rewards.py:32 documents the sim as non-ascension-only on purpose). Sim: rewards.py:170-174, GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20) -- exact match. ShouldGiveRewards defaults true on both sides (EncounterModel.cs:62; Encounter.should_give_rewards default True, monsters/base.py:360); SeapunkNormal does not override either."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-08-03"
+}

@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from .cmds import is_over_or_ending as _is_over_or_ending
 from .creatures import Creature
+from .dotnet_sort import dotnet_list_sort
 from .hooks import HookSystem
 from .turn_phase import PlayerTurnPhase
 
@@ -31,8 +32,11 @@ def _compare_to_key(card: "Card") -> "tuple[str, int]":
     letters but *before* the lowercase ones, so sorting the sim's lowercase
     slugs orders `blood_wall`/`bloodletting` and
     `jack_of_all_trades`/`jackpot` the opposite way round from the game.
-    Cards that compare equal keep their incoming order (Python's sort is
-    stable), so the caller must pass the pile in the GAME's orientation."""
+    Cards that compare equal are ordered by `dotnet_list_sort`'s introsort, not
+    by their incoming positions (`List<T>.Sort()` is NOT stable — see
+    `sts2_rl/dotnet_sort.py`), but the incoming order is still what that
+    algorithm runs on, so the caller must pass the pile in the GAME's
+    orientation."""
     return (card.id.upper(), card.upgrade_level)
 
 
@@ -53,7 +57,7 @@ def stable_shuffled_cards(cards: "list[Card]", combat_rng,
     """
     out = list(cards)
     if combat_rng.is_parity:
-        out.sort(key=_compare_to_key)
+        dotnet_list_sort(out, key=_compare_to_key)
     (stream if stream is not None else combat_rng.shuffle).shuffle(out)
     return out
 
@@ -564,6 +568,15 @@ class PlayerCombatState(Creature):
             which SORTS the pile into a canonical order first so the result is
             INDEPENDENT of the pile's incoming (play) order, THEN Fisher-Yates.
 
+        "Independent of the incoming order" is the verb's INTENT and holds for
+        any two cards that compare unequal. It does NOT hold for a tie: C#'s
+        `List<T>.Sort()` is an introsort and is not stable, so two identical
+        cards (same ModelId, same upgrade level — `CardModel.CompareTo` returns
+        0, CardModel.cs:2242-2263) come out in an order the ALGORITHM decides
+        from where they happened to sit. That is why the sort below is
+        `dotnet_list_sort` and not `cards.sort`; see `sts2_rl/dotnet_sort.py`
+        for the divergence that paid for it.
+
         In parity mode we reproduce both. The stabilizing sort mirrors the
         game's CardModel.CompareTo: first ModelId ordinal (Category.Entry) — the
         sim card `id` is a lowercase slug whose ordinal order matches the game
@@ -611,7 +624,7 @@ class PlayerCombatState(Creature):
         fixed because the regression tests pinned a single seed where the
         2-card shuffle happened not to swap."""
         if stable and self._combat_rng.is_parity:
-            cards.sort(key=_compare_to_key)
+            dotnet_list_sort(cards, key=_compare_to_key)
         self._combat_rng.shuffle.shuffle(cards)
         if self._combat_rng.is_parity:
             cards.reverse()

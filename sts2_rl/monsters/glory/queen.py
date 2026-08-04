@@ -217,4 +217,8 @@ class Queen(MachineMonster):
 QUEEN_BOSS = Encounter(
     id="queen_boss",
     monster_classes=[TorchHeadAmalgam, Queen],
+    # QueenBoss.cs:17,43-50 — the row and the roster agree, so the sort is a
+    # no-op today; declared so a future summon lands where the game puts it.
+    slots=("amalgam", "queen"),
+    monster_slots=("amalgam", "queen"),
 )

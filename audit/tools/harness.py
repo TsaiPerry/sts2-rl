@@ -59,6 +59,13 @@ GAME_MODEL_DIRS = {
     # relic tier filed 45 potion-mechanic gaps. Making it a KIND is what turns
     # "out of scope" into "unaudited", which is a fact the tools can report.
     "potion": "src/Core/Models/Potions",
+    # Three "systems tier" kinds added 2026-08-03 (wiring only, no records
+    # yet — see prompts/2026-08-03-audit-the-systems-tier.md). `encounter`
+    # and `affliction` are the game's own content dirs; `character` gets one
+    # too even though only Ironclad is in scope (see `_sim_units`'s comment).
+    "encounter": "src/Core/Models/Encounters",
+    "affliction": "src/Core/Models/Afflictions",
+    "character": "src/Core/Models/Characters",
 }
 
 # `public override <type> <Name>(  |  => ...  |  { ...` — one-regex scan of
@@ -68,11 +75,62 @@ GAME_MODEL_DIRS = {
 # `(decimal, bool)` — is matched; without it those hooks were silently
 # skipped, and the enumeration cannot be trusted if it can miss a member.
 # The quantifier is non-greedy, so `void Foo(` still parses as type `void`.
+#
+# OPEN DEFECT, not fixed here (2026-08-03, P1-T4): this same blind spot exists
+# for `protected override` — and it is not rare. Measured with
+# `grep -l "protected override" <dir>/*.cs | wc -l` against each model dir's
+# TOTAL .cs file count (non-recursive, same population `unported()` globs):
+#   Relics 246/298, Powers 143/260, Cards 564/578, Monsters 117/121,
+#   Events 68/68, Enchantments 9/23, Potions 63/64 files. `validate` currently
+#   passes hundreds of finished records for these seven kinds against an
+#   enumeration that cannot see every `protected override` member they
+#   declare — those records are not wrong on the strength of anything found
+#   here, but they have not been checked against the fuller enumeration
+#   either. Widening this regex globally would retroactively flag all of them
+#   as incomplete in one step, which is a decision for whoever runs that
+#   campaign, not a side effect of fixing the three new "systems tier" kinds
+#   below. See PROTECTED_OVERRIDE_KINDS for the narrow fix that IS made here.
 _OVERRIDE_RE = re.compile(
     r"^\s*public\s+override\s+(?:sealed\s+)?(?:async\s+)?"
     r"[\w<>,.?\[\]() ]+?\s(\w+)\s*(?:\(|=>|\{|$)",
     re.M,
 )
+
+# Same scan, but for `protected override` — identical shape otherwise, so any
+# fix to the type character class or the quantifier above must be mirrored
+# here (or the two would silently drift apart on the exact same class of bug
+# this pair exists to catch).
+_PROTECTED_OVERRIDE_RE = re.compile(
+    r"^\s*protected\s+override\s+(?:sealed\s+)?(?:async\s+)?"
+    r"[\w<>,.?\[\]() ]+?\s(\w+)\s*(?:\(|=>|\{|$)",
+    re.M,
+)
+
+# Kinds whose GAME-side subject is declared `protected override`, not
+# `public override` — added 2026-08-03 for the three "systems tier" kinds
+# (encounter/affliction/character). The motivating case: EVERY one of the 88
+# `src/Core/Models/Encounters/*.cs` files declares
+#   protected override IReadOnlyList<(MonsterModel, string?)> GenerateMonsters()
+# and that method — the monster roster, slot assignment, RNG draw count/
+# stream, ordering — is the entire subject of the encounter audit. Before this
+# constant existed, `_declared_overrides` only matched `public override`, so
+# `GenerateMonsters` was invisible to `skeleton`/`validate` and an encounter
+# record could be pronounced complete having verdicted nothing about it.
+#
+# Scoped to exactly these three kinds, not widened for everyone, because the
+# seven pre-existing kinds (`card`, `relic`, `power`, `monster`, `event`,
+# `potion`, `enchantment`) have hundreds of `protected override` members of
+# their own (see the finding logged on `_OVERRIDE_RE` above) and every one of
+# those kinds already has finished, `validate`-passing records written
+# against the narrower enumeration. Widening for them here would silently
+# invalidate that work as a side effect of an unrelated task instead of as a
+# deliberate, reviewed decision — exactly the failure mode
+# `MODEL_ROOT_CLASSES`'s own block comment already warns about ("a promise one
+# root did not keep"). A named, scoped constant — checked at the one place
+# enumeration happens — means widening it later for another kind is a
+# one-line change with an explicit reason, not a boolean threaded through
+# every call site that touches enumeration.
+PROTECTED_OVERRIDE_KINDS = frozenset({"encounter", "affliction", "character"})
 
 # `public sealed class Foo : Bar, IBaz` -> ("Foo", "Bar, IBaz").
 _CLASS_DECL_RE = re.compile(
@@ -89,23 +147,56 @@ _CLASS_DECL_RE = re.compile(
 # audited, once, by the seam tier (hook_dispatch hashes AbstractModel.cs and
 # the model files). Base-class following stops here.
 #
-# THIS IS A PROMISE, AND ONE ROOT DOES NOT KEEP IT. There is no potion seam, so
-# stopping at PotionModel means PotionModel.OnUseWrapper — the whole use path
-# for all 51 potions — is verdicted nowhere, and `validate` cannot notice
-# because a root is exactly what it is told to stop at. Recorded once in
-# audit/content/potion/shared-mechanisms.md and carried as one guard per potion
-# record until a `potion_pipeline` seam exists. Before adding a root here,
-# check which seam covers it.
+# THIS WAS A PROMISE ONE ROOT DID NOT KEEP. Until 2026-08-03 there was no
+# potion seam, so stopping at PotionModel meant PotionModel.OnUseWrapper — the
+# whole use path for all 51 potions — was verdicted nowhere, and `validate`
+# could not notice because a root is exactly what it is told to stop at. That
+# hole is WIRED SHUT (not yet audited) by SEAM_SOURCES["potion_pipeline"]
+# (PotionCmd.cs + PotionModel.cs, see audit/seams/potion_pipeline.md). The 51
+# potion records' own `shared-mechanisms.md` guard citation is unchanged —
+# that doc is still the per-unit pointer to the shared mechanism — but now a
+# seam record actually exists to carry that mechanism's own verdict once
+# audited, instead of the hole being merely documented. Before adding a root
+# here, check which seam covers it — same rule, now with an example that
+# actually got closed instead of just documented.
 MODEL_ROOT_CLASSES = frozenset({
     "AbstractModel", "AfflictionModel", "BadgeModel", "CardModel",
     "CreatureModel", "EnchantmentModel", "EventModel", "ModifierModel",
     "MonsterModel", "OrbModel", "PotionModel", "PowerModel", "RelicModel",
 })
 
+# EncounterModel and CharacterModel are DELIBERATELY NOT roots here, checked
+# (not assumed) as part of widening enumeration to `protected override` for
+# their kinds (2026-08-03, P1-T4). Both are the immediate base of every unit
+# in their kind (every Encounters/*.cs : EncounterModel, every rostered
+# Characters/*.cs : CharacterModel), so if either declared a `protected
+# override` member, widening the regex would newly pull it in as "inherited"
+# — a real behaviour change worth a decision, per the task brief. Read
+# directly: neither file declares ANY `protected override` member (both have
+# exactly one relevant override at all, `public override bool
+# ShouldReceiveCombatHooks => false`, already surfaced today as an inherited
+# hook — e.g. encounter/flyconid's fourth hook). So promoting them to roots
+# would suppress that existing, legitimate hook for no compensating benefit;
+# leaving them off costs nothing, because there is no protected member to
+# leak in. AfflictionModel (already a root, above) is a different case: it
+# DOES declare `protected override void AfterCloned()`, but root membership
+# already stops `split_overrides` before it reaches AfflictionModel.cs at
+# all, so the widened regex cannot surface it either way — root status, not
+# regex width, is what's controlling there.
 
-def _declared_overrides(cs_text: str) -> list[str]:
-    """Names of every `public override` member declared in this text."""
-    return list(dict.fromkeys(_OVERRIDE_RE.findall(cs_text)))
+
+def _declared_overrides(cs_text: str, kind: str | None = None) -> list[str]:
+    """Names of every `public override` member declared in this text, in
+    source order. When `kind` is one of PROTECTED_OVERRIDE_KINDS, also
+    includes `protected override` members (see that constant's comment) —
+    merged by position, not by pattern, so a file mixing both visibilities
+    still enumerates in the order they're actually declared."""
+    matches = [(m.start(), m.group(1)) for m in _OVERRIDE_RE.finditer(cs_text)]
+    if kind in PROTECTED_OVERRIDE_KINDS:
+        matches += [(m.start(), m.group(1))
+                    for m in _PROTECTED_OVERRIDE_RE.finditer(cs_text)]
+    matches.sort(key=lambda t: t[0])
+    return list(dict.fromkeys(name for _, name in matches))
 
 
 def _base_class_name(cs_text: str) -> str | None:
@@ -149,15 +240,26 @@ def find_class_file(name: str, game_root: Path | None = None) -> Path | None:
 
 
 def split_overrides(cs_text: str, game_root: Path | None = None,
-                    source_path: Path | None = None) -> tuple[list[str], list[str]]:
+                    source_path: Path | None = None,
+                    kind: str | None = None) -> tuple[list[str], list[str]]:
     """(declared here, inherited from the immediate base), in declaration order.
 
     A `.cs` file that declares only `OriginModel` while its base declares the
     real behaviour used to enumerate as one hook, so `validate` confirmed a
     verdict for that one and never noticed the other seven. One level of base
     is enough for the shapes this source uses; `game_root` is required to
-    resolve it because the base normally lives in another file."""
-    declared = _declared_overrides(cs_text)
+    resolve it because the base normally lives in another file.
+
+    `kind` is passed straight through to both `_declared_overrides` calls —
+    the unit's own file AND its base's — so a PROTECTED_OVERRIDE_KINDS unit
+    whose base also declares a `protected override` member would see it as
+    inherited too. (As of 2026-08-03 this is moot for all three scoped kinds:
+    EncounterModel.cs and CharacterModel.cs declare none, and AfflictionModel
+    is already a MODEL_ROOT_CLASSES root so its members — including the one
+    `protected override AfterCloned()` it does have — are never reached from
+    here regardless. Passing `kind` through anyway is correct on principle and
+    costs nothing today.)"""
+    declared = _declared_overrides(cs_text, kind)
     if game_root is None:
         return declared, []
     base = _base_class_name(cs_text)
@@ -167,17 +269,19 @@ def split_overrides(cs_text: str, game_root: Path | None = None,
     if bp is None or (source_path and bp.resolve() == Path(source_path).resolve()):
         return declared, []
     inherited = [n for n in _declared_overrides(
-        bp.read_text(encoding="utf-8-sig", errors="replace"))
+        bp.read_text(encoding="utf-8-sig", errors="replace"), kind)
         if n not in declared]
     return declared, inherited
 
 
 def list_overrides(cs_text: str, game_root: Path | None = None,
-                   source_path: Path | None = None) -> list[str]:
+                   source_path: Path | None = None,
+                   kind: str | None = None) -> list[str]:
     """Every `public override` member the unit really has, in declaration
     order: the ones it declares, then the ones it inherits from its immediate
-    base. Pass `game_root` to get the inherited half."""
-    declared, inherited = split_overrides(cs_text, game_root, source_path)
+    base. Pass `game_root` to get the inherited half. Pass `kind` to widen the
+    enumeration to `protected override` for PROTECTED_OVERRIDE_KINDS."""
+    declared, inherited = split_overrides(cs_text, game_root, source_path, kind)
     return declared + inherited
 
 
@@ -237,6 +341,30 @@ def _sim_units(kind: str) -> dict[str, type]:
         return dict(ALL_POTIONS)
     if kind == "monster":
         return _monster_units()
+    if kind == "affliction":
+        from sts2_rl.afflictions import ALL_AFFLICTIONS
+        return dict(ALL_AFFLICTIONS)
+    if kind == "character":
+        # Ironclad-relevant scope. `CHARACTERS` holds all FIVE playable
+        # characters — Ironclad plus four source-verified-but-unported rows
+        # (characters.py's module docstring); `DeprecatedCharacter` and
+        # `RandomCharacter` are framework plumbing the sim never registers as
+        # a playable character at all, so they are not content and do not
+        # belong here regardless of scope. Porting Silent/Regent/Necrobinder/
+        # Defect is a separate campaign, not this audit's job, but `roster`
+        # reports what the sim REGISTERS, not what is content-complete — so
+        # all five appear, which is deliberately fine (see the prompt brief).
+        # Every one of the five is built by a function in this single file
+        # (`_ironclad`/`_unported`, both called from `_build_registry`), so
+        # the shared `Character` dataclass stands in for `cls`: unlike an
+        # instance (which `inspect.getsourcefile` cannot resolve — no
+        # `__module__` on a plain value), the class correctly resolves to
+        # `characters.py` for every one of the five, because that really is
+        # where every one of them is defined.
+        from sts2_rl.characters import CHARACTERS, Character
+        return {cid: Character for cid in CHARACTERS}
+    if kind == "encounter":
+        return _encounter_units()
     raise ValueError(f"unknown kind: {kind}")
 
 
@@ -256,6 +384,131 @@ def _monster_units() -> dict[str, type]:
                     and cls.__module__ == mod.__name__
                 ):
                     units[_snake(cls.__name__)] = cls
+    return units
+
+
+def _encounter_units() -> dict[str, object]:
+    """unit_id -> the per-monster submodule that builds the instance.
+
+    The four acts' `ENCOUNTERS: dict[str, Encounter]` registries hold
+    dataclass INSTANCES, not classes — every encounter shares the one
+    `Encounter` class (`monsters/base.py`), so `inspect.getsourcefile
+    (type(instance))` would point every single encounter at base.py instead
+    of the file that actually builds it (an `Encounter(...)` call in a
+    per-monster module, e.g. `BYGONE_EFFIGY_ELITE` in `bygone_effigy.py`).
+    `roster()` only needs *something* `inspect.getsourcefile` accepts, and it
+    accepts a module just as well as a class, so this walks each act's
+    submodules — the same way `_monster_units` does — and hands back the
+    submodule that actually holds the matching instance, matched by IDENTITY
+    rather than name (a submodule routinely builds more than one encounter,
+    e.g. `slimes.py`'s `SLIMES_NORMAL` and `SLIMES_WEAK`, and both must
+    resolve to `slimes.py`).
+
+    Also verifies the four acts' dicts share no key: `roster` would silently
+    let one shadow the other in a merged namespace, and that would hide a
+    real content collision rather than surface it.
+
+    The four `ENCOUNTERS` dicts are not the whole story. Six game files build
+    an `EncounterModel` that the room system never reaches through the normal
+    per-act monster rotation — instead an *event* hands the built encounter
+    straight to combat (`Event.pending_encounter` / `Event.canonical_encounter`,
+    see `events/base.py`'s docstring), and the sim mirrors that with a
+    module-level `Encounter(...)` instance that sits outside all four dicts.
+    Confirmed by grepping every module-level `Encounter(` construction under
+    `sts2_rl/` (2026-08-03): the 80 ENCOUNTERS-dict entries are every encounter
+    reachable from `rooms.py`'s ordinary spawn path, and exactly five more are
+    real, consumed, ported content:
+      - `DenseVegetationEventEncounter.cs` -> `events/dense_vegetation.py`
+      - `PunchOffEventEncounter.cs`        -> `events/punch_off.py`
+      - `MysteriousKnightEventEncounter.cs`-> `monsters/hive/flail_knight.py`
+        (built there, not in `events/the_lantern_key.py` — that module only
+        imports the constant; matches how the four acts' encounters live in a
+        per-monster submodule rather than in the act's own `__init__.py`)
+      - `FakeMerchantEventEncounter.cs`    -> `monsters/fake_merchant.py`
+      - `BattlewornDummyEventEncounter.cs` -> `monsters/glory/battle_friend.py`
+    A SIXTH file matching the same "*EventEncounter.cs" naming pattern,
+    `TheArchitectEventEncounter.cs`, is NOT one of these, despite an earlier
+    pass over this campaign guessing otherwise: `events/base.py`'s
+    `is_combat_layout` comment and `run.py`'s `complete_run` docstring both
+    say outright that The Architect's victory event is unported (no sim
+    `Encounter` instance exists for it anywhere), so its `.cs` file correctly
+    surfaces as unported below, same as `DeprecatedEncounter.cs` (literally
+    deprecated, not content) and `TunnelerNormal.cs` (the sim only ports the
+    Weak variant, `TunnelerWeak.cs`).
+    Two more near-duplicates this grep turned up are dead code, not gaps, and
+    are deliberately NOT rostered: top-level `sts2_rl/monsters/nibbit.py`
+    (`NIBBITS_NORMAL`/`NIBBITS_WEAK`) and `sts2_rl/monsters/
+    fuzzy_wurm_crawler.py` (`FUZZY_WURM_ENCOUNTER`) are pre-`overgrowth/`-
+    package leftovers, fully superseded by their same-named counterparts in
+    `monsters/overgrowth/`, and imported by nothing — not `monsters/__init__.py`
+    (which imports the `overgrowth/` package's versions under the same names),
+    not any event, not any test. A unit with no import path is not "ported
+    content that never passes through an ENCOUNTERS dict" — it is unreachable,
+    so it stays out of the roster the same way `sim_only` skeletons stay out
+    of `unported()`'s C#-side count.
+
+    `BattlewornDummyEventEncounter.cs` is ONE class whose ONE `GenerateMonsters`
+    switch picks among three monster models by a `Setting` enum; the sim
+    mirrors the three arms as three separate constants
+    (`BATTLEWORN_DUMMY_SETTING_1/2/3`), but every `public override` hook on the
+    class (`RoomType`, `ShouldGiveRewards`, `AllPossibleMonsters`,
+    `SaveCustomState`/`LoadCustomState`) is shared code with nothing to tell
+    apart per setting. Auditing it as three units would cite the same hooks in
+    three records with nothing keeping their verdicts in sync — the exact
+    cross-record-disagreement failure mode this campaign already treats as a
+    defect elsewhere — for zero benefit, since there is no per-setting
+    behaviour to disagree about in the first place. So it is ONE unit, same as
+    every other `.cs` file, not three.
+
+    Unit ids reuse each encounter's own `Encounter.id` field where one exists
+    (already a stable identity used elsewhere, e.g. `snapshots.py`'s
+    `_EVENT_ENCOUNTERS` tuple) rather than inventing new ones. Battleworn Dummy
+    has three ids and no single one can stand for the whole class, so it is
+    named after its own `.cs` file instead, in the same "<name>_event" shape
+    the real ids already use. None of the five collides with an
+    ENCOUNTERS-dict key (checked below, not just assumed) or with each other.
+    """
+    from sts2_rl.monsters.base import Encounter
+
+    units: dict[str, object] = {}
+    owning_act: dict[str, str] = {}
+    for act in ("overgrowth", "underdocks", "hive", "glory"):
+        pkg = importlib.import_module(f"sts2_rl.monsters.{act}")
+        instance_module: dict[int, object] = {}
+        for info in pkgutil.iter_modules(pkg.__path__):
+            mod = importlib.import_module(f"sts2_rl.monsters.{act}.{info.name}")
+            for val in vars(mod).values():
+                if isinstance(val, Encounter):
+                    instance_module.setdefault(id(val), mod)
+        for unit_id, enc in pkg.ENCOUNTERS.items():
+            if unit_id in units:
+                raise ValueError(
+                    f"encounter id {unit_id!r} is defined in both "
+                    f"{owning_act[unit_id]}.ENCOUNTERS and {act}.ENCOUNTERS")
+            owning_act[unit_id] = act
+            # Fallback to the act package itself on the (currently unused)
+            # chance an encounter is built directly in the act's __init__.py
+            # rather than a per-monster submodule.
+            units[unit_id] = instance_module.get(id(enc), pkg)
+
+    from sts2_rl.events import dense_vegetation, punch_off
+    from sts2_rl.monsters import fake_merchant
+    from sts2_rl.monsters.glory import battle_friend
+    from sts2_rl.monsters.hive import flail_knight
+
+    extra_units = {
+        "dense_vegetation_event": dense_vegetation,
+        "punch_off_event": punch_off,
+        "mysterious_knight_event": flail_knight,
+        "fake_merchant_event": fake_merchant,
+        "battleworn_dummy_event": battle_friend,
+    }
+    for unit_id, mod in extra_units.items():
+        if unit_id in units:
+            raise ValueError(
+                f"encounter id {unit_id!r} collides with an "
+                f"ENCOUNTERS-dict key from {owning_act.get(unit_id)!r}")
+        units[unit_id] = mod
     return units
 
 
@@ -720,6 +973,300 @@ SEAM_SOURCES: dict[str, tuple[list[str], list[str]]] = {
          "sts2_rl/monsters/hive/the_obscura.py",
          "sts2_rl/monsters/underdocks/living_fog.py"],
     ),
+    # Five "systems tier" seams added 2026-08-03 (wiring only — scope docs +
+    # empty records, see prompts/2026-08-03-audit-the-systems-tier.md and its
+    # follow-up P1-T2 brief). No verdicts yet; audit/seams/<name>.md carries
+    # the scope-boundary reasoning summarized in each comment below.
+    "rng_streams": (
+        # Rng.cs is the counter-wrapping PRNG every stream is one instance of;
+        # MegaRandom.cs is the Xoshiro256** core it wraps. Neither file knows
+        # about "streams" by NAME — that identity is the two RngType enums
+        # (PlayerRngType.cs: 3 per-player streams; RunRngType.cs: 12 per-run
+        # streams — found by grepping every consumer of PlayerRngSet/RunRngSet
+        # for what defines their type parameter; no third file defines a
+        # stream anywhere in src/) and the two Set classes that seed one Rng
+        # per enum value off one base seed (PlayerRngSet.cs, RunRngSet.cs).
+        # StringHelper.cs is pinned too: GetDeterministicHashCode is how a
+        # stream's NAME becomes part of its seed (`new Rng(Seed, name)` adds
+        # `GetDeterministicHashCode(SnakeCase(rngType))`), so a change to
+        # either method silently reseeds every stream. Together these six
+        # files are the whole "which stream a draw comes off, and in what
+        # count" map — GAP-QUEUE.md's own "Behaviour in no tier's scope"
+        # section names this as the highest-impact structural hole in the
+        # queue, since stream desync is the highest-impact failure class the
+        # queue tracks.
+        ["src/Core/Random/Rng.cs", "src/Core/Random/MegaRandom.cs",
+         "src/Core/Random/PlayerRngSet.cs", "src/Core/Runs/RunRngSet.cs",
+         "src/Core/Entities/Rngs/PlayerRngType.cs",
+         "src/Core/Entities/Rngs/RunRngType.cs",
+         "src/Core/Helpers/StringHelper.cs"],
+        # rng.py ports every file above in one module (MegaRandom, Rng,
+        # RunRngSet, PlayerRngSet, RunRngType, PlayerRngType, plus
+        # snake_case/deterministic_hash_code for StringHelper.cs). combat_rng.py
+        # is the per-purpose CombatRng facade (legacy shared-random vs. parity
+        # per-stream) every in-combat RNG consumer actually calls through.
+        # run.py INSTANTIATES RunRngSet/PlayerRngSet but defines no stream
+        # identity of its own — it is a consumer, claimed by run_layer for its
+        # orchestration role, not here (see run_layer's scope doc).
+        ["sts2_rl/rng.py", "sts2_rl/combat_rng.py"],
+    ),
+    "rewards": (
+        # The 11 Rewards/*.cs files are the reward TYPES (Card/Gold/Potion/
+        # Relic/SpecialCard/CardRemoval reward, plus the LinkedRewardSet that
+        # groups them and the RewardType enum/extensions) and RewardsSet, the
+        # per-room generator whose two populate loops around Hook.ModifyRewards
+        # are this seam's central claim (see the crystal_sphere/g3 finding
+        # below). RewardsCmd.cs is the only Commands/*.cs file whose subject is
+        # rewards (OfferForRoomEnd/OfferCustom/GenerateForRoomEnd/GenerateCustom
+        # — all four are thin wrappers around RewardsSet, so the file adds no
+        # new logic but is the entry point every room-end and event/relic
+        # reward path calls through).
+        # CardCreationFlags/Options/Source/CardRarityOddsType.cs live under
+        # src/Core/Runs/ in the game tree (so the P1-T2 brief's own
+        # controller-analysis filed them under run_layer), but they are
+        # overruled to HERE: their whole subject is "what cards can a reward
+        # generate and at what rarity", and the sim proves it — every one of
+        # the four is ported inside rewards.py (RarityOddsType,
+        # CardCreationSource, CardCreationFlags, CardCreationOptions classes),
+        # not run.py. Filing them under run_layer would split one audited
+        # concept across two records for no reason but which C# folder it
+        # happened to ship in.
+        ["src/Core/Rewards/CardRemovalReward.cs", "src/Core/Rewards/CardReward.cs",
+         "src/Core/Rewards/GoldReward.cs", "src/Core/Rewards/LinkedRewardSet.cs",
+         "src/Core/Rewards/PotionReward.cs", "src/Core/Rewards/RelicReward.cs",
+         "src/Core/Rewards/Reward.cs", "src/Core/Rewards/RewardType.cs",
+         "src/Core/Rewards/RewardTypeExtensions.cs", "src/Core/Rewards/RewardsSet.cs",
+         "src/Core/Rewards/SpecialCardReward.cs", "src/Core/Commands/RewardsCmd.cs",
+         "src/Core/Runs/CardCreationFlags.cs", "src/Core/Runs/CardCreationOptions.cs",
+         "src/Core/Runs/CardCreationSource.cs", "src/Core/Runs/CardRarityOddsType.cs"],
+        # rewards.py is the whole sim counterpart: it carries the four
+        # reassigned Runs/*.cs ports listed above AND the reward-generation
+        # pipeline (roll_gold_reward, create_reward_cards, CombatRewards,
+        # apply_reward_modifiers, generate_combat_rewards) that stands in for
+        # RewardsSet/RewardsCmd. Nothing else in the sim generates a reward.
+        ["sts2_rl/rewards.py"],
+    ),
+    "relic_pools": (
+        # RelicGrabBag.cs is the escalation-ladder/refill machine two live
+        # bugs already live here (relic/circlet/g4): GetAvailableDeque's
+        # Shop->Common->Uncommon->Rare climb before falling back to Circlet,
+        # and the _refreshAllowed refill branch. RelicFactory/CardFactory/
+        # PotionFactory.cs are the three pool-to-instance choke points
+        # (CardFactory doubles as the card-pool seam's factory per the brief —
+        # there is no separate "card_pools" seam). RelicCmd.cs (Obtain/Remove/
+        # Replace/Melt) and RelicSelectCmd.cs (the ChooseARelicScreen pick) are
+        # the only two Commands/*.cs files whose subject is relics reaching a
+        # player, as opposed to a pool being built. The 32 RelicPools/
+        # CardPools/PotionPools files (9+13+10) are every named pool
+        # (character/shared/event/deprecated/mock/token/curse/status/quest) —
+        # claimed as one set rather than filtering because each one is a
+        # top-level GenerateAll* roster with no shared base logic to point at
+        # instead; a partial claim would leave an arbitrary subset unpinned
+        # for no principled reason. GrabBag.cs (the generic weighted-pop
+        # primitive RelicGrabBag delegates UnstableShuffle to) is NOT claimed
+        # here — despite rng.py's grab_and_remove docstring naming it, its only
+        # real caller is ActModel's tag-safe encounter/event picking, so it is
+        # claimed by rooms_and_map instead (see that seam's doc).
+        ["src/Core/Runs/RelicGrabBag.cs", "src/Core/Factories/RelicFactory.cs",
+         "src/Core/Factories/CardFactory.cs", "src/Core/Factories/PotionFactory.cs",
+         "src/Core/Commands/RelicCmd.cs", "src/Core/Commands/RelicSelectCmd.cs",
+         "src/Core/Models/RelicPools/DefectRelicPool.cs",
+         "src/Core/Models/RelicPools/DeprecatedRelicPool.cs",
+         "src/Core/Models/RelicPools/EventRelicPool.cs",
+         "src/Core/Models/RelicPools/FallbackRelicPool.cs",
+         "src/Core/Models/RelicPools/IroncladRelicPool.cs",
+         "src/Core/Models/RelicPools/NecrobinderRelicPool.cs",
+         "src/Core/Models/RelicPools/RegentRelicPool.cs",
+         "src/Core/Models/RelicPools/SharedRelicPool.cs",
+         "src/Core/Models/RelicPools/SilentRelicPool.cs",
+         "src/Core/Models/CardPools/ColorlessCardPool.cs",
+         "src/Core/Models/CardPools/CurseCardPool.cs",
+         "src/Core/Models/CardPools/DefectCardPool.cs",
+         "src/Core/Models/CardPools/DeprecatedCardPool.cs",
+         "src/Core/Models/CardPools/EventCardPool.cs",
+         "src/Core/Models/CardPools/IroncladCardPool.cs",
+         "src/Core/Models/CardPools/MockCardPool.cs",
+         "src/Core/Models/CardPools/NecrobinderCardPool.cs",
+         "src/Core/Models/CardPools/QuestCardPool.cs",
+         "src/Core/Models/CardPools/RegentCardPool.cs",
+         "src/Core/Models/CardPools/SilentCardPool.cs",
+         "src/Core/Models/CardPools/StatusCardPool.cs",
+         "src/Core/Models/CardPools/TokenCardPool.cs",
+         "src/Core/Models/PotionPools/DefectPotionPool.cs",
+         "src/Core/Models/PotionPools/DeprecatedPotionPool.cs",
+         "src/Core/Models/PotionPools/EventPotionPool.cs",
+         "src/Core/Models/PotionPools/IroncladPotionPool.cs",
+         "src/Core/Models/PotionPools/MockPotionPool.cs",
+         "src/Core/Models/PotionPools/NecrobinderPotionPool.cs",
+         "src/Core/Models/PotionPools/RegentPotionPool.cs",
+         "src/Core/Models/PotionPools/SharedPotionPool.cs",
+         "src/Core/Models/PotionPools/SilentPotionPool.cs",
+         "src/Core/Models/PotionPools/TokenPotionPool.cs"],
+        # relic_pools.py + potion_pools.py are the transcribed rosters
+        # (source-order id/rarity tuples) for the relic and potion halves;
+        # cards/pool.py is the card-pool equivalent the brief asked to locate
+        # (IRONCLAD_POOL/COLORLESS_POOL/CURSE_POOL plus the CardFactory.
+        # FilterForCombat/GetDistinctForCombat/transform-options ports).
+        # combat_card_db.py was checked and excluded: it is NetCombatCardDb's
+        # per-combat card-ID assigner (multiplayer net identity), not pool
+        # composition — a different subject entirely.
+        ["sts2_rl/relic_pools.py", "sts2_rl/potion_pools.py", "sts2_rl/cards/pool.py"],
+    ),
+    "run_layer": (
+        # RunManager.cs is the run orchestrator (also cross-cited by
+        # rooms_and_map for its BuildRoomTypeBlacklist/RollRoomTypeFor methods
+        # only — split by method, see that seam's doc). IRunState.cs is its
+        # declared surface, the same "root contract, audited once" role
+        # AbstractModel.cs plays for hook_dispatch. ExtraRunFields.cs is a
+        # 3-field bag; two fields (StartedWithNeow save/load display,
+        # TestSubjectKills save-progression) are unsimulated, but the third
+        # (FreedRepy) is real, ported gameplay state (war_historian_repy.py's
+        # only other reader), so the whole file is claimed.
+        #
+        # This seam is deliberately thin: RunState.cs (the other half of "the
+        # run") is already claimed by hook_dispatch (IterateHookListeners);
+        # RelicGrabBag.cs and RunRngSet.cs are claimed by relic_pools and
+        # rng_streams respectively (do not double-claim — see those seams'
+        # docs); CardCreationFlags/Options/Source/CardRarityOddsType.cs are
+        # claimed by rewards, overruling the brief's own controller-analysis,
+        # because rewards.py is where the sim actually ports them (see that
+        # seam's doc). What is left after every neighbouring seam takes its
+        # subject is orchestration plumbing — the singleton and its contract.
+        #
+        # Of the 21 Runs/*.cs candidate files (Runs/* minus RunState.cs),
+        # 12 are dropped as pure DTO/interface/multiplayer/score plumbing —
+        # every one is named, with its reason, in audit/seams/run_layer.md's
+        # file table (not silently omitted): GameMode.cs + GameModeExtension.cs
+        # (Daily/Custom mode + achievement-lock, unsimulated meta-progression);
+        # ICardScope.cs (pure interface, implementation lives on RunState.cs/
+        # CombatState.cs, both claimed elsewhere); IPlayerCollection.cs (pure
+        # test-mocking interface per its own doc comment); MapLocation.cs +
+        # RunLocation.cs (packet-serialization value types for multiplayer
+        # message routing / map voting, by their own doc comments); NullRunState.cs
+        # (null-object stub for menu/test contexts outside an active run — the
+        # RL sim is always inside one); PlayerMapPointHistoryEntry.cs (per-floor
+        # stat-tracking DTO, JSON+packet serialization only); RunHistory.cs +
+        # RunHistoryPlayer.cs + RunHistoryUtilities.cs (save-file run-history
+        # bookkeeping, no gameplay branch); ScoreUtility.cs (score/badge/
+        # leaderboard math, not RL-relevant — the brief's own "score plumbing"
+        # drop category).
+        ["src/Core/Runs/RunManager.cs", "src/Core/Runs/IRunState.cs",
+         "src/Core/Runs/ExtraRunFields.cs"],
+        ["sts2_rl/run.py"],
+    ),
+    "rooms_and_map": (
+        # Rooms/*.cs (14) and Map/*.cs (16) are claimed wholesale per the
+        # brief (every room type + every map-generation file, including the
+        # mock/null/saved/spoils variants — the room/map tier has no shared
+        # base worth pointing at instead, same reasoning as relic_pools' 32
+        # pool files). Models/Acts/*.cs (5: Overgrowth/Underdocks/Hive/Glory/
+        # DeprecatedAct) is the sim's ACTS-INTO-THIS-SEAM decision: the sim has
+        # no act registry (verified — no ACTS/ALL_ACTS/class Act anywhere in
+        # sts2_rl/, per the brief), so there is no "act" kind to roster Acts
+        # against, and Acts' structure (encounter/event rosters, boss discovery
+        # order, map point type rolls) is folded into this seam instead of
+        # being invisible.
+        #
+        # Four files were added on top of the brief's literal Rooms+Map+Acts
+        # list, found by reading rooms.py/actmap.py/shop.py/rest_site.py's own
+        # docstrings for game paths outside those three directories:
+        #  - Models/ActModel.cs: the ACTS' BASE CLASS (GenerateRooms, the
+        #    default GetMapPointTypes, ApplyActDiscoveryOrderModifications) —
+        #    rooms.py's docstring cites it directly ("RoomSet.cs + ActModel.
+        #    GenerateRooms -> RoomSet/ActRooms"); omitting it would leave the
+        #    one method every Act file calls into unpinned.
+        #  - Odds/UnknownMapPointOdds.cs: the "?"-node pity roller rooms.py
+        #    ports as UnknownOdds; lives under Core/Odds/, not Map/ or Rooms/.
+        #  - Entities/RestSite/RestSiteOption.cs: rest_site.py's own docstring
+        #    names it as ground truth (Hook.TryModifyRestSiteOptions); it is a
+        #    sibling of Rooms/RestSiteRoom.cs, not the same file.
+        #  - Helpers/GrabBag.cs: the generic weighted-pop primitive ActModel
+        #    uses for tag-safe encounter/event picking (AddWithoutRepeatingTags)
+        #    — NOT claimed by relic_pools (see that seam's doc) because
+        #    RelicGrabBag's own shuffle/escalation logic never calls it.
+        # Entities/Merchant/*.cs (7 of 8): shop.py's docstring names
+        # MerchantInventory.cs and MerchantEntry.cs as ground truth alongside
+        # the already-listed Rooms/MerchantRoom.cs; the four entry subclasses
+        # (Card/CardRemoval/Potion/Relic) and PurchaseStatus.cs are the pricing/
+        # stocking logic shop.py ports. MerchantDialogueSet.cs (the 8th file,
+        # shop NPC flavor lines) is dropped — presentation only, no priced
+        # behaviour.
+        # RunManager.cs is cross-cited from run_layer (BuildRoomTypeBlacklist/
+        # RollRoomTypeFor only, per rooms.py's docstring — the rest of the file
+        # is run_layer's, see that seam's doc for the split).
+        #
+        # NOT claimed here: EncounterModel.cs's own GenerateMonstersWithSlots
+        # (monster-slot generation) — GAP-QUEUE.md names this as one of the
+        # two worst systems-tier holes, but it is the ENCOUNTER kind's own
+        # subject (each encounter content record's future job), not "which
+        # encounter gets rolled for a room". Left open on purpose; see the
+        # P1-T2 report's MODEL_ROOT_CLASSES discussion for why EncounterModel
+        # is still not a root.
+        ["src/Core/Rooms/AbstractRoom.cs", "src/Core/Rooms/BackgroundAssets.cs",
+         "src/Core/Rooms/CombatEventVisuals.cs", "src/Core/Rooms/CombatRoom.cs",
+         "src/Core/Rooms/CombatRoomMode.cs", "src/Core/Rooms/EventRoom.cs",
+         "src/Core/Rooms/ICombatRoomVisuals.cs", "src/Core/Rooms/MapRoom.cs",
+         "src/Core/Rooms/MerchantRoom.cs", "src/Core/Rooms/RestSiteRoom.cs",
+         "src/Core/Rooms/RoomSet.cs", "src/Core/Rooms/RoomType.cs",
+         "src/Core/Rooms/RoomTypeExtensions.cs", "src/Core/Rooms/TreasureRoom.cs",
+         "src/Core/Map/ActMap.cs", "src/Core/Map/GoldenPathActMap.cs",
+         "src/Core/Map/MapCoord.cs", "src/Core/Map/MapPathPruning.cs",
+         "src/Core/Map/MapPoint.cs", "src/Core/Map/MapPointState.cs",
+         "src/Core/Map/MapPointType.cs", "src/Core/Map/MapPointTypeCounts.cs",
+         "src/Core/Map/MapPostProcessing.cs", "src/Core/Map/MapTravel.cs",
+         "src/Core/Map/MockCraftedActMap.cs", "src/Core/Map/MockSinglePointActMap.cs",
+         "src/Core/Map/NullActMap.cs", "src/Core/Map/SavedActMap.cs",
+         "src/Core/Map/SpoilsActMap.cs", "src/Core/Map/StandardActMap.cs",
+         "src/Core/Models/Acts/DeprecatedAct.cs", "src/Core/Models/Acts/Glory.cs",
+         "src/Core/Models/Acts/Hive.cs", "src/Core/Models/Acts/Overgrowth.cs",
+         "src/Core/Models/Acts/Underdocks.cs", "src/Core/Models/ActModel.cs",
+         "src/Core/Odds/UnknownMapPointOdds.cs",
+         "src/Core/Entities/RestSite/RestSiteOption.cs",
+         "src/Core/Entities/Merchant/MerchantEntry.cs",
+         "src/Core/Entities/Merchant/MerchantInventory.cs",
+         "src/Core/Entities/Merchant/MerchantCardEntry.cs",
+         "src/Core/Entities/Merchant/MerchantCardRemovalEntry.cs",
+         "src/Core/Entities/Merchant/MerchantPotionEntry.cs",
+         "src/Core/Entities/Merchant/MerchantRelicEntry.cs",
+         "src/Core/Entities/Merchant/PurchaseStatus.cs",
+         "src/Core/Helpers/GrabBag.cs", "src/Core/Commands/MapCmd.cs",
+         "src/Core/Runs/RunManager.cs"],
+        ["sts2_rl/rooms.py", "sts2_rl/actmap.py", "sts2_rl/rest_site.py",
+         "sts2_rl/shop.py"],
+    ),
+    "potion_pipeline": (
+        # The `commands_remainder` decision (P1-T2 brief, item 6): of the 13
+        # Commands/*.cs files not already claimed by an existing seam, 4 go to
+        # a new-in-this-task seam (RewardsCmd->rewards, MapCmd->rooms_and_map,
+        # RelicCmd+RelicSelectCmd->relic_pools — all folded into the seam
+        # above that owns their subject, per the brief's own instruction), 8
+        # are out of scope (ForgeCmd/OrbCmd/OstyCmd — Regent/Defect/
+        # Necrobinder, Ironclad-irrelevant; SfxCmd/VfxCmd/TalkCmd/ThinkCmd —
+        # presentation; Cmd.cs — overruling the brief's suggested run_layer
+        # fold, since on inspection it is nothing but Godot scene-tree timer
+        # waits for animation pacing, the same presentation category as the
+        # four *Cmd files beside it, not run orchestration), and PotionCmd.cs
+        # has no natural fold target — it is the ENTIRE belt-procurement/
+        # discard pipeline (TryToProcure/Discard, each wrapping a Hook.*
+        # dispatch), and folding it into relic_pools (pool composition) or
+        # rewards (offer generation) would misdescribe it. So it gets this
+        # sixth seam, paired with PotionModel.cs: harness.MODEL_ROOT_CLASSES'
+        # block comment already documented this exact hole ("There is no
+        # potion seam, so stopping at PotionModel means PotionModel.
+        # OnUseWrapper ... is verdicted nowhere") — that comment is updated
+        # alongside this entry to point at potion_pipeline instead of
+        # asserting the hole is still open.
+        ["src/Core/Commands/PotionCmd.cs", "src/Core/Models/PotionModel.cs"],
+        # potions.py holds every ported potion's OnUse body (already cited by
+        # hook_dispatch for unrelated gap evidence — cross-seam citation on the
+        # sim side is normal, see hooks.py/combat.py/player.py's own multi-seam
+        # citations). player.py is the belt itself (add_potion/discard_potion,
+        # PotionCmd.TryToProcure/Discard's counterpart). combat.py is
+        # use_potion, the in-combat consumption path. run.py's add_potion is
+        # the run-level (non-combat, e.g. reward) grant path.
+        ["sts2_rl/potions.py", "sts2_rl/player.py", "sts2_rl/combat.py",
+         "sts2_rl/run.py"],
+    ),
 }
 SEAMS: tuple[str, ...] = tuple(SEAM_SOURCES)
 
@@ -772,7 +1319,7 @@ def skeleton(unit: str, game_root: Path | None = None,
                 name: {"maps_to": "", "verdict": ""}
                 for name in list_overrides(
                     gp.read_text(encoding="utf-8-sig", errors="replace"),
-                    game_root=root, source_path=gp)
+                    game_root=root, source_path=gp, kind=kind)
             },
             "guards": [],
             "verdict": "",
@@ -855,13 +1402,14 @@ def enumeration_gaps(record: dict, game_root: Path | None = None) -> list[str]:
     would red-line the whole ledger. `validate --strict-inherited` does that
     promotion once the records have caught up."""
     root = game_root or DEFAULT_GAME_ROOT
-    if record.get("sim_only") or (record.get("unit", "").split("/", 1)[0] == "seam"):
+    kind = record.get("unit", "").split("/", 1)[0]
+    if record.get("sim_only") or kind == "seam":
         return []
     gp = root / (record.get("game_source") or {}).get("path", "")
     if not gp.is_file():
         return []
     _, inherited = split_overrides(
-        gp.read_text(encoding="utf-8-sig", errors="replace"), root, gp)
+        gp.read_text(encoding="utf-8-sig", errors="replace"), root, gp, kind)
     have = {hook_key(k) for k in (record.get("hooks") or {})}
     return [n for n in inherited if n not in have]
 
@@ -931,7 +1479,8 @@ def validate_record(record: dict, game_root: Path | None = None,
         if gp.is_file():
             have = {hook_key(k) for k in hooks}
             declared, inherited = split_overrides(
-                gp.read_text(encoding="utf-8-sig", errors="replace"), root, gp)
+                gp.read_text(encoding="utf-8-sig", errors="replace"), root, gp,
+                kind)
             missing = [n for n in declared if n not in have]
             if strict_inherited:
                 missing += [n for n in inherited if n not in have]

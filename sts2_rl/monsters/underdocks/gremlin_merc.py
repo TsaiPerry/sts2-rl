@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from ..base import Encounter, Intent, MoveType
@@ -137,7 +138,39 @@ class FatGremlin(MachineMonster):
         CreatureCmd.escape(ctx.hooks, self)
 
 
-GREMLIN_MERC_NORMAL = Encounter(
+@dataclass
+class GremlinMercEncounter(Encounter):
+    """`GremlinMercNormal` — the one encounter with a bespoke escape/reward
+    rule (EncounterModel.cs:371 names it as THE example)."""
+
+    def calculate_gold_proportion(self, combat) -> float:
+        """`GremlinMercNormal.CalculateGoldProportion`
+        (GremlinMercNormal.cs:58-69), all three arms:
+
+            no Fat Gremlin escaped        -> 1.0  (the base formula is not used)
+            it escaped, stole nothing     -> 0.5
+            it escaped WITH stolen gold   -> 0.0
+
+        `GoldWasStolen` is a flag `SurprisePower.AfterDeath` raises via
+        `MarkGoldStolen` when the dying Merc's ThieveryPower total is > 0
+        (SurprisePower.cs:34-38). The flag itself is NOT ported onto the
+        `Encounter`: these objects are module-level singletons shared by every
+        combat (C# takes a `ToMutable()` copy per run), so state parked on one
+        would leak into the next fight. `combat.gold_stolen` — the combat's own
+        running total of ThieveryPower steals — carries the same fact here: the
+        Merc is this encounter's only thief and it cannot steal after the death
+        that raises the flag, so "the dying Merc's Thievery total was > 0" and
+        "this combat had any gold stolen" coincide. Neither the Merc's own
+        ThieveryPower nor the Fat Gremlin's HeistPower can be read back
+        instead — powers are cleared on death AND on escape, both of which have
+        happened by the time rewards are generated.
+        """
+        if not any(isinstance(e, FatGremlin) and e.escaped for e in combat.enemies):
+            return 1.0
+        return 0.0 if combat.gold_stolen > 0 else 0.5
+
+
+GREMLIN_MERC_NORMAL = GremlinMercEncounter(
     id="gremlin_merc_normal",
     monster_classes=[GremlinMerc],
 )

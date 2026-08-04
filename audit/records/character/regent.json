@@ -1,0 +1,149 @@
+{
+  "unit": "character/regent",
+  "game_source": {
+    "path": "src\\Core\\Models\\Characters\\Regent.cs",
+    "sha256": "9ad2fd58b83070ab50fe0a8ad734502cd2cdf43ff9c649b01ca31c2bcd344d4e"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\characters.py",
+    "sha256": "2df97b087c2a1211b25975c2e83c708704a4fe3dba83579c2b1281d8039f8a8f"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/CharacterModel.cs",
+      "sha256": "8cbce4b51220c71424cc9b84367c04a744f15bd990bc22dcbc0f2bb9fe2b050a",
+      "side": "game"
+    }
+  ],
+  "hooks": {
+    "NameColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Regent.cs:26 `StsColors.orange`, Statistics-screen text color. Presentation only, no sim reader."
+    },
+    "Gender": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Regent.cs:28 `CharacterGender.Masculine`, grammatical/pronoun text only."
+    },
+    "UnlocksAfterRunAs": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Regent.cs:30 `ModelDb.Character<Silent>()` \u2014 Regent unlocks after a Silent run, the second link in the chain. Same waiver as the other four records' UnlocksAfterRunAs: the sim has no cross-run save/unlock-state system at all, and models every run fully-unlocked (events/orobas.py's documented deliberate-divergence) regardless of what any character's prerequisite chain says."
+    },
+    "StartingHp": {
+      "maps_to": "Character(starting_hp=75) (characters.py's _build_registry, regent row)",
+      "verdict": "faithful",
+      "rationale": "Regent.cs:32 `StartingHp => 75`. Exact match."
+    },
+    "StartingGold": {
+      "maps_to": "Character(starting_gold=99) (characters.py's _unported helper, hardcoded)",
+      "verdict": "faithful",
+      "rationale": "Regent.cs:34 `StartingGold => 99`. Matches; all five characters share this constant in the C# (verified by reading all five Characters/*.cs files directly)."
+    },
+    "ShouldAlwaysShowStarCounter": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Regent.cs:36 `=> true`, overriding CharacterModel's default `false` (CharacterModel.cs:90) \u2014 Regent is the ONLY one of the five to override this. It is a pure UI display flag (whether the Star-currency counter is shown even at zero stars); `grep -rn star_counter\\|ShouldAlwaysShowStarCounter sts2_rl/*.py` (re-run 2026-08-03) finds zero readers anywhere in the sim, confirming no gameplay path consumes it. No sim reader; presentation only, and doubly moot since Regent's Star mechanic itself is unported."
+    },
+    "CardPool": {
+      "maps_to": "Character(card_pool=()) (characters.py, empty by design)",
+      "verdict": "waiver",
+      "rationale": "Regent.cs:38 `ModelDb.CardPool<RegentCardPool>()`. UNPORTED BY DESIGN, per PROMPT.md's scope line (\"Characters other than Ironclad: waiver with rationale\") \u2014 RegentCardPool's content wave has not started. Absent, not wrong: `Character.is_ported` (characters.py:83-89) is False for Regent, which is what keeps this empty tuple from being read as a real pool anywhere downstream."
+    },
+    "RelicPool": {
+      "maps_to": "Character(relic_pool=()) (characters.py, empty by design)",
+      "verdict": "waiver",
+      "rationale": "Regent.cs:40 `ModelDb.RelicPool<RegentRelicPool>()`. Same disposition as CardPool: unported by design, gated by `is_ported`."
+    },
+    "PotionPool": {
+      "maps_to": "Character(potion_pool=()) (characters.py, empty by design)",
+      "verdict": "waiver",
+      "rationale": "Regent.cs:42 `ModelDb.PotionPool<RegentPotionPool>()`. Same disposition."
+    },
+    "StartingDeck": {
+      "maps_to": "Character(starting_deck=()) (characters.py, empty by design)",
+      "verdict": "waiver",
+      "rationale": "Regent.cs:44-56: 4x StrikeRegent, 4x DefendRegent, FallingStar, Venerate (10 cards). Deliberately left empty to fail with a clear `NotImplementedError` rather than a `KeyError` deep inside deck construction (naming card ids no `@register_card` has created). EXECUTED WITNESS for unreachability, re-run 2026-08-03: `get_character('regent')` raises `NotImplementedError(\"character 'regent' has no content ported yet...\")`; `CHARACTERS['regent'].is_ported` is `False` (`starting_deck=()`, `card_pool=()`); `RunState.__init__` resolves `self.character = get_character(character)` unconditionally before anything else runs, so no `RunState` for `regent` can ever be constructed and `run.py`'s starting-relic grant loop / `build_starting_deck` are structurally unreachable, not merely undemonstrated."
+    },
+    "StartingRelics": {
+      "maps_to": "Character(starting_relics=('divine_right',)) (characters.py's _build_registry, regent row)",
+      "verdict": "faithful",
+      "rationale": "Regent.cs:58 `ModelDb.Relic<DivineRight>()`. The id is correctly transcribed (matching the C# name), but `'divine_right' in ALL_RELICS` is False (confirmed by import, re-checked 2026-08-03) \u2014 no such relic class is registered yet, matching the character's overall unported status. Same dormant-unreachable disposition as the other three unported characters' StartingRelics entries: `get_character`'s guard blocks this value from ever being read by `run.py`'s grant loop."
+    },
+    "AttackAnimDelay": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Regent.cs:60, animation timing only. No sim reader."
+    },
+    "CastAnimDelay": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Regent.cs:62, animation timing only. No sim reader."
+    },
+    "EnergyLabelOutlineColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Regent.cs:64, UI color. No sim reader."
+    },
+    "DialogueColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Regent.cs:66, UI color. No sim reader."
+    },
+    "SpeechBubbleColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Regent.cs:68, UI color. No sim reader."
+    },
+    "MapDrawingColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Regent.cs:70, UI color. No sim reader."
+    },
+    "RemoteTargetingLineColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Regent.cs:72, multiplayer-only UI color, doubly out of scope."
+    },
+    "RemoteTargetingLineOutline": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Regent.cs:74, multiplayer-only UI color, doubly out of scope."
+    },
+    "CharacterTransitionSfx": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Regent.cs:76 `=> \"event:/sfx/ui/wipe_ironclad\"` \u2014 reuses Ironclad's screen-wipe sound rather than the CharacterModel default derived from its own id. Audio-only, no gameplay effect; no sim reader."
+    },
+    "GetArchitectAttackVfx": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Regent.cs:78-95, five VFX asset-path strings for the Architect event. Presentation only."
+    },
+    "GenerateAnimator": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Regent.cs:97-121, Godot animation state graph (adds an `attack_sovereign` branch). Presentation only."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "(nothing, trivially)",
+      "verdict": "faithful",
+      "rationale": "INHERITED from CharacterModel.cs:208 (`=> false`); Regent.cs declares no override. Same trivial agreement as the other four records in this kind: the sim's `Character` dataclass is never a hook-system participant either."
+    }
+  },
+  "guards": [
+    {
+      "what": "MaxEnergy default",
+      "maps_to": "Regent.cs does not override `MaxEnergy` (virtual, CharacterModel.cs:84, default 3); `Character(...)` for Regent likewise takes the default (max_energy=3). Matches.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "What \"unported by design\" means, stated once for this whole record rather than repeated per hook",
+      "verdict": "waiver",
+      "rationale": "Two different things are true about this row: (1) the STATS the table carries today (StartingHp=75, StartingGold=99, StartingRelics=('divine_right',)) are transcribed correctly against Regent.cs and independently verdicted `faithful` above \u2014 a wrong number here would have been a `gap`, not a `waiver`; (2) the CONTENT the table deliberately omits (StartingDeck, CardPool, RelicPool, PotionPool) is `waiver`, enforced structurally by `is_ported`/`get_character`'s `NotImplementedError` (executed above) rather than merely asserted. A caller reading `CHARACTERS['regent']` directly (bypassing `get_character`) would see correct-but-inert numbers and empty content tuples, never wrong numbers."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-08-03"
+}

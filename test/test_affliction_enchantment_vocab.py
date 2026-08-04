@@ -191,11 +191,12 @@ def test_enchantment_capacity_covers_full_game_total():
     #   Momentum, Nimble, PerfectFit, RoyallyApproved, Sharp, Slither,
     #   SlumberingEssence, SoulsPower, Sown, Spiral, Steady, Swift,
     #   TezcatarasEmber, Vigorous = 22
-    # Only 19 are ported today (Inky, Momentum, SlumberingEssence are not) —
+    # Only 20 are ported today (Inky and SlumberingEssence are not; Momentum
+    # landed 2026-08-03 with Punch Dagger) —
     # capacity must still cover the full 22, which is the whole point of
     # sizing to the game total rather than the ported total.
     game_total = 22
-    ported_total = 19
+    ported_total = 20
     assert capacity("enchantments") >= game_total
     assert len(ALL_ENCHANTMENTS) == ported_total, (
         "ported enchantment count drifted — re-verify against "

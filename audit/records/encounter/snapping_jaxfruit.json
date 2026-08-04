@@ -1,0 +1,56 @@
+{
+  "unit": "encounter/snapping_jaxfruit",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\SnappingJaxfruitNormal.cs",
+    "sha256": "887db71805efb36f843a39eb334565684a191644bc7489205b49443e930e3752"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\snapping_jaxfruit.py",
+    "sha256": "484416c4c857d3d8746e481aba663adb4f89ba76fce2b2cc59e34ad1159be594"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms normal_keys",
+      "verdict": "faithful"
+    },
+    "Tags": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms tags[\"snapping_jaxfruit\"] = (\"mushroom\",)",
+      "verdict": "faithful",
+      "note": "SnappingJaxfruitNormal.Tags = [EncounterTag.Mushroom], matches."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "none -- the sim has no per-encounter monster-preview member",
+      "verdict": "deliberate-divergence",
+      "rationale": "Same zero-cost finding as overgrowth_crawlers/AllPossibleMonsters."
+    },
+    "GenerateMonsters": {
+      "maps_to": "sts2_rl/monsters/overgrowth/snapping_jaxfruit.py:SNAPPING_JAXFRUIT_NORMAL = Encounter(id=\"snapping_jaxfruit_normal\", monster_classes=[SnappingJaxfruit, _flyconid])",
+      "verdict": "faithful",
+      "note": "C# GenerateMonsters returns [(SnappingJaxfruit, null), (Flyconid, null)] -- fixed 2-monster roster, that order, zero draws. The sim's plain Encounter (no create_monsters override) instantiates monster_classes in list order; `_flyconid` is a thin factory function (not a class) used only to dodge a circular import with .flyconid, but `cls(hooks, rng)` calls it exactly like a constructor and it returns a real Flyconid instance, so the observable roster/order/draw-count (0) are unaffected."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "structural: Encounter is never registered with HookSystem",
+      "verdict": "faithful"
+    },
+    "IsWeak": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms -- \"snapping_jaxfruit\" is absent from weak_keys",
+      "verdict": "faithful"
+    },
+    "ShouldGiveRewards": {
+      "maps_to": "sts2_rl/monsters/base.py:Encounter.should_give_rewards (default True)",
+      "verdict": "faithful"
+    },
+    "MinGoldReward": {
+      "maps_to": "sts2_rl/rewards.py:GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20)",
+      "verdict": "faithful",
+      "note": "Poverty multiplier out of scope, not applied in roll_gold_reward."
+    },
+    "MaxGoldReward": {
+      "maps_to": "sts2_rl/rewards.py:GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20)",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-08-03"
+}

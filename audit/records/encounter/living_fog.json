@@ -1,0 +1,114 @@
+{
+  "unit": "encounter/living_fog",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\LivingFogNormal.cs",
+    "sha256": "7668bd09c733559b5f7b2eb999849869fe786094c7bbc47f215b91e0af5d89e7"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\underdocks\\living_fog.py",
+    "sha256": "5557042291918858f39100f1cc6d99a39e97782f350ae092db2ec45e0340878a"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "rooms.py `_underdocks_rooms().normal_keys`",
+      "verdict": "faithful",
+      "rationale": "RoomType.Monster. The sim represents room-type membership by pool bucket rather than a per-encounter attribute: `sts2_rl/rooms.py`'s `_underdocks_rooms()` places `\"living_fog\"` in `normal_keys`, which `seam/rooms_and_map` (the picker) and `rewards.GOLD_REWARD_RANGES` (keyed by `RoomType.MONSTER`, see the gold-ladder guard) both key off. EXECUTED: `grep -n '\"living_fog\"' sts2_rl/rooms.py` -- present exactly once, in `normal_keys`."
+    },
+    "HasScene": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "LivingFogNormal.cs:16: `HasScene => true`. Presentation surface; waived per the monster tier's established precedent."
+    },
+    "Slots": {
+      "maps_to": "living_fog.py's `_bloat`/`_slot_index` hand-rolled occupancy tracking (NOT `Encounter.slots`)",
+      "verdict": "deliberate-divergence",
+      "rationale": "LivingFogNormal.cs:18: `Slots = [bomb1, bomb2, bomb3, bomb4, bomb5, livingFog]` (6 named slots) -- consumed by `CombatState.SortEnemiesBySlotName`/`EncounterModel.GetNextSlot` whenever a creature is added with a non-null SlotName. The sim's `LIVING_FOG_NORMAL = Encounter(id=\"living_fog_normal\", monster_classes=[LivingFog])` passes NO `slots=` -- `encounter.slots` is the empty-tuple default, diverging from the C#'s real 6-element row. This is inert by construction rather than by luck: `living_fog.py`'s own `_bloat` (which spawns a Gas Bomb) and `_slot_index` completely bypass `self.slots`/`sort_enemies_by_slot_name` -- they track occupancy via a custom `GasBomb.slot` int (0..4) and compute the insertion INDEX directly (`CreatureCmd.add(ctx.hooks, bomb, index=idx)`, no `slot_name=` argument, so `sort_enemies_by_slot_name` is never even called), reproducing the same effective ordering SortEnemiesBySlotName would produce given the real 6-slot row (bombs occupy slots 0-4, ahead of the Living Fog's own slot 5, matching the C#'s livingFog-is-last placement). `test_underdocks.py::TestLivingFog`'s slot-order test (`[type(e).__name__ for e in cs.enemies] == [\"GasBomb\", \"LivingFog\"]`, then `[\"GasBomb\", \"GasBomb\", \"LivingFog\"]` for a second Bloat) pins exactly this and passes (`py -m pytest test/test_underdocks.py -k LivingFog -q`, re-run this batch, 6 passed). A documented, verified reimplementation rather than a gap -- but flagged because the `Encounter.slots` field itself is silently wrong for this unit, which the next reader who trusts that field directly (rather than living_fog.py's own bypass) would get wrong."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "sts2_rl/vocab.json's `monsters` list",
+      "verdict": "faithful",
+      "rationale": "The sim has no `Encounter.all_possible_monsters` field; the purpose this member serves (every monster class the encounter can ever field, including summons, for the obs vocabulary / bestiary-style previews) is served by `sts2_rl/vocab.json`'s `monsters` list, which every monster class the roster registers is checked into regardless of whether it starts on the field. EXECUTED: `py -c \"import json; m=json.load(open('sts2_rl/vocab.json'))['monsters']; print([c for c in ['LivingFog', 'GasBomb'] if c not in m])\"` -> `[]` (all present)."
+    },
+    "ExtraAssetPaths": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "LivingFogNormal.cs:26: preloads the Smog affliction's overlay VFX path. Presentation/asset-preload surface only; waived per the monster tier's established precedent."
+    },
+    "GetCameraScaling": {
+      "maps_to": "-",
+      "verdict": "waiver",
+      "rationale": "LivingFogNormal.cs:28-31: returns 0.9f, a combat-camera zoom factor. Presentation surface; waived."
+    },
+    "GenerateMonsters": {
+      "maps_to": "Encounter(monster_classes=[LivingFog]).create_monsters (base Encounter, monsters/base.py); GasBomb spawns are LivingFog._bloat, not GenerateMonsters",
+      "verdict": "faithful",
+      "rationale": "C# LivingFogNormal.cs:33-36 returns a SINGLE-element list, `(LivingFog.ToMutable(), \"livingFog\")` -- zero RNG draws. Sim `LIVING_FOG_NORMAL = Encounter(monster_classes=[LivingFog])` (living_fog.py:145-148): one instance, zero draws -- roster/order/draw-count match. The initial creature's slot label (\"livingFog\") is dropped on the sim side (`monster_slots` defaults to `()`), the SAME shape as the Slots guard above and inert for the identical reason (`_slot_index()`, living_fog.py, returns the hardcoded constant `_BOMB_SLOTS` for a `LivingFog` instance by TYPE dispatch, never reading `creature.slot_name`) -- not filed separately from the Slots guard, same mechanism."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "n/a -- Encounter has no hook-listener interface",
+      "verdict": "faithful",
+      "rationale": "`EncounterModel.ShouldReceiveCombatHooks => false` (EncounterModel.cs:39), not overridden by this unit. The sim's `Encounter` (monsters/base.py) is a plain dataclass with no `on_*`/hook-listener interface at all -- it is never registered with `HookSystem` (grep `hooks.register` across sts2_rl/: only `Creature.__init__`/`Monster.__init__` call it) -- so it architecturally cannot receive a combat hook, matching the false default by construction rather than by an explicit flag. Faithful."
+    }
+  },
+  "guards": [
+    {
+      "what": "Gold reward ladder (MinGoldReward/MaxGoldReward, inherited from EncounterModel -- not overridden by this unit)",
+      "verdict": "faithful",
+      "rationale": "EncounterModel.cs:64-100: RoomType.Monster -> 10-20, Elite -> 35-45, Boss -> 100-100 (both bounds equal), times AscensionHelper.PovertyAscensionGoldMultiplier under Poverty. sts2_rl/rewards.py:170-174's `GOLD_REWARD_RANGES` pins the identical non-ascension triple `{MONSTER: (10, 20), ELITE: (35, 45), BOSS: (100, 100)}`; rewards.py's own module docstring (line 32) states ascension/Poverty scaling is out of scope, matching this audit's own scope line (`PROMPT.md` Scope section: 'Ascension values: out of scope'). This unit passes no `min_gold`/`max_gold` override to its sim `Encounter`, so `generate_combat_rewards` (rewards.py:885-887) falls through to the room-type default range -- matching the C#'s own inheritance of the base ladder."
+    },
+    {
+      "what": "Per-encounter Rng independence (EncounterModel.cs:41-49's own doc comment: the encounter's Rng is independent of the run's centralized Rng, safe because its state need not survive past the encounter)",
+      "verdict": "faithful",
+      "rationale": "Stream IDENTITY (which Rng object, how it is seeded) is `seam/rng_streams`'s mechanism, not this record's -- cited, not re-verdicted, per PROMPT.md rule 3 and this batch's brief. What IS this record's to check: does the sim's draw actually land on that independent per-encounter Rng rather than a shared/run-level one? `sts2_rl/run.py:1609-1613`'s `create_combat` builds `encounter_selection_rng` via `make_encounter_rng(seed, total_floor, encounter.entry)` (rng.py, verdicted faithful by seam/rng_streams step 21) whenever `self.rng_set is not None` (parity mode -- string- seeded runs, the conformance/replay path) and threads it into `CombatState`/`Encounter.create_monsters` as `selection_rng` (combat.py:222-223). In that mode the draw this record verdicts lands on the correct independent stream. When `rng_set is None` (legacy mode -- `run.py:1609`'s own comment: 'Legacy runs pass None and keep their random.Random composition draws', the RL-training path: `grep -n rng_set sts2_rl/run_env.py` returns zero hits, so training never sets it), `selection_rng` is None and the draw falls back to the shared legacy `random.Random` -- the game's independence guarantee is not honoured in that mode. This is the SAME sim-wide, already-documented parity-vs-legacy split every other RNG consumer in this codebase carries (seam/rng_streams's own G2-adjacent discussion of `CombatRng`'s legacy fallback), not a defect specific to this encounter, and it does not affect the conformance/replay path this campaign's own symptom (89U21BV1TZ) is measured against. Checked per this batch's brief instruction; not filed as a new gap."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-08-03",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Models\\EncounterModel.cs",
+      "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Combat\\CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Combat\\CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/vocab.json",
+      "sha256": "bf3f75ef04a22eef5001af8ff6991494ffed16c9ab2d0a7b0a957997a05a678b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "3caf6a189d109feb62c5ab57f03028277542a8bf12311898e7445be27ce199b2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "f655a201de2bdb93464f4e1998f264887a76fc4168a7f868dea641fc5cf2bdc6",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
+      "side": "sim"
+    }
+  ]
+}

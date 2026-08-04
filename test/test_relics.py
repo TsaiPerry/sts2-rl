@@ -166,9 +166,11 @@ class TestRegistry:
         # Nest's Byrdpip, granted by Byrdonis Egg's HATCH rest-site option
         # = 236; Darv's 12 = 248; the Fake Merchant's 9 knock-offs plus his
         # Rug = 258; War Historian Repy's History Course, granted by the
-        # UNLOCK CAGE option = 259)
+        # UNLOCK CAGE option = 259, plus the Circlet — RelicFactory's
+        # FallbackRelic, in no pool and no grab-bag deque, reachable only when
+        # a pull finds nothing (RelicFactory.cs:47) = 260)
         # — all constructible by id, and the original head is present.
-        assert len(ALL_RELICS) == 259
+        assert len(ALL_RELICS) == 260
         assert "golden_compass" in ALL_RELICS
         for nid in ("golden_pearl", "cursed_pearl", "winged_boots",
                     "neows_bones", "silver_crucible"):
@@ -1495,3 +1497,63 @@ class TestPaelsToothCandidateFilter:
         run.add_relic("paels_tooth")
         tooth = next(r for r in run.relics if r.id == "paels_tooth")
         assert smithed not in tooth.stored_cards
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Circlet — RelicFactory.FallbackRelic (RelicFactory.cs:13, 47)
+# ═════════════════════════════════════════════════════════════════════════
+
+class TestCircletIsTheFallbackRelic:
+    """`PullNextRelicFromFront` is
+    `grabBag.PullFromFront(rarity, filter, runState) ?? FallbackRelic`
+    (RelicFactory.cs:47), and `PullFromFront` returns null whenever the
+    ROLLED RARITY's deque is empty (RelicGrabBag.cs:129-146) — it never
+    substitutes another rarity. So both dry states hand out a Circlet."""
+
+    def _run(self, seed=7):
+        from sts2_rl.run import RunState
+
+        return RunState(rng=random.Random(seed))
+
+    def test_an_empty_grab_bag_yields_a_circlet(self):
+        run = self._run()
+        run.relic_grab_bag.clear()
+        pulled = run.pull_relic_from_front()
+        assert pulled is not None, "the game never returns nothing"
+        assert pulled.id == "circlet"
+
+    def test_an_exhausted_common_deque_escalates_to_uncommon(self):
+        """`GetAvailableDeque` walks Shop -> Common -> Uncommon -> Rare while
+        the current deque has nothing passing the filter (RelicGrabBag.cs:
+        227-237). The fallback is the END of that ladder, not the first empty
+        deque."""
+        from sts2_rl.relics import ALL_RELICS, RelicRarity
+
+        run = self._run()
+        uncommon = next(rid for rid, cls in ALL_RELICS.items()
+                        if cls.rarity == RelicRarity.UNCOMMON)
+        run.relic_grab_bag[:] = [uncommon]
+        pulled = run.pull_relic_from_front(rarity=RelicRarity.COMMON)
+        assert pulled.id == uncommon
+        assert run.relic_grab_bag == []
+
+    def test_the_ladder_ends_at_rare_so_a_dry_rare_deque_yields_a_circlet(self):
+        """Rare's successor in the switch is `_ => RelicRarity.None`
+        (RelicGrabBag.cs:234), which nulls the deque — so a Rare ask never
+        walks DOWN to the Commons still sitting in the bag."""
+        from sts2_rl.relics import ALL_RELICS, RelicRarity
+
+        run = self._run()
+        common = next(rid for rid, cls in ALL_RELICS.items()
+                      if cls.rarity == RelicRarity.COMMON)
+        run.relic_grab_bag[:] = [common]
+        pulled = run.pull_relic_from_front(rarity=RelicRarity.RARE)
+        assert pulled.id == "circlet"
+        assert run.relic_grab_bag == [common], "the common must stay in the bag"
+
+    def test_the_circlet_is_never_in_the_grab_bag(self):
+        """`RelicRarity.None` (Circlet.cs:7) is in no deque — the relic lives
+        in FallbackRelicPool alone, so it can only arrive through the
+        fallback."""
+        run = self._run()
+        assert "circlet" not in run.relic_grab_bag

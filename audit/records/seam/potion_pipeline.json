@@ -1,0 +1,286 @@
+{
+  "unit": "seam/potion_pipeline",
+  "game_sources": [
+    {
+      "path": "src/Core/Commands/PotionCmd.cs",
+      "sha256": "101e099dcbfe8ef4622e79aee327ad2d6a46e4329ce06a52ddb3ec7fca89979b"
+    },
+    {
+      "path": "src/Core/Models/PotionModel.cs",
+      "sha256": "78b161c2e578894935b57bc17a99349aeefd7509a094cc3534b406c40258b8a9"
+    }
+  ],
+  "sim_sources": [
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "8be566a77bf360fa01389c168bd403215a95e2c9366c63160d85db2346fa4428"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "a1bbd3bbbb94aa4eae709d0fc0acdd157fd6c5355a1d67c59a815e0e00e630c5"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "3caf6a189d109feb62c5ab57f03028277542a8bf12311898e7445be27ce199b2"
+    }
+  ],
+  "extra_sources": [
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "e6a1bbdf2e7b3a2f941b2de5dff283cd2538b220e703e771b53d9042e97111d4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Players/Player.cs",
+      "sha256": "4672a42656cec2b61d7f720000a462648b12d303d92af92d21c0ac3325d156db",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/BeltBuckle.cs",
+      "sha256": "860e63d5cd988cffb84c4b63178adc7a018b4071be2e783900766cb5096d158a",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/Sozu.cs",
+      "sha256": "f91bf90297f47bd2b9dac224078f2c1cd8f4604d981a9a5a3b5ce7461ecfc250",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Potions/FoulPotion.cs",
+      "sha256": "5fb3b0fed42e91677b0cb6d49c4a7e6422406c357f61e8cca1c0ca7cc5d5913c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/potion_pools.py",
+      "sha256": "d3a31cbdd8277a5ea1c3ea274d295ca22ca3b431a6a6eec5abc0aa6b06e81fad",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/conformance/idmap.py",
+      "sha256": "f879967895bf0be9050a2c63804961714370d5d3ef9af9b4a89bdd34c75747df",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/conformance/runner.py",
+      "sha256": "11b4f9bc91ddfa01813c14e63f56cc9c0d8f54a8d777e563e94a798421febefe",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/belt_buckle.py",
+      "sha256": "d53eca3206beff1eef99547d413fa24bea175fa170d4c8f9e9922171e29dcc1f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/sozu.py",
+      "sha256": "424b9ec780ad43005cd0db2910d30076b3eb6b9a2b2afb5279002779fb2c2a30",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/petrified_toad.py",
+      "sha256": "1ec05e5b66a5122905e5701bd978c173f547bef905ecf862b0baee3e5f618d50",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/delicate_frond.py",
+      "sha256": "b92938475c6725d9ea192a18128dc02cc5a070d759a5a48e30ad87d690ba8b56",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/colorless_skills.py",
+      "sha256": "c13dfe72568ec69cf7d5071a5f943845bca24a3ace370221a5d681756230f867",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "a9badf73750f625b05cda5494c8477aa19ead8a6373c93db20213638819390d5",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "7ae1b7259e72befa07f4aceaa9ab0e23783fc55876bcde6090b9b2cfae65a43e",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Factories/PotionFactory.cs",
+      "sha256": "5b150e742b36f1235aa503d477dd8530d221bfbb8469fd2954bd43e1f4e32cc3",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "2e0c6eea66dfc1098c82386fa15838c6d376a83953a895c028b4f2ef60816919",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Potions/FairyInABottle.cs",
+      "sha256": "a69db9c41545c7f5a29a9d3ee4bcfc2746bcbb3eba0525a3ccbf86142d6459b1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Potions/FruitJuice.cs",
+      "sha256": "d07229b27c818fe509dd4fb360e12c967bda26880b7c6953217e9290944bf71e",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Potions/RegenPotion.cs",
+      "sha256": "7f33d4d5255e8fbfdb04580abc8022a99b67f28d2e4e467d8f5e85535996854f",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/fake_merchant.py",
+      "sha256": "b988afdfbe947f93dc619f6a22907d77137bdba4363fc04de23641f5ed6d87d5",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/ranwid_the_elder.py",
+      "sha256": "f55d8ec03d921439cc395aac26885ae51148697bc6ec10a282875132858e9116",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/stone_of_all_time.py",
+      "sha256": "06c17e2f42537857c6bd7b8ea77fe096907c7cbe70f4ca46256b3868df6cd63e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/the_future_of_potions.py",
+      "sha256": "2d293a7a43d7052df138ddecde938d210d557d5e610ccf9f3c7ac049a7016847",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/alchemical_coffer.py",
+      "sha256": "fcb66ed14022901bbb6f6cac6ad1c0182cecc9eb8a25fc7399b021221f3ecfdf",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/shop.py",
+      "sha256": "89c0628c5a3e7ef69a3db1b56315b3d861c14a2fa5ea01dd6aba3153f5becc3d",
+      "side": "sim"
+    }
+  ],
+  "steps": [
+    {
+      "what": "1. PotionModel.cs:293 RemoveBeforeUse -- the belt slot is nulled and the potion stops being a hook listener BEFORE anything else in OnUseWrapper resolves",
+      "verdict": "faithful",
+      "rationale": "CombatState.use_potion (combat.py:1591-1592) nulls `player.potions[slot]` and calls `player.detach_potion(potion)` before dispatching any hook or running `potion.use`, in that order -- the same order PotionModel.cs:293 puts before :297's BeforePotionUsed. RunState.use_potion (run.py:818-819) does the same for the out-of-combat AnyTime arm. Player.RemoveUsedPotionInternal (Player.cs:686-692) is the C# counterpart RemoveBeforeUse calls, and it nulls the slot in place without compacting, matching player.py's fixed-length belt (guard G4)."
+    },
+    {
+      "what": "2. PotionModel.cs:297 await Hook.BeforePotionUsed(...) -- dispatched before OnUse",
+      "verdict": "faithful",
+      "issue": "CLOSED. `combat.py:1598` calls `self.hooks.before_potion_used(potion, target)` immediately before `potion.use(ctx, target)` at :1603, inside the same `_card_or_potion_effect()` bracket OnUse itself sits in. `hooks.py:1808-1819` (`CombatState.before_potion_used`) is the real dispatcher C#'s Hook.BeforePotionUsed (Hook.cs:984-991) is missing on the sim side of `audit/content/potion/shared-mechanisms.md`'s W2 entry (written 2026-07-26/27) and on `audit/records/power/surrounded.json`'s own prior text -- both are STALE. `power/surrounded.json`'s current `BeforePotionUsed` hook entry (verdict `faithful`, dated closed 2026-07-27) already carries the correct, current verdict: SurroundedPower implements `before_potion_used` (powers.py, cited there), so the Kaiser Crab facing flip now runs before the potion lands rather than a phase late. Matched per rule 3 rather than re-derived; see this record's report for the staleness this closes in the narration doc."
+    },
+    {
+      "what": "3. PotionModel.cs:298-323 TestMode.IsOff branch -- item-throw VFX and its 0.5s wait",
+      "verdict": "waiver",
+      "rationale": "Presentation only: a thrown-item sprite tween and a scaled wait. The sim has no VFX layer and no wait-for-animation concept anywhere in the combat loop."
+    },
+    {
+      "what": "4. PotionModel.cs:324/:331 BeginCardOrPotionEffect / EndCardOrPotionEffect bracket around OnUse (the `finally`)",
+      "verdict": "faithful",
+      "issue": "CLOSED. `combat.py:1602-1603` runs `potion.use(ctx, target)` inside `with self._card_or_potion_effect():`, a nesting-depth counter released in a `finally` (mirrors the C# try/finally exactly), shipped by `turn_structure`/G16 as the same bracket a card play sits in (CardModel.cs:1901/:1969). Matches `audit/records/potion/fire_potion.json` guard W4 (faithful, closed 2026-07-29 round 6) and `audit/records/relic/unceasing_top.json` guard G2's sibling reasoning, per rule 3."
+    },
+    {
+      "what": "5. PotionModel.cs:327 await OnUse(choiceContext, target) -- the potion's own effect",
+      "verdict": "faithful",
+      "rationale": "Out of this seam's scope by the seam scaffold's own boundary: each of the 51 `potion/*` content records verdicts its own `OnUse` body. This step exists only to place it correctly in the pipeline order -- `potion.use(ctx, target)` at combat.py:1603 (in-combat) / `potion.use_out_of_combat(self)` at run.py:819 (out-of-combat AnyTime)."
+    },
+    {
+      "what": "6. PotionModel.cs:333 InvokeExecutionFinished()",
+      "verdict": "waiver",
+      "rationale": "Multiplayer action-queue/async bookkeeping (marks the awaited action's execution as finished so a peer's queue can advance); no local gameplay state. The sim is single-player and synchronous, so there is nothing for this to gate."
+    },
+    {
+      "what": "7. PotionModel.cs:336 `if (combatState != null && CombatManager.Instance.IsInProgress) History.PotionUsed(...)`",
+      "verdict": "waiver",
+      "rationale": "Save/UI-only (CombatHistory, read by the post-combat summary screen). No ported unit reads it. The IsInProgress guard on this ONE step (unlike :338/:340 below, which are unconditional) is presentation bookkeeping for a screen the sim does not have, not a gameplay branch."
+    },
+    {
+      "what": "8. PotionModel.cs:338 await Hook.AfterPotionUsed(...) -- unconditional, regardless of whether combat is still in progress",
+      "verdict": "faithful",
+      "rationale": "`combat.py:1604` calls `self.hooks.on_potion_used(potion, target)` unconditionally, immediately after the effect and before the empty-hand check, matching Hook.AfterPotionUsed's dispatcher (Hook.cs:996-1003, an unconditional `foreach` over `IterateHookListeners`) and PotionModel.cs:338's own lack of an IsInProgress guard (the guard belongs to step 7's History write only, not to this dispatch)."
+    },
+    {
+      "what": "9. PotionModel.cs:339 CurrentMapPointHistoryEntry...PotionUsed.Add(Id)",
+      "verdict": "waiver",
+      "rationale": "Save-file/run-history telemetry (the map-point summary's potion-used list). No ported unit reads it."
+    },
+    {
+      "what": "10. PotionModel.cs:340 await CombatManager.Instance.CheckForEmptyHand(choiceContext, Owner) -- the SECOND of exactly two C# call sites (CardModel.cs:1992, PotionModel.cs:340; CombatManager.cs:869-883's own comment names both by number)",
+      "verdict": "faithful",
+      "issue": "CLOSED. `combat.py:1605` calls `self._check_for_empty_hand()` right after `on_potion_used`, and `_check_for_empty_hand` (combat.py:1612-1633) is called from exactly TWO sites in combat.py -- line 1125 (the card-play path) and line 1605 (this one) -- reproducing C#'s exact two-caller shape including the `IsExecutingCardOrPotionEffect` depth guard (step 4) and a `Phase.COMBAT_OVER` early return standing in for `CombatManager.Instance.IsInProgress`. Matches `audit/records/potion/fire_potion.json` guard W (faithful, closed 2026-07-29 round 6) and `audit/records/relic/unceasing_top.json` guard G1 (which this closure also closes at its own site, per rule 3 -- both records still read `gap`/an older date and should be re-derived by whichever pass owns them next; noted as a cross-record staleness in this record's report, not fixed here)."
+    },
+    {
+      "what": "11. PotionModel.cs:295/:341 choiceContext.PushModel(this) / PopModel(this)",
+      "verdict": "waiver",
+      "rationale": "UI/multiplayer choice-stack scoping -- lets hover-tip and dynamic-var display code know which model is 'current' while a peer's choice is pending. No gameplay reader; the sim has no choice-context stack of any kind."
+    },
+    {
+      "what": "12. PotionModel.CanBeGeneratedInCombat (PotionModel.cs:153, default true; 3 overrides: FairyInABottle.cs:19, FruitJuice.cs:20, RegenPotion.cs:22)",
+      "verdict": "faithful",
+      "rationale": "`sts2_rl/potion_pools.py`'s `NOT_GENERATED_IN_COMBAT = frozenset({'fairy_in_a_bottle', 'fruit_juice', 'regen_potion'})` is exactly that 3-member override set, consulted by the in-combat random-potion generators (Alchemize, Entropic Brew's in-combat use). Re-verified here by grep (`grep -rn CanBeGeneratedInCombat src/Core/Models/Potions/` returns exactly those 3 lines) rather than inherited; matches `audit/records/card/alchemize.json` guard N1 per rule 3."
+    },
+    {
+      "what": "13. PotionModel.PassesCustomUsabilityCheck (PotionModel.cs:164, default true; 1 override: FoulPotion.cs:51-68)",
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-08-03 (gap-fix pass). `Potion.passes_custom_usability_check` is ported as a default-True hook and consulted by BOTH use paths (`RunState.use_potion`, `CombatState.use_potion`), with FoulPotion's override (FoulPotion.cs:51-68) refusing the drink outside combat, a shop whose merchant still stands, or the Fake Merchant event. `RunState` gained the `current_room_type`/`current_event` it needs (set in `enter_point`). The event arm of `FoulPotion.OnUse` (FoulPotion.cs:89-108) is ported at the same time — `use_out_of_combat` now routes to `FakeMerchant.foul_potion_thrown` instead of paying the shop's 100 gold — because admitting that room without it would have introduced a new divergence. Tests: test/test_potions.py::TestFoulPotionUsabilityCheck.\n\nWHAT THE GAP SAID: The sim has NO general concept of this virtual at all -- not a stub, not a always-true default, nothing. `CombatState.use_potion`'s only gates are phase/slot-bounds/`automatic` (combat.py:1577-1587) and `RunState.use_potion`'s only gates are slot-bounds/None/`usage != USAGE_ANY_TIME` (run.py:810-817); neither calls anything resembling a usability check. The default (true) never restricts the other 50 potions, so this is only observable at FoulPotion, which restricts itself to combat, an un-opened MerchantRoom, or the FakeMerchant event (FoulPotion.cs:51-68). This exact gap is already filed at `audit/records/potion/foul_potion.json`'s `PassesCustomUsabilityCheck` hook and its guard G1, matched here per rule 3 rather than re-derived -- but that record's own `live: false` / 'DORMANT... no production caller reaches RunState.use_potion' text is dated 2026-07-27 and is now STALE: its own sibling `Usage` hook entry (dated 2026-07-28, round 3) says the conformance ReplayRunner was wired to drive an out-of-combat `UsePotion` through `RunState.use_potion`, and that wiring is real and live in the main replay loop -- `conformance/runner.py:846` calls `self._use_map_potion(run, cmd, divergences, room_index)` inside the room-command dispatch loop, and `_use_map_potion` (runner.py:542-569) calls `run.use_potion(slot)` at :564. So a recorded save that drinks Foul Potion outside a shop (at a rest site, on the map, at any non-Merchant event) now reaches `FoulPotion.use_out_of_combat` with no usability gate and pays 100 gold where the game refuses the drink outright -- LIVE via the conformance replay path, not dormant. Flagged as a cross-record disagreement in this record's report; `potion/foul_potion.json` is not edited here per the brief."
+    },
+    {
+      "what": "14. PotionModel.ShouldReceiveCombatHooks => true (PotionModel.cs:197, unconditional; no potion overrides it -- grep -rn 'override.*ShouldReceiveCombatHooks' src/Core/Models/Potions/ returns nothing)",
+      "verdict": "faithful",
+      "rationale": "Every held potion is registered as a hook listener while it sits in the belt, unconditionally: `combat.py:259-261` (`for _potion in self.player.held_potions: _potion.combat = self; self.hooks.register(_potion)`), run once at CombatState construction, plus `player.add_potion`/`try_to_procure`'s own `self._hooks.register(potion)` for a mid-combat procure. Matches `audit/content/potion/shared-mechanisms.md`'s `sweep-hooks` finding (re-run: exactly one potion, `fairy_in_a_bottle`, is a hook listener on each side, implementing `ShouldDie`/`AfterPreventingDeath`) -- still current, this fact did not change."
+    }
+  ],
+  "guards": [
+    {
+      "what": "G1: PotionCmd.TryToProcure's combat-side shape -- Hook.ShouldProcurePotion gate BEFORE AddPotionInternal (PotionCmd.cs:31,40); Hook.AfterPotionProcured AFTER, only on success (PotionCmd.cs:46)",
+      "verdict": "faithful",
+      "issue": "CLOSED. `sts2_rl/potions.py`'s `try_to_procure(hooks, player, potion)` (potions.py:1422-1445) reproduces the shape exactly: a `hooks._each('should_procure_potion')` gate pass that can short-circuit False, then `player.add_potion(potion)` (the sim's `AddPotionInternal` -- `PlayerCombatState.add_potion`, player.py:253-267, is an ungated primitive by design, matching AddPotionInternal, which C# also calls only from inside TryToProcure/AddPotionInternal's own callers), then an `after_potion_procured` dispatch pass on success only. All four ported combat-side procure sources now call it -- `relics/petrified_toad.py:28`, `relics/delicate_frond.py:41`, `cards/colorless_skills.py:56` (Alchemize), and `potions.py:1306` (Entropic Brew's in-combat use). Matches `audit/records/relic/sozu.json` hook `ShouldProcurePotion` (faithful) and guard G1 (faithful, closed round 7), `audit/records/relic/petrified_toad.json` guards G1/G2, `audit/records/relic/belt_buckle.json` hook `AfterPotionProcured` (faithful), `audit/records/relic/delicate_frond.json` guards G2/G3, and `audit/records/card/alchemize.json` guards G1/G2 -- all independently re-derived to `faithful` in the same round (2026-07-29) and all matched here per rule 3, not re-derived. `PlayerCombatState.add_potion`'s own docstring (player.py:258-261) still reads 'Combat-side procurement (Alchemize, Delicate Frond, Petrified Toad) does not run the Hook.ShouldProcurePotion gate today ... out of scope' -- that sentence is now STALE prose describing the pre-round-7 shape (none of those three call `add_potion` directly anymore, all three call `try_to_procure` first), not a live divergence; flagged in this record's report as documentation rot, not filed as a gap, since the round-7 fix already closed the behavior the sentence used to describe correctly."
+    },
+    {
+      "what": "G2: PotionCmd.TryToProcure's run-level (out-of-combat) shape -- same gate, but does the sim ALSO fire Hook.AfterPotionProcured on this path?",
+      "verdict": "gap",
+      "live": false,
+      "issue": "`RunState.add_potion` (run.py:764-789) runs the ShouldProcurePotion-equivalent gate (`all(r.should_procure_potion(self, potion) for r in self.relics)`, :779) correctly for every out-of-combat grant path (reward pick via `driver.py`/`events/base.py`, shop purchase via `shop.py:412`, Alchemical Coffer/Phial Holster's explicit-slot and append forms) -- but never dispatches `after_potion_procured` on success. `grep -rn after_potion_procured sts2_rl/` finds exactly one dispatch site in the whole codebase, `potions.py:1443` inside `try_to_procure` (the COMBAT-side helper, guard G1) -- `RunState.add_potion` has no equivalent call at all. Hook.AfterPotionProcured has exactly one implementer in the whole decompiled game, `BeltBuckle.cs:63-70`, and its body opens `if (CombatManager.Instance.IsInProgress && ...)` -- so the C# hook itself is a no-op for every out-of-combat procure too. DORMANT rather than live for that reason, verified by enumeration rather than asserted: `grep -rn 'override.*AfterPotionProcured' src/` returns exactly BeltBuckle.cs, and its own guard is IsInProgress. Distinct from `audit/records/relic/belt_buckle.json`'s existing `AfterObtained` gap (a different C# hook, the mid-combat relic-pickup path) and from its `AfterPotionDiscarded` gap (guard G3 below) -- this is the missing dispatch SITE on the run-level procure verb itself, not a missing listener. Live the moment any future potion-reacting relic implements AfterPotionProcured without gating on IsInProgress, or the moment BeltBuckle's own gate is ever removed."
+    },
+    {
+      "what": "G3: PotionCmd.Discard -- potion.Discard() then unconditional Hook.AfterPotionDiscarded (PotionCmd.cs:58-59)",
+      "verdict": "gap",
+      "live": false,
+      "issue": "Neither `PlayerCombatState.discard_potion` (player.py:269-273, the in-combat verb) nor `RunState.discard_potion` (run.py:791-794, the out-of-combat verb) dispatches any hook. This exact mechanism is already filed at `audit/records/relic/belt_buckle.json`'s `AfterPotionDiscarded` hook entry (verdict `gap`, no `live` field set on that record -- predates the field's introduction) -- matched here per rule 3 as the PotionCmd-verb-level home for the same missing dispatch, rather than re-derived. Dormancy re-verified by enumerating every caller of `discard_potion`, on both sides: the four out-of-combat event callers (`events/ranwid_the_elder.py:76`, `events/the_future_of_potions.py:146`, `events/stone_of_all_time.py:67`, `events/fake_merchant.py:122`, all calling `run.discard_potion`) are all out-of-combat, where the hook's one implementer (BeltBuckle.cs:72-79, `AfterPotionDiscarded`) is IsInProgress-gated and would no-op regardless (same reasoning as G2); and the one in-combat caller, `potions.py:1372` (`combat.player.discard_potion(self)`), is Fairy in a Bottle's `after_preventing_death` using `discard_potion` as a stand-in for `RemoveBeforeUse` (step 1), not a real PotionCmd.Discard -- its own comment says as much and correctly omits the AfterPotionDiscarded dispatch, since C#'s automatic-use path never calls PotionCmd.Discard either. No ported content exercises a REAL in-combat voluntary discard today."
+    },
+    {
+      "what": "G4: the belt is fixed-length and never compacted -- slot identity is observable and load-bearing",
+      "verdict": "faithful",
+      "rationale": "`Player.cs`'s `_potionSlots` is a `List<PotionModel?>` sized by `SetMaxPotionCountInternal` (Player.cs:581-615) and never shrunk except on an explicit `SubtractFromMaxPotionCount`; `AddPotionInternal` (Player.cs:624-666) defaults to `slotIndex = _potionSlots.IndexOf(null)` (first open slot) or accepts an explicit index, failing with `PotionProcureFailureReason.TooFull` when the target slot is occupied or none is open. `player.py`'s `self.potions: list[Potion | None]` (fixed length, sized by `MAX_POTIONS`/`add_potion_slots`) and `run.py`'s twin mirror this exactly: both `add_potion` methods default to `self.potions.index(None)` and both accept an explicit `slot` (the form Alchemical Coffer needs, `relics/alchemical_coffer.py:41` -> `run.add_potion(potion, slot=original_slots + i)`, matching `AlchemicalCoffer.cs`'s snapshot-then-append-into-new-slots shape), returning `False`/failing silently on a full or occupied slot rather than raising. `discard_potion`/`use_potion` null the slot in place on both sides (`Player.cs` `RemovePotionInternal`, Player.cs:694-702; `player.py`/`run.py` `self.potions[i] = None`) -- neither side ever shifts a later potion down to fill the gap. Slot identity is observable and asserted by the conformance runner (`conformance/runner.py`'s `resync_floor_potions`, cited from `idmap.py`'s own docstring) and by `potions.try_to_procure`/`run.add_potion`'s belt-full failure mode, which `audit/records/card/alchemize.json` guard N2 already executes (2 CombatPotionGeneration draws spent, then a silent drop, on a full belt)."
+    },
+    {
+      "what": "G5: potion GENERATION draw counts -- PotionFactory.CreateRandomPotion(InCombat/OutOfCombat) is one NextFloat (rarity band) + one NextItem (pick in-bucket), on the named RunRngSet.CombatPotionGeneration stream, over the unlocked pool (character pool + SharedPotionPool)",
+      "verdict": "faithful",
+      "rationale": "PotionFactory.cs:67-81's rarity thresholds (Rare <= 0.10, Uncommon <= 0.35, else Common) are reproduced verbatim by `potion_pools._rarity_for_roll` and its `generate_random_potion` helper draws the same two numbers (one rarity float, one bucket-index pick) over the same non-empty bucket, on `rng_set.combat_potion_generation` for a parity run. Five call sites use it, each for its own draw count: Alchemize (1 potion = 2 draws, `card/alchemize.json` guard N1, executed: exactly 2 draws whether the belt is open or full), Entropic Brew's in-combat use (1 potion), Delicate Frond (1 potion per open slot per combat start, `relic/delicate_frond.json` guard G1, closed round 7, executed: Rare share converges to 0.10 over 120 seeded combats, not a uniform pick's 0.33), Alchemical Coffer and Phial Holster (N potions = 2N draws, one `NextFloat`/`NextItem` pair per potion, matching `PotionFactory.CreateRandomPotionsOutOfCombat`'s per-item loop). Stream IDENTITY (that `RunRngSet.CombatPotionGeneration`/`rng_set.combat_potion_generation` is the correct, single, named stream and not a silent fallback to the shared legacy `random.Random`) is `seam/rng_streams`'s mechanism, not re-derived here -- recorded as a draw-count/order fact per this seam's brief, citing the five matched records above per rule 3."
+    },
+    {
+      "what": "G6: Potion Courier's Ransack draws exactly ONE item off the per-player PlayerRng.Rewards stream, not CombatPotionGeneration -- a different generation path with a different stream and a different draw count",
+      "verdict": "faithful",
+      "rationale": "`PotionCourier.Ransack` (an EventModel, not part of this seam's own game sources) calls `base.Owner.PlayerRng.Rewards.NextItem(items)` once over an Uncommon-filtered concatenation of the character pool then SharedPotionPool -- structurally the SAME shape G5 describes (rarity-filtered pool, ordered concatenation) but off a DIFFERENT stream (Rewards, not CombatPotionGeneration) and with only ONE draw (no separate rarity roll -- Ransack's pool is pre-filtered to Uncommon by a `.Where` before the single NextItem, so there is no float draw at all). Already fully audited and verdicted `faithful` at `audit/records/event/potion_courier.json` (its own guard on this exact draw: '`run.rewards_rng` IS the per-player Rewards stream in parity runs ... EXECUTED: choosing RANSACK advances the Rewards counter by exactly 1'). Cited here, not re-derived, as the other worked example of a potion-generation draw this seam's brief asks for -- recorded so a future potion-generation sweep does not conflate Ransack's 1-draw/Rewards shape with Alchemize's 2-draw/CombatPotionGeneration shape. `event/potion_courier.py`, `PotionCourier.cs` and `RewardsCmd.cs` are that record's sources, not this seam's, and are deliberately not hashed here (rule 7 applies to what a record's OWN prose cites by line; this entry cites the owning record's conclusion, not a fresh line number)."
+    },
+    {
+      "what": "G7: placeholder potions (`potion_pools._ParityPotion`) for an id that IS in the Ironclad-reachable pool but has no real class",
+      "verdict": "deliberate-divergence",
+      "rationale": "As of this pass every one of the 51 `POTION_POOL` ids has a real implemented class (`potion_pools.py`'s own module docstring: 'Every potion in this roster is now implemented in potions.py -- test_potions.TestPoolCoverage gates that'), so this bucket is currently EMPTY and `_ParityPotion` is never actually constructed for a pool id today -- the `mazaleths_gift` example both `shared-mechanisms.md` and `conformance/runner.py`'s own inline comment (`runner.py:784`, '(e.g. mazaleths_gift)') still give is STALE: `potions.py:688-705` registers a real `MazalethsGift` class. The class exists as a forward-guard for a FUTURE unimplemented pool addition, and its `use()` deliberately RAISES `NotImplementedError` (potion_pools.py:124-127) rather than silently no-op-ing -- a fail-loud choice, verified by reading the method body. Recorded as `deliberate-divergence` rather than `faithful`/`gap` because the sim's behaviour here (raise, don't silently proceed) is an explicit engineering choice with no C# analogue to be faithful OR unfaithful to; flagged as documentation staleness (not a gap) in this record's report."
+    },
+    {
+      "what": "G8: genuinely cross-character potions -- an id that is NOT in the Ironclad-reachable pool at all (Silent's Poison Potion, Defect's Focus Potion, etc.), reached only via a non-Ironclad recording's UsePotion/belt-resync",
+      "verdict": "waiver",
+      "rationale": "`idmap.sim_potion_id` (idmap.py:32-43) returns `None` for such an id (checked against both `ALL_POTIONS`, the implemented catalogue, and `_POOL_RARITY`, the full Ironclad-reachable roster including G7's placeholders) -- and `runner.py`'s `resync_floor_potions`, the caller, explicitly LEAVES that slot at `None` on an unmapped id (its own comment: 'Unmapped ids ... are left/dropped empty') rather than raising. This is a DIFFERENT failure mode from G7's raise-on-use: a genuinely cross-character potion is silently DROPPED at resync time and never becomes an object the sim could call `.use()` on at all, where an Ironclad-pool placeholder (G7) would be constructed and then raise the moment anything tried to use it. Both are deliberate, and neither is a gap in THIS seam's mechanism (PotionModel/PotionCmd apply identically to every character; the sim's Ironclad-only scope is what makes the OTHER four characters' potions unreachable, which is `character`/`relic_pools` territory, not this seam's). Waived as out-of-Ironclad-scope per the shared contract, not asserted as unreachable without checking -- reachability was checked (the conformance harness DOES replay the other 4 characters' seeds, per `MEMORY.md`'s 'SP3 seeds are 5 characters' note), and the two failure modes (raise vs. silent-drop) are recorded here precisely because they differ and a future fix to one must not assume it also fixed the other."
+    },
+    {
+      "what": "G9: EnqueueManualUse / AfterUsageCanceled (PotionModel.cs:236-247, :344-347) -- the queue-then-confirm UI flow and its cancellation path",
+      "verdict": "waiver",
+      "rationale": "A potion use is queued via `RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue`, an async multiplayer action queue, and can be cancelled before it executes (`AfterUsageCanceled` just resets `IsQueued`). Cancellation happens strictly BEFORE `OnUseWrapper` runs, so `RemoveBeforeUse` (step 1) never fires and nothing in the pipeline this record covers is reachable from a cancelled use -- there is no state to diverge on. The sim calls `use_potion`/`use_potion` synchronously with no queue and no cancel path, which is presentation/architecture (single-player, synchronous), not a gameplay gap."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-08-03"
+}

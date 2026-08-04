@@ -160,6 +160,10 @@
     {
       "path": "src/Core/Models/Monsters/SoulNexus.cs",
       "sha256": "7b30b1db0adbf736c71c4121d5ebf0fc6e1597f5be434a7017b0d1e3a204f8a3"
+    },
+    {
+      "path": "src/Core/Models/Monsters/SludgeSpinner.cs",
+      "sha256": "cd0607e20498f39528ed97295ac7b0fec56cc484c56e70b522461bc41aba988a"
     }
   ],
   "sim_sources": [
@@ -216,12 +220,20 @@
       "sha256": "789a1a3297f11e8b4097b8c315c4d63c2509d5e1d68a164d4d56ce40a4326284"
     },
     {
+      "path": "sts2_rl/monsters/glory/soul_nexus.py",
+      "sha256": "614cdb3a8d5503e007e078e4b9a2fd7c57acc9afaad2869e88c27242ec035cbb"
+    },
+    {
       "path": "sts2_rl/monsters/fake_merchant.py",
       "sha256": "fdfe33aa23b58cd08022468f2cc63cc6c8d906c5563eb23b71490d7b23f101e0"
     },
     {
       "path": "sts2_rl/monsters/underdocks/fossil_stalker.py",
       "sha256": "9aec46f9057804b1f2c6977f4292147fd5a1ea1f940c93cb02cf206b5cadc2fd"
+    },
+    {
+      "path": "sts2_rl/monsters/underdocks/sludge_spinner.py",
+      "sha256": "296903d80db1aff7fde9e56041048218f1605c897e88671492c0dc5d92d4ba37"
     },
     {
       "path": "sts2_rl/monsters/underdocks/two_tailed_rat.py",
@@ -405,7 +417,7 @@
       "what": "13. The TEN AddBranch overloads and every integer's role (RandomBranchState.cs:46-113): #1 :46 (int cooldown, R, Func) [throws on CanRepeatXTimes]; #2 :62 (int cooldown, int maxRepeats, Func); #3 :75 (int maxRepeats, Func); #4 :80 (int cooldown, R, float); #5 :85 (R, float); #6 :90 (R, Func); #7 :95 (int maxRepeats, float); #8 :100 (int cooldown, R); #9 :105 (int maxRepeats); #10 :110 (R). NO overload takes a weight as an int \u2014 every weight is a float or Func<float>, defaulting to 1f",
       "verdict": "faithful",
       "maps_to": "state_machine.py:160-176 add_branch(state, weight=1.0, repeat_type=CAN_REPEAT_FOREVER, max_times=0, cooldown=0)",
-      "issue": "Closed 2026-07-27: every ported RandomBranchState now reads its C# integer arguments as cooldown / maxRepeats rather than as weights. Re-executed in this pass: `py audit/tools/state_machine_probes.py mismatch` reports 12 resolved C#<->sim pairs covering 13 C# RandomBranchStates, 12 MATCH exactly and 0 misread -- the five that misread (Flail Knight, Hunter Killer, Mysterious Knight, Scroll of Biting, Spectral Knight) are all corrected. The sim's add_branch keeps a keyword signature (state, weight, repeat_type, max_times, cooldown), which is a deliberate re-architecture of C#'s ten positional overloads; what this step recorded as a gap was the transliteration error it invited, and no port commits it any more. WAS: 5 of 12 pairs converted a repeat limit or a cooldown into a branch weight."
+      "issue": "Closed 2026-07-28 (per-monster fix commits; the machinery's own reading was already correct by 2026-07-27): every ported RandomBranchState now reads its C# integer arguments as cooldown / maxRepeats rather than as weights. RE-VERIFIED 2026-08-03 (P3 correction pass, prompted by this record's doc-file counterpart `audit/seams/monster_state_machine.md` still describing this gap as LIVE): read FlailKnight.cs:49-57, HunterKiller.cs:42-48, ScrollOfBiting.cs:89-90, SpectralKnight.cs:52-53 and FakeMerchantMonster.cs:55-58 directly against RandomBranchState.cs's overload table, then read all five sim ports (hive/flail_knight.py, hive/hunter_killer.py, glory/scroll_of_biting.py, glory/knights.py, fake_merchant.py) line by line -- every one now passes `max_times=`/`cooldown=` by KEYWORD and leaves `weight` at its 1.0 default, matching the C# overload's role for that integer. `py audit/tools/state_machine_probes.py mismatch` (WIDENED this pass -- see below) reports 15 resolved C#<->sim pairs covering 16 C# RandomBranchStates, 15 MATCH exactly and 0 misread -- the five that originally misread (Flail Knight, Hunter Killer, Scroll of Biting, Spectral Knight, Fake Merchant) are all corrected; each has its own per-monster record (audit/records/monster/flail_knight.json etc., plus mysterious_knight.json for the FlailKnight subclass that inherits the same machine and never had a branch of its own) independently confirming the same fix, dated 2026-07-28. CORRECTED: an earlier pass of this issue text named 'Mysterious Knight' as one of the five misreading monsters, in place of 'Fake Merchant' -- MysteriousKnight.cs (16 lines) overrides no GenerateMoveStateMachine at all and inherits FlailKnight's machine verbatim (confirmed by reading it and by mysterious_knight.json:38), so it was never a distinct site; FakeMerchantMonster.cs:58's own AddBranch(moveState4, 3, MoveRepeatType.CannotRepeat) is the fifth genuine site and is in `_CS_BRANCHES`. WIDENED (this pass): `_CS_BRANCHES` previously resolved only 12 of the 14 sim classes `hand-rolled` reports as ported onto the state machine against a matching C# RandomBranchState (+ FakeMerchantMonster, outside that census's roster scan) -- SoulNexus, SludgeSpinner and TheObscura were simply missing from the hand-curated table, not excluded for a reason. None of the three has a non-default int argument in C# (cs-addbranch's full non-default-int census does not name any of them), so none could have exhibited this bug and the '0 misread' headline is unchanged, but the probe's own 'for every ported RandomBranchState' claim is now actually true of its output; see the probe's updated `mismatch` docstring. The sim's add_branch keeps a keyword signature (state, weight, repeat_type, max_times, cooldown), which is a deliberate re-architecture of C#'s ten positional overloads; what this step recorded as a gap was the transliteration error it invited, and no port commits it any more. WAS: 5 of 12 pairs converted a repeat limit or a cooldown into a branch weight (this record's own doc counterpart, audit/seams/monster_state_machine.md, still described this state as of 2026-08-03 and has been corrected in the same pass as this entry)."
     },
     {
       "what": "14. GetNextState: max = States.Sum(GetStateWeight), ONE draw rng.NextFloat(max), then walk the branches IN ADD ORDER subtracting each weight and returning the first with num <= 0 \u2014 add order is observable \u2014 RandomBranchState.cs:115-126",
@@ -641,5 +653,5 @@
     }
   ],
   "verdict": "deliberate-divergence",
-  "audited": "2026-07-26"
+  "audited": "2026-08-03"
 }

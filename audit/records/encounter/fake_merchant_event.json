@@ -1,0 +1,70 @@
+{
+  "unit": "encounter/fake_merchant_event",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\FakeMerchantEventEncounter.cs",
+    "sha256": "838a42bf80c7b23d1db4a9d45ab8428e467349222ac28a4bf380989fbafda36c"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\fake_merchant.py",
+    "sha256": "fdfe33aa23b58cd08022468f2cc63cc6c8d906c5563eb23b71490d7b23f101e0"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/EncounterModel.cs",
+      "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
+      "side": "game"
+    }
+  ],
+  "hooks": {
+    "RoomType": {
+      "maps_to": "driver.py's Event fight path (`_run_event`) always calls `_run_combat(event.pending_encounter, RoomType.MONSTER)`, matching FakeMerchantEventEncounter.cs:11's `RoomType.Monster`.",
+      "verdict": "faithful"
+    },
+    "HasScene": {
+      "maps_to": "no sim counterpart -- the headless sim has no scene/rendering system at all (`grep -rn HasScene\\|CreateScene\\|GetAssetPaths sts2_rl/` is empty). Presentation-only in C# (gates `EncounterModel.GetAssetPaths`'s scene preload, EncounterModel.cs:328-343); no RNG or game-state effect.",
+      "verdict": "waiver",
+      "rationale": "Unreachable: no renderer/scene graph/asset pipeline exists anywhere in the sim."
+    },
+    "HasCustomBackground": {
+      "maps_to": "no sim counterpart -- gates `EncounterModel.GetBackgroundAssets`'s choice between a bespoke background (`CreateBackgroundAssetsForCustom`) and the act's generic one (EncounterModel.cs:293-313); purely a visual asset choice, same absence of any sim background/asset system as `HasScene`.",
+      "verdict": "waiver",
+      "rationale": "Unreachable for the same reason as `HasScene` -- there is no background/asset selection concept anywhere in the sim."
+    },
+    "Slots": {
+      "maps_to": "`Encounter.slots` (monsters/base.py) -- `FAKE_MERCHANT_EVENT_ENCOUNTER` (fake_merchant.py:119-124) passes no `slots=`, so it defaults to `()`, where FakeMerchantEventEncounter.cs:17 declares `[\"merchant\"]`. Executed: `py audit/tools/encounter_probes_e9.py slots-not-ported` prints `()` for the sim side.",
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-08-03 (gap-fix pass). The `Encounter` dataclass already had `slots`/`monster_slots` and `CreatureCmd.add(slot_name=)` re-sorts on them (shipped round 7 for Fabricator/Ovicopter); this unit simply never declared its row. It does now, transcribed from the C# `Slots` override and `GenerateMonsters`' `(model, slot)` pairs, and `CombatState.__init__` routes every roster through `Encounter.seat_in_slots` so the seventeen `create_monsters` overrides are seated too. Regression tests: test/test_encounter_slots.py.\n\nWHAT THE GAP SAID: encounter/_slots_not_ported (same mechanism as dense_vegetation_event's Slots/GenerateMonsters entries): the single `\"merchant\"` slot is not represented. Traced the one consequence (`CombatState.sort_enemies_by_slot_name`, no-ops on empty `slots` and is never called for initial roster construction anyway) and the only OTHER thing slot identity could matter for -- move-selection or any other behavioural branch on `FakeMerchantMonster.slot_name` -- reading FakeMerchantMonster.cs and fake_merchant.py's `FakeMerchantMonster` class top to bottom finds no such branch on either side. Costs nothing for a single fixed monster with no slot-conditioned behaviour."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "no explicit sim field (whole-tree grep is empty, see battleworn_dummy_event); `FAKE_MERCHANT_EVENT_ENCOUNTER.monster_classes = [FakeMerchantMonster]` already equals the C# superset `{FakeMerchantMonster}` (FakeMerchantEventEncounter.cs:19) exactly.",
+      "verdict": "deliberate-divergence",
+      "rationale": "No sim representation of the concept, but a single-class non-branching roster IS its own superset, so nothing is lost here."
+    },
+    "MinGoldReward": {
+      "maps_to": "`Encounter.min_gold` (monsters/base.py) -- `FAKE_MERCHANT_EVENT_ENCOUNTER` pins `min_gold=300` (fake_merchant.py:122, `_GOLD_REWARD = 300`), matching FakeMerchantEventEncounter.cs:21's fixed `300`. Honoured end to end: `rewards.generate_combat_rewards` (rewards.py:885-887) uses `(encounter.min_gold, encounter.max_gold)` as the roll range whenever `encounter.min_gold is not None`, overriding the RoomType ladder, exactly mirroring `roll_gold_reward`'s own docstring citation of the C# virtual override -- and `driver.py`'s `_run_combat` passes `encounter=event.pending_encounter` through to `generate_combat_rewards` for every event fight, so the override actually reaches the roll.",
+      "verdict": "faithful"
+    },
+    "MaxGoldReward": {
+      "maps_to": "same as MinGoldReward -- `max_gold=300` matches FakeMerchantEventEncounter.cs:23's fixed `300`, both ends of the (300,300) range consumed identically.",
+      "verdict": "faithful"
+    },
+    "GenerateMonsters": {
+      "maps_to": "base `Encounter.create_monsters` (monsters/base.py), unmodified by FAKE_MERCHANT_EVENT_ENCOUNTER. Roster: 1 FakeMerchantMonster, matching FakeMerchantEventEncounter.cs:25-28's single-element list. Order: trivial (one element). Draw count: BOTH sides draw zero from any Rng in this method (no `base.Rng` call in the C# body; the sim's default `create_monsters` only invokes the class constructor, whose own draws are the Niche/legacy HP roll, a separate concern). Slot pairing: C# returns `(monster, \"merchant\")` (line 27); the sim's `monster_slots` defaults to `()` so `.slot_name` is never set -- the same root-cause omission as the `Slots` hook above, and dormant for the same reason (no downstream reader of this monster's slot_name on either side).",
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-08-03 (gap-fix pass). The `Encounter` dataclass already had `slots`/`monster_slots` and `CreatureCmd.add(slot_name=)` re-sorts on them (shipped round 7 for Fabricator/Ovicopter); this unit simply never declared its row. It does now, transcribed from the C# `Slots` override and `GenerateMonsters`' `(model, slot)` pairs, and `CombatState.__init__` routes every roster through `Encounter.seat_in_slots` so the seventeen `create_monsters` overrides are seated too. Regression tests: test/test_encounter_slots.py.\n\nWHAT THE GAP SAID: encounter/_slots_not_ported (paired with the Slots entry above): the returned monster carries no slot identity. Confirmed dormant: `py audit/tools/encounter_probes_e9.py slots-not-ported` shows the sim's constructed monster with `slot_name=None`, and no code path in `sts2_rl/monsters/fake_merchant.py`'s `FakeMerchantMonster` reads slot identity for any move or effect."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "EncounterModel.ShouldReceiveCombatHooks => false (EncounterModel.cs:39, inherited, not re-overridden). The sim never registers an Encounter as a hook listener anywhere (checked every `hooks.register(` call site).",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "encounter/_entry_slug_mismatch: `FAKE_MERCHANT_EVENT_ENCOUNTER.entry` = `FAKE_MERCHANT_EVENT` (from `id=\"fake_merchant_event\"`), but the game's real `Id.Entry` for `FakeMerchantEventEncounter` is `FAKE_MERCHANT_EVENT_ENCOUNTER` (`StringHelper.Slugify(type.Name)` via `ModelDb.GetEntry`) -- the sim's id drops the '_ENCOUNTER' suffix. Executed: `py audit/tools/encounter_probes_e9.py entry-slug-mismatch` prints MISMATCH.",
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-08-03 (gap-fix pass). `Encounter` gained an explicit `entry_slug` field and `Encounter.entry` returns it when set, so this unit seeds `make_encounter_rng` with the game's real `ModelId.Entry` while keeping its sim id. A mechanical sweep of ALL 87 sim encounters against `src/Core/Models/Encounters/*.cs` (audit/tools/encounter_entry_sweep.py) found two more the unit batches had not checked — `fuzzy_wurm_crawler` (FuzzyWurmCrawlerWeak) and `overgrowth_crawlers_normal` (OvergrowthCrawlers) — and now reports MATCH for every one. Pinned by test/test_encounter_entry_slugs.py.\n\nWHAT THE GAP SAID: Same mechanism as `battleworn_dummy_event/G1` and (LIVE) `punch_off_event/G1`. Dormant here because FakeMerchantEventEncounter.GenerateMonsters draws zero values from `base.Rng` (see the GenerateMonsters entry above); `py audit/tools/encounter_probes_e9.py dormant-4-zero-draws` confirms the sim's `create_monsters` output is byte-identical under two unrelated seeds."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-08-03"
+}

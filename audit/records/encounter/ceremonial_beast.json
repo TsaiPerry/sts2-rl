@@ -1,0 +1,119 @@
+{
+  "unit": "encounter/ceremonial_beast",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\CeremonialBeastBoss.cs",
+    "sha256": "9f38229d78747b47ce3a9a00514967e8783bc64e32e96067fb321cdc64929754"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\ceremonial_beast.py",
+    "sha256": "3890c1e4b5d92983eebe18b258a71d2c4a6e0fa192bcbe215116acfe046f16f3"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "ENCOUNTERS['ceremonial_beast'] listed in rooms.py boss_keys (_overgrowth_rooms)",
+      "verdict": "faithful",
+      "rationale": "CeremonialBeastBoss.RoomType => RoomType.Boss (CeremonialBeastBoss.cs:11). Sim carries no room_type field on the Encounter dataclass; 'ceremonial_beast' is placed in rooms.py:107's boss_keys for _overgrowth_rooms() (seam/rooms_and_map owns the picker itself). GOLD_REWARD_RANGES[RoomType.BOSS]=(100,100) (rewards.py:173) matches EncounterModel.cs:72/91's Boss=>100/100 defaults, which CeremonialBeastBoss does not override."
+    },
+    "CustomBgm": {
+      "maps_to": "(none)",
+      "verdict": "deliberate-divergence",
+      "rationale": "Pure audio selection (\"event:/music/act1_boss_ceremonial_beast\"). Its only reader is CombatManager.cs:392's NRunMusicController.PlayCustomMusic -- zero gameplay effect. The headless sim plays no audio."
+    },
+    "HasCustomBackground": {
+      "maps_to": "(none)",
+      "verdict": "deliberate-divergence",
+      "rationale": "Pure visual background selection (protected bool => true, routes GetBackgroundAssets to CreateBackgroundAssetsForCustom instead of the act's generic pool, EncounterModel.cs:188/296-313). No gameplay reader; zero RNG-observable effect in the sim's scope (it only changes which asset bundle is used, not any draw count on a stream the sim models -- CreateBackgroundAssetsForCustom takes an Rng parameter but that Rng is the visuals-only BackgroundAssets ctor's own, never EncounterModel.Rng). The headless sim renders no background."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "(none)",
+      "verdict": "deliberate-divergence",
+      "rationale": "No sim counterpart. C#'s only consumers of AllPossibleMonsters are ActModel.AllMonsters (ActModel.cs:169, read only by ModelDb.Monsters -> UnlockConsoleCmd.cs:68/147's dev-console 'monsters' listing and NGeneralStatsGrid.cs:164's stats-screen ratio label) and the Bestiary screen (NBestiary.cs:194) -- all UI/dev-console, zero gameplay or RNG effect, confirmed by reading every caller in src/. The headless sim has neither surface, so omitting a counterpart costs nothing observable."
+    },
+    "ExtraAssetPaths": {
+      "maps_to": "(none)",
+      "verdict": "deliberate-divergence",
+      "rationale": "Preloads the Ringing affliction's overlay sprite (ModelDb.Affliction<Ringing>().OverlayPath) so the VFX asset is ready before BEAST_CRY applies it. Its only reader is EncounterModel.GetAssetPaths (EncounterModel.cs:328-343), itself only used for asset preloading -- zero gameplay effect. The Ringing power itself (the mechanical half) is ported independently of this asset list."
+    },
+    "GetCameraScaling": {
+      "maps_to": "(none)",
+      "verdict": "deliberate-divergence",
+      "rationale": "Pure combat-scene camera framing (0.9f). Its only readers are NCombatRoom.cs:188/284/310, Godot node positioning -- zero gameplay effect. The headless sim renders nothing."
+    },
+    "GetCameraOffset": {
+      "maps_to": "(none)",
+      "verdict": "deliberate-divergence",
+      "rationale": "Pure combat-scene camera framing (Vector2.Down * 50f). Its only reader is NCombatRoom.cs:189, Godot node positioning -- zero gameplay effect. The headless sim renders nothing."
+    },
+    "GenerateMonsters": {
+      "maps_to": "CEREMONIAL_BEAST_BOSS.monster_classes = [CeremonialBeast] (ceremonial_beast.py:90-93)",
+      "verdict": "faithful",
+      "rationale": "CeremonialBeastBoss.GenerateMonsters (CeremonialBeastBoss.cs:31-34) returns a single-element list: (ModelDb.Monster<CeremonialBeast>().ToMutable(), null) -- zero base.Rng calls, one monster, no slot. Sim's monster_classes=[CeremonialBeast], no slots/monster_slots set (defaults (), sts2_rl/monsters/base.py) and create_monsters draws no RNG for composition (the default implementation this encounter inherits, sts2_rl/monsters/base.py). Roster (1x CeremonialBeast), order (trivial), slot (null/none on both sides) and draw count (0 == 0) all match."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "(structural -- Encounter dataclass has no hook methods)",
+      "verdict": "faithful",
+      "rationale": "EncounterModel.ShouldReceiveCombatHooks => false (EncounterModel.cs:39), not overridden by CeremonialBeastBoss. The sim's Encounter dataclass (sts2_rl/monsters/base.py) declares no hook methods and is never passed to HookSystem.register -- it is plain data, structurally incapable of joining the hook walk, which reproduces 'the encounter itself is not a listener' exactly."
+    }
+  },
+  "guards": [
+    {
+      "what": "MinGoldReward/MaxGoldReward gold ladder (the encounter brief's 5th thing to verdict)",
+      "verdict": "faithful",
+      "rationale": "CeremonialBeastBoss does not override MinGoldReward/MaxGoldReward, so both inherit EncounterModel.cs:64-100's RoomType ladder (Boss=100-100) times AscensionHelper.PovertyAscensionGoldMultiplier under AscensionLevel.Poverty. CEREMONIAL_BEAST_BOSS carries min_gold=None, max_gold=None (Encounter dataclass default, sts2_rl/monsters/base.py), so rewards.py:875/886-887 falls back to GOLD_REWARD_RANGES[RoomType.BOSS]=(100,100) (rewards.py:173) -- the same ladder, and rewards.py:875 additionally special-cases the FINAL act's boss (out of Ironclad act-1 scope here). Ascension (Poverty) scaling is out of scope by the audit contract (rewards.py:32's explicit 'no Scarcity/Poverty scaling')."
+    },
+    {
+      "what": "EncounterModel.Rng independence (per the encounter brief: verify the sim does not draw encounter rolls off a shared/run-level stream)",
+      "verdict": "faithful",
+      "rationale": "CeremonialBeastBoss.GenerateMonsters makes zero base.Rng calls (CeremonialBeastBoss.cs:31-34, confirmed by reading the whole method) and the sim's create_monsters counterpart makes zero calls to any Rng/random.Random for composition -- there is nothing here for stream identity to diverge on. (Draw-count fact only; which named stream backs EncounterModel.Rng in general is seam/rng_streams' mechanism, already verdicted faithful for the seeding formula at rng_streams step 21.)"
+    }
+  ],
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/EncounterModel.cs",
+      "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/ActModel.cs",
+      "sha256": "158831cf2c7b7887f2242fa5751fad3ceeb5c8913fbc89d41451645bd822cc9b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/Screens/Bestiary/NBestiary.cs",
+      "sha256": "e5bf63632335d834f61d57c951775a428ecb1a27f98a56bf790675e9bd3aba79",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/DevConsole/ConsoleCommands/UnlockConsoleCmd.cs",
+      "sha256": "9fd3b7a41e15d1c2e54a4997bab1db88daf97820ac13ed5ab364c522f5246175",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/Screens/StatsScreen/NGeneralStatsGrid.cs",
+      "sha256": "6df922988a4392ab94066d704b902b8c267101f0f0af506b87be7a0926f284e0",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Nodes/Rooms/NCombatRoom.cs",
+      "sha256": "574b7cb0445ef0e6972258331200c4847b1b05ded4aef6047d51dc80a9b74b48",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-08-03"
+}

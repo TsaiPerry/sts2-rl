@@ -1,0 +1,67 @@
+{
+  "unit": "encounter/test_subject",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\TestSubjectBoss.cs",
+    "sha256": "2b79aee0c4e2dc5af23b39aecddd9c808c0954c26347d6080366fc54fad96c4f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\glory\\test_subject.py",
+    "sha256": "800eed5a3cd3bb1471be6533ce6035049a0b185d8cf2662e0019126b77840fa7"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "sts2_rl/rooms.py _glory_rooms().boss_keys includes 'test_subject'",
+      "verdict": "faithful",
+      "rationale": "TestSubjectBoss declares RoomType.Boss; bucket membership agrees (test_subject only in boss_keys)."
+    },
+    "BossNodePath": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only: an asset path string ('res://images/map/placeholder/' + Id.Entry + '_icon') used to pick the boss map-node icon. The sim has no map-node rendering layer of any kind; no gameplay state or RNG draw is involved. Overriding the base EncounterModel.BossNodePath default (which points at a different placeholder path pattern) changes only which icon is preloaded."
+    },
+    "CustomBgm": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only: an FMOD event path ('event:/music/act3_boss_test_subject'). No sim counterpart exists anywhere (grep across sts2_rl/ for CustomBgm/HasBgm returns nothing) and none is needed -- audio has no observable effect on game state."
+    },
+    "BossNodeSpineResource": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only: overriding it to null skips a Spine skeleton resource lookup for the map node (the base implementation would otherwise try to load one via BossNodePath). No sim counterpart; no gameplay effect."
+    },
+    "HasCustomBackground": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only: routes combat-background asset generation to CreateBackgroundAssetsForCustom instead of the act's default background generator. The rng it is passed (NCombatRoom.GenerateBackgroundRngForCurrentPoint) is a background-asset-only stream, never the run's or the encounter's own Rng, so skipping it draws nothing the sim would need to reproduce for parity. No sim counterpart exists (no background rendering at all)."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "TEST_SUBJECT_BOSS.monster_classes = [TestSubject]",
+      "verdict": "faithful",
+      "rationale": "Single-element superset on both sides, identical to the fixed, always-spawning roster -- no divergence possible."
+    },
+    "GenerateMonsters": {
+      "maps_to": "Encounter.create_monsters (sts2_rl/monsters/base.py) via TEST_SUBJECT_BOSS(monster_classes=[TestSubject])",
+      "verdict": "faithful",
+      "rationale": "One monster, no slot tag (null on the C# side; monster_slots left unset on the sim side so slot_name stays None), zero RNG draws in GenerateMonsters on either side. Checked explicitly per this batch's brief: TestSubjectBoss.cs has no reference anywhere to SaveManager.Instance.Progress.TestSubjectKills -- the profile-lifetime #C{Count} title suffix that makes test_subject the open, named divergence at the 933T39V18D conformance seed lives entirely inside TestSubject.cs's own Title construction (monster tier), not in the encounter. The encounter side contributes nothing to that counter: it neither reads nor increments it, spawns exactly the one TestSubject model every time with no conditional roster, and draws nothing that a stale/mismatched counter could desynchronise. The sim's own docstring (test_subject.py) independently documents the same fact and names the conformance driver's accepted-suffix workaround (combat_driver._name_matches) -- this record corroborates that from the encounter side rather than duplicating the monster-tier verdict."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "the Encounter dataclass (sts2_rl/monsters/base.py) is never registered as a hook listener; only Monster instances register themselves",
+      "verdict": "faithful",
+      "rationale": "Same structural fact as every unit in this batch."
+    }
+  },
+  "guards": [
+    {
+      "what": "MinGoldReward/MaxGoldReward -- not overridden, inherits the Boss ladder (100-100, i.e. fixed) x Poverty multiplier",
+      "verdict": "faithful",
+      "rationale": "sts2_rl/rewards.py GOLD_REWARD_RANGES[RoomType.BOSS] = (100, 100) and TEST_SUBJECT_BOSS sets neither min_gold nor max_gold -- matches the fixed 100 gold. Poverty/ascension scaling out of scope per PROMPT.md."
+    },
+    {
+      "what": "ShouldGiveRewards -- not overridden, defaults true",
+      "verdict": "faithful",
+      "rationale": "TestSubjectBoss does not override ShouldGiveRewards; Encounter.should_give_rewards defaults True and is left unset here -- matches."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-08-03"
+}

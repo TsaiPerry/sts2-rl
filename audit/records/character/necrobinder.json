@@ -1,0 +1,149 @@
+{
+  "unit": "character/necrobinder",
+  "game_source": {
+    "path": "src\\Core\\Models\\Characters\\Necrobinder.cs",
+    "sha256": "8cea893f7d4b88bae3a550a85d7b0c5730cd98724a59c5eee8e29b6cccb8c30d"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\characters.py",
+    "sha256": "2df97b087c2a1211b25975c2e83c708704a4fe3dba83579c2b1281d8039f8a8f"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/CharacterModel.cs",
+      "sha256": "8cbce4b51220c71424cc9b84367c04a744f15bd990bc22dcbc0f2bb9fe2b050a",
+      "side": "game"
+    }
+  ],
+  "hooks": {
+    "NameColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Necrobinder.cs:27 `StsColors.purple`, Statistics-screen text color. Presentation only, no sim reader."
+    },
+    "Gender": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Necrobinder.cs:29 `CharacterGender.Feminine`, grammatical/pronoun text only."
+    },
+    "UnlocksAfterRunAs": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Necrobinder.cs:31 `ModelDb.Character<Regent>()` \u2014 Necrobinder unlocks after a Regent run. Same waiver as the other four records' UnlocksAfterRunAs: the sim has no cross-run save/unlock-state system at all, and models every run fully-unlocked (events/orobas.py's documented deliberate-divergence) regardless of what any character's prerequisite chain says."
+    },
+    "StartingHp": {
+      "maps_to": "Character(starting_hp=66) (characters.py's _build_registry, necrobinder row)",
+      "verdict": "faithful",
+      "rationale": "Necrobinder.cs:33 `StartingHp => 66`. Exact match \u2014 the lowest starting HP of the five, correctly carried through."
+    },
+    "StartingGold": {
+      "maps_to": "Character(starting_gold=99) (characters.py's _unported helper, hardcoded)",
+      "verdict": "faithful",
+      "rationale": "Necrobinder.cs:35 `StartingGold => 99`. Matches; all five characters share this constant in the C# (verified by reading all five Characters/*.cs files directly)."
+    },
+    "CardPool": {
+      "maps_to": "Character(card_pool=()) (characters.py, empty by design)",
+      "verdict": "waiver",
+      "rationale": "Necrobinder.cs:37 `ModelDb.CardPool<NecrobinderCardPool>()`. UNPORTED BY DESIGN, per PROMPT.md's scope line (\"Characters other than Ironclad: waiver with rationale\") \u2014 NecrobinderCardPool's content wave has not started. Absent, not wrong: `Character.is_ported` (characters.py:83-89) is False for Necrobinder, which is what keeps this empty tuple from being read as a real pool anywhere downstream."
+    },
+    "RelicPool": {
+      "maps_to": "Character(relic_pool=()) (characters.py, empty by design)",
+      "verdict": "waiver",
+      "rationale": "Necrobinder.cs:39 `ModelDb.RelicPool<NecrobinderRelicPool>()`. Same disposition as CardPool: unported by design, gated by `is_ported`."
+    },
+    "PotionPool": {
+      "maps_to": "Character(potion_pool=()) (characters.py, empty by design)",
+      "verdict": "waiver",
+      "rationale": "Necrobinder.cs:41 `ModelDb.PotionPool<NecrobinderPotionPool>()`. Same disposition."
+    },
+    "ExtraAssetPaths": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Necrobinder.cs:43-47 returns two extra scene/VFX paths (`vfx/vfx_heal_osty`, `creature_visuals/osty`) for Osty, Necrobinder's companion summon visuals \u2014 feeds `CharacterModel.AssetPaths` (CharacterModel.cs:188), an asset-preload list with no gameplay meaning. Necrobinder is the ONLY one of the five to override this (the base default is `Array.Empty<string>()`, CharacterModel.cs:142). Presentation/asset-loading only; no sim reader, and doubly moot since Necrobinder's Osty summon mechanic itself is unported."
+    },
+    "StartingDeck": {
+      "maps_to": "Character(starting_deck=()) (characters.py, empty by design)",
+      "verdict": "waiver",
+      "rationale": "Necrobinder.cs:49-61: 4x StrikeNecrobinder, 4x DefendNecrobinder, Bodyguard, Unleash (10 cards). Deliberately left empty to fail with a clear `NotImplementedError` rather than a `KeyError` deep inside deck construction (naming card ids no `@register_card` has created). EXECUTED WITNESS for unreachability, re-run 2026-08-03: `get_character('necrobinder')` raises `NotImplementedError(\"character 'necrobinder' has no content ported yet...\")`; `CHARACTERS['necrobinder'].is_ported` is `False` (`starting_deck=()`, `card_pool=()`); `RunState.__init__` resolves `self.character = get_character(character)` unconditionally before anything else runs, so no `RunState` for `necrobinder` can ever be constructed and `run.py`'s starting-relic grant loop / `build_starting_deck` are structurally unreachable, not merely undemonstrated."
+    },
+    "StartingRelics": {
+      "maps_to": "Character(starting_relics=('bound_phylactery',)) (characters.py's _build_registry, necrobinder row)",
+      "verdict": "faithful",
+      "rationale": "Necrobinder.cs:63 `ModelDb.Relic<BoundPhylactery>()`. The id is correctly transcribed (matching the C# name), but `'bound_phylactery' in ALL_RELICS` is False (confirmed by import, re-checked 2026-08-03) \u2014 no such relic class is registered yet, matching the character's overall unported status. Same dormant-unreachable disposition as character/silent's and character/defect's equivalent entries: `get_character`'s guard blocks this value from ever being read by `run.py`'s grant loop."
+    },
+    "AttackAnimDelay": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Necrobinder.cs:65, animation timing only. No sim reader."
+    },
+    "CastAnimDelay": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Necrobinder.cs:67 `=> 0.4f`, the longest CastAnimDelay of the five (others are 0.25f). Still pure animation timing, no gameplay effect; no sim reader."
+    },
+    "EnergyLabelOutlineColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Necrobinder.cs:69, UI color. No sim reader."
+    },
+    "DialogueColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Necrobinder.cs:71, UI color. No sim reader."
+    },
+    "MapDrawingColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Necrobinder.cs:73, UI color. No sim reader."
+    },
+    "RemoteTargetingLineColor": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Necrobinder.cs:75, multiplayer-only UI color, doubly out of scope."
+    },
+    "RemoteTargetingLineOutline": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Necrobinder.cs:77, multiplayer-only UI color, doubly out of scope."
+    },
+    "CharacterTransitionSfx": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Necrobinder.cs:79 `=> \"event:/sfx/ui/wipe_ironclad\"` \u2014 reuses Ironclad's screen-wipe sound rather than the CharacterModel default derived from its own id. Audio-only, no gameplay effect; no sim reader."
+    },
+    "GetArchitectAttackVfx": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Necrobinder.cs:81-96, four VFX asset-path strings for the Architect event. Presentation only."
+    },
+    "GenerateAnimator": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Necrobinder.cs:98-122, Godot animation state graph (adds a `cast_mighty` PowerUp/summon branch). Presentation only."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "(nothing, trivially)",
+      "verdict": "faithful",
+      "rationale": "INHERITED from CharacterModel.cs:208 (`=> false`); Necrobinder.cs declares no override. Same trivial agreement as the other four records in this kind: the sim's `Character` dataclass is never a hook-system participant either."
+    }
+  },
+  "guards": [
+    {
+      "what": "SpeechBubbleColor \u2014 NOT declared, unlike the other four characters",
+      "maps_to": "Necrobinder.cs declares no `SpeechBubbleColor` override (confirmed by reading the file end-to-end), so it uses CharacterModel's default (`VfxColor.Cyan`, CharacterModel.cs:172) \u2014 the harness's enumeration correctly omits it from this unit's hook list rather than a miss. Presentation only regardless; noted because every OTHER character in this kind does override it, which could look like an omission if not stated.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "MaxEnergy default",
+      "maps_to": "Necrobinder.cs does not override `MaxEnergy` (virtual, CharacterModel.cs:84, default 3); `Character(...)` for Necrobinder likewise takes the default (max_energy=3). Matches.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "What \"unported by design\" means, stated once for this whole record rather than repeated per hook",
+      "verdict": "waiver",
+      "rationale": "Two different things are true about this row: (1) the STATS the table carries today (StartingHp=66, StartingGold=99, StartingRelics=('bound_phylactery',)) are transcribed correctly against Necrobinder.cs and independently verdicted `faithful` above \u2014 a wrong number here would have been a `gap`, not a `waiver`; (2) the CONTENT the table deliberately omits (StartingDeck, CardPool, RelicPool, PotionPool) is `waiver`, enforced structurally by `is_ported`/`get_character`'s `NotImplementedError` (executed above) rather than merely asserted. A caller reading `CHARACTERS['necrobinder']` directly (bypassing `get_character`) would see correct-but-inert numbers and empty content tuples, never wrong numbers."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-08-03"
+}

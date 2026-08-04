@@ -129,6 +129,6 @@
       "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart, so its absence is not a divergence from the source. No operational consequence here -- Vambrace's pickup mutates nothing outside run.relics."
     }
   ],
-  "verdict": "faithful",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

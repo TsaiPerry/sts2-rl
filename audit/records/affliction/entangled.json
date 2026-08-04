@@ -1,0 +1,48 @@
+{
+  "unit": "affliction/entangled",
+  "game_source": {
+    "path": "src\\Core\\Models\\Afflictions\\Entangled.cs",
+    "sha256": "7221aef9c6b6cd695310dbf2744788efde89b370708141a7004a81492ec3a7ac"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\afflictions.py",
+    "sha256": "0bf0219fa3a2c37393c5091497f87360b5e530297f6fd117d2fee78918f3cf81"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/AfflictionModel.cs",
+      "sha256": "8aee0ce0b30603c24b325ed4c02aa67e1c2182817b163a0e85a03a195df03e41",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/TangledPower.cs",
+      "sha256": "f52ae733202234b2cf4dfe54c05d3657e24a996e867d6142048b2d106650d022",
+      "side": "game"
+    }
+  ],
+  "hooks": {},
+  "guards": [
+    {
+      "what": "Entangled.cs's own docstring is literal: \"This Affliction has no logic of its own.\" It declares NO override of any AfflictionModel member — not even HasExtraCardText — so there is nothing for this unit to diverge on at the AfflictionModel layer; every observable behavior is TangledPower's.",
+      "maps_to": "`EntangledAffliction` (afflictions.py) is likewise a bare data-only subclass with no method overrides beyond the constructor. Symmetric with the C# split.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "trigger + power reference (context, not re-derived)",
+      "maps_to": "TangledPower.AfterApplied (TangledPower.cs:22-28) afflicts every Attack card in the player's hand/piles at power-grant time; AfterCardEnteredCombat (:30-36) afflicts a newly-entering unafflicted Attack card; TryModifyEnergyCostInCombat (:60-67) raises an Entangled Attack's cost by `base.Amount`; AfterSideTurnEnd (:38-44) self-removes the power (Flash + PowerCmd.Remove), whose AfterRemoved (:46-52) sweeps every Entangled affliction off `AllCards`. Mirrored by `power/tangled` (powers.py), already audited: rollup verdict `faithful` — every entry closed. Applier confirmed ported: `sts2_rl/monsters/overgrowth/vine_shambler.py`.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "stacking",
+      "maps_to": "Entangled overrides no `IsStackable`, inheriting AfflictionModel's default `False` (AfflictionModel.cs:127-130); `EntangledAffliction` leaves the base `is_stackable = False` unoverridden the same way.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "duration / decay + player-vs-creature scope",
+      "maps_to": "Entangled is card-scoped to the player's own Attack cards (no monster deck exists, so this is a player-only affliction like all seven). It is a SINGLE-TURN debuff by construction: TangledPower removes ITSELF at AfterSideTurnEnd every side-turn-end the owner participates in, and that removal's AfterRemoved sweep is what actually clears the card markers — so Entangled cannot outlive the turn it (and the power carrying it) was applied on. No AfterDeath override exists on TangledPower; TangledPower is carried by the PLAYER (an enemy-inflicted debuff), so there is no applier-death removal path to check, the same shape as Bound's ChainsOfBindingPower.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-08-03"
+}

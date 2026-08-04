@@ -1,0 +1,60 @@
+{
+  "unit": "encounter/overgrowth_crawlers",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\OvergrowthCrawlers.cs",
+    "sha256": "95d288bd00553b5e173a5b2e7c8d2101281e8b4cfbcd5e54877b12d3a4e20640"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\overgrowth_crawlers.py",
+    "sha256": "4e6a8987f255e0238e0861aa8475e326c4b3a222c78a703c01040d1083690f13"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms normal_keys (\"overgrowth_crawlers\" is in normal_keys, never in weak/elite/boss)",
+      "verdict": "faithful"
+    },
+    "Tags": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms tags[\"overgrowth_crawlers\"] = (\"shrinker\", \"crawler\")",
+      "verdict": "faithful",
+      "note": "OvergrowthCrawlers.Tags = [EncounterTag.Shrinker, EncounterTag.Crawler]; rooms.py's tuple carries the same two values. Order is not observable — the picker only intersects sets (seam/rooms_and_map owns AddWithoutRepeatingTags)."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "none -- the sim has no per-encounter monster-preview member",
+      "verdict": "deliberate-divergence",
+      "rationale": "Checked both C# consumers: full_env.py's MONSTER_IDS / _monster_classes() function builds ONE global vocabulary by walking every Monster subclass, a strict superset of any single encounter's roster, so no observation consumer needs a per-encounter preview; EncounterModel.GetAssetPaths (asset preloading), the other consumer, has no sim counterpart at all (headless, no asset streaming). Cost: zero, by enumeration of both consumers. This shape recurs identically across all 85 sim encounters -- see batch report."
+    },
+    "GenerateMonsters": {
+      "maps_to": "sts2_rl/monsters/base.py:Encounter.create_monsters (no override) -> [cls(hooks, rng) for cls in monster_classes]; overgrowth_crawlers.py's OVERGROWTH_CRAWLERS_NORMAL = Encounter(id=\"overgrowth_crawlers_normal\", monster_classes=[ShrinkerBeetle, FuzzyWurmCrawler])",
+      "verdict": "faithful",
+      "note": "C# GenerateMonsters returns exactly [(ShrinkerBeetle, null), (FuzzyWurmCrawler, null)] -- a fixed 2-monster roster in that order, zero base.Rng draws. The sim's plain Encounter.create_monsters instantiates monster_classes in list order with no RNG draw, and monster_slots defaults to () so both get slot_name=None, matching null/null. Roster, order, slot names and draw count (0) all match."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "structural: CombatState.__init__ (sts2_rl/combat.py) only ever calls encounter.create_monsters(); no hooks.register(encounter) call exists anywhere in the codebase",
+      "verdict": "faithful",
+      "note": "EncounterModel.ShouldReceiveCombatHooks => false means an encounter is never itself a hook listener. The sim's Encounter is a plain dataclass never added to HookSystem at all, so the same effect holds by construction."
+    },
+    "IsWeak": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms -- \"overgrowth_crawlers\" is absent from weak_keys",
+      "verdict": "faithful",
+      "note": "No override in C# (default false); the sim never places this id in any act's weak_keys bucket."
+    },
+    "ShouldGiveRewards": {
+      "maps_to": "sts2_rl/monsters/base.py:Encounter.should_give_rewards (default True); consumed by RunDriver._run_combat in driver.py and by the conformance runner's _run_combat in conformance/runner.py",
+      "verdict": "faithful",
+      "note": "No override in C# (default true); OVERGROWTH_CRAWLERS_NORMAL does not pass should_give_rewards, so it keeps the dataclass default True."
+    },
+    "MinGoldReward": {
+      "maps_to": "sts2_rl/rewards.py:GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20), reached via roll_gold_reward's gold_range=None fallback (Encounter.min_gold defaults None)",
+      "verdict": "faithful",
+      "note": "No override in C#; base ladder for RoomType.Monster is 10. Ascension Poverty's multiplier (EncounterModel.cs:75-77) is out of scope per PROMPT.md and is not applied anywhere in rewards.roll_gold_reward -- noted, not filed."
+    },
+    "MaxGoldReward": {
+      "maps_to": "sts2_rl/rewards.py:GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20)",
+      "verdict": "faithful",
+      "note": "No override in C#; base ladder for RoomType.Monster is 20 (same Poverty-multiplier note as MinGoldReward)."
+    }
+  },
+  "guards": [],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-08-03"
+}

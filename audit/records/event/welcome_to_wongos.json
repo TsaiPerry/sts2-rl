@@ -36,17 +36,17 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
       "side": "sim"
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     },
     {
@@ -61,7 +61,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "3caf6a189d109feb62c5ab57f03028277542a8bf12311898e7445be27ce199b2",
       "side": "sim"
     }
   ],
@@ -104,8 +104,9 @@
     },
     {
       "what": "EV-11: BARGAIN_BIN's Common pull (WelcomeToWongos.cs:136) and GenerateInitialOptions' Rare pull (:80) calls run.pull_relic_from_front (run.py:559-595), which scans the merged bag for the first relic of the asked rarity passing the filter and, on no match, pops the FRONT OF THE BAG at any rarity. The game's RelicGrabBag.GetAvailableDeque (RelicGrabBag.cs:218-243) instead walks a rarity LADDER (Shop -> Common -> Uncommon -> Rare -> None) and RelicFactory.PullNextRelicFromFront falls back to `FallbackRelic` = Circlet (RelicFactory.cs:13, :47)",
-      "verdict": "gap",
-      "issue": "MECHANISM EV-11, one verdict at every pull_relic_from_front site (rule 3). Neither leg costs an RNG draw -- WelcomeToWongos uses the THREE-argument overload (RelicFactory.cs:45-50), which skips RollRarity entirely -- so this is purely WHICH relic comes out. EXECUTED (`py audit/tools/event_probes_c.py grabbag`): with the Common deque emptied, BARGAIN_BIN's `pull_relic_from_front(COMMON, shop_legal=True)` hands out 'gremlin_horn', an UNCOMMON, without walking the ladder; with no Rare left, FEATURED_ITEM hands out 'gremlin_horn' where the game hands out Circlet, and `circlet` is not even ported (`circlet in ALL_RELICS` is False). DORMANT: the probe shows the parity bag holds 122 relics with 36 Rare + IsAllowedInShops, and nothing in ported content drains a whole rarity deque inside one run -- the concrete unported thing that would make it live is the Circlet relic itself, plus any content that empties a deque. Recorded so the sim's bag-front fallback is not mistaken for the source's shape. RADIUS beyond this record: every other pull_relic_from_front caller -- events/luminous_choir.py, events/round_tea_party.py, events/relic_trader.py, relics/wongos_mystery_ticket.py:47 -- whose records verdicted the pull faithful on the STREAM question without examining the ladder."
+      "verdict": "faithful",
+      "issue": "Closed 2026-08-03. RE-EXECUTED THIS ENTRY'S OWN PROBE (`py audit/tools/event_probes_c.py grabbag`): 'circlet ported ... sim=True C#=True' and 'FEATURED_ITEM with no Rare left: sim=circlet C#=circlet' both read MATCH where the entry recorded 'gremlin_horn' against the game's Circlet, and BARGAIN_BIN with the Common deque emptied now pulls an UNCOMMON -- the probe's own description of what the game does ('GetAvailableDeque escalates Common -> Uncommon -> Rare ... only when the ladder ends does PullNextRelicFromFront return Circlet'). THE PROBE CAUGHT A HALF-FIX: the first cut of this change returned the Circlet as soon as the ASKED rarity was dry, which is what PullFromFront alone reads like (RelicGrabBag.cs:129-135); the escalation lives one call deeper, in GetAvailableDeque, and the probe is what surfaced it. The Circlet itself is ported at audit/records/relic/circlet.json.",
+      "maps_to": "`RunState.pull_relic_from_front` (sts2_rl/run.py) is `GetAvailableDeque`'s shape now: drop the `IsAllowed` rejects, then CLIMB while the asked rarity holds nothing passing the filter -- Shop -> Common -> Uncommon -> Rare -> None (RelicGrabBag.cs:227-237, ported as `_NEXT_RARITY`) -- and when the ladder ends, hand out `RelicFactory.FallbackRelic`, the Circlet (RelicFactory.cs:13/47). A pull never reaches DOWN to a lower rarity, and never returns nothing. Both of this event's legs use the three-argument overload, so neither costs a RollRarity draw on either side."
     },
     {
       "what": "CheckObtainWongoBadge (WelcomeToWongos.cs:111-131) is not ported: the sim never grants WongoCustomerAppreciationBadge, and it tracks points on an ad-hoc attribute instead of run state",
@@ -129,5 +130,5 @@
     }
   ],
   "verdict": "gap",
-  "audited": "2026-07-26"
+  "audited": "2026-08-03"
 }

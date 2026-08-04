@@ -78,6 +78,6 @@
       "rationale": "There is no AscensionHelper.GetValueIfAscension anywhere in Kifuda.cs, so 3 is the pinned non-ascension value for both uses, and `DynamicVars.Cards.IntValue` and the literal `3` agree. Nothing to compare in the sim (the port carries no constants at all), so this entry records that a G1 fix has no ascension branch to resolve."
     }
   ],
-  "verdict": "faithful",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

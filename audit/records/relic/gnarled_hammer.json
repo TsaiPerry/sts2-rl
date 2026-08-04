@@ -78,6 +78,6 @@
       "rationale": "This record hashes only relic/gnarled_hammer's own two files (the game_source / sim_source pair above). Every other file it cites by line is listed here so the staleness blind spot is visible, per binding rule 7 and the UNHASHED reminder that `py audit/tools/citation_check.py audit/records/relic` prints: src/Core/Models/Enchantments/Sharp.cs, sts2_rl/cards/base.py, sts2_rl/enchantments.py, sts2_rl/relics/claws.py, sts2_rl/relics/glass_eye.py, sts2_rl/run.py. The individually load-bearing ones are also named inline in the guard or hook entry that leans on them."
     }
   ],
-  "verdict": "faithful",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

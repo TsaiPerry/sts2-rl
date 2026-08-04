@@ -106,7 +106,7 @@ core — but the C# file listed is the *driver loop only*: it holds no branch
 semantics, no repeat rules, no weights, and no stun handling. Everything this
 seam's seed facts are about lives in its four siblings.
 
-The table is now **40 game files + 43 sim files** (verified by the `sources-sweep` probe: every `.cs`/`.py` file the record or this doc cites with a line number is hashed). Added on the game side:
+The table is now **41 game files + 45 sim files** (verified by the `sources-sweep` probe: every `.cs`/`.py` file the record or this doc cites with a line number is hashed; was 40+43 before the P3 correction pass added `SludgeSpinner.cs`/`soul_nexus.py`/`sludge_spinner.py` for the widened `mismatch` probe — see the "Gaps found" correction note). Added on the game side:
 
 - **`.../MonsterMoveStateMachine/RandomBranchState.cs`** — the 10 `AddBranch`
   overloads (46-113), `GetNextState` (115-128) and `GetStateWeight` (130-167).
@@ -131,8 +131,8 @@ The table is now **40 game files + 43 sim files** (verified by the `sources-swee
 - **`src/Core/Commands/CreatureCmd.cs`** — `Stun` (863-890), the public entry.
   Step 31. Already listed under `creature_card_cmds`.
 - **The 14 monster models the record cites with line numbers** — the five that
-  make **G1** live (`FlailKnight.cs`, `HunterKiller.cs`, `ScrollOfBiting.cs`,
-  `SpectralKnight.cs`, `FakeMerchantMonster.cs`), the two that read the same
+  made **G1** live until it closed 2026-07-28 (`FlailKnight.cs`, `HunterKiller.cs`,
+  `ScrollOfBiting.cs`, `SpectralKnight.cs`, `FakeMerchantMonster.cs`), the two that read the same
   arguments **correctly** and are the counter-evidence that this is a port bug
   and not a machinery bug (`FossilStalker.cs`, `TwoTailedRat.cs`), the
   hand-rolled ports (`Flyconid.cs`, `TwigSlimeM.cs`, `LeafSlimeS.cs`,
@@ -160,7 +160,7 @@ where the seam is actually violated):
   **G6**.
 - **The 13 sim monster ports** the record cites with line numbers:
   `hive/flail_knight.py`, `hive/hunter_killer.py`, `glory/scroll_of_biting.py`,
-  `glory/knights.py`, `fake_merchant.py` (**G1** live),
+  `glory/knights.py`, `fake_merchant.py` (**G1**, CLOSED 2026-07-28),
   `underdocks/fossil_stalker.py`, `underdocks/two_tailed_rat.py` (correct),
   `overgrowth/flyconid.py`, `overgrowth/slimes.py`, `overgrowth/inklets.py`,
   `overgrowth/phrog_parasite.py`, `overgrowth/slithering_strangler.py`
@@ -207,8 +207,19 @@ there: the eight unclaimed hook-override models of boundary hole 5
 `SoulFysh.cs`, `TheInsatiable.cs`, `Vantom.cs`), named in a hole table and used
 as evidence for nothing, plus the `sts2_rl/cards/base.py` in the paragraph
 above, which is a worked example of the false positive rather than a citation.
-Current output: **194 tokens cited, 179 hashed, 0 NOT hashed, 6 excluded,
-9 name-only, 1 ambiguous.**
+Output as of the original pass: **194 tokens cited, 179 hashed, 0 NOT hashed,
+6 excluded, 9 name-only, 1 ambiguous.** Current output (2026-08-03, after the
+P3 correction pass added `SludgeSpinner.cs`/`soul_nexus.py`/`sludge_spinner.py`
+to the widened `mismatch` probe's evidence and hashed them): **204 tokens
+cited, 178 hashed, 1 NOT hashed, 8 excluded, 17 name-only, 1 ambiguous.** The
+one NOT-hashed token, `Rng.cs` (→ `src/Core/Random/Rng.cs`), is **pre-existing
+and unrelated to G1** — it comes from step 15's `Rng.cs:145-164` citation
+(closed 2026-07-30, G7 clause b), not from anything this pass touched. It
+predates this pass's edits (confirmed by re-running the sweep before making
+any `.md` changes) and is left unfixed here per this pass's scope: it belongs
+to a different mechanism, and rule 7's fix (adding `Rng.cs` to `game_sources`)
+was not verified against that mechanism's own evidence in this pass. Flagged
+as a live tooling defect for whoever next touches G7/step 15, not corrected.
 
 ### Scope boundary — what the six seams together do NOT cover
 
@@ -311,7 +322,8 @@ are named here so the holes are documented:
    **sim's `add_branch` puts `weight` in positional slot 2**
    (`state_machine.py:160-167`) where **C# puts `cooldown`/`maxRepeats`**, so a
    positional transliteration silently converts a repeat limit into a weight.
-   **Five ported monsters still do this** (**G1**); see below.
+   **Five ported monsters did this** (**G1**, CLOSED 2026-07-28 — see below,
+   and the correction note at the top of "Gaps found").
 2. **"Repeat rules: CANNOT_REPEAT / CAN_REPEAT_X_TIMES / USE_ONLY_ONCE +
    cooldowns keyed off state_log."** Confirmed on both sides and the sim's
    implementation of the rules themselves is **faithful** —
@@ -647,13 +659,15 @@ are named here so the holes are documented:
 The **machinery** is a close transliteration: steps 1-2, 4-9, 12, 14, 16-20,
 23-26, 28-34, 42-45 and 47 are `faithful`, and the two branch classes'
 `get_next_state` walks are line-for-line equivalents including the single
-`NextFloat(total)` primitive. The seam's failures are concentrated in three
-places:
+`NextFloat(total)` primitive. The seam's failures were, at the time this
+section was written, concentrated in three places — **all closed today; see
+the "Gaps found" correction note below**:
 
-- **The ports' branch arguments** (**G1**) — five monsters convert a C#
-  `maxRepeats`/`cooldown` into a sim `weight`.
-- **The stun override** (**G4**, **G5**) — the sim models the *intent* of a
-  stun and none of the *machine* consequences.
+- **The ports' branch arguments** (**G1**, CLOSED 2026-07-28) — five monsters
+  used to convert a C# `maxRepeats`/`cooldown` into a sim `weight`.
+- **The stun override** (**G4**, **G5**; **G4** CLOSED 2026-07-27, checked
+  this pass) — the sim used to model the *intent* of a stun and none of the
+  *machine* consequences.
 - **Machinery details** — the missing string follow-up (**G3**), the
   unrepresentable unwired branch (**G2**), the three unvalidated machine
   constructions (**G8**, steps 3/22/37), the degenerate-weight arms (**G7**),
@@ -666,49 +680,120 @@ and in `.superpowers/sdd/task-10-report.md`; do not copy them by hand.
 
 ### Gaps found
 
-**Two are LIVE on currently-ported content** — **G1** and **G4** — and
-**seven are dormant** — **G2**, **G3**, **G5**, **G6**, **G7**, **G8**,
-**G9** — each with its concrete unported (or un-contended) trigger named and
-its dormancy argument **executed**, not asserted. Two labels were CORRECTED
-after the first pass. **G6** was written LIVE and demoted when its own strict
-xfail XPASSed (argument under **G6** below). **G8** absorbed steps 22 and 37,
-which the first pass verdicted `deliberate-divergence` and `faithful`: all
-three sites are one mechanism and rule 3 forces one verdict (see **G8**). **G4**
-keeps its LIVE label but on a different — and executed — reachability argument
-(see **G4**); only the route was wrong.
+> **CORRECTION (2026-08-03, P3 pass).** This whole section was stale. It read
+> "Two are LIVE — **G1** and **G4**" as though that were still true; it has not
+> been true since **2026-07-27/28**. The JSON record (`audit/records/seam/
+> monster_state_machine.json`) was updated at the time — every one of **G1**
+> through **G9** now carries `"verdict": "faithful"` or `"deliberate-divergence"`
+> with a dated `"issue"` documenting the closure, and `py audit/tools/
+> gap_queue.py counts` reads **0 live / 0 dormant / 0 total** gap-verdicted
+> entries for this seam today — but this doc, the human-readable half of the
+> same record, was never brought back in sync, and a later investigation that
+> trusted this section's "LIVE" label over the JSON would have filed a false
+> gap. **G1** is corrected below, with the closure re-verified independently
+> this pass (not just copied from the JSON): read all five C# sites and all
+> five sim ports directly, re-ran `mismatch` (widened — see its note below),
+> and re-ran the pinning tests
+> (`test/test_hook_order.py::test_addbranch_int_args_are_repeat_limits_not_weights`,
+> `test/test_monster_branch_audit.py::TestAddBranchIntArgsAreRepeatLimits`'s 11
+> cases) — all green. **G4** was checked as a byproduct, because the paragraph
+> this replaces named it in the same breath as G1: `sts2_rl/monsters/
+> state_machine.py`'s `MonsterMoveStateMachine.stun` does build the synthetic
+> `STUNNED` state described as missing below (`STUN_STATE_ID`,
+> `must_perform_once_before_transitioning=True`), and
+> `test_stun_makes_the_stun_a_move_and_relogs_the_deferred_one` passes — so G4
+> is closed too. **G2, G3, G5–G9 were NOT independently re-verified by this
+> pass** beyond the `gap_queue` count above; they read as closed in the JSON's
+> own `"issue"` text (each with a date and an executed witness) but this doc's
+> prose for them is left exactly as the first pass wrote it and should not be
+> trusted without the same treatment G1 got here. Do not delete this note when
+> editing nearby text — it is the record of why the two documents disagreed.
+
+**Historically, two were LIVE on currently-ported content** — **G1** and
+**G4** — and **seven were dormant** — **G2**, **G3**, **G5**, **G6**, **G7**,
+**G8**, **G9** — each with its concrete unported (or un-contended) trigger
+named and its dormancy argument **executed**, not asserted, at the time this
+section was written. Two labels were CORRECTED after the first pass. **G6**
+was written LIVE and demoted when its own strict xfail XPASSed (argument
+under **G6** below). **G8** absorbed steps 22 and 37, which the first pass
+verdicted `deliberate-divergence` and `faithful`: all three sites are one
+mechanism and rule 3 forces one verdict (see **G8**). **G4** kept its LIVE
+label but on a different — and executed — reachability argument (see **G4**);
+only the route was wrong. **All nine are closed today; see the correction
+note above.**
 
 - **G1 — five ported monsters read a C# `maxRepeats`/`cooldown` argument as a
-  sim `weight`. LIVE, and it is the same bug class as the shipped
+  sim `weight`. CLOSED 2026-07-28 (all five sites; the machinery's own
+  reading — the `add_branch` signature itself — was already correct
+  2026-07-27), and it was the same bug class as the shipped
   TwigSlimeM/Flyconid fix.** `RandomBranchState.AddBranch`'s positional slot 2
   is `cooldown` or `maxRepeats` (never a weight — see seed fact 1); the sim's
   `add_branch(state, weight=1.0, repeat_type=…, max_times=0, cooldown=0)`
-  (`state_machine.py:160-167`) puts **`weight`** there. Executed
-  (`mismatch`, which now **prints these totals** so they cannot drift again):
-  of the **12** resolved C#↔sim pairs — one per ported sim *module*, together
-  covering **13** C# `RandomBranchState`s because `fake_merchant.py` folds two
-  (`RAND_MOVE`, `FakeMerchantMonster.cs:55-58`, and `RAND_ATTACK_MOVE`, `:66-68`)
-  into one row — **7 match exactly** and **5 do not**. (A first pass said "13
-  resolved / 8 match", having read the branch-state count as the pair count.)
+  (`state_machine.py:160-167`) puts **`weight`** there, so a positional port
+  used to convert one into the other. Each of the five now passes
+  `max_times=`/`cooldown=` by **keyword** and leaves `weight` at its 1.0
+  default — verified 2026-08-03 by reading all five C# sites
+  (`FlailKnight.cs:49-57`, `HunterKiller.cs:42-48`, `ScrollOfBiting.cs:89-90`,
+  `SpectralKnight.cs:52-53`, `FakeMerchantMonster.cs:55-58`) directly against
+  `RandomBranchState.cs`'s overload table and all five current sim ports
+  (`hive/flail_knight.py:53-58`, `hive/hunter_killer.py:44-49`,
+  `glory/scroll_of_biting.py:60-68`, `glory/knights.py:111-116`,
+  `fake_merchant.py:66-75`) line by line, plus each C# call's own comment
+  identifying the overload it resolves to
+  (e.g. `hive/flail_knight.py:50-51`: *"FlailKnight.cs:50-51 AddBranch(state,
+  2) is the (state, int maxRepeats) overload — a repeat limit, not a
+  weight."*). Executed (`mismatch`, **WIDENED 2026-08-03** — see the probe's
+  own docstring; it used to resolve 12 of the 14 sim classes `hand-rolled`
+  reports as ported onto the state machine, missing `SoulNexus`,
+  `SludgeSpinner` and `TheObscura`, none of which could exhibit this bug
+  since none has a non-default int argument in C#, but the coverage claim
+  was not true of the probe's own output until now): of the **15** resolved
+  C#↔sim pairs — one per ported sim *module*, together covering **16** C#
+  `RandomBranchState`s because `fake_merchant.py` folds two (`RAND_MOVE`,
+  `FakeMerchantMonster.cs:55-58`, and `RAND_ATTACK_MOVE`, `:66-68`) into one
+  row — **all 15 match exactly and 0 misread**. (Before the fix, a first pass
+  found 7 matched and 5 did not, having resolved only 12 pairs / 13 branch
+  states; an even earlier pass had said "13 resolved / 8 match", having read
+  the branch-state count as the pair count.) Per-monster pin:
+  `test/test_monster_branch_audit.py::TestAddBranchIntArgsAreRepeatLimits`
+  (11 cases, all green) plus
+  `test/test_hook_order.py::test_addbranch_int_args_are_repeat_limits_not_weights`.
+
+  **Correction to an earlier synthesis of this closure.** The JSON's own
+  closure note (step 13) at one point named the five sites as "Flail Knight,
+  Hunter Killer, **Mysterious Knight**, Scroll of Biting, Spectral Knight" —
+  substituting Mysterious Knight for Fake Merchant. `MysteriousKnight.cs` is
+  16 lines, overrides no `GenerateMoveStateMachine` at all, and inherits
+  `FlailKnight`'s machine verbatim (confirmed by reading it, and by
+  `audit/records/monster/mysterious_knight.json:38`, which shares text with
+  `flail_knight.json` because it is the same underlying fix) — so it was never
+  a distinct sixth site, and Fake Merchant's own `FakeMerchantMonster.cs:58`
+  `AddBranch(ENRAGE, 3, MoveRepeatType.CannotRepeat)` is the genuine fifth.
+  Fixed in the JSON in this pass.
+
+  **What it looked like broken, preserved for history.** Before the fix, the
+  five sites read:
   - `FlailKnight.cs:50,51` `AddBranch(FLAIL, 2)` / `AddBranch(RAM, 2)` =
-    maxRepeats 2, weight 1 → `hive/flail_knight.py:51,52` `weight=2.0`,
+    maxRepeats 2, weight 1 → `hive/flail_knight.py` had `weight=2.0`,
     `CAN_REPEAT_FOREVER`;
   - `HunterKiller.cs:43` `AddBranch(PUNCTURE, 2)` →
-    `hive/hunter_killer.py:45` `weight=2.0`;
+    `hive/hunter_killer.py` had `weight=2.0`;
   - `ScrollOfBiting.cs:90` `AddBranch(CHEW, 2)` →
-    `glory/scroll_of_biting.py:65` `weight=2.0`;
+    `glory/scroll_of_biting.py` had `weight=2.0`;
   - `SpectralKnight.cs:52` `AddBranch(SOUL_SLASH, 2)` →
-    `glory/knights.py:111` `weight=2.0`;
+    `glory/knights.py` had `weight=2.0`;
   - `FakeMerchantMonster.cs:58` `AddBranch(ENRAGE, 3,
     MoveRepeatType.CannotRepeat)` = **cooldown 3**, weight 1 →
-    `fake_merchant.py:72-75` `weight=_ENRAGE_WEIGHT` (`= 3.0`, line 34), no
-    cooldown. The sim's own docstring (`fake_merchant.py:40`) records the
-    misreading in prose: *"ENRAGE (+2 Strength, weight 3)"*.
+    `fake_merchant.py` had `weight=_ENRAGE_WEIGHT` (`= 3.0`), no
+    cooldown. The sim's own docstring used to record the misreading in prose:
+    *"ENRAGE (+2 Strength, weight 3)"*; the current docstring
+    (`fake_merchant.py:39`) reads *"ENRAGE (+2 Strength, cooldown 3)"*.
 
-  Both halves of the divergence are observable, and both were **executed**
-  (`distribution`, 100000 rolls, seed 7, sim machine vs the same machine with
-  the C# parameters restored):
+  Both halves of the divergence were observable, and both had been
+  **executed** (`distribution`, 100000 rolls, seed 7, the broken sim machine
+  vs the same machine with the C# parameters restored) before the fix:
 
-  | monster | sim | game |
+  | monster | sim (broken) | game |
   |---|---|---|
   | FlailKnight | FLAIL 41.6% / RAM 41.6% / WAR_CHANT 16.8% | 36.2% / 36.4% / 27.4% |
   | HunterKiller | BITE 25.1% / PUNCTURE 74.9% | 40.0% / 60.0% |
@@ -716,24 +801,23 @@ keeps its LIVE label but on a different — and executed — reachability argume
   | SpectralKnight | SOUL_SLASH 75.1% / SOUL_FLAME 24.9% | 60.0% / 40.0% |
   | FakeMerchant | ENRAGE 30.0% / SWIPE 25.2% / SPEW 24.9% / THROW 20.0% | 13.6% / 29.7% / 29.4% / 27.4% |
 
-  **LIVE, with both sides reachable on ported content** (rule 6): all five
-  monsters are exported from ported encounter modules —
+  `distribution`'s hard-coded `_DIST_CASES` fixture still applies the C#
+  parameters on top of *today's* (already-fixed) build to reproduce this
+  table on demand — it is a regression fixture now, not a live finding.
+
+  **Was LIVE, with both sides reachable on ported content** (rule 6): all
+  five monsters are exported from ported encounter modules —
   `monsters/hive/__init__.py:26,31` (FlailKnight, HunterKiller),
   `monsters/glory/__init__.py:30,35` (SpectralKnight, ScrollOfBiting),
   `monsters/fake_merchant.py:117-120` (`FAKE_MERCHANT_EVENT_ENCOUNTER`, the
   ported `FakeMerchant` event's fight, `events/fake_merchant.py:26`). The
-  observable is an enemy intent a player sees on screen and a replay records,
-  plus a different `MonsterAi` draw sequence.
-  *Counter-evidence that this is a port bug and not a machinery bug:*
+  observable was an enemy intent a player sees on screen and a replay
+  records, plus a different `MonsterAi` draw sequence — now matching.
+  *Counter-evidence that this was a port bug and not a machinery bug:*
   `FossilStalker.cs:58-60` and `TwoTailedRat.cs:127` carry the same argument
   shapes and their ports read them **correctly**
   (`underdocks/fossil_stalker.py:57` `max_times=2`,
   `underdocks/two_tailed_rat.py:83` `cooldown=3`).
-  *Not covered by the pre-existing regression file:*
-  `test/test_monster_branch_audit.py` locks the **hand-rolled overgrowth**
-  ports (Inklet, PhrogParasite, SlitheringStrangler) and the two
-  previously-fixed ones (Flyconid, TwigSlimeM); none of the five above appears
-  in it.
 
 - **G2 — the sim silently drops a `RandomBranchState` that C# builds but never
   wires. DORMANT** (step 49 — the fix pass gave it a numbered step, which it
@@ -1105,14 +1189,23 @@ keeps its LIVE label but on a different — and executed — reachability argume
 
 | behaviour | status |
 |---|---|
-| Weight-vs-cooldown arg handling | **Partly pre-existing.** `test/test_monster_branch_audit.py` (whole file, 211 lines, 5 classes) is the verified regression file for the hand-rolled overgrowth ports and the two previously-fixed monsters — `TestPreviouslyFixedBugClassRegression::test_twig_slime_m_draws_every_turn` and `::test_flyconid_draws_every_turn` are the direct descendants of the shipped fix. It does **not** reach the five machine ports of **G1**, so `TestMonsterStateMachineOrder::test_addbranch_int_args_are_repeat_limits_not_weights` was added as a strict xfail. |
+| Weight-vs-cooldown arg handling | **CLOSED 2026-07-28, re-verified 2026-08-03 — no longer an xfail.** `test/test_monster_branch_audit.py` (whole file, 211 lines, 5 classes) is the verified regression file for the hand-rolled overgrowth ports and the two previously-fixed monsters — `TestPreviouslyFixedBugClassRegression::test_twig_slime_m_draws_every_turn` and `::test_flyconid_draws_every_turn` are the direct descendants of the shipped fix — and it gained `TestAddBranchIntArgsAreRepeatLimits` (11 cases) covering the five machine ports of **G1** directly. `TestMonsterStateMachineOrder::test_addbranch_int_args_are_repeat_limits_not_weights` (`test/test_hook_order.py:1304`) was originally added as a strict xfail; its `strict=True` xfail marker has since been removed and it is now a plain passing assertion (re-run this pass: green, along with the 11 `TestAddBranchIntArgsAreRepeatLimits` cases). |
 | Repeat-rule enforcement | **Pre-existing, verified by path.** `test/test_new_features.py::TestStateMachine::test_mawler_roar_used_at_most_once_per_combat` (line 148) covers `USE_ONLY_ONCE` **and** `CANNOT_REPEAT` on **Mawler**, one of the brief's named monsters; `::test_fogmog_branch_only_yields_legal_sequences` (line 126) covers **Fogmog**; `::test_use_only_once_and_cannot_repeat_weights` (line 168) covers both rules on a synthetic machine over 60 transitions. **`CAN_REPEAT_X_TIMES` was covered by none of them**, and it is the rule the five bugged ports drop, so `test_can_repeat_x_times_blocks_the_n_plus_first_repeat` was added (passing) to close that hole. |
 | Spawn-roll exactly-once | **New, passing.** `creature_card_cmds` step 3's deferred `PrepareForNextTurn(rollNewMove: false)` site (steps 47-48) had no coverage: nothing asserted that a mid-combat spawn rolls its move exactly once, so a future `telegraph_next_move` inside `CreatureCmd.add` would silently double-roll (one extra `MonsterAi` draw plus a second log entry). `test_a_mid_combat_spawn_rolls_its_move_exactly_once` closes it. |
 
-**Nine tests** live in `test/test_hook_order.py::TestMonsterStateMachineOrder`:
-**two passing** (the `CAN_REPEAT_X_TIMES` rule and the spawn-roll exactly-once
-property) and **seven strict xfails** pinning **G1**, **G3**, **G4**, **G5**,
-**G6**, **G7a** and **G8**. **G2** and **G9** are not pinned: G2's observable is
-already asserted by `test/test_monster_branch_audit.py`'s zero-draw tests, and
-G9's (both clauses) is a non-observable, because the sim's enemy side is
-atomic — neither has an assertion that would fail today for the reason stated.
+**Nine tests** live in `test/test_hook_order.py::TestMonsterStateMachineOrder`.
+As originally written this was **two passing** (the `CAN_REPEAT_X_TIMES` rule
+and the spawn-roll exactly-once property) and **seven strict xfails** pinning
+**G1**, **G3**, **G4**, **G5**, **G6**, **G7a** and **G8**. **STALE as of
+2026-08-03**, re G1 only (see the "Gaps found" correction note; the other six
+were not re-checked this pass): `test_addbranch_int_args_are_repeat_limits_not_weights`
+(**G1**'s pin) carries no `xfail` marker today and passes — re-run this pass —
+so the count is now **at least three passing** (the two above plus G1's) and
+**at most six strict xfails**; the JSON's own per-step "issue" text (steps 3,
+10, 15, 22, 35-37, 39-44, 48-49) claims G3-G9 are ALL closed too, with the
+JSON's `strict xfail marker is deleted and which now passes` language repeated
+at nearly every one, but this doc does not re-derive that here. **G2** and
+**G9** are not pinned by this class: G2's observable is already asserted by
+`test/test_monster_branch_audit.py`'s zero-draw tests, and G9's (both clauses)
+is a non-observable, because the sim's enemy side is atomic — neither had an
+assertion that would fail for the reason stated, at the time this was written.

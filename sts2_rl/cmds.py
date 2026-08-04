@@ -1605,7 +1605,19 @@ class CardPileCmd:
         (enchantment/EG2), that was not merely a dead listener but a crash:
         Corrupted and Sown reach the engine through `self.combat.hooks` in
         their `on_play`, and on a copy `combat` was None.
+
+        This is also where the card gets its `NetCombatCardDb` id, when the
+        combat is tracking them: `CardPile.AddInternal` raises
+        `ContentsChanged` on every non-silent add (CardPile.cs:102-106) and the
+        db ids off that subscription (NetCombatCardDb.cs:105-111), so the stamp
+        lands at the pile move — BEFORE the registration and hook dispatch
+        below, and therefore before anything they trigger can add a card of its
+        own. Every caller has already placed `card` in its pile by now.
         """
+        combat = getattr(hooks, "combat", None)
+        db = getattr(combat, "card_db", None) if combat is not None else None
+        if db is not None:
+            db.on_card_added(card)
         card.combat = hooks.combat
         hooks.register(card)
         if card.affliction is not None and card.affliction not in hooks._listeners:

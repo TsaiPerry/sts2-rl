@@ -1,0 +1,86 @@
+{
+  "unit": "encounter/sewer_clam",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\SewerClamNormal.cs",
+    "sha256": "b4ec1bef42fc1e4023b04f1658398e5aa55d849234655c5aa2446c93d820c637"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\underdocks\\sewer_clam.py",
+    "sha256": "27f5f7ea740f0d937117ea30e3c62794c8166ea9f3f1a2f14615836a3538f236"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/ActModel.cs",
+      "sha256": "158831cf2c7b7887f2242fa5751fad3ceeb5c8913fbc89d41451645bd822cc9b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/EncounterModel.cs",
+      "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/Screens/Bestiary/NBestiary.cs",
+      "sha256": "e5bf63632335d834f61d57c951775a428ecb1a27f98a56bf790675e9bd3aba79",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "4ba9a145147eb29e6f42a10acb70986873bf1bb12d47a12ef764a423572f312f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/base.py",
+      "sha256": "424336cf4fb7be8026278b7a34af428082d8487fb57f25c3565311fe5c993388",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "RoomType": {
+      "maps_to": "RoomType.Monster (SewerClamNormal.cs:9). Sim: 'sewer_clam' is in ActRooms.normal_keys for underdocks (rooms.py:136), the structural equivalent -- drives the (10,20) gold ladder (see guards).",
+      "verdict": "faithful"
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "[SewerClam] only (SewerClamNormal.cs:11). Presentation/infra-only consumers (NBestiary.cs:194, ActModel.cs:169); nearest sim analog is full_env.py's global MONSTER_IDS vocabulary (full_env.py:252-269).",
+      "verdict": "waiver",
+      "rationale": "Bestiary display and asset preload have no headless counterpart; the global monster vocabulary already covers this monster's identity regardless of per-encounter membership."
+    },
+    "GenerateMonsters": {
+      "maps_to": "SewerClamNormal.cs:13-16 returns a single-element list [(SewerClam, null)] -- 1 monster, unslotted, 0 Rng draws (the C# body calls no Rng method). Sim: sewer_clam.py:52-55, Encounter(id='sewer_clam_normal', monster_classes=[SewerClam]) -- 1 monster, slot_name defaults None, 0 draws.",
+      "verdict": "faithful"
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "EncounterModel.cs:39, `=> false`. Sim: Encounter is never registered with HookSystem (combat.py:170-232 registers only the player, cards, and Monsters, monsters/base.py:296-297).",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: MinGoldReward/MaxGoldReward + ShouldGiveRewards (both inherited defaults, not overridden by SewerClamNormal)",
+      "verdict": "faithful",
+      "rationale": "RoomType.Monster -> (10, 20) gold, non-ascension branch (EncounterModel.cs:64-81/83-100; Poverty scaling is out-of-scope ascension, documented in rewards.py:32). Sim: rewards.py:170-174, GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20). ShouldGiveRewards defaults true both sides (EncounterModel.cs:62; monsters/base.py:360)."
+    },
+    {
+      "what": "N2: Tags -- SewerClamNormal does not override EncounterModel.Tags (defaults Array.Empty<EncounterTag>(), EncounterModel.cs:114)",
+      "verdict": "faithful",
+      "rationale": "'sewer_clam' has no entry in ActRooms.tags for underdocks (rooms.py:140-145) -- the sim does not invent a tag for an untagged C# encounter."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-08-03"
+}

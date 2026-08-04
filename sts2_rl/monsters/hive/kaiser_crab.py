@@ -159,4 +159,7 @@ class Rocket(MachineMonster):
 KAISER_CRAB_BOSS = Encounter(
     id="kaiser_crab_boss",
     monster_classes=[Crusher, Rocket],
+    # KaiserCrabBoss.cs:29,49-56.
+    slots=("crusher", "rocket"),
+    monster_slots=("crusher", "rocket"),
 )

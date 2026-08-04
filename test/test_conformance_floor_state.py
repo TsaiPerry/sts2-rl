@@ -120,7 +120,20 @@ def test_resync_does_not_degrade_replay_vs_no_floor_saves_baseline(seed):
     saves, the case the stale-save fix was built against) and 89U21BV1TZ
     (only its 3 act-boundary saves) — the risk this guards against is
     per-seed, so the invariant must hold on more than one seed before the
-    resync mechanism can be trusted generally."""
+    resync mechanism can be trusted generally.
+
+    WHOLE-RUN STREAM COUNTERS ARE EXCLUDED, and not to make the test pass.
+    The two arms are not comparable on them: `resync_floors` pins each stream
+    to the FLOOR-ENTRY snapshot in `_FLOOR_ROOTS[seed]/floor_N/run.save`,
+    while `combat_divergences`' counter leg compares the run's end state to
+    `REC/<seed>/floor_49/run.save`, which is a DIFFERENT capture taken at run
+    END — for 933T39V18D, Shuffle 892 at floor-49 entry vs 909 at the end. So
+    once the unresynced arm is exact (as it became when the card-db and
+    `List<T>.Sort()` fixes landed and 933T's baseline counters went to zero
+    divergences), the resynced arm is pinned to the earlier snapshot on the
+    last floor and can only lose. What the guard was built to catch — the
+    stale-save cascade — showed up as forced_combats and as PER-COMMAND
+    mismatches (10 -> 126), and both are still compared below."""
     from sts2_rl.conformance.recording import parse_recording
     from sts2_rl.conformance.runner import ReplayRunner
     from sts2_rl.conformance.save import parse_save
@@ -134,5 +147,8 @@ def test_resync_does_not_degrade_replay_vs_no_floor_saves_baseline(seed):
     resynced = ReplayRunner(rec, oracle).run(
         stop_after_act=2, floor_saves=saves, resync_floors=True)
 
+    def per_command(result):
+        return [d for d in result.combat_divergences if d.command_index != -1]
+
     assert resynced.forced_combats <= baseline.forced_combats
-    assert len(resynced.combat_divergences) <= len(baseline.combat_divergences)
+    assert len(per_command(resynced)) <= len(per_command(baseline))

@@ -1,0 +1,111 @@
+{
+  "unit": "encounter/nibbits_normal",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\NibbitsNormal.cs",
+    "sha256": "f1c0386f52c14844942666254fad206e86747f86ebdc2c6a921e034e5078386b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\nibbit.py",
+    "sha256": "490ccc48aaf60a2cf040701982500fe0f491a8f2f8b0cbfb76d2462aae6aae5b"
+  },
+  "hooks": {
+    "Slots": {
+      "maps_to": "NIBBITS_NORMAL (nibbit.py:60-63) -- carries no slots/monster_slots",
+      "verdict": "gap",
+      "live": false,
+      "issue": "NibbitsNormal.Slots => [\"front\", \"back\"] (NibbitsNormal.cs:13, backed by the private consts _backSlot/_frontSlot at :9-11). NIBBITS_NORMAL = Encounter(id='nibbits_normal', monster_classes=[partial(Nibbit, is_front=True), Nibbit]) declares no `slots=`/`monster_slots=` (both default to the empty tuple, sts2_rl/monsters/base.py), so CombatState.sort_enemies_by_slot_name (combat.py:1317-1337) is a permanent no-op for this encounter (combat.py:1329's `if encounter is None or not getattr(encounter, 'slots', ()): return`). DORMANT, not live: Nibbit.cs (read top to bottom) has no CreatureCmd.Add call anywhere -- BUTT/SLICE/HISS are its only three moves, none of which summon, and Nibbit has no other spawn path in this or any other C# file (grep of `CreatureCmd.Add<Nibbit>` across src/ returns only NibbitsNormal.GenerateMonsters itself). SortEnemiesBySlotName's only OTHER caller (CombatManager.AddCreature, gated on a non-null SlotName) is therefore never reached again after the initial construction, so the game's own ordering is fixed at construction time and never re-sorted either. The sim's construction order ([front-tagged Nibbit, plain Nibbit], nibbit.py:62) already matches the game's array order ([front,back], NibbitsNormal.cs:25-29) without needing the slot tags or the sort. Executed: `py audit/tools/encounter_probes_e1.py nibbits-slot-dormancy` confirms zero `CreatureCmd.add`/`CreatureCmd.Add` occurrences in the Nibbit class body on either side. Mechanism id: encounter/nibbits_normal/g1. Filed as a real structural gap (the sim genuinely cannot express this encounter's slot row, and a future summon-capable Nibbit variant or a shared Slots-reading feature would reopen it instantly) but not live today."
+    },
+    "RoomType": {
+      "maps_to": "ENCOUNTERS['nibbits_normal'] listed in rooms.py normal_keys (_overgrowth_rooms)",
+      "verdict": "faithful",
+      "rationale": "NibbitsNormal.RoomType => RoomType.Monster (NibbitsNormal.cs:15). Sim carries no room_type field on the Encounter dataclass; 'nibbits_normal' is placed in rooms.py:101's normal_keys for _overgrowth_rooms() (seam/rooms_and_map owns the picker itself). GOLD_REWARD_RANGES[RoomType.MONSTER]=(10,20) (rewards.py:171) matches EncounterModel.cs:70/89's Monster=>10/20 defaults, which NibbitsNormal does not override."
+    },
+    "HasScene": {
+      "maps_to": "(none)",
+      "verdict": "deliberate-divergence",
+      "rationale": "Selects a bespoke Godot scene layout for this encounter (public bool => true) instead of the act's generic combat scene. Its only reader is NCombatRoom.cs:289, Godot scene instantiation -- zero gameplay effect. The headless sim renders no scene."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "(none)",
+      "verdict": "deliberate-divergence",
+      "rationale": "No sim counterpart. C#'s only consumers of AllPossibleMonsters are ActModel.AllMonsters (ActModel.cs:169, read only by ModelDb.Monsters -> UnlockConsoleCmd.cs:68/147's dev-console 'monsters' listing and NGeneralStatsGrid.cs:164's stats-screen ratio label) and the Bestiary screen (NBestiary.cs:194) -- all UI/dev-console, zero gameplay or RNG effect, confirmed by reading every caller in src/. The headless sim has neither surface, so omitting a counterpart costs nothing observable."
+    },
+    "GenerateMonsters": {
+      "maps_to": "NIBBITS_NORMAL.monster_classes = [partial(Nibbit, is_front=True), Nibbit] (nibbit.py:60-63)",
+      "verdict": "gap",
+      "live": false,
+      "issue": "Roster (2x Nibbit), order ([front-tagged, plain] on both sides) and draw count (0 == 0) all match; only the SLOT half of each tuple diverges. NibbitsNormal.GenerateMonsters (NibbitsNormal.cs:21-30) returns [(front-nibbit,\"front\"),(plain-nibbit,\"back\")] -- tagged tuples. NIBBITS_NORMAL.monster_slots is unset (default (), sts2_rl/monsters/base.py), so the sim's two Nibbits carry slot_name=None on construction. Same mechanism and same dormancy reasoning as the Slots entry above (encounter/nibbits_normal/g1): nothing in Nibbit.cs ever reads or re-sorts on SlotName after construction, so the missing tags are inert given the order already matches. Filed for completeness per the audit brief's instruction to verdict the slot-name half of GenerateMonsters explicitly, not folded silently into the roster/order verdict."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "(structural -- Encounter dataclass has no hook methods)",
+      "verdict": "faithful",
+      "rationale": "EncounterModel.ShouldReceiveCombatHooks => false (EncounterModel.cs:39), not overridden by NibbitsNormal. The sim's Encounter dataclass (sts2_rl/monsters/base.py) declares no hook methods and is never passed to HookSystem.register -- it is plain data, structurally incapable of joining the hook walk, which reproduces 'the encounter itself is not a listener' exactly."
+    }
+  },
+  "guards": [
+    {
+      "what": "MinGoldReward/MaxGoldReward gold ladder (the encounter brief's 5th thing to verdict)",
+      "verdict": "faithful",
+      "rationale": "NibbitsNormal does not override MinGoldReward/MaxGoldReward, so both inherit EncounterModel.cs:64-100's RoomType ladder (Monster=10-20) times AscensionHelper.PovertyAscensionGoldMultiplier under AscensionLevel.Poverty. NIBBITS_NORMAL carries min_gold=None, max_gold=None (Encounter dataclass default, sts2_rl/monsters/base.py), so rewards.py:886-887 falls back to GOLD_REWARD_RANGES[RoomType.MONSTER]=(10,20) (rewards.py:171) -- the same ladder. Ascension (Poverty) scaling is out of scope by the audit contract (rewards.py:32's explicit 'no Scarcity/Poverty scaling')."
+    },
+    {
+      "what": "EncounterModel.Rng independence (per the encounter brief: verify the sim does not draw encounter rolls off a shared/run-level stream)",
+      "verdict": "faithful",
+      "rationale": "NibbitsNormal.GenerateMonsters makes zero base.Rng calls (NibbitsNormal.cs:21-30, confirmed by reading the whole method) and the sim's create_monsters counterpart (the default Encounter.create_monsters this unit inherits, sts2_rl/monsters/base.py) makes zero calls to any Rng/random.Random for composition -- there is nothing here for stream identity to diverge on. (Draw-count fact only; which named stream backs EncounterModel.Rng in general is seam/rng_streams' mechanism, already verdicted faithful for the seeding formula at rng_streams step 21.)"
+    }
+  ],
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/EncounterModel.cs",
+      "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/ActModel.cs",
+      "sha256": "158831cf2c7b7887f2242fa5751fad3ceeb5c8913fbc89d41451645bd822cc9b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/Screens/Bestiary/NBestiary.cs",
+      "sha256": "e5bf63632335d834f61d57c951775a428ecb1a27f98a56bf790675e9bd3aba79",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/DevConsole/ConsoleCommands/UnlockConsoleCmd.cs",
+      "sha256": "9fd3b7a41e15d1c2e54a4997bab1db88daf97820ac13ed5ab364c522f5246175",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/Screens/StatsScreen/NGeneralStatsGrid.cs",
+      "sha256": "6df922988a4392ab94066d704b902b8c267101f0f0af506b87be7a0926f284e0",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Nodes/Rooms/NCombatRoom.cs",
+      "sha256": "574b7cb0445ef0e6972258331200c4847b1b05ded4aef6047d51dc80a9b74b48",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Monsters/Nibbit.cs",
+      "sha256": "dd6215ab8d52f588b661607affb549db14e40bec8381236a5bb4c9cd101e6f81",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
+      "side": "sim"
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-08-03"
+}

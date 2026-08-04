@@ -115,11 +115,23 @@ class FakeMerchant(Event):
         self._set_state("INITIAL", self._page_options())
 
     def _throw_potion(self) -> None:
+        potion = next(p for p in self.run.held_potions if p.id == "foul_potion")
+        self.run.discard_potion(potion)
+        self.foul_potion_thrown()
+
+    def foul_potion_thrown(self) -> None:
+        """`FakeMerchant.FoulPotionThrown` (FakeMerchant.cs:126-147) — the
+        stall's half of the throw, with the potion already spent.
+
+        Split out from the THROW_POTION option because it has a SECOND caller
+        in the game: `FoulPotion.OnUse`'s event arm (FoulPotion.cs:89-108),
+        i.e. drinking the potion from the belt while standing in this event.
+        That path spends the potion through the belt (`RunState.use_potion`)
+        rather than through the option, so it must not discard it again.
+        """
         from ..monsters.fake_merchant import FAKE_MERCHANT_EVENT_ENCOUNTER
         from ..relics import make_relic
 
-        potion = next(p for p in self.run.held_potions if p.id == "foul_potion")
-        self.run.discard_potion(potion)
         self.pending_encounter = FAKE_MERCHANT_EVENT_ENCOUNTER
         # FoulPotionThrown: the Rug, plus every relic still unsold.
         self.pending_reward_extras = [

@@ -183,6 +183,6 @@
       "issue": "Closed 2026-07-27: `CreatureCmd.kill` (cmds.py:284-292) now routes through the shared `_resolve_death`, so the non-damage kill path runs the same two arms as DamageCmd.deal and fires both `on_death(..., was_removal_prevented)` (cmds.py:49 / :63) and `after_preventing_death` (:64). Consequence (a) is moot as well: steam_eruption's 999999999 HP restore moved off `on_damage_received` onto `on_death` (powers.py:2144-2151), which this path fires. VERIFIED 2026-07-27 by reading cmds.py:30-64 and :284-292."
     }
   ],
-  "verdict": "faithful",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

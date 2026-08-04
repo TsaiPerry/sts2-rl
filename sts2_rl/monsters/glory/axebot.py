@@ -92,4 +92,9 @@ class Axebot(MachineMonster):
 AXEBOTS_NORMAL = Encounter(
     id="axebots_normal",
     monster_classes=[Axebot],
+    # AxebotsNormal.cs:11,19-22 — a one-name row, and GenerateMonsters seats
+    # the starting Axebot in it. Nothing summons in this encounter, so the
+    # row orders nothing today; declared because the sort reads it.
+    slots=("front",),
+    monster_slots=("front",),
 )

@@ -1,0 +1,63 @@
+{
+  "unit": "encounter/slimes_weak",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\SlimesWeak.cs",
+    "sha256": "28dfe46549350f953e4174d2c5554c3c5c3b56b07901d9e0c27db8084c2e95a8"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\slimes.py",
+    "sha256": "aa0f518c7cce29c7991d16e6d69c46606c2ae786e9b3c0741596cfb62e91288c"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms weak_keys",
+      "verdict": "faithful"
+    },
+    "Tags": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms tags[\"slimes_weak\"] = (\"slimes\",)",
+      "verdict": "faithful",
+      "note": "SlimesWeak.Tags = [EncounterTag.Slimes], matches."
+    },
+    "IsWeak": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms weak_keys contains \"slimes_weak\"",
+      "verdict": "faithful"
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "none -- the sim has no per-encounter monster-preview member",
+      "verdict": "deliberate-divergence",
+      "rationale": "Same zero-cost finding as overgrowth_crawlers/AllPossibleMonsters."
+    },
+    "GenerateMonsters": {
+      "maps_to": "sts2_rl/monsters/overgrowth/slimes.py:SlimesWeakEncounter.create_monsters (parity branch, selection_rng is not None)",
+      "verdict": "faithful",
+      "note": "C# draws THREE times: NextItem on the 2-item _smallSlimes list picks small A; the pick is removed, leaving one item, and NextItem is called AGAIN on that 1-item list (a forced but still RNG-consuming pick, small B); then NextItem(_mediumSlimes) picks the medium. Return order is [A, medium, B] (positions 0/1/2), so the draw ORDER (small,small,medium) differs from the RETURN order (small,medium,small). The sim's parity branch reproduces every part of this exactly: selection_rng.next_item(smalls) -> remove -> selection_rng.next_item(smalls) (still consumes a draw on the 1-item remainder) -> selection_rng.next_item([LeafSlimeM, TwigSlimeM]) -> returns [small_a, medium, small_b]. Executed witness (seed 12345): roster=['LeafSlimeS','TwigSlimeM','TwigSlimeS'], draws=3 -- always both small types plus one random medium, 3 draws, matching the C# shape including the forced-but-counted second draw. See the guards entry below for the non-parity (legacy) path."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "structural: Encounter is never registered with HookSystem",
+      "verdict": "faithful"
+    },
+    "ShouldGiveRewards": {
+      "maps_to": "sts2_rl/monsters/base.py:Encounter.should_give_rewards (default True)",
+      "verdict": "faithful"
+    },
+    "MinGoldReward": {
+      "maps_to": "sts2_rl/rewards.py:GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20)",
+      "verdict": "faithful",
+      "note": "IsWeak does not change the gold ladder (still a Monster room). Poverty multiplier out of scope, not applied in roll_gold_reward."
+    },
+    "MaxGoldReward": {
+      "maps_to": "sts2_rl/rewards.py:GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20)",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "Encounter Rng independence outside parity (default/legacy) mode",
+      "mechanism": "encounter/_legacy_shared_selection_rng",
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-08-03 (gap-fix pass). `RunState.create_combat` now builds the per-encounter Rng on BOTH paths: with a string seed from `rng_set.seed` as before, and without one from a run seed derived at construction (`run.derive_encounter_seed`, a hash of the shared generator's STATE, so it consumes no draw and shifts no other legacy stream). `create_monsters`' `selection_rng=None` arm is therefore unreachable from any production call site, and the composition no longer moves when the shared stream does — executed in test/test_encounter_selection_rng.py (test_the_composition_does_not_move_with_the_shared_stream) and by audit/tools/encounter_probes_e2.py legacy-shared-stream.\n\nWHAT THE GAP SAID: Same mechanism as ruby_raiders' guard (full rationale there). With no string seed, SlimesWeakEncounter.create_monsters falls back to `rng.sample([LeafSlimeS, TwigSlimeS], 2)` + `rng.choice([LeafSlimeM, TwigSlimeM])` on the shared combat_rng.legacy() stream. Executed witness: py audit/tools/encounter_probes_e2.py legacy-shared-stream confirms the shared-object identity for CombatState(encounter=SLIMES_WEAK). Does not explain the 89U conformance divergence (89U's replay takes the correct parity branch, verdicted faithful above); this is a 3-act seed anyway (Ironclad) and slimes_weak is act-1 content, so it is directly in scope for that seed's early floors, but only via the legacy path, which conformance runs never take."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-08-03"
+}

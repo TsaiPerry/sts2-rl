@@ -1,0 +1,89 @@
+{
+  "unit": "encounter/seapunk_weak",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\SeapunkWeak.cs",
+    "sha256": "12a6ee2a6b0064ac98f977e97ce17796471bcc56eedfb445eeb7e7f716e43380"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\underdocks\\seapunk.py",
+    "sha256": "0fcaa8b12589c4ebcc21f0b5e52b9f57b6f841aa582bdc2d0f4ada25e1bb4b18"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/ActModel.cs",
+      "sha256": "158831cf2c7b7887f2242fa5751fad3ceeb5c8913fbc89d41451645bd822cc9b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/EncounterModel.cs",
+      "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/Screens/Bestiary/NBestiary.cs",
+      "sha256": "e5bf63632335d834f61d57c951775a428ecb1a27f98a56bf790675e9bd3aba79",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/full_env.py",
+      "sha256": "4ba9a145147eb29e6f42a10acb70986873bf1bb12d47a12ef764a423572f312f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/monsters/base.py",
+      "sha256": "424336cf4fb7be8026278b7a34af428082d8487fb57f25c3565311fe5c993388",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "RoomType": {
+      "maps_to": "RoomType.Monster (SeapunkWeak.cs:10). Sim: 'seapunk_weak' is in ActRooms.weak_keys for underdocks (rooms.py:129-132) -- weak fights are still RoomType.Monster in C# (IsWeak is orthogonal), so the same (10,20) gold ladder applies (see guards).",
+      "verdict": "faithful"
+    },
+    "Tags": {
+      "maps_to": "EncounterTag.Seapunk (SeapunkWeak.cs:12). Sim: ActRooms.tags['seapunk_weak'] = ('seapunk',) (rooms.py:143), matching 'seapunk_normal' (rooms.py:144). Tag VALUE matches; the no-repeat-tag picker mechanism itself belongs to seam/rooms_and_map (not re-verdicted here).",
+      "verdict": "faithful"
+    },
+    "IsWeak": {
+      "maps_to": "SeapunkWeak.cs:14, `=> true`. Sim: 'seapunk_weak' is placed in ActRooms.weak_keys (rooms.py:130), the structural equivalent -- the run layer's act-opening weak-fight roll draws from weak_keys (seam/rooms_and_map's mechanism; only the classification is verdicted here, and it matches).",
+      "verdict": "faithful"
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "[Seapunk] only (SeapunkWeak.cs:16 -- a single-element list, unlike SeapunkNormal's two). Same two presentation/infra-only consumers as seapunk_normal (NBestiary.cs:194, ActModel.cs:169); same nearest sim analog (full_env.py's global MONSTER_IDS, full_env.py:252-269).",
+      "verdict": "waiver",
+      "rationale": "Bestiary display and asset preload have no headless counterpart; the global MONSTER_IDS vocabulary already covers every monster identity regardless of which encounter lists it."
+    },
+    "GenerateMonsters": {
+      "maps_to": "SeapunkWeak.cs:18-21 returns a single-element list [(Seapunk, null)] -- 1 monster, unslotted, 0 Rng draws. Sim: seapunk.py:71-74, Encounter(id='seapunk_weak', monster_classes=[Seapunk]) -- 1 monster, slot_name defaults None (matches null), 0 draws (GenerateMonsters' own C# body calls no Rng method; the per-monster HP roll on both sides is CreateCreature/Encounter.create_monsters-level, not this method's).",
+      "verdict": "faithful"
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "EncounterModel.cs:39, `=> false`. Sim: Encounter is never registered with HookSystem (combat.py:170-232 registers the player, cards, and Monsters only, monsters/base.py:296-297).",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [
+    {
+      "what": "N1: MinGoldReward/MaxGoldReward + ShouldGiveRewards (both inherited defaults, not overridden by SeapunkWeak)",
+      "verdict": "faithful",
+      "rationale": "RoomType.Monster -> (10, 20) gold, non-ascension branch (EncounterModel.cs:64-81/83-100; Poverty scaling is ascension scope, out of the audit contract, and rewards.py:32 documents the non-ascension-only decision). Sim: rewards.py:170-174, GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20) -- exact match. ShouldGiveRewards defaults true on both sides (EncounterModel.cs:62; monsters/base.py:360); not overridden here."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-08-03"
+}

@@ -27,8 +27,10 @@ from sts2_rl import CombatState
 from sts2_rl.cards import make_card
 from sts2_rl.monsters.glory import FABRICATOR_NORMAL
 from sts2_rl.monsters.glory.fabricator import Fabricator
-from sts2_rl.monsters.hive import OVICOPTER_NORMAL
+from sts2_rl.monsters.hive import OVICOPTER_NORMAL, THE_OBSCURA_NORMAL
 from sts2_rl.monsters.hive.ovicopter import Ovicopter, ToughEgg
+from sts2_rl.monsters.overgrowth import FOGMOG_NORMAL
+from sts2_rl.monsters.underdocks import TWO_TAILED_RATS_NORMAL
 
 
 def _combat(encounter, seed: int) -> CombatState:
@@ -146,3 +148,81 @@ def test_the_lay_stops_when_the_row_is_full():
     ovi._lay_eggs(cs._ctx())
     ovi._lay_eggs(cs._ctx())
     assert len([e for e in cs.enemies if isinstance(e, ToughEgg)]) == 5
+
+
+def test_a_dead_creature_vacates_its_slot():
+    """`CombatState.RemoveCreature` (CombatState.cs:287-290) drops the corpse
+    out of `Enemies` before the next `Slots.FirstOrDefault(unoccupied)` scan,
+    so the slot is free again. The sim keeps corpses in `combat.enemies`, so
+    the scan has to skip `is_removed_from_combat` ones itself."""
+    cs = _combat(FABRICATOR_NORMAL, 3)
+    fab = cs.enemies[0]
+    fab._fabricate(cs._ctx())
+    assert FABRICATOR_NORMAL.get_next_slot(cs) == "bot3"
+    bot1 = next(e for e in cs.enemies if e.slot_name == "bot1")
+    bot1.hp = 0
+    assert bot1.is_removed_from_combat
+    assert FABRICATOR_NORMAL.get_next_slot(cs) == "bot1"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# encounter/_slot_order — two_tailed_rats' CALL_FOR_BACKUP
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_the_three_rats_are_seated_in_the_last_three_slots():
+    """TwoTailedRatsNormal.cs:12 declares five names; :36-41 seats the starting
+    rats in Slots[2..4], leaving "first"/"second" for the summons."""
+    assert list(TWO_TAILED_RATS_NORMAL.slots) == [
+        "first", "second", "third", "fourth", "fifth"]
+    cs = _combat(TWO_TAILED_RATS_NORMAL, 5)
+    assert [e.slot_name for e in cs.enemies] == ["third", "fourth", "fifth"]
+
+
+def test_the_backup_rat_seats_ahead_of_the_starting_three():
+    """`Slots.LastOrDefault(free)` = "second" (TwoTailedRat.cs:180), and the
+    re-sort puts index 1 ahead of the starting rats' 2/3/4 — so the summon is
+    `enemies[0]`, not the appended `enemies[-1]` the sim used to produce."""
+    cs = _combat(TWO_TAILED_RATS_NORMAL, 5)
+    rat = cs.enemies[0]
+    rat.turns_until_summonable = 0
+    rat._call_for_backup(cs._ctx())
+    assert [e.slot_name for e in cs.enemies] == [
+        "second", "third", "fourth", "fifth"]
+    assert cs.enemies[0].net_id == 4  # the newcomer, seated at the FRONT
+
+
+def test_a_full_row_summons_nothing():
+    """`if (!string.IsNullOrEmpty(nextSlot))` (TwoTailedRat.cs:181) — five
+    occupied slots means the CALL_FOR_BACKUP body adds no rat at all."""
+    cs = _combat(TWO_TAILED_RATS_NORMAL, 5)
+    rat = cs.enemies[0]
+    rat.turns_until_summonable = 0
+    rat._call_for_backup(cs._ctx())
+    rat._call_for_backup(cs._ctx())
+    assert len(cs.enemies) == 5
+    assert not rat._can_summon()  # GetNextSlot is "" — the row is full
+    rat._call_for_backup(cs._ctx())
+    assert len(cs.enemies) == 5
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# encounter/fogmog/Slots + encounter/_slot_name_not_set — the illusion summons
+# ══════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.parametrize("encounter,summon_slot,starter_slot,summon_name", [
+    (FOGMOG_NORMAL, "illusion", "fogmog", "EyeWithTeeth"),
+    (THE_OBSCURA_NORMAL, "illusion", "obscura", "Parafright"),
+])
+def test_the_illusion_summon_seats_in_front(
+    encounter, summon_slot, starter_slot, summon_name
+):
+    """Fogmog.cs:66 and TheObscura.cs:84 both hard-code the "illusion" slot,
+    which is index 0 of their two-name rows — the summon re-sorts AHEAD of the
+    summoner the instant it lands."""
+    cs = _combat(encounter, 7)
+    starter = cs.enemies[0]
+    assert starter.slot_name == starter_slot
+    move = getattr(starter, "_illusion_move", None) or starter._illusion
+    move(cs._ctx())
+    assert [type(e).__name__ for e in cs.enemies][0] == summon_name
+    assert [e.slot_name for e in cs.enemies] == [summon_slot, starter_slot]

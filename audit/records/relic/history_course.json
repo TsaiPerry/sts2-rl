@@ -8,8 +8,19 @@
     "path": "sts2_rl\\relics\\history_course.py",
     "sha256": "33037867688fdeac2b7d7bbe3617fed57a5acf0fa285494b788eee98106510c7"
   },
-  "extra_sources": [],
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/RelicModel.cs",
+      "sha256": "82d29bc5857bbf1dadaf26a6d55dbb05c19af0067bf8a642dd6d225999303f7b",
+      "side": "game"
+    }
+  ],
   "hooks": {
+    "Rarity": {
+      "maps_to": "rarity = RelicRarity.EVENT (sts2_rl/relics/history_course.py:45)",
+      "verdict": "faithful",
+      "rationale": "HistoryCourse.cs:15 `Rarity => RelicRarity.Event`. The sim models the rarity behaviourally, not just as a copied field: `RelicRarity.EVENT` is excluded from `RelicGrabBag._rarities`'s sim mirror (`relic_pools.py`'s `BAG_RARITIES = {Common, Uncommon, Rare, Shop}`, with an explicit comment that Event/Ancient/Starter relics never enter the bag), matching `RelicGrabBag`'s own rarity-bucket construction in the game; and it carries the same `999_999_999` non-shop-stockable merchant cost as the game's `RelicModel.MerchantCost`/`_MERCHANT_COST_BY_RARITY` table (`sts2_rl/relics/base.py`, `RelicModel.cs:304-314`). History Course is granted directly by War Historian Repy's event option on both sides (its own docstring), never drawn from a pool, so the only observable consequences of `Rarity` -- pool eligibility and shop price -- are both correctly modelled as unreachable/unbuyable on the sim side too. No divergence; not a stub."
+    },
     "AfterAutoPrePlayPhaseEntered": {
       "maps_to": "after_auto_pre_play_phase_entered (history_course.py)",
       "verdict": "faithful",

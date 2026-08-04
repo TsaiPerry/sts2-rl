@@ -1,0 +1,86 @@
+{
+  "unit": "encounter/vantom",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\VantomBoss.cs",
+    "sha256": "8329bf57830e745461e5fcf96edeb09f5ad345cccc7172a9fd6500db2a580469"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\vantom.py",
+    "sha256": "b0bf8d7d17f84e1a11f39d88c99624288c12c90e9349abf3571abc656ba2253d"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms boss_keys",
+      "verdict": "faithful"
+    },
+    "BossNodePath": {
+      "maps_to": "none -- headless sim has no map-node rendering",
+      "verdict": "deliberate-divergence",
+      "rationale": "BossNodePath is a map-node icon asset path; the sim's map layer (actmap.py) has no node-rendering concept, only structural point/edge data."
+    },
+    "BossNodeSpineResource": {
+      "maps_to": "none -- headless sim has no map-node rendering",
+      "verdict": "deliberate-divergence",
+      "rationale": "Same rationale as BossNodePath -- purely a Spine skeleton resource lookup for map-node rendering."
+    },
+    "HasCustomBackground": {
+      "maps_to": "none -- headless sim has no background/rendering layer",
+      "verdict": "deliberate-divergence",
+      "rationale": "VantomBoss.HasCustomBackground => true is a pure presentation switch; the sim has no background/asset concept at all."
+    },
+    "CustomBgm": {
+      "maps_to": "none -- headless sim has no audio layer",
+      "verdict": "deliberate-divergence",
+      "rationale": "VantomBoss.CustomBgm names an FMOD event path; the sim has no audio layer at all."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "none -- the sim has no per-encounter monster-preview member",
+      "verdict": "deliberate-divergence",
+      "rationale": "Same zero-cost finding as overgrowth_crawlers/AllPossibleMonsters."
+    },
+    "GetCameraScaling": {
+      "maps_to": "none -- headless sim has no camera/rendering layer",
+      "verdict": "deliberate-divergence",
+      "rationale": "VantomBoss.GetCameraScaling => 0.9f is a pure presentation value; the sim never renders combat."
+    },
+    "GetCameraOffset": {
+      "maps_to": "none -- headless sim has no camera/rendering layer",
+      "verdict": "deliberate-divergence",
+      "rationale": "VantomBoss.GetCameraOffset => Vector2.Down * 50f is a pure presentation value; same rationale as GetCameraScaling."
+    },
+    "GenerateMonsters": {
+      "maps_to": "sts2_rl/monsters/overgrowth/vantom.py:VANTOM_BOSS = Encounter(id=\"vantom_boss\", monster_classes=[Vantom])",
+      "verdict": "faithful",
+      "note": "C# GenerateMonsters is a single-element list [(Vantom, null)], zero draws; VantomBoss also has no Slots override (default empty), so the null slot is doubly unremarkable. The sim's plain Encounter with one monster class, no create_monsters override, no slots kwarg matches exactly."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "structural: Encounter is never registered with HookSystem",
+      "verdict": "faithful"
+    },
+    "Tags": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms tags -- \"vantom\" is absent",
+      "verdict": "faithful",
+      "note": "No Tags override in C# (default empty)."
+    },
+    "IsWeak": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms -- \"vantom\" is absent from weak_keys",
+      "verdict": "faithful"
+    },
+    "ShouldGiveRewards": {
+      "maps_to": "sts2_rl/monsters/base.py:Encounter.should_give_rewards (default True)",
+      "verdict": "faithful"
+    },
+    "MinGoldReward": {
+      "maps_to": "sts2_rl/rewards.py:GOLD_REWARD_RANGES[RoomType.BOSS] = (100, 100)",
+      "verdict": "faithful",
+      "note": "No override in C#; base ladder for RoomType.Boss is 100. Poverty multiplier out of scope, not applied in roll_gold_reward."
+    },
+    "MaxGoldReward": {
+      "maps_to": "sts2_rl/rewards.py:GOLD_REWARD_RANGES[RoomType.BOSS] = (100, 100)",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-08-03"
+}

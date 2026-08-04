@@ -33,6 +33,19 @@ Probes:
                     branch tuple (weight, repeatType, maxTimes, cooldown) vs
                     the sim port's, listed per branch. The record's
                     "N monsters misread the int argument" number comes from here.
+                    WIDENED 2026-08-03 (P3 correction pass): `_CS_BRANCHES` used
+                    to resolve 12 of the 14 sim classes `hand-rolled`'s own
+                    census reports as "ported ON the state machine" (+
+                    FakeMerchantMonster, which that census does not see --
+                    it is not in the roster `hand_rolled` scans). SoulNexus,
+                    SludgeSpinner and TheObscura were simply missing from the
+                    hand-curated table, not excluded for a reason -- so the
+                    docstring's "for every ported RandomBranchState" was not
+                    true of this probe's own output. Now 15 pairs / 16
+                    branch states, all three added ones NON-default-int-free
+                    (verified against cs-addbranch's full census) so the
+                    "0 misreads" headline is unchanged, but it is no longer a
+                    coverage artefact for THIS gap either.
   distribution      EXECUTED: the observable of `mismatch` — roll each
                     mismatched sim machine 100000 times and, beside it, the
                     same machine with the C# branch parameters restored.
@@ -862,6 +875,29 @@ _CS_BRANCHES: dict[str, tuple[str, list[tuple[str, str, float, str, int, int]]]]
         ("WRITHE",    "moveState",  1.0, "CANNOT_REPEAT", 0, 0),
         ("BULK",      "moveState2", 1.0, "CANNOT_REPEAT", 0, 0),
         ("CONSTRICT", "moveState3", 1.0, "CANNOT_REPEAT", 0, 0)]),
+    # The three below were added by the P3 correction pass (2026-08-03): `hand_rolled()`
+    # reports 14 sim classes "ported ON the state machine" against a C# RandomBranchState,
+    # but this table previously resolved only 11 of them (+ FakeMerchantMonster, which
+    # `hand_rolled()`'s roster scan does not see at all -- see its call site). SoulNexus,
+    # SludgeSpinner and TheObscura were missing -- not because they are hand-rolled, but
+    # simply omitted from this hand-curated table -- so `mismatch`'s "for every ported
+    # RandomBranchState" claim was not actually true of its own output. None of the three
+    # has a non-default int argument on the C# side (verified against cs-addbranch's
+    # full non-default-int census, which does not name any of them), so none COULD have
+    # exhibited G1's bug -- adding them does not change the "0 misreads" headline -- but
+    # they were unverified BY THIS PROBE until now.
+    "sts2_rl/monsters/glory/soul_nexus.py": ("SoulNexus.cs:70-72", [
+        ("SOUL_BURN",  "moveState",  1.0, "CANNOT_REPEAT", 0, 0),
+        ("MAELSTROM",  "moveState2", 1.0, "CANNOT_REPEAT", 0, 0),
+        ("DRAIN_LIFE", "moveState3", 1.0, "CANNOT_REPEAT", 0, 0)]),
+    "sts2_rl/monsters/underdocks/sludge_spinner.py": ("SludgeSpinner.cs:45-47", [
+        ("OIL_SPRAY", "moveState",  1.0, "CANNOT_REPEAT", 0, 0),
+        ("SLAM",      "moveState2", 1.0, "CANNOT_REPEAT", 0, 0),
+        ("RAGE",      "moveState3", 1.0, "CANNOT_REPEAT", 0, 0)]),
+    "sts2_rl/monsters/hive/the_obscura.py": ("TheObscura.cs:67-69", [
+        ("PIERCING_GAZE",      "moveState2", 1.0, "CANNOT_REPEAT", 0, 0),
+        ("SAIL(WAIL)",         "moveState3", 1.0, "CANNOT_REPEAT", 0, 0),
+        ("HARDENING_STRIKE",   "moveState4", 1.0, "CANNOT_REPEAT", 0, 0)]),
 }
 
 

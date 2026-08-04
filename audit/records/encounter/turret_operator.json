@@ -1,0 +1,52 @@
+{
+  "unit": "encounter/turret_operator",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\TurretOperatorWeak.cs",
+    "sha256": "998337f7118b974fd5ed537d4743e7f5e8ad01d25e3885f3fd99a29b24fc5d7b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\glory\\turret_operator.py",
+    "sha256": "59b8ba3a89a64d15015e268f4ed09c5bb23f5a569b65be28e110af1e733caebd"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "sts2_rl/rooms.py _glory_rooms().weak_keys includes 'turret_operator'",
+      "verdict": "faithful",
+      "rationale": "TurretOperatorWeak declares RoomType.Monster; the sim's turret_operator sits in weak_keys under the same act's rooms, which run.py treats as RoomType.MONSTER at combat entry -- matches."
+    },
+    "IsWeak": {
+      "maps_to": "sts2_rl/rooms.py _glory_rooms().weak_keys includes 'turret_operator'",
+      "verdict": "faithful",
+      "rationale": "TurretOperatorWeak overrides IsWeak => true. The sim has no is_weak field on Encounter itself; 'weakness' is externalized to which bucket the room generator draws from (rooms.py's ActRooms.weak_keys, drawn only for the act's opening weak-encounter rooms per num_weak_encounters in actmap.py). turret_operator is listed only in weak_keys, never normal/elite/boss_keys, which reproduces the same selection behaviour by a different mechanism -- same room-type classification, same act placement."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "TURRET_OPERATOR_WEAK.monster_classes = [LivingShield, TurretOperator]",
+      "verdict": "faithful",
+      "rationale": "C#'s AllPossibleMonsters array literal is [LivingShield, TurretOperator] (ModelDb.Monster<LivingShield>() first); the sim's monster_classes list is the same two classes. Fixed, always-spawning roster -- no possible divergence."
+    },
+    "GenerateMonsters": {
+      "maps_to": "Encounter.create_monsters (sts2_rl/monsters/base.py) via TURRET_OPERATOR_WEAK(monster_classes=[LivingShield, TurretOperator])",
+      "verdict": "faithful",
+      "rationale": "C#'s GenerateMonsters returns (LivingShield, null) then (TurretOperator, null) -- LivingShield FIRST, matching its own AllPossibleMonsters order. Sim's monster_classes = [LivingShield, TurretOperator], same order, preserved by create_monsters' list comprehension into combat.enemies. Neither tuple carries a slot name on either side (monster_slots left at its default empty tuple, so slot_name stays None), and TurretOperatorWeak declares no Slots row at all (inherits EncounterModel.Slots = empty), so there is no row for LivingShield/TurretOperator to be re-sorted against even in the game -- the C# CombatManager.AddCreature guard (`creature.SlotName != null`) never fires for this encounter either. Zero RNG draws in GenerateMonsters on both sides. Roster, order, slot(-lessness) and draw-count all match."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "the Encounter dataclass (sts2_rl/monsters/base.py) is never registered as a hook listener; only Monster instances register themselves",
+      "verdict": "faithful",
+      "rationale": "Same structural fact as every unit in this batch."
+    }
+  },
+  "guards": [
+    {
+      "what": "MinGoldReward/MaxGoldReward -- not overridden, inherits the Monster ladder (10-20) x Poverty multiplier",
+      "verdict": "faithful",
+      "rationale": "sts2_rl/rewards.py GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20) and TURRET_OPERATOR_WEAK sets neither min_gold nor max_gold -- matches (weak encounters use the same Monster ladder as normal ones; TurretOperatorWeak overrides only IsWeak, not the gold accessors). Poverty/ascension scaling out of scope per PROMPT.md."
+    },
+    {
+      "what": "ShouldGiveRewards -- not overridden, defaults true",
+      "verdict": "faithful",
+      "rationale": "TurretOperatorWeak does not override ShouldGiveRewards, so the base true stands (weak encounters do give rewards, unlike e.g. the Battleworn Dummy training fights). Encounter.should_give_rewards defaults True and TURRET_OPERATOR_WEAK leaves it unset -- matches."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-08-03"
+}

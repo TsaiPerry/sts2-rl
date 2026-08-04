@@ -92,6 +92,16 @@ class Potion:
         never reach it."""
         raise NotImplementedError
 
+    def passes_custom_usability_check(self, run=None, combat=None) -> bool:
+        """`PotionModel.PassesCustomUsabilityCheck` (PotionModel.cs:158-164).
+
+        A virtual gate, default TRUE, that the Use button consults before
+        anything else happens (NPotionPopup.cs:144). `FoulPotion` is the
+        source's only override. Callers pass whichever context they have:
+        `RunState.use_potion` the run, `CombatState.use_potion` the combat.
+        """
+        return True
+
     def __repr__(self) -> str:
         return self.name
 
@@ -491,11 +501,47 @@ class FoulPotion(Potion):
                 props=DamageProps.NON_CARD_UNPOWERED,
             )
 
+    def passes_custom_usability_check(self, run=None, combat=None) -> bool:
+        """`FoulPotion.PassesCustomUsabilityCheck` (FoulPotion.cs:51-68) — the
+        source's ONLY override of the gate, and a refusal, not a modifier:
+
+            in combat                          -> True
+            a Shop room, stall still standing  -> True
+            the Fake Merchant event            -> True
+            anywhere else                      -> False
+
+        Both merchant arms are written as `GetFoulPotionMerchantTarget(...)
+        .button != null` (:126-152), which is the merchant button existing and
+        its inventory screen NOT being open. The sim has no inventory screen,
+        so the ported condition is the half that survives headless: the room
+        is the stall, and the merchant has not already been driven off it.
+        """
+        if combat is not None:
+            return True
+        if run is None:
+            return True
+        from .rooms import RoomType
+
+        if run.current_room_type == RoomType.SHOP:
+            return not run.merchant_driven_off
+        event = getattr(run, "current_event", None)
+        return event is not None and event.id == "fake_merchant"
+
     def use_out_of_combat(self, run) -> None:
-        # FoulPotion.cs:79-88, the MerchantRoom arm: the merchant is driven
-        # off (NMerchantRoom.FoulPotionThrown) and the thrower gains GoldVar.
-        # The Fake Merchant arm (:89-108) belongs to the event, which owns the
-        # stall and the fight it starts.
+        """`FoulPotion.OnUse`'s two out-of-combat arms (FoulPotion.cs:79-108).
+
+        The room decides which: at a real shop the merchant is driven off
+        (NMerchantRoom.FoulPotionThrown) and the thrower gains GoldVar(100);
+        in the Fake Merchant event the potion instead exposes the stall and
+        starts that fight (`fakeMerchant.FoulPotionThrown(this)`). The sim used
+        to run the shop arm unconditionally, which was harmless only while the
+        potion could be drunk anywhere — `passes_custom_usability_check` now
+        admits the event room too, so the arm has to be picked properly.
+        """
+        event = getattr(run, "current_event", None)
+        if event is not None and event.id == "fake_merchant":
+            event.foul_potion_thrown()
+            return
         run.merchant_driven_off = True
         run.gain_gold(self.GOLD)
 

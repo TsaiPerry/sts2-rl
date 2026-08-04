@@ -1,0 +1,62 @@
+{
+  "unit": "relic/circlet",
+  "game_source": {
+    "path": "src\\Core\\Models\\Relics\\Circlet.cs",
+    "sha256": "418c9acc19086b59ad09a499534d504f1727a2b79c6901257431171acb31b0be"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\relics\\circlet.py",
+    "sha256": "8bde739f9b58ba3ae0ce30f161ac0cdf987ac7cd0dcc7ce4bbe4738ed1057d4e"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Factories/RelicFactory.cs",
+      "sha256": "7bbd2464ae72129712f40d3a660c1f7bf61ed8bf16b8718a355fbf1c5e2b8143",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Runs/RelicGrabBag.cs",
+      "sha256": "9bb001cbc618f21cebaf7ceb324812010972d92b7a6ed043f268e56fce5a541c",
+      "side": "game"
+    }
+  ],
+  "hooks": {
+    "Rarity": {
+      "maps_to": "`RelicRarity.None` (Circlet.cs:7) is ported as the new `RelicRarity.NONE` member (sts2_rl/relics/base.py), carried by this relic alone. Its whole behavioural consequence is exclusion: `_BAG_RARITIES` is (COMMON, UNCOMMON, RARE), so a NONE-rarity relic enters no grab-bag deque and no shop bag, exactly as C# builds its deques from `_rarities` (RelicGrabBag.cs:77). Pinned by test_relics.py::TestCircletIsTheFallbackRelic::test_the_circlet_is_never_in_the_grab_bag.",
+      "verdict": "faithful"
+    },
+    "IsStackable": {
+      "maps_to": "`IsStackable => true` (Circlet.cs:9) has exactly one consumer: `RelicCmd.Obtain` skips the two `GrabBag.Remove(relic)` calls for a stackable relic (RelicCmd.cs:41-46). For the Circlet that branch is inert either way -- it is in no bag to be removed from -- so the sim needs no flag, and duplicates already accumulate because `RunState.add_relic` appends without a duplicate guard. That is the observable half of IsStackable: a second dry pull hands out a second Circlet and the run holds both.",
+      "verdict": "faithful",
+      "issue": "NOTED, not a gap at this unit, and recorded because it generalises: the sim's `add_relic` never removes the obtained relic from the grab bag, where C# does so for every NON-stackable relic (RelicCmd.cs:42-45). For a relic that arrived through a pull this is already handled (the pull removes it), so the exposure is limited to relics granted by some other path. ENUMERATED over the ported non-pull grant sites: events/colossal_flower.py, events/drowning_beacon.py, events/grave_of_the_forgotten.py, events/hungry_for_mushrooms.py and events/lost_wisp.py grant pollinous_core, fresnel_lens, forgotten_soul, big_mushroom, fragrant_mushroom and lost_wisp -- every one EVENT rarity, hence in no deque -- and events/darv.py, events/doll_room.py, events/fake_merchant.py, events/ranwid_the_elder.py and events/relic_trader.py hand over relics the bag already yielded. So no ported path can currently duplicate a bag relic, which is why this is a note rather than a filed gap; port a content grant of a Common/Uncommon/Rare relic and it becomes one."
+    }
+  },
+  "guards": [
+    {
+      "what": "the relic is reachable at all -- RelicFactory.FallbackRelic and the rarity ladder that ends at it",
+      "maps_to": "`PullNextRelicFromFront` is `TestRngInjector.ConsumeRelicOverride() ?? player.RelicGrabBag.PullFromFront(rarity, filter, runState) ?? FallbackRelic` (RelicFactory.cs:47), and `PullFromFront` nulls out when `GetAvailableDeque` does (RelicGrabBag.cs:129-135). `GetAvailableDeque` first drops the relics `IsAllowed` rejects, then CLIMBS while the current deque holds nothing passing the filter -- Shop -> Common -> Uncommon -> Rare -> None (RelicGrabBag.cs:227-237) -- so the fallback is the end of that ladder, never the first empty deque, and a pull never falls back to a rarity BELOW the one it asked for. `RunState.pull_relic_from_front` is that shape now: `_NEXT_RARITY` is the switch, the walk ends at `make_relic('circlet')`, and the bag is left untouched when it does. Pinned by the three tests in test_relics.py::TestCircletIsTheFallbackRelic -- empty bag, an exhausted Common escalating to Uncommon, and a dry Rare falling through to the Circlet with the Commons left alone.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "no hooks at all -- the relic does nothing once held",
+      "maps_to": "Circlet.cs declares only Rarity and IsStackable: no AfterObtained, no combat hooks, no run hooks. The sim's class body is the same two declarations plus `is_allowed_in_shops = False` (it is in no shop bag, and the flag keeps a future shop path from stocking it). Nothing to diverge.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "the multiplayer fallback deque (_mpFallbackDequeue) has no sim counterpart",
+      "maps_to": "`GetAvailableDeque` ends with `if (list == null && DequeHasAnyRelics(_mpFallbackDequeue, filter)) list = _mpFallbackDequeue;` (RelicGrabBag.cs:238-241), one last deque consulted before the Circlet. `HasAvailableRelics` reads it too (:57).",
+      "verdict": "waiver",
+      "issue": "Out of scope by the same rule the rest of the campaign uses for multiplayer-only state: the deque is populated only in a multiplayer run, and the sim is single-player, so in the sim it is permanently empty and `list == null` goes straight to the fallback. Recorded rather than dropped so a reader does not mistake the sim's two-outcome ladder (a relic, or the Circlet) for the source's three.",
+      "rationale": "Multiplayer-only state, waived on the same ground as the rest of the campaign: _mpFallbackDequeue is populated only in a multiplayer run and the sim is single-player, so it is permanently empty and the ladder's null goes straight to the Circlet."
+    },
+    {
+      "what": "_refreshAllowed / RefreshRarity -- the deque-refill branch before the ladder",
+      "maps_to": "`GetAvailableDeque` refills an empty deque before climbing when `_refreshAllowed` is set (RelicGrabBag.cs:222-226), a flag set by the `RelicGrabBag(bool refreshAllowed)` ctor (:64-67). The sim models no refill: `pull_relic_from_front` climbs and then falls back.",
+      "verdict": "gap",
+      "live": false,
+      "issue": "FILED 2026-08-03 rather than assumed away. Whether the absence is a divergence depends on which bags are constructed with `refreshAllowed: true`, and this record did NOT enumerate the ctor's callers -- so the branch is recorded as an open question, not verdicted as equivalent. DORMANT on the same reachability the rest of this record rests on: getting to the branch at all needs an exhausted deque, and nothing in ported content drains a rarity inside one run (event/EV-11's probe measures the parity bag at 122 relics, 36 of them Rare and shop-legal). Trigger: EV-11's trigger, plus enumerating the RelicGrabBag ctor's callers."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-08-03"
+}

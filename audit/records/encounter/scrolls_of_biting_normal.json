@@ -1,0 +1,52 @@
+{
+  "unit": "encounter/scrolls_of_biting_normal",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\ScrollsOfBitingNormal.cs",
+    "sha256": "a6b35af7e55980d1b6886fe48fbb92dd8b7fd7ca27f70c4766a0025add70b9d6"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\glory\\scroll_of_biting.py",
+    "sha256": "553067979e60041c347356874dcc2f084ebf7c275bfc99d95d63010adf836ab6"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "sts2_rl/rooms.py _glory_rooms().normal_keys includes 'scrolls_of_biting_normal'",
+      "verdict": "faithful",
+      "rationale": "ScrollsOfBitingNormal declares RoomType.Monster; bucket membership agrees."
+    },
+    "Tags": {
+      "maps_to": "sts2_rl/rooms.py _glory_rooms().tags['scrolls_of_biting_normal'] = ('scrolls',)",
+      "verdict": "faithful",
+      "rationale": "ScrollsOfBitingNormal.Tags returns EncounterTag.Scrolls (single element). The sim models EncounterTag membership via a per-key tags dict consumed by the act's grab-bag encounter picker rather than a property on Encounter itself; scrolls_of_biting_normal (and _weak) are tagged 'scrolls', matching. This mirrors the brief's guidance to cross-reference seam/rooms_and_map, which owns the tag-safe picker itself; this record only verdicts that the tag DATA is present and correct."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "SCROLLS_OF_BITING_NORMAL.monster_classes = [ScrollOfBiting] * 4",
+      "verdict": "faithful",
+      "rationale": "C#'s AllPossibleMonsters is the single-element superset [ScrollOfBiting] (the count of copies is not part of the declared superset, only which CLASS can appear). The sim's monster_classes is [ScrollOfBiting]*4 for this variant, which collapses to the same single distinct class -- no divergence possible since only one monster type is ever involved."
+    },
+    "GenerateMonsters": {
+      "maps_to": "_ScrollsEncounter.create_monsters (scroll_of_biting.py) via SCROLLS_OF_BITING_NORMAL = _ScrollsEncounter('scrolls_of_biting_normal', 4)",
+      "verdict": "faithful",
+      "rationale": "Roster/count: C# constructs exactly 4 ScrollOfBiting instances via ModelDb.Monster<ScrollOfBiting>().ToMutable(); the sim's _ScrollsEncounter(count=4) constructs exactly 4 ScrollOfBiting(...) instances. Order: C# returns them in construction order (scrollOfBiting, scrollOfBiting2, scrollOfBiting3, scrollOfBiting4); the sim returns [ScrollOfBiting(hooks, rng, starter_move_idx=i) for i in idxs] in the same list order. Slot: none of the four tuples carries a slot name in C# (all null); the sim never sets monster_slots for this Encounter, so slot_name stays None on all four -- matches. Draw count: C# draws exactly ONE `base.Rng.NextInt(3)` (assigned to `num` while also setting scrollOfBiting.StarterMoveIdx), then derives scroll 2/3's indices arithmetically (no further draws) and hard-codes scroll 4's index to 2 (no draw at all). The sim draws exactly once too -- `base = selection_rng.next_int(3)` when a parity selection_rng is supplied -- then computes idxs = [(base+i)%3 for i in range(3)] plus a hard-coded trailing 2 for the 4-monster variant (count==4), reproducing scroll 4's fixed MORE_TEETH-start behaviour without a second draw. Draw ORDER vs construction: C# constructs all four ToMutable() clones (no RNG involved in ToMutable itself) before drawing, and the sim's draw happens before any ScrollOfBiting object is constructed at all (`base = selection_rng.next_int(3)` runs first, then the list comprehension builds the four instances) -- in both cases there is exactly one draw and no monster construction interleaves with it, so there is no Flyconid-style draw-before/after-append divergence to find. Stream identity is not this record's call (owned by seam/rng_streams): the sim uses run.py's make_encounter_rng-seeded selection_rng, matching EncounterModel.GenerateMonstersWithSlots's per-encounter Rng, when a string_seed run seeds one; a run with no string_seed falls back to the shared legacy random.Random on both the composition draw and the fallback path documented in scroll_of_biting.py's own comment ('Legacy keeps the shared-rng draw') -- a deliberate, already-documented two-mode design (parity vs legacy training runs), not a new finding."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "sts2_rl/monsters/base.py Encounter dataclass is never registered as a hook listener; only Monster instances register themselves",
+      "verdict": "faithful",
+      "rationale": "Same structural fact as every unit in this batch."
+    }
+  },
+  "guards": [
+    {
+      "what": "MinGoldReward/MaxGoldReward -- not overridden, inherits the Monster ladder (10-20) x Poverty multiplier",
+      "verdict": "faithful",
+      "rationale": "sts2_rl/rewards.py GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20) and SCROLLS_OF_BITING_NORMAL sets neither min_gold nor max_gold -- matches. Poverty/ascension scaling out of scope per PROMPT.md."
+    },
+    {
+      "what": "ShouldGiveRewards -- not overridden, defaults true",
+      "verdict": "faithful",
+      "rationale": "ScrollsOfBitingNormal does not override ShouldGiveRewards; Encounter.should_give_rewards defaults True and is left unset here -- matches."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-08-03"
+}

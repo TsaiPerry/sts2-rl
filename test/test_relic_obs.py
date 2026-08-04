@@ -32,8 +32,9 @@ def _make(relic_id: str):
 # ---------------------------------------------------------------------------
 
 def test_all_relics_are_registered_and_countable():
-    # Re-measured, not copied from prose: ALL_RELICS is 259 as of 2026-08-01.
-    assert len(ALL_RELICS) == 259
+    # Re-measured, not copied from prose: ALL_RELICS is 260 as of 2026-08-03
+    # (259 + the Circlet, RelicFactory's FallbackRelic).
+    assert len(ALL_RELICS) == 260
 
 
 def test_relic_row_never_raises_for_any_registered_relic():
@@ -49,10 +50,10 @@ def test_relic_row_never_raises_for_any_registered_relic():
 
 def test_relics_with_no_mutable_state_are_all_zero():
     stateless = [rid for rid in ALL_RELICS if rid not in _TABLE]
-    # 259 registered - 50 admitted (28 counter-only + 4 both + 18 flag-only)
+    # 260 registered - 50 admitted (28 counter-only + 4 both + 18 flag-only)
     # = 209 with either no mutable state or fully-excluded state; both
     # collapse to (0, 0) since relic_row only special-cases admitted ids.
-    assert len(stateless) == 259 - len(_TABLE)
+    assert len(stateless) == 260 - len(_TABLE)
     for relic_id in stateless:
         inst = ALL_RELICS[relic_id]()
         assert relic_row(inst, in_combat=False) == (0, 0)
@@ -69,7 +70,7 @@ def test_admitted_relic_count_matches_the_census():
 
 
 def test_relics_with_genuinely_no_mutable_attributes_are_194_from_a_bare_constructor():
-    # A bare `cls()` shows 65 stateful relics (194 = 259 - 65), not 70: the
+    # A bare `cls()` shows 65 stateful relics (195 = 260 - 65), not 70: the
     # other 5 (`lees_waffle`, `looming_fruit`, `mango`, `pear`, `strawberry`)
     # only create `_healed` LAZILY, inside `after_obtained`, so a freshly
     # constructed instance carries no extra attribute yet. The census's
@@ -87,7 +88,7 @@ def test_relics_with_genuinely_no_mutable_attributes_are_194_from_a_bare_constru
         extra = {k: v for k, v in vars(inst).items() if k not in base_attrs}
         if not extra:
             stateless += 1
-    assert stateless == 259 - 65
+    assert stateless == 260 - 65
 
 
 # ---------------------------------------------------------------------------

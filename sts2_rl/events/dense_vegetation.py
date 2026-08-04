@@ -27,6 +27,14 @@ class _WrigglerNestEncounter(Encounter):
 DENSE_VEGETATION_EVENT_ENCOUNTER = _WrigglerNestEncounter(
     id="dense_vegetation_event",
     monster_classes=[Wriggler] * 4,
+    # C# class DenseVegetationEventEncounter — the sim id drops the suffix.
+    entry_slug="DENSE_VEGETATION_EVENT_ENCOUNTER",
+    # DenseVegetationEventEncounter.cs:13,18-28 — GenerateMonsters walks the
+    # row itself, one Wriggler per slot. The sim's `slot=` constructor
+    # argument drives the odd/even opening move; these are the
+    # `Creature.SlotName`s the game also sets.
+    slots=("wriggler1", "wriggler2", "wriggler3", "wriggler4"),
+    monster_slots=("wriggler1", "wriggler2", "wriggler3", "wriggler4"),
 )
 
 

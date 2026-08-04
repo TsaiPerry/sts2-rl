@@ -693,6 +693,56 @@ class RoyallyApprovedEnchantment(Enchantment):
         self.card.retain = True
 
 
+@register_enchantment
+class MomentumEnchantment(Enchantment):
+    """Momentum — every play of the enchanted Attack raises its damage by
+    [amount] for every LATER play in that combat.
+
+    Source: Momentum.cs — `CanEnchantCardType` accepts Attacks only (:31-34);
+    `OnPlay` adds Amount to a private `ExtraDamage` counter (:36-40);
+    `EnchantDamageAdditive` returns that counter on powered attacks (:42-49).
+    Granted by Punch Dagger (amount 5).
+
+    The play that raises the counter is not the play that benefits:
+    `CardModel.OnPlayWrapper` runs the card's own OnPlay (CardModel.cs:1931)
+    before the enchantment's (:1937-1945), so the damage is already dealt.
+
+    The counter is per-COMBAT, not per-run: `PopulateCombatState` clones every
+    deck card into the draw pile (Player.cs:802-811) and the deck copy never
+    plays, so the growth dies with the combat that built it. The sim's
+    `RunState.create_combat` deep-copies the deck for the same reason, so it
+    gets that for free.
+    """
+
+    id = "momentum"
+    name = "Momentum"
+
+    def __init__(self, amount: int = 1) -> None:
+        super().__init__(amount)
+        # `Momentum._extraDamage` — the accumulated bonus, not the Amount.
+        self.extra_damage = 0
+
+    @classmethod
+    def can_enchant(cls, card: Card) -> bool:
+        from .cards import CardType
+
+        return super().can_enchant(card) and card.card_type == CardType.ATTACK
+
+    def clone_preserving_mutability(self) -> "Enchantment":
+        """`AbstractModel.MutableClone` is a MemberwiseClone, so the private
+        counter rides along with a card copy (Anger's, Trash Heap's) — the
+        base only carries Amount and Status."""
+        clone = super().clone_preserving_mutability()
+        clone.extra_damage = self.extra_damage
+        return clone
+
+    def on_play(self, card: Card, target: Creature | None = None) -> None:
+        self.extra_damage += self.amount
+
+    def enchant_damage_additive(self, amount: int, props) -> int:
+        return self.extra_damage if is_powered_attack(props) else 0
+
+
 ALL_ENCHANTMENTS: dict[str, type[Enchantment]] = dict(_ENCHANTMENT_CLASSES)
 
 # Stable vocabulary (frozen append-only + capacity-padded; vocab.py). Mirrors

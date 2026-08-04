@@ -68,15 +68,21 @@ class BattleFriendV3(_BattleFriend):
 # (BattlewornDummyEventEncounter.cs picks the dummy by Setting; its
 # ShouldGiveRewards=false suppresses the normal reward screen — the event's
 # Resume grants the setting's reward instead).
+# One C# class, `BattlewornDummyEventEncounter`, whose `Setting` enum picks
+# the BattleFriend (BattlewornDummyEventEncounter.cs:62-70); the sim models
+# each setting as its own Encounter. All three are still that ONE model id, so
+# all three seed the per-encounter Rng with its slug.
+_BATTLEWORN_DUMMY_ENTRY = "BATTLEWORN_DUMMY_EVENT_ENCOUNTER"
+
 BATTLEWORN_DUMMY_SETTING_1 = Encounter(
     id="battleworn_dummy_setting_1", monster_classes=[BattleFriendV1],
-    should_give_rewards=False,
+    should_give_rewards=False, entry_slug=_BATTLEWORN_DUMMY_ENTRY,
 )
 BATTLEWORN_DUMMY_SETTING_2 = Encounter(
     id="battleworn_dummy_setting_2", monster_classes=[BattleFriendV2],
-    should_give_rewards=False,
+    should_give_rewards=False, entry_slug=_BATTLEWORN_DUMMY_ENTRY,
 )
 BATTLEWORN_DUMMY_SETTING_3 = Encounter(
     id="battleworn_dummy_setting_3", monster_classes=[BattleFriendV3],
-    should_give_rewards=False,
+    should_give_rewards=False, entry_slug=_BATTLEWORN_DUMMY_ENTRY,
 )

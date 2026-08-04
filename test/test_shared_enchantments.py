@@ -203,3 +203,93 @@ def test_every_enchantment_answers_enchanted_replay_count():
         assert card.enchanted_replay_count() == card.base_replay_count, eid
         card.base_replay_count = 1
         assert card.enchanted_replay_count() >= 1, eid
+
+
+# ── Momentum: +amount damage per play, compounding, Attacks only ─────────
+# Source: Momentum.cs — OnPlay adds Amount to a private ExtraDamage counter;
+# EnchantDamageAdditive returns that counter on powered attacks;
+# CanEnchantCardType restricts it to Attacks. Granted by Punch Dagger (5).
+
+def test_momentum_only_enchants_attacks():
+    """`CanEnchantCardType(cardType) => cardType == CardType.Attack`
+    (Momentum.cs:31-34)."""
+    momentum = make_enchantment("momentum")
+    assert momentum.can_enchant(make_card("strike"))
+    assert not momentum.can_enchant(make_card("defend"))
+
+
+def test_momentum_pays_out_from_the_second_play_on():
+    """The counter is raised in OnPlay, which CardModel.OnPlayWrapper runs
+    AFTER the card's own OnPlay (CardModel.cs:1931 then :1937-1945) — so the
+    play that raises it is not the play that benefits. Strike deals 6; with
+    Momentum 5 the second play deals 11 and the third 16."""
+    strike, second, third = (make_card("strike") for _ in range(3))
+    enchant("momentum", strike, 5)
+    combat = build([strike, second, third] + [make_card("defend") for _ in range(2)])
+    combat.player.energy = 9
+    enemy = combat.enemy
+    dealt = []
+    for _ in range(3):
+        hp = enemy.hp
+        combat.play_card(combat.player.hand.index(strike))
+        dealt.append(hp - enemy.hp)
+        combat.player.discard_pile.remove(strike)
+        combat.player.hand.append(strike)
+    assert dealt == [6, 11, 16]
+
+
+def test_momentum_starts_each_combat_at_zero():
+    """`PopulateCombatState` clones every deck card into the draw pile
+    (Player.cs:802-811) and the deck copy never plays, so the counter a
+    combat builds up dies with that combat."""
+    from sts2_rl.run import RunState
+
+    run = RunState(rng=random.Random(3))
+    strike = next(c for c in run.deck if c.id == "strike")
+    enchant("momentum", strike, 5)
+    dealt = []
+    for _ in range(2):
+        combat = run.create_combat(WURM)
+        played = next(c for c in combat.player.all_cards
+                      if c.enchantment is not None)
+        combat.player.hand.append(played)
+        combat.player.energy = 9
+        enemy = combat.enemy
+        for _ in range(2):
+            hp = enemy.hp
+            combat.play_card(combat.player.hand.index(played))
+            dealt.append(hp - enemy.hp)
+            combat.player.discard_pile.remove(played)
+            combat.player.hand.append(played)
+    assert dealt == [6, 11, 6, 11]
+
+
+def test_punch_dagger_enchants_a_deck_attack_with_momentum_5():
+    """PunchDagger.cs:24-33 — AfterObtained puts up a one-card
+    FromDeckForEnchantment screen over the deck's Momentum-eligible cards and
+    enchants the pick with `DynamicVar("Momentum", 5)`."""
+    from sts2_rl.relics import make_relic
+    from sts2_rl.run import RunState
+
+    run = RunState(rng=random.Random(11))
+    run.add_relic(make_relic("punch_dagger"))
+    enchanted = [c for c in run.deck if c.enchantment is not None]
+    assert len(enchanted) == 1
+    assert enchanted[0].enchantment.id == "momentum"
+    assert enchanted[0].enchantment.amount == 5
+    assert enchanted[0].card_type.name == "ATTACK"
+
+
+def test_a_card_copy_carries_momentums_accumulated_bonus():
+    """`ClonePreservingMutability` is `AbstractModel.MutableClone`, a
+    MemberwiseClone (CardModel.cs:1204-1209), so a copy made mid-combat —
+    Anger's, Trash Heap's — inherits the private ExtraDamage counter, not just
+    the Amount."""
+    from sts2_rl.cards.base import create_clone
+
+    anger = make_card("anger")
+    momentum = enchant("momentum", anger, 5)
+    momentum.on_play(anger)
+    momentum.on_play(anger)
+    clone = create_clone(anger)
+    assert clone.enchantment.extra_damage == 10

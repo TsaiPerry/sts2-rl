@@ -205,6 +205,118 @@ class TestOverrideEnumeration:
         assert harness.hook_key("BeforeApplied") == "BeforeApplied"
 
 
+FIXTURE_PROTECTED_CS = """\
+namespace MegaCrit.Sts2.Core.Models.Encounters;
+
+public sealed class FixtureEncounter : EncounterModel
+{
+    public override RoomType RoomType => RoomType.Monster;
+
+    protected override IReadOnlyList<(MonsterModel, string?)> GenerateMonsters()
+    {
+        return null;
+    }
+}
+"""
+
+
+class TestProtectedOverrideKinds:
+    """P1-T4 (2026-08-03): `protected override` was invisible to every
+    enumeration path, which meant `GenerateMonsters` -- the entire subject of
+    the encounter audit -- never showed up in a skeleton's `hooks`. Fixed
+    ONLY for PROTECTED_OVERRIDE_KINDS (encounter/affliction/character); the
+    seven pre-existing kinds keep the narrower `public override`-only
+    enumeration their finished records were written against (see
+    harness.py's _OVERRIDE_RE comment for the open-defect note)."""
+
+    def test_protected_override_kinds_is_exactly_the_three_new_kinds(self):
+        assert harness.PROTECTED_OVERRIDE_KINDS == {
+            "encounter", "affliction", "character"}
+
+    def test_protected_override_invisible_by_default(self):
+        # No kind passed at all -- the shape every pre-2026-08-03 call site
+        # used, and still the default today.
+        assert harness.list_overrides(FIXTURE_PROTECTED_CS) == ["RoomType"]
+
+    def test_protected_override_invisible_for_old_kinds(self):
+        for kind in ("relic", "power", "card", "monster", "event",
+                     "potion", "enchantment"):
+            assert harness.list_overrides(FIXTURE_PROTECTED_CS, kind=kind) == [
+                "RoomType"], kind
+
+    def test_protected_override_enumerated_for_new_kinds(self):
+        for kind in harness.PROTECTED_OVERRIDE_KINDS:
+            assert harness.list_overrides(FIXTURE_PROTECTED_CS, kind=kind) == [
+                "RoomType", "GenerateMonsters"], kind
+
+    def test_declaration_order_is_preserved_across_visibilities(self):
+        cs = """\
+public sealed class Fixture : EncounterModel
+{
+    protected override IReadOnlyList<(MonsterModel, string?)> GenerateMonsters()
+    {
+        return null;
+    }
+
+    public override RoomType RoomType => RoomType.Monster;
+}
+"""
+        assert harness.list_overrides(cs, kind="encounter") == [
+            "GenerateMonsters", "RoomType"]
+
+    def test_regresses_the_generate_monsters_gap(self):
+        """The motivating bug, reproduced exactly: a `protected override`
+        member whose return type is a parenthesised tuple with a nullable
+        annotation INSIDE it -- FlyconidNormal.cs's real shape. Invisible
+        without a kind (the old, unwidened behavior); enumerated with one."""
+        cs = (
+            "public sealed class FixtureFlyconid : EncounterModel\n"
+            "{\n"
+            "    protected override IReadOnlyList<(MonsterModel, string?)> "
+            "GenerateMonsters()\n"
+            "    {\n"
+            "        return null;\n"
+            "    }\n"
+            "}\n"
+        )
+        assert harness.list_overrides(cs) == []
+        assert harness.list_overrides(cs, kind="encounter") == ["GenerateMonsters"]
+
+    def test_skeleton_enumerates_protected_override_for_new_kinds(
+            self, tmp_path, monkeypatch):
+        d = tmp_path / "src/Core/Models/Encounters"
+        d.mkdir(parents=True)
+        (d / "FixtureEncounter.cs").write_text(
+            FIXTURE_PROTECTED_CS, encoding="utf-8")
+        monkeypatch.setattr(harness, "roster", lambda kind, game_root=None: [{
+            "unit": "encounter/fixture_encounter",
+            "sim_path": "sts2_rl/monsters/base.py",
+            "game_path": "src/Core/Models/Encounters/FixtureEncounter.cs",
+            "game_exists": True,
+        }])
+        out = harness.skeleton("encounter/fixture_encounter", game_root=tmp_path,
+                               audits_dir=tmp_path / "records")
+        rec = json.loads(out.read_text(encoding="utf-8"))
+        assert list(rec["hooks"]) == ["RoomType", "GenerateMonsters"]
+
+    def test_all_88_encounter_cs_files_yield_generate_monsters(self):
+        """The literal claim the whole fix rests on. Not a fixture -- reads
+        every real game .cs file directly, same population `unported()`
+        globs (non-recursive, so the Mocks/ subdirectory is correctly out of
+        scope)."""
+        root = harness.DEFAULT_GAME_ROOT
+        model_dir = root / harness.GAME_MODEL_DIRS["encounter"]
+        files = sorted(model_dir.glob("*.cs"))
+        assert len(files) == 88
+        missing = []
+        for f in files:
+            text = f.read_text(encoding="utf-8-sig", errors="replace")
+            if "GenerateMonsters" not in harness._declared_overrides(
+                    text, kind="encounter"):
+                missing.append(f.name)
+        assert missing == []
+
+
 class TestHashing:
     def test_sha256_normalizes_line_endings(self, tmp_path):
         a = tmp_path / "a.cs"
@@ -256,9 +368,12 @@ class TestInterfaceContract:
     def test_game_model_dirs_keys(self):
         # `potion` joined 2026-07-26, replacing the shared contract's blanket
         # "potions are out of scope" clause with an ordinary unaudited kind.
+        # `encounter`/`affliction`/`character` joined 2026-08-03 as the first
+        # three "systems tier" kinds (wiring only, no records filled in yet --
+        # prompts/2026-08-03-audit-the-systems-tier.md task 1).
         assert set(harness.GAME_MODEL_DIRS) == {
             "relic", "power", "card", "monster", "event", "enchantment",
-            "potion",
+            "potion", "encounter", "affliction", "character",
         }
 
     def test_verdicts_order(self):

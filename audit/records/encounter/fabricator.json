@@ -1,0 +1,100 @@
+{
+  "unit": "encounter/fabricator",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\FabricatorNormal.cs",
+    "sha256": "fa62a116ba3cc8338da0e81b67a72b8016bffb73af57c6f907cd517d68a0ba7a"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\glory\\fabricator.py",
+    "sha256": "b3df21ebed6055dabca3cef5e5a0d1efc96279b98aae518d80ad669b6fbfeb3e"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "rooms.py:191 `normal_keys=(..., \"fabricator\", ...)` (glory ActRooms)",
+      "verdict": "deliberate-divergence",
+      "rationale": "FabricatorNormal.cs:15 `RoomType => RoomType.Monster`. Modeled structurally by pool membership. One shared mechanism across this batch; see `encounter/_room_type_and_weak` in the report."
+    },
+    "HasScene": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Presentation only -- gates a bespoke combat `.tscn` (FabricatorNormal.cs:17). No scene loading in the headless sim."
+    },
+    "Slots": {
+      "maps_to": "FABRICATOR_NORMAL.slots (fabricator.py:236-237)",
+      "verdict": "faithful",
+      "rationale": "FabricatorNormal.cs:19 `Slots => [\"bot1\",\"bot2\",\"fabricator\",\"bot3\",\"bot4\"]`; `FABRICATOR_NORMAL = Encounter(..., slots=(\"bot1\",\"bot2\",\"fabricator\",\"bot3\",\"bot4\"), monster_slots=(\"fabricator\",))` (fabricator.py:232-240) is element-for-element identical, including the Fabricator seated in the MIDDLE entry rather than first. This is the fix already shipped and audited under `audit/records/monster/fabricator.json`'s guard \"Encounter.GetNextSlot placement... has no sim analogue\" (closed 2026-07-29, round 7) -- matched here per rule 3, not re-derived: that closure ported exactly this `Slots`/`monster_slots`/`get_next_slot` machinery, and this record's own reading of `Encounter.slots`/`monster_slots` (monsters/base.py:352-397) confirms it is still in place and unchanged since."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "no sim counterpart",
+      "verdict": "gap",
+      "live": false,
+      "issue": "FabricatorNormal.cs:21-44 returns the Fabricator plus every bot in `Fabricator.defenseSpawns`/`aggroSpawns` (5 monster models total: Fabricator, Guardbot, Noisebot, Zapbot, Stabbot) as the declared superset of everything this encounter could ever field, including creatures that only ever appear via a MID-COMBAT spawn (never via `GenerateMonsters`). Shared finding, filed once under `encounter/_all_possible_monsters` (see `encounter/aeonglass` for the full enumeration of the three game-side debug/UI consumers; dormant, no sim counterpart to any of them). Distinct from `encounter/construct_menagerie`'s instance of the same shared gap in that this unit's superset genuinely differs in KIND, not just count, from its `GenerateMonsters` roster -- still costs nothing observable, for the same reason (no dev console, no stats screen, no bestiary in the headless sim)."
+    },
+    "GenerateMonsters": {
+      "maps_to": "monsters/base.py:408-416 Encounter.create_monsters + FABRICATOR_NORMAL (fabricator.py:232-240)",
+      "verdict": "faithful",
+      "rationale": "ROSTER: FabricatorNormal.cs:46-49 returns exactly one `(Fabricator, \"fabricator\")` pair -- the bots in `AllPossibleMonsters` are NOT part of the initial roster, they are summoned later by the Fabricator's own move (`monster/fabricator.json`'s subject, not this record's); `FABRICATOR_NORMAL = Encounter(..., monster_classes=[Fabricator], ...)` (fabricator.py:232-240) -- one monster, same class. ORDER: trivially matches (single element). SLOT: `\"fabricator\"` on both sides -- see the Slots hook above. DRAW COUNT: zero on both sides -- `FabricatorNormal.GenerateMonsters` never touches `base.Rng` (the Fabricator's bot-spawning RNG draws are its own MOVE, on the MonsterAi stream, already audited faithful in `monster/fabricator.json`'s guard on `Fabricator._spawn_bot`), and the sim's fixed-composition path draws nothing here (monsters/base.py:408-411)."
+    },
+    "GetCameraScaling": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Presentation only. FabricatorNormal.cs:51-54 returns 0.85f. No camera in the headless sim."
+    },
+    "GetCameraOffset": {
+      "maps_to": "no sim counterpart",
+      "verdict": "waiver",
+      "rationale": "Presentation only. FabricatorNormal.cs:56-59 returns Vector2.Down*60f. No camera in the headless sim."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "no sim counterpart (by absence)",
+      "verdict": "faithful",
+      "rationale": "`EncounterModel.ShouldReceiveCombatHooks => false` (EncounterModel.cs:39), not overridden. The sim's `Encounter` dataclass is never registered with `HookSystem` -- never a hook listener on either side."
+    }
+  },
+  "guards": [
+    {
+      "what": "Draw count / stream independence of the per-encounter Rng",
+      "verdict": "faithful",
+      "rationale": "Zero draws in GenerateMonsters (see above). The Fabricator's own in-combat bot-spawning draws are a MONSTER-tier (MonsterAi stream) concern, already audited in `monster/fabricator.json`, not re-derived here."
+    },
+    {
+      "what": "The Niche HP-roll (Fabricator has min_hp==max_hp==150, degenerate range, single initial enemy)",
+      "verdict": "faithful",
+      "rationale": "Same shape as `encounter/aeonglass`'s check: one draw on both sides for the initial Fabricator (`hashSet={150}` -> `NextItem`; sim `candidates=[150]` -> `next_int_range(0,1)`, combat.py:402-422). Each bot the Fabricator later summons rolls its OWN Niche HP via `CombatState.assign_parity_hp` (combat.py:438-446, the mid-combat-spawn path), already checked faithful in `monster/fabricator.json`'s and `power/stock.json`'s guards on the identical mechanism -- not re-derived here."
+    },
+    {
+      "what": "Reachability",
+      "verdict": "faithful",
+      "rationale": "rooms.py:191 lists `fabricator` in Glory's `normal_keys`, and `FABRICATOR_NORMAL` is registered in `sts2_rl/monsters/glory/__init__.py`'s `ENCOUNTERS` dict (line 64)."
+    }
+  ],
+  "verdict": "gap",
+  "audited": "2026-08-03",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Models\\EncounterModel.cs",
+      "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Entities\\Creatures\\Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\monsters\\base.py",
+      "sha256": "424336cf4fb7be8026278b7a34af428082d8487fb57f25c3565311fe5c993388",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\combat.py",
+      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\rooms.py",
+      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "side": "sim"
+    }
+  ]
+}

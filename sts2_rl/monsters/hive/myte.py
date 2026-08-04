@@ -82,4 +82,11 @@ class MytesEncounter(Encounter):
         return [Myte(hooks, rng, slot="first"), Myte(hooks, rng, slot="second")]
 
 
-MYTES_NORMAL = MytesEncounter(id="mytes_normal")
+MYTES_NORMAL = MytesEncounter(
+    id="mytes_normal",
+    # MytesNormal.cs:14,32-39 — the row the two Mytes are seated in. The
+    # sim also passes `slot=` to the Myte constructor, which drives its
+    # opening-move choice; this is the `Creature.SlotName` the game reads.
+    slots=("first", "second"),
+    monster_slots=("first", "second"),
+)

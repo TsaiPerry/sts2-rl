@@ -43,6 +43,10 @@ class _PunchOffEncounter(Encounter):
 PUNCH_OFF_EVENT_ENCOUNTER = _PunchOffEncounter(
     id="punch_off_event",
     monster_classes=[PunchConstruct, PunchConstruct],
+    # C# class PunchOffEventEncounter — the sim id drops the suffix. This one
+    # is not cosmetic: `PunchConstruct.adjust_hp_after_added` spends a real
+    # StartingHpReduction roll off the stream this key seeds.
+    entry_slug="PUNCH_OFF_EVENT_ENCOUNTER",
 )
 
 

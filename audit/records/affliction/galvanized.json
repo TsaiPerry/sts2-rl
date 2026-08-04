@@ -1,0 +1,49 @@
+{
+  "unit": "affliction/galvanized",
+  "game_source": {
+    "path": "src\\Core\\Models\\Afflictions\\Galvanized.cs",
+    "sha256": "1f2a2d352c0f4296afb40f141e7bdb8962ec7e8c35e26b1e72d81b3191717c94"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\afflictions.py",
+    "sha256": "0bf0219fa3a2c37393c5091497f87360b5e530297f6fd117d2fee78918f3cf81"
+  },
+  "extra_sources": [
+    {
+      "path": "src/Core/Models/AfflictionModel.cs",
+      "sha256": "8aee0ce0b30603c24b325ed4c02aa67e1c2182817b163a0e85a03a195df03e41",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Powers/GalvanicPower.cs",
+      "sha256": "a5ab939011e8a3d9e9c54da251db9fb3a066a762a063df6d868267396b10c11e",
+      "side": "game"
+    }
+  ],
+  "hooks": {
+    "IsStackable": {
+      "maps_to": "GalvanizedAffliction.is_stackable = True (afflictions.py)",
+      "verdict": "faithful",
+      "rationale": "Galvanized.cs:7 `IsStackable => true`. The sim's field matches exactly. Per the sim's own docstring this is currently DORMANT on ported content: GalvanicPower never re-applies through `CardCmd.afflict`'s stacking branch — its own AfterCardEnteredCombat/BeforeCombatStart both gate on `card.affliction is None` first, so no card is ever afflicted twice — it instead syncs the amount directly via a separate write, matching GalvanicPower.cs's own `AfterPowerAmountChanged`-style resync in its sibling VitalSparkPower shape. Ported for fidelity regardless of today's reachability, matching PROMPT.md's own guidance not to skip a field just because it is inert today."
+    },
+    "HasExtraCardText": {
+      "maps_to": "(nothing)",
+      "verdict": "waiver",
+      "rationale": "Galvanized.cs:9 `HasExtraCardText => true` only unlocks the UI `DynamicExtraCardText` LocString (AfflictionModel.cs:44-54) — no sim reader exists or is needed. Same disposition as affliction/bound's HasExtraCardText and enchantment/adroit's precedent."
+    }
+  },
+  "guards": [
+    {
+      "what": "trigger + power reference (context, not re-derived)",
+      "maps_to": "GalvanicPower.BeforeCombatStart (GalvanicPower.cs:34-41) afflicts every Power card in the player's hand/piles at combat start; AfterCardEnteredCombat (:44-49) afflicts a newly-entering unafflicted Power card; AfterCardPlayed (:52-56) deals `base.Amount` damage to the card owner (`ValueProp.Unpowered | ValueProp.Move`) whenever a Galvanized card resolves. GalvanicPower carries no AfterRemoved/AfterSideTurnEnd override at all, so Galvanized afflictions are NOT swept on any timer — they persist on their cards for as long as the card itself exists (see the decay guard below). Mirrored by `power/galvanic` (powers.py), already audited: rollup `gap` — an added `affliction is None` guard at the BeforeCombatStart site (C# has none there, recurring shape 8) and a dropped `ValueProp.Move` flag on the AfterCardPlayed damage — both DORMANT there. Not re-derived here. Applier confirmed ported: `sts2_rl/monsters/glory/globe_head.py`.",
+      "verdict": "faithful"
+    },
+    {
+      "what": "duration / decay + player-vs-creature scope",
+      "maps_to": "Unlike Bound/Entangled/Ringing/Smog, Galvanized has NO turn-boundary sweep at all in either engine — a Galvanized Power card keeps the marker until it is played (which is the affliction's whole point: paying the damage on play) or until some other affliction-clearing event removes it. It is card-scoped to the player's own Power cards (no monster deck exists). No AfterDeath path applies: GalvanicPower is carried by the player, granted by an enemy (Globe Head), with no applier-death removal case.",
+      "verdict": "faithful"
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-08-03"
+}

@@ -1,0 +1,47 @@
+{
+  "unit": "encounter/the_lost_and_forgotten",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\TheLostAndForgottenNormal.cs",
+    "sha256": "7aef08948cdba811e42407947615cae984bb6c5d9ca11ca3e463f277c6f778cc"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\glory\\the_lost_and_forgotten.py",
+    "sha256": "3a48359cec493d954570f09d23a5943f5065c942f6d064397dc6ce97b1c678f1"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "sts2_rl/rooms.py _glory_rooms().normal_keys includes 'the_lost_and_forgotten'",
+      "verdict": "faithful",
+      "rationale": "TheLostAndForgottenNormal declares RoomType.Monster; the bucket-membership counterpart agrees."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "THE_LOST_AND_FORGOTTEN_NORMAL.monster_classes = [TheLost, TheForgotten]",
+      "verdict": "faithful",
+      "rationale": "C# declares the 2-element array [TheLost, TheForgotten] (Queen-style array literal, ModelDb.Monster<TheLost>() first). The sim's monster_classes carries the same two classes. AllPossibleMonsters is an unordered superset used for previews/asset-preload, not a placement list, so the two sides agreeing as a SET (order immaterial here) is the right bar; both are also the fixed, always-spawning roster so there is no possible divergence."
+    },
+    "GenerateMonsters": {
+      "maps_to": "Encounter.create_monsters (sts2_rl/monsters/base.py) via THE_LOST_AND_FORGOTTEN_NORMAL(monster_classes=[TheLost, TheForgotten])",
+      "verdict": "faithful",
+      "rationale": "C#'s GenerateMonsters returns (TheLost, null) then (TheForgotten, null), in that order -- exactly TheLostAndForgottenNormal's own AllPossibleMonsters order. Sim's monster_classes = [TheLost, TheForgotten], same order, and create_monsters constructs `[cls(hooks, rng) for cls in monster_classes]`, preserving it into combat.enemies. Neither tuple carries a slot name (both null / monster_slots left at its default empty tuple, so slot_name stays None on both created creatures). Zero RNG draws in GenerateMonsters on either side -- neither TheLost nor TheForgotten's constructor consumes the per-encounter Rng (their own Possess-Strength/-Speed powers and move machines are monster-tier, not encounter-tier, concerns). Roster, order, slot and draw-count all match."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "the Encounter dataclass (sts2_rl/monsters/base.py) is never registered as a hook listener; only Monster instances register themselves",
+      "verdict": "faithful",
+      "rationale": "Same structural fact as every unit in this batch."
+    }
+  },
+  "guards": [
+    {
+      "what": "MinGoldReward/MaxGoldReward -- not overridden, inherits the Monster ladder (10-20) x Poverty multiplier",
+      "verdict": "faithful",
+      "rationale": "sts2_rl/rewards.py GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20) and THE_LOST_AND_FORGOTTEN_NORMAL sets neither min_gold nor max_gold -- matches. Poverty/ascension scaling out of scope per PROMPT.md, and not modelled by rewards.py."
+    },
+    {
+      "what": "ShouldGiveRewards / IsWeak -- neither overridden, both default (true / false)",
+      "verdict": "faithful",
+      "rationale": "Encounter.should_give_rewards defaults True and is unset here; the_lost_and_forgotten appears only in normal_keys, matching IsWeak's inherited false."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-08-03"
+}

@@ -256,3 +256,97 @@ def test_thieving_hopper_steal_pick_comes_from_the_card_gen_stream():
     assert expected not in player.draw_pile
     assert expected not in player.discard_pile
     assert hopper.powers["swipe"].stolen_card is expected
+
+
+# ── encounter/_selection_rng_fallback ────────────────────────────────────────
+# `EncounterModel.Rng`'s independence (EncounterModel.cs:42-49) held only on
+# the string-seeded (conformance) path: `RunState.create_combat` built the
+# per-encounter stream only `if self.rng_set is not None`, and the RL
+# training/eval construction (`run_env.py`'s `RunState(rng=..., character=...)`)
+# never passes a string seed — so all seven `create_monsters` overrides with a
+# `selection_rng=None` arm drew their composition off the SAME `random.Random`
+# every other unseeded draw in the fight uses.
+
+_FALLBACK_UNITS = [
+    ("sts2_rl.monsters.overgrowth.flyconid", "FLYCONID_NORMAL"),
+    ("sts2_rl.events.punch_off", "PUNCH_OFF_EVENT_ENCOUNTER"),
+    ("sts2_rl.monsters.overgrowth.ruby_raiders", "RUBY_RAIDERS_NORMAL"),
+    ("sts2_rl.monsters.overgrowth.slimes", "SLIMES_NORMAL"),
+    ("sts2_rl.monsters.overgrowth.slimes", "SLIMES_WEAK"),
+    ("sts2_rl.monsters.overgrowth.slithering_strangler",
+     "SLITHERING_STRANGLER_NORMAL"),
+    ("sts2_rl.monsters.underdocks.two_tailed_rat", "TWO_TAILED_RATS_NORMAL"),
+]
+
+
+def _unit(module: str, name: str):
+    import importlib
+
+    return getattr(importlib.import_module(module), name)
+
+
+def _signature(monsters) -> list[tuple]:
+    """What the composition draw actually decides: which monsters, and the
+    per-monster value the draw feeds (the rats' staggered starter move, the
+    Punch Constructs' HP reduction)."""
+    return [
+        (type(m).__name__,
+         getattr(m, "_starter_move_idx", None),
+         getattr(m, "starting_hp_reduction", None))
+        for m in monsters
+    ]
+
+
+@pytest.mark.parametrize("module,name", _FALLBACK_UNITS)
+def test_the_composition_does_not_move_with_the_shared_stream(module, name):
+    """The point of the isolation: advancing the shared `random.Random` must
+    not change what the encounter generates. It did, for all seven."""
+    encounter = _unit(module, name)
+
+    def compose(shared_draws: int) -> list[tuple]:
+        from sts2_rl.run import RunState
+
+        rng = random.Random(4)
+        run = RunState(rng=rng)
+        for _ in range(shared_draws):
+            rng.random()
+        run.total_floor = 6
+        return _signature(run.create_combat(encounter).enemies)
+
+    baseline = compose(0)
+    for extra in (1, 2, 3, 7):
+        assert compose(extra) == baseline, f"{name} composed off the shared rng"
+
+
+@pytest.mark.parametrize("module,name", _FALLBACK_UNITS)
+def test_the_seedless_composition_uses_the_games_formula(module, name):
+    """Same formula as the parity path — `make_encounter_rng(run seed, floor,
+    Id.Entry)` — with the run seed the seedless path derives at construction
+    instead of one hashed from a string seed."""
+    from sts2_rl.run import RunState
+
+    encounter = _unit(module, name)
+    run = RunState(rng=random.Random(11))
+    run.total_floor = 9
+    got = _signature(run.create_combat(encounter).enemies)
+
+    expected = _signature(CombatState(
+        rng=random.Random(0), encounter=encounter,
+        encounter_selection_rng=make_encounter_rng(
+            run._legacy_encounter_seed, 9, encounter.entry),
+    ).enemies)
+    assert got == expected
+
+
+def test_deriving_the_seedless_run_seed_consumes_no_draw():
+    """It is read off `getstate()`, so every other legacy stream keeps the
+    exact draw sequence it had before this fix."""
+    from sts2_rl.run import derive_encounter_seed
+
+    probe = random.Random(3)
+    before = probe.getstate()
+    seed = derive_encounter_seed(probe)
+    assert probe.getstate() == before
+    assert derive_encounter_seed(probe) == seed  # a pure function of the state
+    probe.random()
+    assert derive_encounter_seed(probe) != seed  # ...and it tracks the state

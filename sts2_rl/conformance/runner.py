@@ -225,11 +225,16 @@ class _ForceWinDriver(RunDriver):
 
     # ── replay recorded combat, else force-win to keep floors advancing ──
     def _run_combat(self, encounter, room_type):
-        from ..combat_card_db import CombatCardDb
         from ..rewards import GOLD_REWARD_RANGES
 
         run = self.run
-        combat = run.create_combat(encounter, room_type=room_type)
+        # `track_card_ids` starts the combat's own `NetCombatCardDb` at the
+        # game's `SetUpCombat` instant, so turn-1 generated cards are id'd as
+        # they are ADDED. It has to be asked for before we know whether this
+        # fight is annotated (the cursor peek below), because by the time we
+        # do, turn 1 has already run.
+        combat = run.create_combat(encounter, room_type=room_type,
+                                   track_card_ids=True)
         self._combat = combat
         try:
             # If the recording's next command is a combat command, this fight
@@ -238,9 +243,7 @@ class _ForceWinDriver(RunDriver):
             # un-annotated / unported and we fall back to the force-win stub.
             nxt = self._cursor.peek()
             if nxt is not None and nxt.name in _COMBAT_CMDS:
-                db = CombatCardDb()
-                db.start(combat)
-                driver = ReplayCombatDriver(combat, self._cursor, db)
+                driver = ReplayCombatDriver(combat, self._cursor, combat.card_db)
                 self.combat_divergences.extend(driver.play())
                 self.unresolved_play_card_ids.extend(driver.unresolved_play_card_ids)
                 # If the replay stopped mid-fight (un-ported effect / unresolved
@@ -261,8 +264,15 @@ class _ForceWinDriver(RunDriver):
         run.finish_combat(combat, room_type=room_type)
         won = bool(combat.result and combat.result.player_won)
         if won and room_type in GOLD_REWARD_RANGES and encounter.should_give_rewards:
-            self._offer_rewards(
-                run.generate_combat_rewards(room_type, encounter=encounter))
+            self._offer_rewards(run.generate_combat_rewards(
+                room_type, encounter=encounter,
+                # `CombatRoom.OnCombatEnded` (CombatRoom.cs:233-236) reads the
+                # encounter's gold proportion off the finished combat, and
+                # `RewardsSet` scales the MONSTER gold range by it. The sim
+                # always passed the 1.0 default, so an encounter that lets an
+                # enemy escape still paid full gold.
+                gold_proportion=encounter.calculate_gold_proportion(combat),
+            ))
         return combat
 
     # ── the decision seam for everything resolved inside a room ──────────
@@ -786,6 +796,27 @@ class ReplayRunner:
                 new_potions[slot] = make_pool_potion(sim_id)
         run.potions[:] = new_potions
 
+    def _recorded_unlock_state(self):
+        """The recording's own `UnlockState`, for
+        `ActModel.ApplyDiscoveryOrderModifications`.
+
+        The pass overrides an act's rolled boss with the first entry of
+        `BossDiscoveryOrder` the PROFILE has not seen (RunManager.cs:678-684),
+        and its gate is true for every ordinary Standard run — so replaying a
+        recording on the wrong profile can fight the wrong boss. The save
+        carries the real one under `players[0].unlock_state`; sim encounter
+        keys are matched to the recorded `ENCOUNTER.*` ids through the same
+        map the pool oracle uses.
+        """
+        from ..rooms import UnlockState
+        from .ids import ENCOUNTER_GAME_IDS
+
+        seen = set(self.oracle.encounters_seen)
+        keys = frozenset(k for k, gid in ENCOUNTER_GAME_IDS.items()
+                         if gid in seen)
+        return UnlockState(encounters_seen=keys,
+                           number_of_runs=self.oracle.number_of_runs)
+
     def run(self, stop_after_act: int = 0,
             player_checkpoints: "dict[int, tuple[int, int]] | None" = None,
             resync_player: bool = False,
@@ -797,7 +828,8 @@ class ReplayRunner:
 
         rec = self.recording
         acts = [short_act_name(a) for a in rec.acts]
-        run = RunState(string_seed=rec.seed)
+        run = RunState(string_seed=rec.seed,
+                       unlock_state=self._recorded_unlock_state())
         # Determinism, not parity: the legacy shared rng (SP4 debt) is seeded
         # so repeated triage runs are bit-identical and a post-fix delta is
         # attributable to the fix ([[conformance-replay-determinism]] is now

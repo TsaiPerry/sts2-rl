@@ -5,12 +5,14 @@ writes engine code; it only parses ``audit/records/<kind>/*.json`` plus the xfai
 pins in ``test/test_hook_order.py`` so the queue's counts are reproducible
 instead of transcribed.
 
-Eight kinds are read: the 6 engine-seam records and the seven content tiers,
-all of which have now landed -- ``power``, ``card``, ``event``,
-``enchantment``, ``relic``, ``monster`` (2026-07-27) and ``potion``
-(2026-07-27).  ``UNAUDITED_KINDS`` is empty for the first time; the machinery
-is kept because it is what stopped the queue implying coverage it did not have,
-and the next kind added to ``harness.GAME_MODEL_DIRS`` needs it again.
+Eleven kinds are read: the 6 engine-seam records and ten content tiers --
+``power``, ``card``, ``event``, ``enchantment``, ``relic``, ``monster``
+(2026-07-27), ``potion`` (2026-07-27), and ``encounter``/``affliction``/
+``character`` (2026-08-03, wiring only -- skeletons on disk, zero filled
+verdicts, so they contribute records but no gap entries yet). ``UNAUDITED_KINDS``
+has been empty since 2026-07-27; the machinery is kept because it is what
+stopped the queue implying coverage it did not have, and the next kind added
+to ``harness.GAME_MODEL_DIRS`` with no records at all would need it again.
 
 **The kind list here is not derived from the harness, so it can silently omit a
 kind.**  It did: ``potion`` became a roster kind on 2026-07-26 and 51 completed
@@ -94,21 +96,66 @@ SEAMS = [
     "turn_structure",
     "hook_dispatch",
     "monster_state_machine",
+    # Joined 2026-08-03, each on filing its first `verdict: "gap"` entry
+    # during the systems-tier campaign -- which is exactly the rule the note
+    # below states. `rooms_and_map` is deliberately still absent: it has a
+    # record, but no gap entry to extract yet. Add it when it files one, and
+    # not before.
+    "rng_streams",
+    "rewards",
+    "relic_pools",
+    "potion_pipeline",
+    # `run_layer` joined AFTER the others, same day: it filed its first two
+    # gap entries (guards G6/G7) while this campaign's fold was already in
+    # progress on a different worktree/agent -- caught by
+    # TestQueueGeneratorCoversEverySeamWithGaps, exactly the test this
+    # comment says should catch it.
+    "run_layer",
 ]
+# Deliberately NOT `harness.SEAMS` (12, after the 2026-08-03 systems-tier
+# wiring added rng_streams/rewards/relic_pools/run_layer/rooms_and_map/
+# potion_pipeline). This list is "seams with real gap-entry text to extract
+# and pin-match against test_hook_order.py's xfail reasons" (see extract()
+# and the xfail-locator below) -- the six new seams ship with an empty
+# `steps: []` scaffold on purpose (no verdicts yet, see each one's
+# audit/seams/<name>.md), so they have nothing to extract. Growing this list
+# to match harness.SEAMS the moment a seam is WIRED, rather than the moment
+# it has its first gap entry, would also widen the substring match at the
+# xfail-locator below for zero benefit today -- some of the new names
+# ("rewards") are common enough English words to false-positive against an
+# unrelated xfail reason. Add a seam here when its record gets its first
+# `verdict: "gap"` entry, not when its record is created.
 
 # Kinds with records on this branch, in queue order.  ``relic`` joined
 # 2026-07-26; ``monster`` and ``potion`` joined 2026-07-27, which completes the
 # seven content kinds ``harness.GAME_MODEL_DIRS`` defines.
+#
+# ``encounter``/``affliction``/``character`` joined 2026-08-03 as pure WIRING
+# (prompts/2026-08-03-audit-the-systems-tier.md, task 1 of the systems-tier
+# campaign): every unit has a skeleton on disk (empty hooks/guards, verdict
+# "") but zero filled verdicts. They still belong in ``CONTENT_KINDS`` and NOT
+# ``UNAUDITED_KINDS`` -- ``UNAUDITED_KINDS`` means "the harness defines this
+# kind and there are NO records for it at all" (see its own comment and
+# ``test_audit_status.py::TestQueueGeneratorCoversEveryKind::
+# test_a_kind_with_records_is_not_listed_unaudited``, which pins exactly this:
+# a kind with records on disk must not be reported NOT AUDITED). A skeleton
+# IS a record, just one with nothing to extract yet -- ``extract()`` walks
+# every hook/guard looking for ``verdict == "gap"`` and finds none, so these
+# three kinds contribute zero gap entries and zero mechanisms until a verdict
+# campaign fills them in, exactly like `potion` did for one day in 2026-07-26.
 CONTENT_KINDS = ["power", "card", "event", "enchantment", "relic", "monster",
-                 "potion"]
+                 "potion", "encounter", "affliction", "character"]
 KINDS = ["seam"] + CONTENT_KINDS
 # Kinds the pipeline defines but has NOT audited -- reported by ``counts`` so a
 # reader of the queue cannot mistake it for complete coverage.  The unit counts
 # are ``py audit/tools/harness.py roster <kind>``'s "N sim units" line.
-# EMPTY since 2026-07-27, for the first time.  Kept rather than deleted: it is
-# the mechanism that kept the queue honest while six kinds were outstanding, and
-# an eighth kind would need it again.  ``counts`` prints the NOT AUDITED line
-# only when this is non-empty -- an unguarded print emitted a dangling label.
+# EMPTY since 2026-07-27 (and still empty after the 2026-08-03 systems-tier
+# wiring -- see the comment on ``CONTENT_KINDS`` for why those three kinds
+# landed there instead). Kept rather than deleted: it is the mechanism that
+# kept the queue honest while six kinds were outstanding, and the next kind
+# added to the harness with NO records at all would need it again.  ``counts``
+# prints the NOT AUDITED line only when this is non-empty -- an unguarded
+# print emitted a dangling label.
 UNAUDITED_KINDS: list[str] = []
 _UNAUDITED_UNITS: dict[str, int] = {}
 
@@ -570,6 +617,116 @@ _FAMILIES = [
     #  rule above resolves the identical text the same way.
     ("potion", None, None, r"CanReceivePowers|G\(AoE-power\)",
      "power/_should_allow_hitting"),
+
+    # --- encounter tier (joined 2026-08-03, systems-tier campaign) ----------
+    # The encounter tier tags nothing, so without this block its 45 gap
+    # entries anchor 45 distinct mechanisms -- every batch proposed its merges
+    # in the record TEXT instead, exactly the shape the relic and potion
+    # blocks above already handle.  Each pattern's membership was checked
+    # against the quoted sentence before being added.
+
+    # 9 sites.  Every one of the nine records in this batch carries the same
+    #  sentence, sourced from `encounter/aeonglass`: "Shared finding across all
+    #  nine units in this batch, filed once under `encounter/_all_possible_monsters`"
+    #  -- the other eight (axebots, construct_menagerie, devoted_sculptor,
+    #  fabricator, frog_knight, globe_head, knights, mecha_knight) cite
+    #  aeonglass "for the full enumeration" rather than restate it. One
+    #  mechanism: the sim has no `AllPossibleMonsters` analogue at all, and its
+    #  three game-side consumers (two dev-console commands, one stats-screen
+    #  ratio) are debug/UI only -- true regardless of whether a given unit's
+    #  own list is one class or, like fabricator's, a five-monster superset
+    #  that differs from `GenerateMonsters` in KIND and not just count.
+    ("encounter", r"^AllPossibleMonsters", None, None, "encounter/_all_possible_monsters"),
+    # 6 sites.  MUST precede the `_selection_rng_fallback` rows below:
+    #  punch_off_event's `GenerateMonsters` hook and its own `g1` guard contain
+    #  BOTH "`_entry_slug_mismatch`" and "`encounter_selection_rng`" (they cite
+    #  the same `RunState.create_combat` call site that seeds the wrong key),
+    #  and the narrower, unambiguous tag must win. battleworn_dummy_event/g1,
+    #  dense_vegetation_event's and fake_merchant_event's and
+    #  mysterious_knight_event's own guards all open "encounter/_entry_slug_mismatch:
+    #  `Encounter.entry` ... does not match the game's real `Id.Entry`"; each
+    #  cross-references "battleworn_dummy_event/G1 and (LIVE) punch_off_event/G1"
+    #  by name. The mechanism: the sim `Encounter.entry` slug the record's own
+    #  docstring says recovers `ModelId.Entry` does not, for five separate
+    #  encounters, which feeds `make_encounter_rng` the wrong key -- dormant at
+    #  four of them (their `GenerateMonsters` draws nothing from the resulting
+    #  Rng) and LIVE at punch_off_event, whose `StartingHpReduction` roll does.
+    ("encounter", None, None, r"encounter/_entry_slug_mismatch",
+     "encounter/_entry_slug_mismatch"),
+    # 8 sites.  axebots/Slots and knights/g1 name each other under "Filed under
+    #  shared mechanism `encounter/_slot_order`"; kaiser_crab/Slots and
+    #  decimillipede/Slots do the same ("Filed under the same shared mechanism
+    #  id as decimillipede's Slots gap (`encounter/_slot_order`)"); queen's
+    #  Slots+GenerateMonsters and two_tailed_rats' Slots+GenerateMonsters each
+    #  carry it too ("Proposed shared mechanism id encounter/_slot_order").
+    #  Shared shape: the sim's `Encounter` dataclass CAN express a slots row
+    #  (Fabricator/Ovicopter use it, per `monster/fabricator.json`'s
+    #  already-closed guard on the identical sort) and these six encounters
+    #  never wire it -- a no-op where the roster order already matches the row
+    #  (kaiser_crab, decimillipede) and LIVE where it does not
+    #  (two_tailed_rats' CALL_FOR_BACKUP summon re-sort).
+    ("encounter", None, None, r"encounter/_slot_order", "encounter/_slot_order"),
+    # 4 sites.  dense_vegetation_event's Slots+GenerateMonsters and
+    #  fake_merchant_event's Slots+GenerateMonsters all carry
+    #  "encounter/_slots_not_ported"; fake_merchant_event's own text says
+    #  "(same mechanism as dense_vegetation_event's Slots/GenerateMonsters
+    #  entries)". Distinct from `_slot_order` above: here the slot row is not
+    #  merely un-sorted, it is not represented on the sim's `Encounter`
+    #  instance at all, and both units are dormant because nothing re-sorts or
+    #  re-seats either encounter's enemies after construction.
+    ("encounter", None, None, r"encounter/_slots_not_ported",
+     "encounter/_slots_not_ported"),
+    # 3 sites.  mytes/Slots and the_obscura's Slots+GenerateMonsters all carry
+    #  "encounter/_slot_name_not_set"; the_obscura's own text says "This is the
+    #  SAME family as encounter/mytes' Slots gap, but here it is LIVE". Distinct
+    #  from `_slot_order`: here the sim's OWN re-architecture (a constructor-time
+    #  slot flag) already reproduces the observable branch outcome the C#
+    #  `SlotName` read produces, so only the `.slot_name` attribute and
+    #  `Encounter.slots` row are missing -- dormant at mytes (nothing summons),
+    #  LIVE at the_obscura (`_illusion`'s mid-combat `CreatureCmd.add` needed
+    #  the primitive and did not use it).
+    ("encounter", None, None, r"encounter/_slot_name_not_set",
+     "encounter/_slot_name_not_set"),
+    # 2 sites.  phrog_parasite/Slots and the_kin/Slots each say "Filed under the
+    #  shared mechanism encounter/_slot_row_unpopulated (also
+    #  phrog_parasite/Slots" / "also the_kin/Slots)". Distinct from the other
+    #  three slot families: both units' `Encounter` never declares
+    #  `slots`/`monster_slots` at all (not merely un-sorted or un-tagged), and
+    #  both are dormant because no C# consumer of `SlotName` applies to either
+    #  unit's own monsters.
+    ("encounter", None, None, r"encounter/_slot_row_unpopulated",
+     "encounter/_slot_row_unpopulated"),
+    # 4 sites, TITLE leg only.  ruby_raiders/g1, slimes_normal/g1, slimes_weak/g1
+    #  and slithering_strangler/g1 share the identical guard title "Encounter
+    #  Rng independence outside parity (default/legacy) mode" and ruby_raiders'
+    #  own text is the one the other three's bodies point back to ("Same
+    #  mechanism as ruby_raiders' guard (full rationale there)"); ruby_raiders'
+    #  own body in turn says this is "Shared across every RNG-drawing
+    #  GenerateMonsters in this batch (slimes_normal, slimes_weak,
+    #  slithering_strangler carry the same guard) -- file once as one mechanism
+    #  per PROMPT.md's family guidance." Three of the four never repeat
+    #  "selection_rng" in their own body text (they defer to ruby_raiders'), so
+    #  this leg matches the TITLE both records share rather than the body.
+    ("encounter", r"^Encounter Rng independence outside parity", None, None,
+     "encounter/_selection_rng_fallback"),
+    # 3 further sites (BODY leg): flyconid/g2 proposes "unifying under
+    #  `encounter/_selection_rng_fallback`" and explicitly names
+    #  "ruby_raiders, scroll_of_biting, slimes ... two_tailed_rat" as sharing
+    #  "the identical gating shape"; punch_off_event's own second guard opens
+    #  "encounter/_selection_rng_fallback (matched under Rule 3 from a sibling
+    #  batch's `flyconid`/`two_tailed_rats` findings"; two_tailed_rats/g3 opens
+    #  "encounter/_selection_rng_fallback (G2, proposed shared mechanism id)".
+    #  One mechanism with the title-leg family above: `EncounterModel.Rng`'s
+    #  documented per-encounter independence is not honoured the moment
+    #  `RunState.rng_set` is `None` (every RL-training/eval env, per
+    #  `run_env.py`'s `RunState(rng=..., character=...)` construction, which
+    #  passes no `string_seed`) -- `create_monsters` then draws off the SAME
+    #  shared per-combat stream every other unseeded draw in the fight uses.
+    #  The parity/conformance path is unaffected (it sets `string_seed`, so
+    #  `rng_set` is not `None` and the real `make_encounter_rng` stream is
+    #  used) -- live for the RL/legacy path only, not for a replay.
+    ("encounter", None, None, r"encounter/_selection_rng_fallback|encounter_selection_rng",
+     "encounter/_selection_rng_fallback"),
 ]
 
 # Individual content entries whose family the regex table gets wrong, or which
@@ -602,6 +759,16 @@ _FAMILY_OVERRIDE = {
     # merge; its body also mentions step 26 in passing, which the step-26
     # family would otherwise claim.
     "monster/test_subject/g1": "power/_death_prevention_branch",
+    # fogmog's Slots AND GenerateMonsters entries each end "Mechanism id:
+    # encounter/fogmog/g1 (same as Slots above -- one fix, both hooks)" --
+    # a same-unit, same-record merge the `_FAMILIES` regex table has no leg
+    # for (there is no OTHER unit sharing this id to key a pattern on).
+    "encounter/fogmog/GenerateMonsters": "encounter/fogmog/Slots",
+    # nibbits_normal/GenerateMonsters: "Same mechanism and same dormancy
+    # reasoning as the Slots entry above (encounter/nibbits_normal/g1)" --
+    # nibbits_normal/Slots itself: "Mechanism id: encounter/nibbits_normal/g1."
+    # Same shape as fogmog above: a same-unit merge with no other member.
+    "encounter/nibbits_normal/GenerateMonsters": "encounter/nibbits_normal/Slots",
 }
 
 # Entries whose FIRST guard reference is not the finding the entry is about.
@@ -1149,8 +1316,17 @@ def cmd_counts():
             f"{k} ({_UNAUDITED_UNITS.get(k, '?')} sim units)"
             for k in UNAUDITED_KINDS))
     else:
-        print("  NOT AUDITED  : none -- all 7 content kinds and 6 seams have "
-              "records (first true 2026-07-27)")
+        # `rc["seam"]` (on-disk record count, dynamic) is used here rather
+        # than `len(SEAMS)` (a fixed 6): SEAMS deliberately stays the six
+        # seams with real gap-entry text to extract/pin-match (see its own
+        # comment) and does NOT grow when a new seam is wired with an empty
+        # `steps: []` scaffold (the 2026-08-03 systems-tier seams added 6
+        # more, all on disk with zero gap entries yet) -- but "has a record"
+        # and "has a gap entry worth extracting" are different claims, and
+        # this line makes the first one, same as the CONTENT_KINDS count
+        # beside it.
+        print(f"  NOT AUDITED  : none -- all {len(CONTENT_KINDS)} content kinds "
+              f"and {rc['seam']} seams have records (first true 2026-07-27)")
     print()
     print("per seam record (entries / mechanisms anchored there / live entries):")
     for seam in SEAMS:

@@ -1,0 +1,74 @@
+{
+  "unit": "encounter/phrog_parasite",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\PhrogParasiteElite.cs",
+    "sha256": "82dd5a6cec15778c9539a8c9402b308556c0b9bc05a47d9c2929b8e8677bb63b"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\phrog_parasite.py",
+    "sha256": "7ebe9be9efd967714cf1c145086821bb4302ab901471dda224fc1b5bdb7eba37"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms elite_keys (\"phrog_parasite\" is in elite_keys)",
+      "verdict": "faithful"
+    },
+    "Slots": {
+      "maps_to": "sts2_rl/monsters/base.py:Encounter.slots (default empty tuple) -- phrog_parasite.py's PHROG_PARASITE_ELITE = Encounter(id=\"phrog_parasite_elite\", monster_classes=[PhrogParasite]) passes no slots= or monster_slots= kwarg",
+      "verdict": "gap",
+      "live": false,
+      "issue": "PhrogParasiteElite.Slots = [\"phrog\", \"wriggler1\", \"wriggler2\", \"wriggler3\", \"wriggler4\"] (5 named rows). The sim's Encounter never declares slots/monster_slots for this unit, so `encounter.slots == ()` and every creature's `.slot_name` stays None -- both the initial PhrogParasite and, later, its 4 spawned Wrigglers (executed: `py audit/tools/encounter_probes_e2.py kin-phrog-slots` shows `encounter.slots=()` and `slot_name=None` on all 5 creatures after InfestedPower.on_death). This is filed under the shared mechanism encounter/_slot_row_unpopulated (also the_kin/Slots). DORMANT here specifically: the initial monster's slot has no reader I could find (grepped every C# `SlotName ==` site across src/ -- Exoskeleton, Myte, PhantasmalGardener, Wriggler; none check \"phrog\"); Wriggler's own move-key selection (which DOES branch on SlotName in C#) is separately and correctly reproduced via a `slot: int` constructor argument at the spawn site (InfestedPower.on_death in sts2_rl/powers.py passes slot=i+1, and Wriggler.__init__ uses `slot % 2` to pick NASTY_BITE vs WRIGGLE -- verified against C#'s wriggler1/3->NASTY_BITE, wriggler2/4->WRIGGLE pattern, byte-for-byte equivalent for the one-time initial-move check the C# state machine performs). So the observable first-move choice is right; only the introspectable slot_name string, the Encounter.slots row, and CombatState.sort_enemies_by_slot_name's ability to reorder this encounter's enemy list are unmodeled. The sim's Encounter dataclass CAN express a slot row (Fabricator/Ovicopter use it), so this is a per-unit omission, not a structural limitation."
+    },
+    "HasScene": {
+      "maps_to": "none -- headless sim has no scene/rendering layer",
+      "verdict": "deliberate-divergence",
+      "rationale": "PhrogParasiteElite.HasScene => true (a bespoke combat layout scene). The sim never renders anything, so this and every other presentation member on this unit (ExtraAssetPaths) are bucketed the same way."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "none -- the sim has no per-encounter monster-preview member",
+      "verdict": "deliberate-divergence",
+      "rationale": "Same zero-cost finding as overgrowth_crawlers/AllPossibleMonsters: full_env.py's global MONSTER_IDS vocabulary already covers Wriggler as a strict superset, and the C#'s other consumer (asset preload) has no sim counterpart at all."
+    },
+    "ExtraAssetPaths": {
+      "maps_to": "none -- headless sim has no asset-path/overlay-rendering layer",
+      "verdict": "deliberate-divergence",
+      "rationale": "PhrogParasiteElite.ExtraAssetPaths preloads the Infection card's overlay sprite. InfectionCard itself is ported (sts2_rl/cards); only the visual overlay asset is out of scope for a headless sim."
+    },
+    "GenerateMonsters": {
+      "maps_to": "sts2_rl/monsters/base.py:Encounter.create_monsters (no override) -> [PhrogParasite(hooks, rng)]",
+      "verdict": "faithful",
+      "note": "C# GenerateMonsters returns a single-element list [(PhrogParasite, \"phrog\")] -- note Wriggler is NOT part of the initial roster despite appearing in AllPossibleMonsters; it is summon-only (InfestedPower.AfterDeath). The sim's PHROG_PARASITE_ELITE likewise builds exactly one PhrogParasite and nothing else. Roster (1 monster, right class), order (trivial) and draw count (0) all match; the slot half of the tuple is verdicted separately under Slots above."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "structural: Encounter is never registered with HookSystem",
+      "verdict": "faithful"
+    },
+    "Tags": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms tags -- \"phrog_parasite\" is absent",
+      "verdict": "faithful",
+      "note": "No Tags override in C# (default empty); the sim's tags dict has no key for this id either."
+    },
+    "IsWeak": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms -- \"phrog_parasite\" is absent from weak_keys",
+      "verdict": "faithful"
+    },
+    "ShouldGiveRewards": {
+      "maps_to": "sts2_rl/monsters/base.py:Encounter.should_give_rewards (default True)",
+      "verdict": "faithful",
+      "note": "No override in C#; PHROG_PARASITE_ELITE does not pass should_give_rewards."
+    },
+    "MinGoldReward": {
+      "maps_to": "sts2_rl/rewards.py:GOLD_REWARD_RANGES[RoomType.ELITE] = (35, 45)",
+      "verdict": "faithful",
+      "note": "No override in C#; base ladder for RoomType.Elite is 35 (Poverty multiplier out of scope, not applied in roll_gold_reward)."
+    },
+    "MaxGoldReward": {
+      "maps_to": "sts2_rl/rewards.py:GOLD_REWARD_RANGES[RoomType.ELITE] = (35, 45)",
+      "verdict": "faithful",
+      "note": "No override in C#; base ladder for RoomType.Elite is 45."
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-08-03"
+}

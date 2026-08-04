@@ -1,0 +1,74 @@
+{
+  "unit": "encounter/exoskeletons_weak",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\ExoskeletonsWeak.cs",
+    "sha256": "bed0b356088f3123345aeea6edbba32bbd00aace7fa583e4cf21fbe8c81d2cf2"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\hive\\exoskeleton.py",
+    "sha256": "19c6925ade2440706e673fb8ce4c8fc54443f1141721de53dfd88c6c3b694770"
+  },
+  "extra_sources": [
+    { "path": "src/Core/Models/EncounterModel.cs", "sha256": "6eaa2f804db14af9d8c90b75ee0762c9b807fcf9d0cfb093b3f217501da89f90", "side": "game" },
+    { "path": "src/Core/Helpers/AscensionHelper.cs", "sha256": "9105f9af7392590a59a7818fed209dd8d3ee817f8995d9a5566786536b515f8a", "side": "game" },
+    { "path": "src/Core/Combat/CombatState.cs", "sha256": "6dc71f2ed75e40551749f77a45d4dd39fd2999904c8d84ef36419efc152fe759", "side": "game" },
+    { "path": "src/Core/Combat/CombatManager.cs", "sha256": "7ae1b7259e72befa07f4aceaa9ab0e23783fc55876bcde6090b9b2cfae65a43e", "side": "game" },
+    { "path": "src/Core/Models/ModelDb.cs", "sha256": "7144c6e265fc4484e40860f4ec7cb288c677a63256675222010f66ab628d6e4f", "side": "game" },
+    { "path": "src/Core/Models/ActModel.cs", "sha256": "55f3a43c7e055aff1e35985c0cd229f22a271698a82b0d0a24a3f01320dcab0b", "side": "game" },
+    { "path": "src/Core/DevConsole/ConsoleCommands/UnlockConsoleCmd.cs", "sha256": "331707da5e8fae33f84d309216dd063a8ec5df95dd338dd136e61d7ba627af35", "side": "game" },
+    { "path": "src/Core/Nodes/Screens/StatsScreen/NGeneralStatsGrid.cs", "sha256": "af26bdcaae7406d49bd923076a158f2574714fa93aa0f71a3da608cf6f856818", "side": "game" },
+    { "path": "src/Core/Models/Monsters/Exoskeleton.cs", "sha256": "e0f2e7828c3d0f22cbe176112dfd95ec7dc29f9617db9d37052561c49a007d1d", "side": "game" },
+    { "path": "sts2_rl/rewards.py", "sha256": "81fa5dbf02a28b7d147ddfc638e29dc62dfbb3b9d80c67870c9b50d9c1a4d5af", "side": "sim" }
+  ],
+  "hooks": {
+    "IsWeak": {
+      "maps_to": "rooms.py::_hive_rooms().weak_keys (pool-membership relocation, not a property on Encounter)",
+      "verdict": "deliberate-divergence",
+      "rationale": "ExoskeletonsWeak.cs:10 `IsWeak => true`. Same structural relocation as bowlbugs_weak's IsWeak: the sim's `Encounter` dataclass has no `is_weak` field; \"exoskeletons_weak\" is one of exactly two Hive keys in `_hive_rooms().weak_keys` (with \"exoskeletons_normal\" correctly absent from it, and present in `normal_keys` instead), which is what `RoomSet._generate_parity` reads to front-load the first `num_weak` rooms of the act. Behaviorally equivalent placement, structurally different representation."
+    },
+    "Tags": {
+      "maps_to": "rooms.py::_hive_rooms().tags[\"exoskeletons_weak\"] = (\"exoskeletons\",)",
+      "verdict": "faithful",
+      "rationale": "ExoskeletonsWeak.cs:12 declares EncounterTag.Exoskeletons -- the SAME tag as the Normal variant (both share it, so the two never appear back-to-back per `GrabBag`'s tag-avoidance). `_hive_rooms()` pins the identical tag under \"exoskeletons_weak\", matching \"exoskeletons_normal\"'s tag too."
+    },
+    "Slots": {
+      "maps_to": "exoskeleton.py::ExoskeletonsEncounter._SLOTS[:3] used as a per-monster constructor arg",
+      "verdict": "faithful",
+      "rationale": "ExoskeletonsWeak.cs:14 => [\"first\",\"second\",\"third\"] (3 slots, one fewer than Normal's 4 -- \"fourth\"/RAND-branch Exoskeletons never spawn in the Weak variant). Same load-bearing mechanism as exoskeletons_normal: `Exoskeleton.cs`'s `ConditionalBranchState(\"INIT_MOVE\")` gates the opening move on `Creature.SlotName`; the sim's `Exoskeleton.__init__(slot=...)` + its own `ConditionalBranchState(\"INIT_MOVE\")` (exoskeleton.py:61-68) reproduce the same three-way mapping. `EXOSKELETONS_WEAK = ExoskeletonsEncounter(id=\"exoskeletons_weak\", count=3)` uses the same `_SLOTS` tuple, sliced by `range(self.count)` to just the first three (\"first\",\"second\",\"third\") -- the \"fourth\"/random branch is correctly never reached because `count=3` never iterates that far, matching the C# class's 3-element array never including it."
+    },
+    "HasScene": {
+      "maps_to": "no counterpart -- sim is headless, no Godot scene graph",
+      "verdict": "waiver",
+      "rationale": "ExoskeletonsWeak.cs:16 => true. Purely a rendering-asset gate, no headless equivalent, no gameplay consequence -- same rationale as every other HasScene=true unit in this batch."
+    },
+    "RoomType": {
+      "maps_to": "rooms.py::_hive_rooms().weak_keys includes \"exoskeletons_weak\"",
+      "verdict": "faithful",
+      "rationale": "ExoskeletonsWeak.cs:18 => RoomType.Monster. \"exoskeletons_weak\" is placed in `_hive_rooms().weak_keys` (not `normal_keys`), matching the pool-classification convention used throughout this batch."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "no per-encounter counterpart; full_env.py::_monster_classes() (global Monster-subclass walk)",
+      "verdict": "waiver",
+      "rationale": "ExoskeletonsWeak.cs:20 declares a single-element list containing only `Exoskeleton` -- exactly GenerateMonsters' draw space (three copies). Same consumer census as the rest of the batch: only UI/debug readers exist for the C# property, and the sim's real vocabulary need is met by the global class walk. Cost: none observed."
+    },
+    "GenerateMonsters": {
+      "maps_to": "exoskeleton.py::ExoskeletonsEncounter.create_monsters (EXOSKELETONS_WEAK, count=3)",
+      "verdict": "faithful",
+      "rationale": "ExoskeletonsWeak.cs:22-30: three fixed `Exoskeleton` instances in slots \"first\",\"second\",\"third\" in that order, zero RNG draws. `ExoskeletonsEncounter.create_monsters` with `count=3` returns `[Exoskeleton(hooks, rng, slot=self._SLOTS[i]) for i in range(3)]` -- same 3 instances, same slot order, zero draws. Roster, order, slots and draw count all match."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "sts2_rl/combat.py::CombatState.__init__ never calls hooks.register(self.encounter)",
+      "verdict": "faithful",
+      "rationale": "`EncounterModel.cs:39` default (`=> false`), not overridden by the sealed `ExoskeletonsWeak`. The sim's `Encounter` is never a hook listener."
+    }
+  },
+  "guards": [
+    {
+      "what": "Gold ladder (MinGoldReward/MaxGoldReward) and ShouldGiveRewards -- both inherited, not overridden by ExoskeletonsWeak",
+      "verdict": "faithful",
+      "rationale": "RoomType.Monster => 10-20 gold, matched by `rewards.py:170-173`'s `GOLD_REWARD_RANGES[RoomType.MONSTER]` (non-ascension baseline). `ShouldGiveRewards` default `true` matched by `Encounter.should_give_rewards`'s dataclass default, unmodified by `EXOSKELETONS_WEAK = ExoskeletonsEncounter(id=\"exoskeletons_weak\", count=3)`."
+    }
+  ],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-08-03"
+}

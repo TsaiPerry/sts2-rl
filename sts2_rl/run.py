@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import copy
 import random
+import zlib
 from typing import TYPE_CHECKING, Callable
 
 from .cards import Card, CardRarity, make_card
@@ -53,11 +54,26 @@ if TYPE_CHECKING:
     from .actmap import ActMapConfig, MapPoint, StandardMap
     from .monsters import Encounter
     from .rooms import RoomResolution, RoomSet, RoomType, UnknownOdds
+    from .rooms import UnlockState as _UnlockStateType  # noqa: F401
 
 
 # Rarities eligible for the relic grab bag (starter/shop/event/ancient relics
 # never come from the bag — they have dedicated sources).
 _BAG_RARITIES = (RelicRarity.COMMON, RelicRarity.UNCOMMON, RelicRarity.RARE)
+
+# `RelicFactory.FallbackRelic => ModelDb.Relic<Circlet>()` (RelicFactory.cs:13)
+# — what a pull yields once the rarity ladder below runs out.
+FALLBACK_RELIC_ID = "circlet"
+
+# `GetAvailableDeque`'s escalation switch (RelicGrabBag.cs:229-235): while the
+# current deque holds nothing the filter accepts, climb. Rare's successor is
+# `_ => RelicRarity.None`, which ends the walk — a pull NEVER falls back to a
+# rarity below the one it asked for.
+_NEXT_RARITY: dict[RelicRarity, RelicRarity] = {
+    RelicRarity.SHOP: RelicRarity.COMMON,
+    RelicRarity.COMMON: RelicRarity.UNCOMMON,
+    RelicRarity.UNCOMMON: RelicRarity.RARE,
+}
 
 # Rarities a transform can produce (GetFilteredTransformationOptions keeps
 # Common/Uncommon/Rare only).
@@ -115,6 +131,18 @@ def ironclad_starting_deck() -> list[Card]:
     return build_starting_deck("ironclad")
 
 
+def derive_encounter_seed(rng: random.Random) -> int:
+    """A run seed for `make_encounter_rng` on the path that has no string seed.
+
+    The game always has `runState.Rng.Seed` to build `EncounterModel.Rng`
+    from; a seedless (RL training/eval) run has only its shared
+    `random.Random`. This hashes that generator's STATE, which makes the
+    derived seed deterministic for a given starting rng while consuming no
+    draw from it — so seating the per-encounter stream shifts nothing else.
+    """
+    return zlib.crc32(repr(rng.getstate()).encode()) & 0xFFFFFFFF
+
+
 class RunState:
     # Ironclad's numbers, kept as class constants for the callers that read
     # them. The live values come from `self.character` — see __init__.
@@ -135,6 +163,7 @@ class RunState:
         total_floor: int = 0,
         string_seed: str | None = None,
         character: "str | Character" = DEFAULT_CHARACTER,
+        unlock_state: "UnlockState | None" = None,
     ) -> None:
         # The character being played (CharacterModel). Every character-dependent
         # value below — starting HP/gold/deck/relics, the card pool content
@@ -160,6 +189,20 @@ class RunState:
         else:
             self.rng_set = None
             self.player_rng = None
+        # `EncounterModel.Rng` is per-encounter and independent of every other
+        # stream BY DESIGN — its own doc comment (EncounterModel.cs:42-49) says
+        # that independence is what makes it safe to stop tracking the stream
+        # once the encounter is over. With a string seed the run seeds it from
+        # `rng_set.seed`; without one (the RL training/eval path,
+        # `run_env.py`'s `RunState(rng=..., character=...)`) there is no
+        # numeric run seed, and `create_combat` used to fall back to drawing
+        # the composition off the SHARED per-combat `random.Random` — the same
+        # object as monster-HP rolls, AI branch picks and shuffles. This is
+        # that missing run seed: derived from the shared generator's state at
+        # construction, so it is stable for a given starting rng, and derived
+        # by READING that state rather than drawing from it, so no other
+        # legacy stream shifts by a single draw.
+        self._legacy_encounter_seed = derive_encounter_seed(self.rng)
         # Lazily seated by `crystal_sphere_rng` (see its docstring).
         self._crystal_sphere_rng = None
         # Optional (minigame) -> (x, y, tool) click policy for the Crystal
@@ -200,6 +243,18 @@ class RunState:
         # NMerchantRoom.FoulPotionThrown: a Foul Potion thrown at the merchant
         # drives him off (FoulPotion.cs:79-88), closing his stall for good.
         self.merchant_driven_off = False
+        # `State.UnlockState` — the PROFILE's discovery history, which
+        # `RunManager.GenerateRooms` feeds to each act's
+        # `ApplyDiscoveryOrderModifications`. Defaults to a profile that has
+        # seen everything, which makes that pass a no-op; pass a real one to
+        # reproduce a recording made on a less-travelled profile.
+        from .rooms import UnlockState
+
+        self.unlock_state = unlock_state or UnlockState.VETERAN
+        # `IRunState.CurrentRoom` (see `enter_point`). None until the first
+        # room is entered — a standalone RunState is in no room at all.
+        self.current_room_type = None
+        self.current_event = None
         # Out-of-combat card chooser with the same signature as
         # CombatState.card_selector: (purpose, candidates, count) -> cards.
         # None = uniform random with the run RNG.
@@ -801,6 +856,13 @@ class RunState:
         from .potions import USAGE_ANY_TIME
         if potion.usage != USAGE_ANY_TIME:
             return False
+        # `PotionModel.PassesCustomUsabilityCheck` (PotionModel.cs:158-164) —
+        # a virtual, default-true gate the game consults before the Use button
+        # does anything (NPotionPopup.cs:144). The sim had no concept of it,
+        # so Foul Potion's own override (its only implementer) could be paid
+        # for and spent in rooms the game refuses outright.
+        if not potion.passes_custom_usability_check(run=self):
+            return False
         self.potions[slot] = None               # RemoveBeforeUse
         potion.use_out_of_combat(self)
         return True
@@ -913,9 +975,11 @@ class RunState:
     ) -> Relic | None:
         """RelicFactory.PullNextRelicFromFront: roll rarity (<0.5 Common,
         <0.83 Uncommon, else Rare), pull the first bag relic of that rarity.
-        Falls back to the front of the bag when no relic matches the rolled
-        rarity (the game substitutes a fallback relic); None if the bag is
-        empty.
+        When that rarity has nothing left the result is a **Circlet**, the
+        source's `FallbackRelic` (RelicFactory.cs:13/47) — `PullFromFront`
+        returns null the moment the rolled rarity's deque is empty
+        (RelicGrabBag.cs:129-146) and never reaches into another rarity, so
+        neither an empty bag nor an exhausted rarity can return nothing.
 
         `rarity` pins the rarity instead of rolling it, and `shop_legal`
         applies an IsAllowedInShops filter — together they are the source's
@@ -938,42 +1002,80 @@ class RunState:
         # total_floor 60 the bag still yielded toxic_egg, which the game stops
         # offering after floor 40.
         self._drop_disallowed_from_grab_bag()
-        if not self.relic_grab_bag:
-            return None
         if rarity is None:
             rarity = roll_relic_rarity(
                 rarity_rng if rarity_rng is not None else self.rewards_rng)
-        for relic_id in self.relic_grab_bag:
-            cls = ALL_RELICS[relic_id]
-            if cls.rarity == rarity and (not shop_legal or cls.is_allowed_in_shops):
-                self.relic_grab_bag.remove(relic_id)
-                return make_relic(relic_id)
-        return make_relic(self.relic_grab_bag.pop(0))
+        # `GetAvailableDeque` climbs the ladder while the current deque holds
+        # nothing passing the filter (RelicGrabBag.cs:227-237).
+        while rarity is not None:
+            for relic_id in self.relic_grab_bag:
+                cls = ALL_RELICS[relic_id]
+                if cls.rarity == rarity and (
+                        not shop_legal or cls.is_allowed_in_shops):
+                    self.relic_grab_bag.remove(relic_id)
+                    return make_relic(relic_id)
+            rarity = _NEXT_RARITY.get(rarity)
+        # The ladder ran out: `?? FallbackRelic` (RelicFactory.cs:47). The bag
+        # is left untouched — the rarities BELOW the asked one are never
+        # consulted, because the switch only ever climbs.
+        return make_relic(FALLBACK_RELIC_ID)
 
     def pull_relic_from_back(
         self, rarity: RelicRarity, blacklist: set[str] | None = None
     ) -> Relic | None:
         """RelicFactory.PullNextRelicFromBack: pull the last shop-legal relic of
-        `rarity` (Shop rarity draws from the shop-relic bag, the rest from the
-        grab bag), skipping ids in `blacklist`. Used by the merchant; a pulled
-        relic never reappears this run. None if the matching bag is empty."""
+        `rarity`, skipping ids in `blacklist`, from the SAME `GetAvailableDeque`
+        escalation ladder (Shop -> Common -> Uncommon -> Rare) `pull_relic_from_
+        front` climbs, and the same `?? FallbackRelic` (Circlet) guard when the
+        ladder runs out -- `PullNextRelicFromBack` shares `GetAvailableDeque`
+        with `PullNextRelicFromFront` verbatim and never returns null
+        (RelicFactory.cs:47,73-78; RelicGrabBag.cs:156-173,218-243).
+
+        There is no separate per-shop `RelicGrabBag` anywhere in the source:
+        `MerchantRelicEntry.FillSlot` passes `RelicRarity.Shop` through the
+        exact same call as every other rarity (MerchantRelicEntry.cs:39). In
+        the SP2 parity path `relic_grab_bag` already carries Shop-rarity
+        relics (populate_relic_grab_bags' 4-rarity player bag flattens
+        Common/Uncommon/Rare/Shop together), so a Shop pull is served from it
+        like any other rarity -- fixing relic_pools/step7 (the shop's
+        Shop-rarity slot bypassing the real bag) and relic_pools/step6 (the
+        missing ladder/fallback) together, since both are the same
+        never-fully-ported method.
+
+        The LEGACY (no `string_seed`) path's `relic_grab_bag` is instead built
+        from `_BAG_RARITIES`, which omits Shop entirely (relic_pools/guard4 --
+        a separate, dormant, already-recorded gap in the run-init POPULATION
+        step, not this pull). Routing a legacy Shop pull through
+        `relic_grab_bag` would therefore always climb straight past an
+        (always-empty) Shop deque to Common, silently changing what
+        rarity the legacy shop's dedicated Shop-rarity slot stocks --
+        and touching `_BAG_RARITIES` to add Shop back would change every
+        legacy run's initial-shuffle draw count, cascading into every
+        subsequent unseeded RNG draw for the whole run. Neither is this
+        task's fix, so the legacy path keeps `_get_shop_relic_bag()` (its
+        pre-existing, not-game-exact-but-self-consistent behavior) for Shop
+        rarity specifically; every other rarity, and the whole parity path,
+        now share the one real ladder+fallback implementation below."""
         blacklist = blacklist or set()
         self._drop_disallowed_from_grab_bag()
-        bag = (
-            self._get_shop_relic_bag()
-            if rarity == RelicRarity.SHOP
-            else self.relic_grab_bag
-        )
-        for relic_id in reversed(bag):
-            cls = ALL_RELICS[relic_id]
-            if (
-                cls.rarity == rarity
-                and cls.is_allowed_in_shops
-                and relic_id not in blacklist
-            ):
-                bag.remove(relic_id)
-                return make_relic(relic_id)
-        return None
+        while rarity is not None:
+            bag = (
+                self._get_shop_relic_bag()
+                if rarity == RelicRarity.SHOP and self.player_relic_bag is None
+                else self.relic_grab_bag
+            )
+            for relic_id in reversed(bag):
+                cls = ALL_RELICS[relic_id]
+                if (
+                    cls.rarity == rarity
+                    and cls.is_allowed_in_shops
+                    and relic_id not in blacklist
+                ):
+                    bag.remove(relic_id)
+                    return make_relic(relic_id)
+            rarity = _NEXT_RARITY.get(rarity)
+        # The ladder ran out: `?? FallbackRelic` (RelicFactory.cs:47,75).
+        return make_relic(FALLBACK_RELIC_ID)
 
     def _drop_disallowed_from_grab_bag(self) -> None:
         """RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270)
@@ -1082,6 +1184,7 @@ class RunState:
             room_set = RoomSet.generate(
                 rooms, up, cfg.num_rooms, cfg.num_weak_encounters,
                 ancient_pool=ancient_pool,
+                unlock_state=self.unlock_state,
             )
             if i == last and double_boss:
                 # RunManager.GenerateRooms rolls the second boss here, not in
@@ -1290,6 +1393,7 @@ class RunState:
                 self.act_config.num_rooms,
                 self.act_config.num_weak_encounters,
                 has_second_boss=self._has_second_boss,
+                unlock_state=self.unlock_state,
             )
         if self.unknown_odds is None:
             self.unknown_odds = UnknownOdds()
@@ -1383,6 +1487,12 @@ class RunState:
         )
         self.current_point = point
         self.total_floor += 1  # IRunState.TotalFloor: rooms entered this run
+        # `IRunState.CurrentRoom`, as far as the sim needs it: the room type
+        # just entered and, for an event room, the event itself. Read by
+        # `PotionModel.PassesCustomUsabilityCheck` (the Foul Potion refuses to
+        # be drunk anywhere but a shop, the Fake Merchant or a fight).
+        self.current_room_type = room_type
+        self.current_event = None
         resolution = RoomResolution(
             point=point, map_point_type=point.point_type, room_type=room_type
         )
@@ -1410,6 +1520,7 @@ class RunState:
                 event_id = listener.modify_next_event(self, event_id)
             if event_id is not None:
                 resolution.event = make_event(event_id, self)
+                self.current_event = resolution.event
                 self.visited_event_ids.add(event_id)
         elif room_type == RoomType.TREASURE:
             # Treasure chest (OneOffSynchronizer): a grab-bag relic plus
@@ -1580,15 +1691,19 @@ class RunState:
         reconciled by finish_combat.
         """
         deck_copy = copy.deepcopy(self.deck)
-        # Parity: monster composition is picked from a per-encounter Rng seeded
-        # from the run seed + current floor + the encounter's slug
-        # (EncounterModel.GenerateMonstersWithSlots), NOT a shared stream. Legacy
-        # runs pass None and keep their random.Random composition draws.
-        encounter_selection_rng = None
-        if self.rng_set is not None:
-            from .rng import make_encounter_rng
-            encounter_selection_rng = make_encounter_rng(
-                self.rng_set.seed, self.total_floor, encounter.entry)
+        # Monster composition is picked from a per-encounter Rng seeded from
+        # the run seed + current floor + the encounter's slug
+        # (EncounterModel.GenerateMonstersWithSlots), NOT a shared stream —
+        # on EVERY path. A run with no string seed has no `rng_set`, so it
+        # uses the seed derived at construction (`_legacy_encounter_seed`);
+        # before that it took `create_monsters`' `selection_rng=None` arm and
+        # drew the composition off the shared per-combat `random.Random`,
+        # which the game's own isolation guarantee forbids.
+        from .rng import make_encounter_rng
+        encounter_selection_rng = make_encounter_rng(
+            self.rng_set.seed if self.rng_set is not None
+            else self._legacy_encounter_seed,
+            self.total_floor, encounter.entry)
         combat = CombatState(
             starting_deck=deck_copy,
             rng=self.rng,

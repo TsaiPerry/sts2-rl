@@ -90,6 +90,20 @@ Three things to expect from that output rather than be surprised by:
 > a sibling module the `gap_queue.py pins` scanner reads — but note the scanner
 > now resolves a content-anchored pin, which it did not before 2026-07-27.
 
+> **2026-08-03 (systems-tier wiring): three new content kinds and six new
+> seams joined the roster, all unfilled.** `encounter` (85 units), `affliction`
+> (7) and `character` (5) are now `CONTENT_KINDS` — 97 skeleton records exist
+> under `audit/records/{encounter,affliction,character}/`, every verdict
+> blank. `rng_streams`, `rewards`, `relic_pools`, `run_layer`, `rooms_and_map`
+> and `potion_pipeline` are now wired seams — 6 skeleton records exist under
+> `audit/records/seam/`, every `steps` list empty. That makes **10 content
+> kinds and 12 seams** total: 7 kinds and 6 seams of them audited, same as
+> before this task. A later campaign fills the 97 + 6 = 103 unfilled records;
+> auditing them is not what this update did. See
+> [Not audited, and why](#not-audited-and-why) for the subjects that were
+> deliberately never wired to any kind or seam at all — a different thing
+> from "wired but not yet filled."
+
 ---
 
 ## Layout
@@ -98,18 +112,24 @@ Three things to expect from that output rather than be surprised by:
 audit/
   README.md          you are here
   GAP-QUEUE.md       every gap in every audited kind, de-duplicated by
-                     mechanism, ordered for work — all 7 kinds
+                     mechanism, ordered for work — the 7 audited kinds
+                     (10 total; see Not audited, and why)
   records/
-    seam/*.json      the 6 engine-seam audit records — the evidence
+    seam/*.json      12 seam records — 6 audited (the evidence), 6 unfilled
+                     skeletons (2026-08-03: rng_streams, rewards,
+                     relic_pools, run_layer, rooms_and_map, potion_pipeline)
     power/ card/ event/ enchantment/
-    relic/ monster/ potion/                             840 content records
+    relic/ monster/ potion/                             840 audited content records
+    encounter/ affliction/ character/                   97 unfilled skeletons
+                     (2026-08-03; a later campaign fills them)
   content/<kind>/    per-tier narration docs, written by that tier's stream:
                      potion/shared-mechanisms.md   the PotionModel.OnUseWrapper
                                                    pipeline, recorded once
                      monster/SHARED-FINDINGS.md    the monster tier's
                                                    cross-batch findings
                      power/gap-ledger.md           the power tier's ledger
-  seams/*.md         the 6 seam narration docs — the ordering specs
+  seams/*.md         12 seam docs — 6 ordering specs, 6 scope scaffolds only
+                     (the same 6 unfilled seams as above)
   tools/             the harness, the status tool, the queue generator, probes
   prompts/           the shared contract + the 10 stream prompts
 ```
@@ -308,6 +328,14 @@ layer is meant to be audited once by the seam tier rather than 840 times.
 > and carries one rollup guard per record (`potion/_use_pipeline`, 51 sites).
 > **The fix is a `potion_pipeline` seam, or extending `creature_card_cmds`.**
 > Worth a check that every other root class names its covering seam.
+>
+> **Update, 2026-08-03:** the fix landed — `potion_pipeline` is now a wired
+> seam (`SEAM_SOURCES["potion_pipeline"]`, claiming `PotionCmd.cs` and
+> `PotionModel.cs`), and `MODEL_ROOT_CLASSES`'s comment on `PotionModel` now
+> points at it instead of asserting the hole is open. `records/seam/
+> potion_pipeline.json` is still an unfilled skeleton, though — wiring a seam
+> is not auditing it, so treat this hole as **named**, not yet **closed**. See
+> [Not audited, and why](#not-audited-and-why).
 
 A hook key is matched on the identifier it starts with, so a record may annotate
 one with provenance: `"Type (inherited, TemporaryStrengthPower.cs:32-42)"`.
@@ -428,8 +456,9 @@ Paths below are relative to `audit/` except the two that are not in it:
 | `records/event/**`, `records/enchantment/**` | event+enchantment stream |
 | `records/monster/**` | monster stream |
 | `records/potion/**`, `content/potion/**`, `tools/potion_probes.py`, `TestPotionContentPins` in `test/test_hook_order.py` | potion stream (complete 2026-07-27; the pins are a prompt-authorised exception to the seam-tier rule below, confined to one named class) |
+| `records/encounter/**`, `records/affliction/**`, `records/character/**` | unclaimed — wired 2026-08-03 (systems-tier task), 97 skeletons, no verdicts written; a later campaign audits them |
 | `GAP-QUEUE.md` | gap-queue stream |
-| `records/seam/**`, `seams/**`, `tools/harness.py`, `test/test_hook_order.py` | seam tier only |
+| `records/seam/**`, `seams/**`, `tools/harness.py`, `test/test_hook_order.py` | seam tier only — includes the 6 new seams (`rng_streams`, `rewards`, `relic_pools`, `run_layer`, `rooms_and_map`, `potion_pipeline`) wired 2026-08-03, unaudited |
 | `sts2_rl/**` | gap-fix stream only, once authorised |
 
 **Never edit `tools/harness.py`, and never edit another stream's records.** If
@@ -443,9 +472,122 @@ read-only and sends lessons back via its report; the relic stream folds them in
 and bumps the version header. That single exception is why the branches merge
 trivially.
 
-A new *kind* beyond the seven needs a `GAME_MODEL_DIRS` entry and a `_sim_units`
+A new *kind* beyond the ten needs a `GAME_MODEL_DIRS` entry and a `_sim_units`
 branch in `harness.py` — that is a seam-tier change, so propose it rather than
 making it.
+
+---
+
+## Not audited, and why
+
+**This is a reported fact, not a silent boundary.** The potion tier's own
+history above is why: a bare "out of scope" line for potions hid ten waived
+divergences across the card and power tiers for months, because an exclusion
+is invisible to every tool in this pipeline — `audit_status` cannot report
+it, `gap_queue` cannot count it, `validate` cannot reject a verdict leaning on
+it. Every subject below is named here instead, with the reason a human
+decided it does not get a `kind` or a `seam`, so the next reader finds a
+sentence rather than rediscovers the absence.
+
+### Whole subjects, never wired to a kind or a seam
+
+Four of these came with a `.cs` count in the campaign's source prompt.
+Measured 2026-08-03 against the live game tree with
+`find <dir> -iname "*.cs" | wc -l` (not carried over from the prompt): all
+four match exactly, so no correction is needed there. The rest had no stated
+count; the numbers below are this pass's own measurement.
+
+| subject | real `.cs` count | reason |
+|---|---|---|
+| `src/Core/Nodes/` | 691 (matches prompt) | UI layer — Godot scene tree, screens, widgets; no game-state the sim's headless run needs to reproduce |
+| `src/Core/Multiplayer/` | 147 (matches prompt) | multiplayer-only; the sim is single-player throughout |
+| `src/Core/Saves/` | 118 (matches prompt) | save-file read/write and schema; the sim has no persistence layer to compare against |
+| `src/Core/Timeline/` | 74 (matches prompt) | replay/spectator timeline scrubbing, a presentation feature over already-simulated state |
+| `src/Core/Localization/` (incl. `DynamicVars/`, `Fonts/`, `Formatters/`) | 58 | display text, fonts, locale formatters — no game-state reader |
+| `src/Core/DevConsole/` (incl. `ConsoleCommands/`) | 52 | developer cheat/debug console commands, not shipping gameplay |
+| `src/Core/Platform/` (incl. `Null/`, `Steam/`) | 28 | Steam/platform integration — achievements, leaderboards, cloud saves, window mode |
+| `Achievements` (`src/Core/Achievements/`, `Models/Achievements/`, `Models/AchievementModel.cs`) | 13 | meta-progression tracking, no gameplay branch |
+| `Badges` (`Models/Badges/`, `Models/BadgeModel.cs`) | 30 | end-of-run stat badges, computed after the run the sim already modelled |
+| `Orbs` (`Entities/Orbs/`, `Models/Orbs/`, `Nodes/Orbs/`, `OrbCmd.cs`, `OrbModel.cs`, `Entities/Cards/OrbEvokeType.cs`, `Combat/History/Entries/OrbChanneledEntry.cs`) | 13 | Defect-only mechanic; Defect is one of the four unported characters below |
+| the four unported characters — Silent, Regent, Necrobinder, Defect | 4 (`Models/Characters/{Silent,Regent,Necrobinder,Defect}.cs`) | `sts2_rl/characters.py`'s `_unported()` rows carry real, source-verified stats but empty card/relic/potion pools — the sim cannot run them. Ironclad-only scope, per `tools/PROMPT.md`'s "Characters other than Ironclad: waiver with rationale." Each character's own card/relic/power/potion files are not double-counted here — they already show up as `unported C# files` in that kind's own `harness.py roster` output |
+
+### The Acts models — folded into a seam, not a kind
+
+`src/Core/Models/Acts/*.cs` (the 5 per-act subclasses) has no `kind` of its
+own: the sim has no act registry — no `ACTS`, `ALL_ACTS` or `class Act`
+anywhere under `sts2_rl/` (verified 2026-08-03) — so there is nothing to
+roster Acts *against*. They are not dropped, though: `seams/rooms_and_map.md`
+claims `ActModel.cs` and all five `Models/Acts/*.cs` files and records the
+act-level structure (encounter/event rosters, boss discovery order, per-act
+map rolls) as part of that seam instead of leaving it invisible.
+
+### `src/Core/Commands/*.cs` the seam wiring left unclaimed
+
+Of the 20 files under `Commands/`, 12 were already claimed by an existing
+seam (`creature_card_cmds`, `damage_pipeline`, `power_cmd`) and 6 went to
+seams the 2026-08-03 task wired (`rooms_and_map`: `MapCmd.cs`; `relic_pools`:
+`RelicCmd.cs`, `RelicSelectCmd.cs`; `rewards`: `RewardsCmd.cs`;
+`potion_pipeline`: `PotionCmd.cs`). The remaining 8 are named here with the
+reason each was read and declined, not silently skipped:
+
+| file | reason |
+|---|---|
+| `Cmd.cs` | presentation — Godot scene-tree timer waits (`Wait`/`CustomScaledWait`) for animation pacing, no gameplay state |
+| `ForgeCmd.cs` | Regent-only (one of the four unported characters above) |
+| `OrbCmd.cs` | Defect-only (one of the four unported characters above) |
+| `OstyCmd.cs` | Necrobinder-only (one of the four unported characters above) |
+| `SfxCmd.cs` | presentation — sound effects |
+| `TalkCmd.cs` | presentation — dialogue/portrait talk bubbles |
+| `ThinkCmd.cs` | presentation — thought-bubble UI |
+| `VfxCmd.cs` | presentation — visual effects |
+
+### `src/Core/Runs/*.cs` the `run_layer` seam dropped
+
+`run_layer` claims only `RunManager.cs`, `IRunState.cs` and
+`ExtraRunFields.cs` from `Runs/`. `RunState.cs` belongs to `hook_dispatch`
+(pre-existing), and `RelicGrabBag.cs` / `RunRngSet.cs` / the four
+`CardCreationFlags.cs`, `CardCreationOptions.cs`, `CardCreationSource.cs`,
+`CardRarityOddsType.cs` files were reassigned to `relic_pools` / `rng_streams`
+/ `rewards` respectively, because each is ported inside that seam's own sim
+file rather than in `run.py`. The other 12 of the 21 `Runs/*.cs` candidates,
+each read in full before being dropped:
+
+| file | reason |
+|---|---|
+| `GameMode.cs` | bare enum; Daily/Custom modes unsimulated |
+| `GameModeExtension.cs` | achievement/epoch lock helper — unsimulated meta-progression |
+| `ICardScope.cs` | pure interface; implementations live on `RunState.cs`/`CombatState.cs`, both claimed elsewhere |
+| `IPlayerCollection.cs` | pure test-mocking interface, per its own doc comment |
+| `MapLocation.cs` | serialization/equality value type for multiplayer map voting |
+| `RunLocation.cs` | same, for multiplayer message routing |
+| `NullRunState.cs` | null-object stub for menu/test contexts with no active run; RL is always in a run |
+| `PlayerMapPointHistoryEntry.cs` | per-floor stat DTO, serialization only |
+| `RunHistory.cs` | save-file schema, no gameplay branch |
+| `RunHistoryPlayer.cs` | serialization-only DTO nested under `RunHistory` |
+| `RunHistoryUtilities.cs` | builds the save-file history entry; real logic, but save/UI-only |
+| `ScoreUtility.cs` | score/badge/leaderboard math — save/UI-only |
+
+### Genuinely-unported content the roster work surfaced
+
+Three `encounter` game files have no sim counterpart at all (down from an
+earlier miscount of six that a first pass corrected — see
+`py audit/tools/harness.py roster encounter`'s `unported` list):
+
+- `TheArchitectEventEncounter.cs` — The Architect's victory event is
+  unported; `run.py`'s `complete_run()` just sets `self.victory = True`
+- `TunnelerNormal.cs` — the sim only ports the Weak Tunneler encounter
+  (`encounter/tunneler` maps to `TunnelerWeak.cs`)
+- `DeprecatedEncounter.cs` — literally `Deprecated`, framework leftover, not
+  content
+
+Three `character` game files are permanently unrostered, all declaring
+`IsPlayable => false`:
+
+- `DeprecatedCharacter.cs`, `RandomCharacter.cs` — framework plumbing the
+  game itself marks non-playable
+- `Deprived.cs` — a debug/mock character (`MockCardPool`, 1000 starting HP,
+  100 max energy) used for game-side test tooling, not a sixth playable
+  character
 
 ---
 

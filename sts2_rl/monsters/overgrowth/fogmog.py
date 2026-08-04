@@ -92,7 +92,12 @@ class Fogmog(MachineMonster):
 
     def _illusion_move(self, ctx: CombatCtx) -> None:
         from ...cmds import CreatureCmd
-        CreatureCmd.add(ctx.hooks, EyeWithTeeth(ctx.hooks, self._rng))
+        # Fogmog.cs:66 — `CreatureCmd.Add<EyeWithTeeth>(CombatState,
+        # "illusion")`: the slot is hard-coded, and its index (0) puts the
+        # summon ahead of the Fogmog when `add` re-sorts the enemy list.
+        CreatureCmd.add(
+            ctx.hooks, EyeWithTeeth(ctx.hooks, self._rng), slot_name="illusion",
+        )
 
     def _swipe_move(self, ctx: CombatCtx) -> None:
         self._execute_attack(ctx, _SWIPE_DMG, 1)
@@ -107,4 +112,9 @@ class Fogmog(MachineMonster):
 FOGMOG_NORMAL = Encounter(
     id="fogmog_normal",
     monster_classes=[Fogmog],
+    # FogmogNormal.cs:15,25-28 — the Fogmog is seated in "fogmog" (index 1)
+    # and ILLUSION_MOVE's EyeWithTeeth takes "illusion" (index 0), so the
+    # turn-1 summon re-sorts AHEAD of the Fogmog.
+    slots=("illusion", "fogmog"),
+    monster_slots=("fogmog",),
 )

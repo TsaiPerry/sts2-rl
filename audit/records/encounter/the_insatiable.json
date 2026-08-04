@@ -1,0 +1,72 @@
+{
+  "unit": "encounter/the_insatiable",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\TheInsatiableBoss.cs",
+    "sha256": "5bdd9681c16c487693aaed27923323b95e70a9197da82130cb38260bfd9cbf92"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\hive\\the_insatiable.py",
+    "sha256": "c69438d60834cfdfc6793f3bd44fe83d4392373b5c7ff4a56687c14e53374b38"
+  },
+  "hooks": {
+    "CustomBgm": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Audio only: CombatManager.cs is the sole non-Models reader. No sim audio layer."
+    },
+    "RoomType": {
+      "maps_to": "sts2_rl/rooms.py _hive_rooms().boss_keys includes 'the_insatiable' (rooms.py)",
+      "verdict": "faithful",
+      "rationale": "TheInsatiableBoss.cs:11 RoomType => Boss. 'the_insatiable' sits in hive's boss_keys only. Cross-ref seam/rooms_and_map for the runtime resolution mechanism."
+    },
+    "HasCustomBackground": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "TheInsatiableBoss.cs:13 => true, a rendering-asset choice (EncounterModel.cs:293-308) consumed only by preload paths. No sim scene/background renderer."
+    },
+    "AmbientSfx": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "TheInsatiableBoss.cs:15 sets a custom ambience track. Readers (ActModel.cs, the Acts/*.cs files, NRunMusicController.cs) are all audio-layer; no gameplay/RNG consumer. No sim audio layer."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation/bestiary only (ActModel.cs:169, NBestiary.cs:194). C# value is [TheInsatiable] (1 element), matching GenerateMonsters' roster. No sim per-encounter vocabulary counterpart."
+    },
+    "GetCameraScaling": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Camera-only (0.9f, NCombatRoom.cs). No sim camera. (TheInsatiableBoss does not override GetCameraOffset, so that member is not a declared hook here.)"
+    },
+    "GenerateMonsters": {
+      "maps_to": "THE_INSATIABLE_BOSS = Encounter(id='the_insatiable_boss', monster_classes=[TheInsatiable]) (the_insatiable.py:111-114)",
+      "verdict": "faithful",
+      "rationale": "TheInsatiableBoss.cs:24-27 returns a fixed single-element list, (TheInsatiable, null) -- roster {TheInsatiable}x1, slot null, ZERO Rng draws. Encounter.create_monsters (sts2_rl/monsters/base.py) matches exactly: roster, order (trivial) and draw count (0) identical."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "sts2_rl/monsters/base.py Encounter (never passed to HookSystem.register)",
+      "verdict": "faithful",
+      "rationale": "EncounterModel.cs:39 => false. The sim's Encounter object is never registered with the HookSystem; only TheInsatiable registers itself. Matches C#."
+    }
+  },
+  "guards": [
+    {
+      "what": "Min/MaxGoldReward inheritance (RoomType.Boss ladder, non-Poverty)",
+      "verdict": "faithful",
+      "rationale": "Not overridden; inherits Boss => (100, 100), matching sts2_rl/rewards.py GOLD_REWARD_RANGES[RoomType.BOSS] exactly (`py audit/tools/encounter_probes_e4.py gold-ladder`). Poverty out of scope per PROMPT.md."
+    },
+    {
+      "what": "ShouldGiveRewards / IsWeak inheritance (defaults true / false)",
+      "verdict": "faithful",
+      "rationale": "Neither overridden. THE_INSATIABLE_BOSS passes no should_give_rewards= (default True); 'the_insatiable' is absent from every weak_keys tuple, matching IsWeak=>false."
+    },
+    {
+      "what": "Per-encounter Rng independence",
+      "verdict": "faithful",
+      "rationale": "GenerateMonsters draws ZERO values on either side -- no draw here to misattribute to a shared stream."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-08-03"
+}

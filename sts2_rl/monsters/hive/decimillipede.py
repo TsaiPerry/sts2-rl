@@ -202,4 +202,9 @@ class DecimillipedeEncounter(Encounter):
         return segments
 
 
-DECIMILLIPEDE_ELITE = DecimillipedeEncounter(id="decimillipede_elite")
+DECIMILLIPEDE_ELITE = DecimillipedeEncounter(
+    id="decimillipede_elite",
+    # DecimillipedeElite.cs:14,43-48.
+    slots=("segment1", "segment2", "segment3"),
+    monster_slots=("segment1", "segment2", "segment3"),
+)

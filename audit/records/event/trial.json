@@ -240,6 +240,6 @@
       "issue": "LIVE but for a DIFFERENT reason than recorded. The record's text is event/brain_leech/g6's wording copied verbatim (\"becomes an Ironclad screen on reroll\") -- that does not apply here: Nondescript Guilty's pool was already the un-overridden character pool before any reroll, so a reroll draws from the same pool either way (pinned by test_trial_ nondescript_guilty_reroll_pool_stays_the_character_pool -- this assertion holds even against the OLD code). The REAL defect, found by re-deriving both draws against Trial.cs:183 (ForNonCombatWithDefaultOdds, Source= Other): mutate_pity defaulted True (mutating pity) on the FIRST draw already, not just reroll -- worse than filed, since it corrupts the pity state on every visit regardless of Driftwood. Also found: is_card_reward was never set on the first draw either (same shape as g7, unfiled). FIXED via a new file-local `_NonCombatCardRewardGroup(CardRewardGroup)` subclass (trial.py) that hardcodes mutate_pity=False, since the base class's `pool is None` heuristic gives the wrong answer for a screen whose pool is un-overridden but still Source=Other. Pinned by test_trial_ nondescript_guilty_does_not_mutate_pity_on_first_draw_or_reroll and test_trial_nondescript_guilty_silken_tress_fires_on_first_draw. Replaced reasoning: the record's \"wrong pool\" mechanism does not hold for this event; the actual mechanism is \"wrong Source/mutate_pity\", present from the first draw onward."
     }
   ],
-  "verdict": "faithful",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

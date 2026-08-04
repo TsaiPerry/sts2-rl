@@ -769,7 +769,8 @@
   "snecko_eye",
   "sozu",
   "velvet_choker",
-  "history_course"
+  "history_course",
+  "circlet"
  ],
  "events": [
   "abyssal_baths",
@@ -886,6 +887,7 @@
   "steady",
   "swift",
   "tezcataras_ember",
-  "vigorous"
+  "vigorous",
+  "momentum"
  ]
 }

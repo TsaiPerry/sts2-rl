@@ -1,0 +1,72 @@
+{
+  "unit": "encounter/ovicopter",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\OvicopterNormal.cs",
+    "sha256": "47d9dbf8600e0e1f7d0a89d1131080a41d9aa1f10e6afa3359d3b7c2c7ddef4d"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\hive\\ovicopter.py",
+    "sha256": "96fadba9f8c2309a0902be7c87b9986f14178e6f7b35263945a55cfe38c54338"
+  },
+  "hooks": {
+    "HasScene": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "OvicopterNormal.cs:14 => true (custom scene). NCombatRoom.cs is the sole non-Models reader, purely scene/rendering. No sim scene layer."
+    },
+    "Slots": {
+      "maps_to": "OVICOPTER_NORMAL.slots = ('egg1','egg2','egg3','egg4','egg5','ovicopter') (ovicopter.py:183)",
+      "verdict": "faithful",
+      "rationale": "OvicopterNormal.cs:16 declares Slots => ['egg1','egg2','egg3','egg4','egg5','ovicopter'] -- 6 elements, exact literal match to the sim's tuple, verified by direct comparison of the two arrays element-by-element (not just length/set). RE-DERIVED FROM SCRATCH per this batch's brief (the prior-round 'sim had the egg slot order wrong' finding is NOT re-inherited): reading OvicopterNormal.cs, Ovicopter.cs, ToughEgg.cs and ovicopter.py directly shows the sim's `_lay_eggs` (ovicopter.py:135-159) now calls `Encounter.last_free_slot` (sts2_rl/monsters/base.py) -- the SAME 'Slots.LastOrDefault(unoccupied)' primitive as Ovicopter.cs:87 -- instead of the old index-based insert the sim's own in-code comment (ovicopter.py:144-153) documents as the previously-fixed bug. This record's Slots verdict covers the DECLARED ROW; the summon mechanics that consume it are `monster/ovicopter`'s territory, not re-audited here, but the row itself and its consumer both check out on inspection."
+    },
+    "RoomType": {
+      "maps_to": "sts2_rl/rooms.py _hive_rooms().normal_keys includes 'ovicopter' (rooms.py)",
+      "verdict": "faithful",
+      "rationale": "OvicopterNormal.cs:18 RoomType => Monster. 'ovicopter' sits in hive's normal_keys only. Cross-ref seam/rooms_and_map (unaudited) for the runtime resolution mechanism."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Presentation/bestiary only (ActModel.cs:169, NBestiary.cs:194). C# value is [Ovicopter, ToughEgg] (2 elements -- ToughEgg is summon-only and correctly listed as a POSSIBLE, not initial, monster). No sim per-encounter vocabulary counterpart; costs nothing observable since the sim is headless."
+    },
+    "GetCameraScaling": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Camera-only (0.8f, NCombatRoom.cs). No sim camera."
+    },
+    "GetCameraOffset": {
+      "maps_to": "(none)",
+      "verdict": "waiver",
+      "rationale": "Camera-only (Vector2.Down*50f + Vector2.Left*100f, NCombatRoom.cs). No sim camera."
+    },
+    "GenerateMonsters": {
+      "maps_to": "OVICOPTER_NORMAL = Encounter(id='ovicopter_normal', monster_classes=[Ovicopter], slots=(...), monster_slots=('ovicopter',)) (ovicopter.py:178-186)",
+      "verdict": "faithful",
+      "rationale": "OvicopterNormal.cs:36-41 returns a fixed single-element list, (Ovicopter, 'ovicopter') -- roster {Ovicopter}x1, slot 'ovicopter', ZERO Rng draws. Note the eggs are NOT part of GenerateMonsters at all on the C# side either: LayEggsMove (Ovicopter.cs:81-94) is a MOVE the Ovicopter performs during combat, executed the first time its state machine rolls, not part of encounter generation. The sim mirrors this exactly: Encounter.create_monsters (sts2_rl/monsters/base.py) builds [Ovicopter(hooks, rng)] and zip(monsters, ('ovicopter',)) assigns slot_name='ovicopter' -- matching roster, slot and draw-count (0) precisely. The batch brief's framing of this unit as placing '[Egg,Egg,Egg,Ovicopter]' via GenerateMonsters does not describe GenerateMonsters's actual return value on either side; that shape belongs to the in-combat LAY_EGGS_MOVE, which this encounter-kind record does not own (monster/ovicopter's territory)."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "sts2_rl/monsters/base.py Encounter (never passed to HookSystem.register)",
+      "verdict": "faithful",
+      "rationale": "EncounterModel.cs:39 => false. The sim's Encounter object is never registered with the HookSystem; only the Ovicopter (and later, the laid ToughEggs) register themselves as Monster instances. Matches C#."
+    }
+  },
+  "guards": [
+    {
+      "what": "Min/MaxGoldReward inheritance (RoomType.Monster ladder, non-Poverty)",
+      "verdict": "faithful",
+      "rationale": "Not overridden; inherits Monster => (10, 20), matching sts2_rl/rewards.py GOLD_REWARD_RANGES[RoomType.MONSTER] exactly (`py audit/tools/encounter_probes_e4.py gold-ladder`). Poverty out of scope per PROMPT.md."
+    },
+    {
+      "what": "ShouldGiveRewards / IsWeak inheritance (defaults true / false)",
+      "verdict": "faithful",
+      "rationale": "Neither overridden. OVICOPTER_NORMAL passes no should_give_rewards= (default True); 'ovicopter' is absent from every weak_keys tuple, matching IsWeak=>false."
+    },
+    {
+      "what": "Per-encounter Rng independence",
+      "verdict": "faithful",
+      "rationale": "GenerateMonsters draws ZERO values on either side -- no draw here to misattribute to a shared stream. The in-combat LAY_EGGS_MOVE's own HP rolls (ToughEgg construction) are a monster/ovicopter concern, not this hook's."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-08-03"
+}

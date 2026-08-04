@@ -52,6 +52,8 @@ from dataclasses import dataclass, field, replace
 from enum import IntEnum
 from typing import Callable, Iterable, Iterator
 
+from .dotnet_sort import dotnet_list_sort
+
 
 class AscensionLevel(IntEnum):
     """AscensionLevel.cs — cumulative thresholds.
@@ -195,8 +197,15 @@ def stable_shuffle(items: list, rng: random.Random, key=None) -> list:
 
     Makes the result independent of incidental input order (set iteration
     order), which is what keeps the sim's own seeds reproducible.
+
+    The sort is `List<T>.Sort()`, an UNSTABLE introsort — see
+    `sts2_rl/dotnet_sort.py`. It matters wherever two items can compare equal:
+    a deck holding two identical upgradable Strikes (War Paint, Whetstone,
+    Sand Castle, the Battleworn Dummy / Doors of Light and Dark picks) is
+    exactly that case. Map points can't tie — `_sort_key` is their unique
+    (col, row) — so the map callers get the same answer either way.
     """
-    items.sort(key=key)
+    dotnet_list_sort(items, key=key)
     rng.shuffle(items)
     return items
 

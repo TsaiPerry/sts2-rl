@@ -1,0 +1,57 @@
+{
+  "unit": "encounter/scrolls_of_biting_weak",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\ScrollsOfBitingWeak.cs",
+    "sha256": "fc0972a52008d577df97e1c32942d8e2b0beb1e8d2977b73e19caa2630a2b8f3"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\glory\\scroll_of_biting.py",
+    "sha256": "553067979e60041c347356874dcc2f084ebf7c275bfc99d95d63010adf836ab6"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "sts2_rl/rooms.py _glory_rooms().weak_keys includes 'scrolls_of_biting_weak'",
+      "verdict": "faithful",
+      "rationale": "ScrollsOfBitingWeak declares RoomType.Monster (weak encounters are still Monster rooms); bucket membership agrees."
+    },
+    "IsWeak": {
+      "maps_to": "sts2_rl/rooms.py _glory_rooms().weak_keys includes 'scrolls_of_biting_weak'",
+      "verdict": "faithful",
+      "rationale": "ScrollsOfBitingWeak overrides IsWeak => true. As with turret_operator, the sim externalizes weakness to bucket membership (weak_keys) rather than a field on Encounter; scrolls_of_biting_weak is listed only in weak_keys."
+    },
+    "Tags": {
+      "maps_to": "sts2_rl/rooms.py _glory_rooms().tags['scrolls_of_biting_weak'] = ('scrolls',)",
+      "verdict": "faithful",
+      "rationale": "ScrollsOfBitingWeak.Tags returns EncounterTag.Scrolls, same as the normal variant. The sim tags both scrolls_of_biting_weak and scrolls_of_biting_normal 'scrolls' -- matches. Tag-safe picking itself belongs to seam/rooms_and_map; this record only verdicts the tag data."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "SCROLLS_OF_BITING_WEAK.monster_classes = [ScrollOfBiting] * 3",
+      "verdict": "faithful",
+      "rationale": "Single distinct class on both sides, identical to the normal variant's reasoning -- no divergence possible."
+    },
+    "GenerateMonsters": {
+      "maps_to": "_ScrollsEncounter.create_monsters (scroll_of_biting.py) via SCROLLS_OF_BITING_WEAK = _ScrollsEncounter('scrolls_of_biting_weak', 3)",
+      "verdict": "faithful",
+      "rationale": "Roster/count: C# constructs exactly 3 ScrollOfBiting instances (no 4th/fixed-index scroll in the weak variant); the sim's _ScrollsEncounter(count=3) constructs exactly 3. Order: C# returns (scrollOfBiting, scrollOfBiting2, scrollOfBiting3) in construction order; sim's list comprehension preserves idxs order identically. Slot: all three tuples are null on the C# side; the sim leaves monster_slots unset so slot_name stays None on all three -- matches. Draw count: exactly ONE `base.Rng.NextInt(3)` on the C# side (assigned to scrollOfBiting.StarterMoveIdx and to `num`), with scroll 2/3 derived arithmetically ((num+1)%3, (num+2)%3, no further draws) -- no fixed-index 4th scroll exists in this variant to special-case. The sim draws exactly once (`base = selection_rng.next_int(3)`) and computes idxs = [(base+i)%3 for i in range(3)] with NO trailing append (count != 4), matching exactly. Draw order vs construction: identical reasoning to the normal variant -- the sim's single draw happens before any ScrollOfBiting is constructed, and C#'s ToMutable() calls (no RNG) all precede its own single draw, so there is no interleaved-construction divergence. Stream identity is seam/rng_streams' call, not this record's; noted only that the sim's per-encounter selection_rng (parity) vs the documented legacy random.Random fallback is the same already-known two-mode design as the normal variant."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "sts2_rl/monsters/base.py Encounter dataclass is never registered as a hook listener; only Monster instances register themselves",
+      "verdict": "faithful",
+      "rationale": "Same structural fact as every unit in this batch."
+    }
+  },
+  "guards": [
+    {
+      "what": "MinGoldReward/MaxGoldReward -- not overridden, inherits the Monster ladder (10-20) x Poverty multiplier",
+      "verdict": "faithful",
+      "rationale": "sts2_rl/rewards.py GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20) and SCROLLS_OF_BITING_WEAK sets neither min_gold nor max_gold -- matches (weak encounters share the Monster ladder; only IsWeak is overridden). Poverty/ascension scaling out of scope per PROMPT.md."
+    },
+    {
+      "what": "ShouldGiveRewards -- not overridden, defaults true",
+      "verdict": "faithful",
+      "rationale": "ScrollsOfBitingWeak does not override ShouldGiveRewards; Encounter.should_give_rewards defaults True and is left unset here -- matches."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-08-03"
+}

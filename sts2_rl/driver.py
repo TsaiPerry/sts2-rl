@@ -520,8 +520,15 @@ class RunDriver:
         won = bool(combat.result and combat.result.player_won)
         if (won and room_type in GOLD_REWARD_RANGES
                 and encounter.should_give_rewards):
-            self._offer_rewards(
-                run.generate_combat_rewards(room_type, encounter=encounter))
+            self._offer_rewards(run.generate_combat_rewards(
+                room_type, encounter=encounter,
+                # `CombatRoom.OnCombatEnded` (CombatRoom.cs:233-236) reads the
+                # encounter's gold proportion off the finished combat, and
+                # `RewardsSet` scales the MONSTER gold range by it. The sim
+                # always passed the 1.0 default, so an encounter that lets an
+                # enemy escape still paid full gold.
+                gold_proportion=encounter.calculate_gold_proportion(combat),
+            ))
         return combat
 
     def _offer_rewards(self, rewards: "CombatRewards") -> None:

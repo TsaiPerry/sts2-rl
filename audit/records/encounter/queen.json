@@ -1,0 +1,82 @@
+{
+  "unit": "encounter/queen",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\QueenBoss.cs",
+    "sha256": "0d42c95c7b046d9ad5e706ea6c1e6f8993f5402685419fa4c087b8ff02786c0f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\glory\\queen.py",
+    "sha256": "a478cd25a0473b558e1921abf6f8bf994cfdbfa89ae258ba0774852a7281e4fa"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "sts2_rl/rooms.py _glory_rooms().boss_keys includes 'queen'",
+      "verdict": "faithful",
+      "rationale": "QueenBoss declares RoomType.Boss; bucket membership agrees (queen only in boss_keys)."
+    },
+    "Slots": {
+      "maps_to": "(dropped) -- QUEEN_BOSS does not set Encounter.slots",
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-08-03 (gap-fix pass). The `Encounter` dataclass already had `slots`/`monster_slots` and `CreatureCmd.add(slot_name=)` re-sorts on them (shipped round 7 for Fabricator/Ovicopter); this unit simply never declared its row. It does now, transcribed from the C# `Slots` override and `GenerateMonsters`' `(model, slot)` pairs, and `CombatState.__init__` routes every roster through `Encounter.seat_in_slots` so the seventeen `create_monsters` overrides are seated too. Regression tests: test/test_encounter_slots.py.\n\nWHAT THE GAP SAID: QueenBoss.cs declares Slots => [\"amalgam\", \"queen\"] (a real, non-empty row), but QUEEN_BOSS (queen.py) is constructed as `Encounter(id=\"queen_boss\", monster_classes=[TorchHeadAmalgam, Queen])` with no `slots=` argument, so it inherits the Encounter dataclass default `()`. Proposed shared mechanism id encounter/_slot_order (see rationale for why this is a shared shape, not unique to Queen). Filed as a gap on the Slots hook because the sim's Encounter dataclass DOES support a non-empty slots row (Fabricator/Ovicopter use it, per monster/fabricator.json's guard closing this exact mechanism there in round 7) -- QueenBoss is simply not wired to it, even though its own C# clearly declares one."
+    },
+    "CustomBgm": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only: an FMOD event path. No sim counterpart; no observable gameplay effect."
+    },
+    "HasCustomBackground": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only, same reasoning as encounter/test_subject: the background rng it consumes is a dedicated background-asset stream (NCombatRoom.GenerateBackgroundRngForCurrentPoint), never the run's or the encounter's Rng, so no draw is skipped that parity needs. No sim background rendering exists at all."
+    },
+    "HasScene": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only: gates whether a Godot scene is instantiated for this encounter's combat UI. No sim counterpart; no observable gameplay effect."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "QUEEN_BOSS.monster_classes = {TorchHeadAmalgam, Queen} (as a set)",
+      "verdict": "faithful",
+      "rationale": "C#'s AllPossibleMonsters array literal is [Queen, TorchHeadAmalgam] (Queen first); the sim's monster_classes is [TorchHeadAmalgam, Queen] (amalgam first). AllPossibleMonsters is an unordered superset used for previews/asset-preload, not a placement list, so the two sides agreeing as a SET is the right bar (order divergence here carries no consequence, unlike the GenerateMonsters tuple order, which is verdicted separately). Both models exist and both are always-spawning, fixed members -- no possible set divergence."
+    },
+    "ExtraAssetPaths": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only: preloads the 'Bound' affliction's card-overlay art (ModelDb.Affliction<Bound>().OverlayPath) so it doesn't pop in mid-fight. This is an asset-preload path string only; the Bound affliction's actual mechanical application (via Queen's ChainsOfBindingPower move) is a power-tier concern, not this encounter's, and is not duplicated here per rule 3."
+    },
+    "GetCameraScaling": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only: a camera zoom-out factor (0.9) for this 2-monster boss fight's framing. No sim camera/rendering layer exists."
+    },
+    "GetCameraOffset": {
+      "maps_to": "(dropped)",
+      "verdict": "waiver",
+      "rationale": "Presentation only: a fixed downward camera pan (Vector2.Down * 60). No sim camera/rendering layer exists."
+    },
+    "GenerateMonsters": {
+      "maps_to": "Encounter.create_monsters (sts2_rl/monsters/base.py) via QUEEN_BOSS(monster_classes=[TorchHeadAmalgam, Queen])",
+      "verdict": "faithful",
+      "rationale": "CLOSED 2026-08-03 (gap-fix pass). The `Encounter` dataclass already had `slots`/`monster_slots` and `CreatureCmd.add(slot_name=)` re-sorts on them (shipped round 7 for Fabricator/Ovicopter); this unit simply never declared its row. It does now, transcribed from the C# `Slots` override and `GenerateMonsters`' `(model, slot)` pairs, and `CombatState.__init__` routes every roster through `Encounter.seat_in_slots` so the seventeen `create_monsters` overrides are seated too. Regression tests: test/test_encounter_slots.py.\n\nWHAT THE GAP SAID: Roster and ORDER are faithful (see rationale), but the slot-tag half of each C# tuple is dropped: QueenBoss.cs's GenerateMonsters returns (TorchHeadAmalgam, \"amalgam\") then (Queen, \"queen\"), while the sim's create_monsters (via the default Encounter.create_monsters, since QUEEN_BOSS supplies no monster_slots) zips monster_classes against an empty monster_slots tuple, so `zip()` yields nothing and neither creature's slot_name is ever set -- both stay None instead of 'amalgam'/'queen'. Same mechanism as, and filed jointly with, the Slots hook above (encounter/_slot_order); see that entry's rationale for the full dormancy witness and the cross-record note about monster/fabricator.json's guard."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "sts2_rl/monsters/base.py Encounter dataclass is never registered as a hook listener; only Monster instances register themselves",
+      "verdict": "faithful",
+      "rationale": "Same structural fact as every unit in this batch."
+    }
+  },
+  "guards": [
+    {
+      "what": "MinGoldReward/MaxGoldReward -- not overridden, inherits the Boss ladder (100-100, i.e. fixed) x Poverty multiplier",
+      "verdict": "faithful",
+      "rationale": "sts2_rl/rewards.py GOLD_REWARD_RANGES[RoomType.BOSS] = (100, 100) and QUEEN_BOSS sets neither min_gold nor max_gold -- matches. Poverty/ascension scaling out of scope per PROMPT.md."
+    },
+    {
+      "what": "ShouldGiveRewards -- not overridden, defaults true",
+      "verdict": "faithful",
+      "rationale": "QueenBoss does not override ShouldGiveRewards; Encounter.should_give_rewards defaults True and is left unset here -- matches."
+    }
+  ],
+  "verdict": "waiver",
+  "audited": "2026-08-03"
+}

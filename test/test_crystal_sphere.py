@@ -466,6 +466,47 @@ def test_the_payout_draws_on_the_events_own_rng_not_the_rewards_stream():
     assert dict(run.player_rng.counters()) == before
 
 
+def test_the_relic_pulls_at_its_reveal_position_not_after_the_card_sweep():
+    """`GenerateWithoutOffering`'s FIRST loop is
+    `foreach (Reward reward in Rewards) reward.Populate()` (RewardsSet.cs:
+    130-134) — list order, i.e. reveal order, and before Hook.ModifyRewards.
+    `RelicReward.Populate` is the grab-bag pull and `CardReward.Populate` draws
+    the three options, both on the event's own Rng, so a relic revealed before
+    a card item pulls FIRST. Hoisting the pull behind every card group's
+    populate reorders the event stream and changes both the relic and the
+    cards."""
+    from sts2_rl.rewards import CardRewardGroup
+
+    order = []
+    real_pull = RunState.pull_relic_from_front
+    real_populate = CardRewardGroup.populate
+
+    def spy_pull(self, *a, **kw):
+        order.append("relic")
+        return real_pull(self, *a, **kw)
+
+    def spy_populate(self, *a, **kw):
+        order.append("card")
+        return real_populate(self, *a, **kw)
+
+    monkey = pytest.MonkeyPatch()
+    try:
+        monkey.setattr(RunState, "pull_relic_from_front", spy_pull)
+        monkey.setattr(CardRewardGroup, "populate", spy_populate)
+        run = sphere_run(seed=6)
+        event = play(run, "PAYMENT_PLAN", reveal_only(ItemKind.RELIC, ItemKind.CARD))
+    finally:
+        monkey.undo()
+
+    revealed = [
+        i.kind for i in event.minigame.revealed
+        if i.kind in (ItemKind.RELIC, ItemKind.CARD)
+    ]
+    assert revealed[:2] == [ItemKind.RELIC, ItemKind.CARD], (
+        "the fixture must reveal the relic before a card item")
+    assert order == [k.value for k in revealed]
+
+
 def test_the_same_seed_replays_the_same_board():
     """The click stream is sim-only but must still be deterministic, or a
     seeded RL run stops being reproducible."""

@@ -131,7 +131,33 @@ class BeatDownCard(Card):
         for card in candidates[: self._cards]:
             if ctx.combat.is_over or ctx.player.is_dead:
                 break
-            ctx.combat.auto_play_card(card)
+            # BeatDown.cs:32-40 rolls the target ITSELF, before the
+            # `CardCmd.AutoPlay` call, and passes it in. That ordering is the
+            # whole of this site's parity: `AutoPlay` checks the Unplayable
+            # keyword (CardCmd.cs:58-62) and `Hook.ShouldPlay` (:63-72) BEFORE
+            # its own `target == null` roll (:73-81), so a hook-vetoed play
+            # taken through the null-target path spends no CombatTargets draw —
+            # but Beat Down has already spent one by the time the veto runs.
+            # Letting `auto_play_card` roll here instead under-drew the stream
+            # for every vetoed Attack: with a Sloth curse in hand (1 card/turn)
+            # 3 attempted attacks drew 1 instead of 3, and with Velvet Choker
+            # at its cap, 0 instead of 3 — desyncing Shuffle-adjacent parity for
+            # the rest of the combat. Beat Down is the ONLY pre-roll caller in
+            # the game source (`grep -rn "CombatTargets.NextItem" src/`: this
+            # site and CardCmd.cs's own two), so every other `auto_play_card`
+            # caller is correct passing no target.
+            target_idx = None
+            if card.target_type == TargetType.ANY_ENEMY:
+                from ..cmds import is_hittable
+                hittable = [i for i, e in enumerate(ctx.combat.enemies)
+                            if is_hittable(ctx.hooks, e)]
+                if not hittable:
+                    # `NextItem` over an empty list yields no target, and
+                    # AutoPlay then spends the card unplayed (CardCmd.cs:78-81).
+                    ctx.combat.auto_play_card(card)
+                    continue
+                target_idx = ctx.combat.combat_rng.targets.choice(hittable)
+            ctx.combat.auto_play_card(card, target_idx=target_idx)
 
 
 @register_card

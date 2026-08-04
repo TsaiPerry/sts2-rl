@@ -58,12 +58,20 @@ class PregeneratedEncounter(Encounter):
 
     @classmethod
     def of(cls, source: Encounter, pregenerated_hp: list[int]) -> "PregeneratedEncounter":
+        # Every field the wrapper must carry forward, not just the ones it
+        # happened to need when it was written: the wrapper IS the encounter
+        # the fight runs on, so a field left behind here is a field the fight
+        # does not have. `entry_slug` re-seeds the per-encounter Rng and the
+        # slot row orders the enemy list — both are read after the wrap.
         return cls(
             id=source.id,
             monster_classes=list(source.monster_classes),
             should_give_rewards=source.should_give_rewards,
             min_gold=source.min_gold,
             max_gold=source.max_gold,
+            slots=source.slots,
+            monster_slots=source.monster_slots,
+            entry_slug=source.entry_slug,
             source=source,
             pregenerated_hp=list(pregenerated_hp),
         )

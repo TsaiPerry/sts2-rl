@@ -59,6 +59,11 @@ class RelicRarity(Enum):
     SHOP = "shop"
     EVENT = "event"
     ANCIENT = "ancient"
+    # `RelicRarity.None` — the enum's zero, carried by Circlet alone
+    # (Circlet.cs:7). It is in no grab-bag deque and no pool but
+    # FallbackRelicPool, so a None-rarity relic can only arrive through
+    # RelicFactory.FallbackRelic.
+    NONE = "none"
 
 
 # RelicModel.MerchantCost by rarity (non-ascension values). Ancient/Starter/
@@ -71,6 +76,7 @@ _MERCHANT_COST_BY_RARITY: dict[RelicRarity, int] = {
     RelicRarity.ANCIENT: 999_999_999,
     RelicRarity.STARTER: 999_999_999,
     RelicRarity.EVENT: 999_999_999,
+    RelicRarity.NONE: 999_999_999,
 }
 
 

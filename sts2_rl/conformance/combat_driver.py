@@ -5,6 +5,10 @@ annotation (Hand / Enemies) against the recording before dispatching it.
 Card resolution uses the `CombatCardDb` (Task 5) oracle: `PlayCard`'s first
 argument is the per-combat card id (`NetCombatCardDb`), not a hand index —
 `card_db.get(id)` returns the card, whose hand index is then looked up live.
+The db is the COMBAT's own (`CombatState.card_db`, started at the game's
+`SetUpCombat` instant and stamping each later card as it is added), not one the
+driver builds after the fact; passing a different db here would reintroduce the
+post-draw reconstruction this driver used to be wrong about.
 Enemy targeting is the recording's 1-based, stable absolute slot into
 `combat.enemies` (dead enemies stay in place as `is_gone`), so `target_idx =
 tid - 1` needs no re-indexing over living enemies.
@@ -29,8 +33,28 @@ _COMBAT_TAIL_CMDS = _DRIVER_CMDS | {"SelectGridCard", "SelectHandCards"}
 
 
 def card_display_name(card) -> str:
-    """Recording spelling: base name + one '+' per upgrade level (Card.__repr__:
-    f"{name}{'+'*upgrade_level}"). e.g. "Strike", "Defend+", "Bash+", "Slimed"."""
+    """Recording spelling — the game's `CardModel.Title`.
+
+    Normally that is the base name plus one '+' per upgrade level
+    (Card.__repr__: f"{name}{'+'*upgrade_level}"): "Strike", "Defend+",
+    "Bash+", "Slimed".
+
+    `Wither` overrides `Title` (Wither.cs:16-27) to append `+{FakeUpgradeLevel}`
+    instead — a SEPARATE counter from `CurrentUpgradeLevel`, which for Wither
+    can never be non-zero (`MaxUpgradeLevel => 0`, Wither.cs:41) because the
+    card grows through `FakeUpgrade()` (:60-64, +3 damage a step) rather than
+    the ordinary upgrade path. Reading `upgrade_level` alone therefore CANNOT
+    reproduce the recording's "Wither+1", and reported it as a hand divergence
+    on every turn one was held: 14 of them across 89U21BV1TZ's act-2 Aeonglass
+    fights, which were the seed's last per-command mismatches. The engine was
+    right the whole time — the sim's Withers carry the matching
+    `fake_upgrade_level`, which is why the run's HP, counters, deck, relics and
+    gold all matched exactly while these 14 "divergences" stood. Teaching the
+    comparator the field takes them to zero and changes nothing else.
+    """
+    fake = getattr(card, "fake_upgrade_level", 0)
+    if fake:
+        return f"{card.name}+{fake}"
     suffix = "+" * card.upgrade_level if card.upgrade_level > 0 else ""
     return f"{card.name}{suffix}"
 
@@ -94,6 +118,25 @@ class ReplayCombatDriver:
         game auto-resolved. When the game *did* auto-resolve it emitted no
         command at all, so this peek cannot steal a later screen's pick."""
         cmd = self.cursor.peek()
+        # `CardSelectCmd.FromChooseACardScreen` — the OTHER screen kind, and
+        # the recording writes it as `SelectCardFromScreen N` (an index into
+        # the offered cards), not as a grid pick. The sim resolves most of
+        # those asynchronously through `_pending_screen_cards`, but the ones
+        # the game blocks on mid-move (Knowledge Demon's Curse of Knowledge,
+        # KnowledgeDemon.cs:183) come through here instead, and used to fall
+        # off the end of this function as "no choice made" — the recorded
+        # command was then dispatched into an empty `_pending_screen_cards`
+        # and did nothing at all. Taking it here is safe precisely BECAUSE the
+        # deferred kind parks its cards first: if a screen is already pending,
+        # the command belongs to that one.
+        if (cmd is not None and cmd.name == "SelectCardFromScreen"
+                and self.combat._pending_screen_cards is None):
+            self.cursor.advance()
+            arg = cmd.args[0] if cmd.args else "skip"
+            if not arg.lstrip("-").isdigit():
+                return []                      # a `skip` on a canSkip screen
+            idx = int(arg)
+            return [candidates[idx]] if 0 <= idx < len(candidates) else []
         if cmd is None or cmd.name != "SelectHandCards":
             if len(candidates) <= count:
                 return list(candidates)

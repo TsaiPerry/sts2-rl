@@ -211,3 +211,41 @@ class TestTransformOptionsStatusBranchExcludesTheFour:
         options = transform_options_in_combat(card, character_pool=None)
         for bad in _CHOOSABLE_CURSE_IDS:
             assert bad not in options, (status_id, bad)
+
+
+class TestStatusTransformKeepsTheDeclaredPoolOrder:
+    """`StatusCardPool.GenerateAllCards` (StatusCardPool.cs:19-34) is NOT
+    alphabetical — Wither sits sixth, between Infection and Slimed. A
+    transform picks `Rng.NextItem` over the filtered candidate list IN POOL
+    ORDER, so alphabetizing the row hands the same draw a different card.
+
+    Queue entry: relic_pools/step13.
+    """
+
+    def test_the_pool_row_is_the_c_sharp_declaration_order(self):
+        from sts2_rl.cards.pool import STATUS_POOL
+
+        # The game's twelve, minus Debris and Void (not ported).
+        assert list(STATUS_POOL) == [
+            "beckon", "burn", "dazed", "frantic_escape", "infection",
+            "wither", "slimed", "soot", "toxic", "wound",
+        ]
+
+    def test_wither_precedes_slimed_toxic_and_wound(self):
+        options = transform_options_in_combat(
+            make_card("dazed"), character_pool=None)
+        assert options.index("wither") < options.index("slimed")
+        assert options.index("wither") < options.index("toxic")
+        assert options.index("wither") < options.index("wound")
+        assert options != sorted(options)
+
+    def test_non_generatable_and_non_pool_statuses_are_excluded(self):
+        """FranticEscape/Soot are pool members the combat filter drops
+        (CanBeGeneratedInCombat => false); mind_rot/sloth/disintegration/
+        waste_away are sim statuses that are not in StatusCardPool at all and
+        used to be swept in by the `sorted(_CARD_CLASSES)` rebuild."""
+        options = transform_options_in_combat(
+            make_card("wound"), character_pool=None)
+        for excluded in ("frantic_escape", "soot", "mind_rot", "sloth",
+                         "disintegration", "waste_away"):
+            assert excluded not in options

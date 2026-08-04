@@ -375,6 +375,58 @@ class TestQueueGeneratorCoversEveryKind:
         )
 
 
+class TestQueueGeneratorCoversEverySeamWithGaps:
+    """`gap_queue.py` keeps a SECOND hand-maintained list -- `SEAMS` -- and it
+    has the identical failure mode as the kind list above.
+
+    `SEAMS` is deliberately NOT `harness.SEAMS`: a seam is added the moment it
+    has its first `verdict: "gap"` entry to extract, not the moment its record
+    is created, because a freshly wired seam ships an empty `steps: []`
+    scaffold with nothing to extract and some of the names are common enough
+    English words ("rewards") to false-positive against an unrelated xfail
+    reason at the pin locator.
+
+    That rule is correct and the comment states it. What was missing is anything
+    that ENFORCES it. On 2026-08-03 the systems-tier campaign wired six seams,
+    then filed 12 gap entries across four of them -- and `counts` went on
+    reporting `seam ... 0 live entries`, because the list still named the
+    original six. Same shape as the `potion` omission the class above exists
+    for: two tools, two answers, and only the one nobody was reading was right.
+
+    This is the enforcement. The rule is not "SEAMS == harness.SEAMS"; it is
+    "every seam record that has something to extract is in SEAMS".
+    """
+
+    def _seam_records_with_gap_entries(self):
+        import json
+
+        from audit.tools import gap_queue
+
+        out = []
+        for path in sorted(gap_queue.RECORD_DIR.glob("*.json")):
+            record = json.loads(path.read_text(encoding="utf-8"))
+            entries = record.get("steps", []) + record.get("guards", [])
+            if any(e.get("verdict") == "gap" for e in entries):
+                out.append(path.stem)
+        return out
+
+    def test_every_seam_with_a_gap_entry_is_extracted(self):
+        from audit.tools import gap_queue
+
+        missing = [s for s in self._seam_records_with_gap_entries()
+                   if s not in gap_queue.SEAMS]
+        assert missing == [], (
+            "these seam records carry `verdict: \"gap\"` entries that "
+            "gap_queue.py never extracts, so they are invisible to "
+            f"`counts`, `coverage` and GAP-QUEUE.md: {missing}"
+        )
+
+    def test_the_queue_generator_invents_no_seam(self):
+        from audit.tools import gap_queue
+
+        assert set(gap_queue.SEAMS) - set(harness.SEAMS) == set()
+
+
 class TestTypedLivenessIsHonouredEverywhere:
     """The typed ``"live"`` key must outrank the prose scan in EVERY record
     shape, not just the one it was added for.

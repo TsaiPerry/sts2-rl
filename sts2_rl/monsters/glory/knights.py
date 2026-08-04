@@ -151,4 +151,8 @@ class SpectralKnight(MachineMonster):
 KNIGHTS_ELITE = Encounter(
     id="knights_elite",
     monster_classes=[FlailKnight, SpectralKnight, MagiKnight],
+    # KnightsElite.cs:37-45 seats the three knights by name but declares NO
+    # `Slots` override, so `Slots.IndexOf` is -1 for all three and the sort
+    # is a no-op — the names are carried for fidelity, not for ordering.
+    monster_slots=("first", "second", "third"),
 )

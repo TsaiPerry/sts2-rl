@@ -1055,3 +1055,68 @@ class TestGremlinMercThievery:
         assert cs.pending_reward_extras == []
         run.finish_combat(cs)
         assert run.gold == 80
+
+
+class TestGremlinMercGoldProportion:
+    """`GremlinMercNormal.CalculateGoldProportion` (GremlinMercNormal.cs:58-69)
+    and the base formula it overrides (EncounterModel.cs:373-376).
+    `CombatRoom.OnCombatEnded` computes it, `RewardsSet` scales the MONSTER
+    gold range by it and skips the reward entirely at 0 (RewardsSet.cs:225-227).
+
+    Queue entry: encounter/gremlin_merc/CalculateGoldProportion.
+    """
+
+    def _combat(self, gold=100, seed=0):
+        from sts2_rl.run import RunState
+        run = RunState(rng=random.Random(seed))
+        run.gold = gold
+        return run, run.create_combat(GREMLIN_MERC_NORMAL)
+
+    def test_nothing_escaped_pays_in_full(self):
+        run, cs = self._combat()
+        cs.end_turn()
+        DamageCmd.deal(cs.hooks, cs.enemies[0], 999, dealer=cs.player)
+        for enemy in list(cs.enemies):
+            DamageCmd.deal(cs.hooks, enemy, 999, dealer=cs.player)
+        assert GREMLIN_MERC_NORMAL.calculate_gold_proportion(cs) == 1.0
+
+    def test_a_fled_fat_gremlin_with_stolen_gold_withholds_the_reward(self):
+        from sts2_rl.rooms import RoomType
+
+        run, cs = self._combat()
+        cs.end_turn()  # GIMME -> steals 20
+        DamageCmd.deal(cs.hooks, cs.enemies[0], 999, dealer=cs.player)
+        cs.end_turn()  # gremlins wake up
+        cs.end_turn()  # sneaky tackles, fat flees
+        assert cs.enemies[2].escaped and cs.gold_stolen == 20
+        assert GREMLIN_MERC_NORMAL.calculate_gold_proportion(cs) == 0.0
+
+        run.finish_combat(cs, room_type=RoomType.MONSTER)
+        rewards = run.generate_combat_rewards(
+            RoomType.MONSTER, encounter=GREMLIN_MERC_NORMAL,
+            gold_proportion=GREMLIN_MERC_NORMAL.calculate_gold_proportion(cs))
+        assert rewards.gold == 0
+
+    def test_a_fled_fat_gremlin_with_nothing_stolen_halves_it(self):
+        """The arm between the two: `!GoldWasStolen` returns 0.5, not 0."""
+        run, cs = self._combat(gold=0)  # nothing to steal
+        DamageCmd.deal(cs.hooks, cs.enemies[0], 999, dealer=cs.player)
+        cs.end_turn()  # gremlins wake up
+        cs.end_turn()  # sneaky tackles, fat flees
+        assert cs.enemies[2].escaped and cs.gold_stolen == 0
+        assert GREMLIN_MERC_NORMAL.calculate_gold_proportion(cs) == 0.5
+
+    def test_the_base_formula_counts_distinct_models_against_escaped_creatures(self):
+        """`1 - EscapedCreatures.Count / SpawnedEnemies.Count`, where
+        SpawnedEnemies is deduplicated by canonical MonsterModel — so the three
+        starting Two-Tailed Rats are ONE spawned enemy."""
+        from sts2_rl.cmds import CreatureCmd
+        from sts2_rl.monsters.underdocks import TWO_TAILED_RATS_NORMAL
+        from sts2_rl.run import RunState
+
+        run = RunState(rng=random.Random(1))
+        cs = run.create_combat(TWO_TAILED_RATS_NORMAL)
+        assert len({type(e) for e in cs.enemies}) == 1
+        assert TWO_TAILED_RATS_NORMAL.calculate_gold_proportion(cs) == 1.0
+        CreatureCmd.escape(cs.hooks, cs.enemies[0])
+        assert TWO_TAILED_RATS_NORMAL.calculate_gold_proportion(cs) == 0.0

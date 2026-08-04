@@ -79,7 +79,10 @@ def test_step2_enemy_side_summon_takes_no_monster_ai_draw():
     rat._call_for_backup(combat._ctx())
     assert rs.monster_ai.counter == before
 
-    spawn = combat.enemies[-1]
+    # The summon holds slot "second" and so re-sorts to the FRONT of the
+    # enemy list (encounter/_slot_order); identify it by its id, not by
+    # position.
+    spawn = max(combat.enemies, key=lambda e: e.net_id)
     assert spawn is not rat
     assert not spawn.has_rolled_a_move
     assert spawn._current_move.id == "UNSET_MOVE"
@@ -97,7 +100,7 @@ def test_step2_the_unrolled_spawn_is_rolled_by_the_next_pass_in_list_order():
     rat.turns_until_summonable = 0
     combat.current_side = "enemy"
     rat._call_for_backup(combat._ctx())
-    spawn = combat.enemies[-1]
+    spawn = max(combat.enemies, key=lambda e: e.net_id)
 
     combat.current_side = "player"
     before = rs.monster_ai.counter

@@ -121,4 +121,9 @@ FAKE_MERCHANT_EVENT_ENCOUNTER = Encounter(
     monster_classes=[FakeMerchantMonster],
     min_gold=_GOLD_REWARD,
     max_gold=_GOLD_REWARD,
+    # C# class FakeMerchantEventEncounter — the sim id drops the suffix.
+    entry_slug="FAKE_MERCHANT_EVENT_ENCOUNTER",
+    # FakeMerchantEventEncounter.cs:17,25-28 — a one-name row.
+    slots=("merchant",),
+    monster_slots=("merchant",),
 )

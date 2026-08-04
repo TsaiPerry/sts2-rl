@@ -93,7 +93,12 @@ class TheObscura(MachineMonster):
 
     def _illusion(self, ctx: CombatCtx) -> None:
         from ...cmds import CreatureCmd
-        CreatureCmd.add(ctx.hooks, Parafright(ctx.hooks, self._rng))
+        # TheObscura.cs:84 — `CreatureCmd.Add<Parafright>(CombatState,
+        # "illusion")`, index 0, so the Parafright re-sorts ahead of the
+        # Obscura the instant it lands.
+        CreatureCmd.add(
+            ctx.hooks, Parafright(ctx.hooks, self._rng), slot_name="illusion",
+        )
 
     def _gaze(self, ctx: CombatCtx) -> None:
         self._execute_attack(ctx, _GAZE_DMG, 1)
@@ -115,4 +120,9 @@ class TheObscura(MachineMonster):
 THE_OBSCURA_NORMAL = Encounter(
     id="the_obscura_normal",
     monster_classes=[TheObscura],
+    # TheObscuraNormal.cs:15,25-28 — same shape as Fogmog: the Obscura sits
+    # in "obscura" (index 1) and the ILLUSION summon takes "illusion"
+    # (index 0), which re-sorts the Parafright ahead of it.
+    slots=("illusion", "obscura"),
+    monster_slots=("obscura",),
 )

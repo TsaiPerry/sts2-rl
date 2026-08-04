@@ -19,8 +19,10 @@ import pytest
 
 from sts2_rl import CombatState, make_relic
 from sts2_rl.cards import make_card
+from sts2_rl.cards.base import TargetType
 from sts2_rl.cmds import CardCmd
 from sts2_rl.combat_rng import _PARITY_STREAMS
+from sts2_rl.monsters.overgrowth import SLIMES_NORMAL
 from sts2_rl.rng import RunRngSet
 
 
@@ -89,6 +91,51 @@ def test_beat_down_draws_on_the_shuffle_stream():
     counters = _split_streams(cs)
     make_card("beat_down").on_play(cs._ctx(), target_idx=0)
     _only(counters, "shuffle")
+
+
+def test_beat_down_spends_a_combat_targets_draw_even_when_the_play_is_vetoed():
+    """`BeatDown.cs:32-40` rolls `Rng.CombatTargets.NextItem(HittableEnemies)`
+    ITSELF and passes the result into `CardCmd.AutoPlay`.
+
+    `AutoPlay` tests the Unplayable keyword (CardCmd.cs:58-62) and
+    `Hook.ShouldPlay` (:63-72) BEFORE its own `target == null` roll (:73-81),
+    so the draw Beat Down already took is spent whether or not the play then
+    survives the veto. The sim let `auto_play_card` roll instead, i.e. AFTER
+    the veto, and so UNDER-DREW the stream once anything blocked an
+    auto-played Attack.
+
+    This was `card/beat_down`'s open guard, filed DORMANT on the claim that
+    "no such preventer is ported that fires on an auto-played Attack". Two
+    are, neither checking `auto_play` or card type: `SlothPower`
+    (powers.py, `_cards_played_this_turn < amount`) — a Knowledge Demon curse
+    — and Velvet Choker (relics/velvet_choker.py), a Darv event reward.
+    """
+    from sts2_rl.cmds import PowerCmd
+    from sts2_rl.powers import SlothPower
+
+    def draws(apply_preventer) -> int:
+        rs = RunRngSet("beat-down-veto")
+        cs = CombatState(rng_set=rs, encounter=SLIMES_NORMAL)
+        cs.player.hand.clear()
+        cs.player.draw_pile.clear()
+        cs.player.discard_pile.clear()
+        attacks = [make_card("strike") for _ in range(3)]
+        for c in attacks:
+            c.combat = cs
+            cs.hooks.register(c)
+        cs.player.discard_pile.extend(attacks)
+        assert all(c.target_type == TargetType.ANY_ENEMY for c in attacks)
+        apply_preventer(cs)
+        before = rs.combat_targets.counter
+        make_card("beat_down").on_play(cs._ctx())
+        return rs.combat_targets.counter - before
+
+    # Three AnyEnemy Attacks attempted => three CombatTargets draws, always.
+    assert draws(lambda cs: None) == 3
+    # A Sloth curse caps the player at ONE card played this turn; the
+    # remaining two are vetoed by Hook.ShouldPlay — and still cost a draw.
+    assert draws(
+        lambda cs: PowerCmd.apply(cs.hooks, cs.player, SlothPower, 1)) == 3
 
 
 @pytest.mark.parametrize("card_id", ["discovery", "distraction", "splash"])

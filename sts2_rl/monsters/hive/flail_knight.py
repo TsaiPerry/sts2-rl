@@ -97,4 +97,6 @@ class MysteriousKnight(FlailKnight):
 MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER = Encounter(
     id="mysterious_knight_event",
     monster_classes=[MysteriousKnight],
+    # C# class MysteriousKnightEventEncounter — the sim id drops the suffix.
+    entry_slug="MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER",
 )

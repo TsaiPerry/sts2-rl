@@ -1,0 +1,97 @@
+{
+  "unit": "encounter/the_kin",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\TheKinBoss.cs",
+    "sha256": "5348911b539aee1e638af569f4ae5bb2e32293ad560fe0b510fb662bf9deb40f"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\the_kin.py",
+    "sha256": "fa84560a3875e11397cd94b9df007dca8df3ccf2b046d621de166630d3da3ff1"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms boss_keys",
+      "verdict": "faithful"
+    },
+    "HasScene": {
+      "maps_to": "none -- headless sim has no scene/rendering layer",
+      "verdict": "deliberate-divergence",
+      "rationale": "TheKinBoss.HasScene => true selects a bespoke Godot combat scene; the sim never renders combat at all."
+    },
+    "HasCustomBackground": {
+      "maps_to": "none -- headless sim has no background/rendering layer",
+      "verdict": "deliberate-divergence",
+      "rationale": "TheKinBoss.HasCustomBackground => true is a pure presentation switch (CreateBackgroundAssetsForCustom vs the act's generic background); the sim has no background/asset concept at all."
+    },
+    "CustomBgm": {
+      "maps_to": "none -- headless sim has no audio layer",
+      "verdict": "deliberate-divergence",
+      "rationale": "TheKinBoss.CustomBgm names an FMOD event path; the sim has no audio layer at all."
+    },
+    "BossNodePath": {
+      "maps_to": "none -- headless sim has no map-node rendering",
+      "verdict": "deliberate-divergence",
+      "rationale": "BossNodePath is a map-node icon asset path; the sim's map layer (actmap.py) has no node-rendering concept, only structural point/edge data."
+    },
+    "BossNodeSpineResource": {
+      "maps_to": "none -- headless sim has no map-node rendering",
+      "verdict": "deliberate-divergence",
+      "rationale": "Same rationale as BossNodePath -- purely a Spine skeleton resource lookup for map-node rendering."
+    },
+    "Slots": {
+      "maps_to": "sts2_rl/monsters/base.py:Encounter.slots (default empty tuple) -- the_kin.py's THE_KIN_BOSS = TheKinEncounter(id=\"the_kin_boss\") passes no slots= kwarg",
+      "verdict": "gap",
+      "live": false,
+      "issue": "TheKinBoss.Slots = [\"slot1\", \"slot2\", \"leaderSlot\"]. The sim's TheKinEncounter dataclass never sets Encounter.slots, and its create_monsters override builds the 3 monsters as a plain list with no slot_name assignment at all. Executed witness: py audit/tools/encounter_probes_e2.py kin-phrog-slots shows `encounter.slots=()` and `slot_name=None` on all 3 creatures. Filed under the shared mechanism encounter/_slot_row_unpopulated (also phrog_parasite/Slots). DORMANT: grepped every C# `SlotName ==` consumer across src/ (Exoskeleton, Myte, PhantasmalGardener, Wriggler) and read KinFollower.cs and KinPriest.cs in full -- neither Kin monster ever reads Creature.SlotName. KinPriest.AfterDeath's 'all followers dead' check (the one behaviourally-live consumer of Kin creature relationships) uses CombatState.GetTeammatesOf (side-based), not slot names. The one place slot order COULD matter mechanically -- CombatManager.AddCreature's SortEnemiesBySlotName resort, ported as the slot_name branch of CreatureCmd.add in sts2_rl/cmds.py -- is never triggered for this unit's own construction (CreatureCmd.add/its sim equivalent is not even in the initial-roster path; TheKinEncounter.create_monsters builds enemies directly) and the 3 monsters' insertion order already matches the intended slot1/slot2/leaderSlot order by construction. The sim's Encounter dataclass CAN express a slot row (Fabricator/Ovicopter use it), so this is a per-unit omission, not a structural limitation."
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "none -- the sim has no per-encounter monster-preview member",
+      "verdict": "deliberate-divergence",
+      "rationale": "Same zero-cost finding as overgrowth_crawlers/AllPossibleMonsters."
+    },
+    "GetCameraScaling": {
+      "maps_to": "none -- headless sim has no camera/rendering layer",
+      "verdict": "deliberate-divergence",
+      "rationale": "TheKinBoss.GetCameraScaling => 0.85f is a pure presentation value; the sim never renders combat."
+    },
+    "GetCameraOffset": {
+      "maps_to": "none -- headless sim has no camera/rendering layer",
+      "verdict": "deliberate-divergence",
+      "rationale": "TheKinBoss.GetCameraOffset => Vector2.Down * 50f is a pure presentation value; same rationale as GetCameraScaling."
+    },
+    "GenerateMonsters": {
+      "maps_to": "sts2_rl/monsters/overgrowth/the_kin.py:TheKinEncounter.create_monsters -> [KinFollower(starts_with_dance=True), KinFollower(), KinPriest()]",
+      "verdict": "faithful",
+      "note": "C# GenerateMonsters is a fixed 3-element list: a KinFollower with StartsWithDance mutated True at slot1, a plain KinFollower at slot2, a KinPriest at leaderSlot -- zero base.Rng draws. The sim builds the identical 3-monster roster in the identical order with the dance flag on the first KinFollower only, and 0 draws (create_monsters ignores selection_rng entirely, correctly, since there is nothing to draw). Roster, order, per-instance flag and draw count all match; the dropped slot-name half of each tuple is verdicted separately under Slots above."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "structural: Encounter is never registered with HookSystem",
+      "verdict": "faithful"
+    },
+    "Tags": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms tags -- \"the_kin\" is absent",
+      "verdict": "faithful",
+      "note": "No Tags override in C# (default empty)."
+    },
+    "IsWeak": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms -- \"the_kin\" is absent from weak_keys",
+      "verdict": "faithful"
+    },
+    "ShouldGiveRewards": {
+      "maps_to": "sts2_rl/monsters/base.py:Encounter.should_give_rewards (default True)",
+      "verdict": "faithful"
+    },
+    "MinGoldReward": {
+      "maps_to": "sts2_rl/rewards.py:GOLD_REWARD_RANGES[RoomType.BOSS] = (100, 100)",
+      "verdict": "faithful",
+      "note": "No override in C#; base ladder for RoomType.Boss is 100. Poverty multiplier out of scope, not applied in roll_gold_reward."
+    },
+    "MaxGoldReward": {
+      "maps_to": "sts2_rl/rewards.py:GOLD_REWARD_RANGES[RoomType.BOSS] = (100, 100)",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [],
+  "verdict": "gap",
+  "audited": "2026-08-03"
+}

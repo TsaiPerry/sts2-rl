@@ -227,29 +227,24 @@ def test_massive_scroll_is_never_offerable_and_after_obtained_is_absent():
     )
 
 
-def test_punch_dagger_g1_still_blocked_on_unported_momentum():
-    """relic/punch_dagger/g1 (DORMANT) — re-verified.
+def test_punch_dagger_enchants_a_deck_attack_now_that_momentum_is_ported():
+    """relic/punch_dagger/g1 — CLOSED 2026-08-03.
 
-    PunchDagger.cs:24-33 enchants a chosen deck card with Momentum (amount 5,
-    `DynamicVar("Momentum", 5m)`, PunchDagger.cs:15-19). Momentum is still not
-    among sts2_rl/enchantments.py's registered enchantments (now 19, not the
-    17 the port's old docstring cited — corrected there this task), so
-    PunchDagger still declares no `after_obtained` and is a genuine no-op.
+    This test used to pin the stub: Momentum was one of the three unported
+    enchantments, so PunchDagger declared no `after_obtained` and picking it
+    up did nothing. Momentum is ported now, so the relic does what
+    PunchDagger.cs:24-33 does — a one-card mandatory enchant screen over the
+    deck's Attacks (`CardSelectorPrefs(prompt, 1)`), then
+    `CardCmd.Enchant(momentum, card, 5)`.
     """
     from sts2_rl.enchantments import ALL_ENCHANTMENTS
 
-    assert "momentum" not in ALL_ENCHANTMENTS
-    assert len(ALL_ENCHANTMENTS) == 19
+    assert "momentum" in ALL_ENCHANTMENTS
 
     run = fresh_run(16)
-    from sts2_rl.relics.base import Relic
-    from sts2_rl.relics.punch_dagger import PunchDagger
+    run.add_relic(make_relic("punch_dagger"))
 
-    # PunchDagger declares no `after_obtained` override at all — confirms the
-    # docstring's "STILL A NO-OP" claim structurally, not just behaviorally.
-    assert "after_obtained" not in PunchDagger.__dict__
-
-    deck_before = [c.enchantment for c in run.deck]
-    relic = make_relic("punch_dagger")
-    Relic.after_obtained(relic, run)           # the inherited no-op
-    assert [c.enchantment for c in run.deck] == deck_before
+    enchanted = [c for c in run.deck if c.enchantment is not None]
+    assert len(enchanted) == 1
+    assert enchanted[0].enchantment.id == "momentum"
+    assert enchanted[0].enchantment.amount == 5

@@ -1,0 +1,56 @@
+{
+  "unit": "encounter/shrinker_beetle_weak",
+  "game_source": {
+    "path": "src\\Core\\Models\\Encounters\\ShrinkerBeetleWeak.cs",
+    "sha256": "90b8eb22088e9fadad9b38528438fb8c53242baddab6c1501d50157ca6bf81c2"
+  },
+  "sim_source": {
+    "path": "sts2_rl\\monsters\\overgrowth\\shrinker_beetle.py",
+    "sha256": "37bf6cdde5a527615bbb931c083ecd1c8c65cff8573a6096a78806e08d90f57e"
+  },
+  "hooks": {
+    "RoomType": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms weak_keys",
+      "verdict": "faithful"
+    },
+    "Tags": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms tags[\"shrinker_beetle_weak\"] = (\"shrinker\",)",
+      "verdict": "faithful",
+      "note": "ShrinkerBeetleWeak.Tags = [EncounterTag.Shrinker], matches."
+    },
+    "IsWeak": {
+      "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms weak_keys contains \"shrinker_beetle_weak\"",
+      "verdict": "faithful"
+    },
+    "AllPossibleMonsters": {
+      "maps_to": "none -- the sim has no per-encounter monster-preview member",
+      "verdict": "deliberate-divergence",
+      "rationale": "Same zero-cost finding as overgrowth_crawlers/AllPossibleMonsters."
+    },
+    "GenerateMonsters": {
+      "maps_to": "sts2_rl/monsters/overgrowth/shrinker_beetle.py:SHRINKER_BEETLE_WEAK = Encounter(id=\"shrinker_beetle_weak\", monster_classes=[ShrinkerBeetle])",
+      "verdict": "faithful",
+      "note": "C# GenerateMonsters is a single-element list [(ShrinkerBeetle, null)], zero draws. The sim's plain Encounter with one monster class and no create_monsters override, no slots kwarg, matches exactly."
+    },
+    "ShouldReceiveCombatHooks": {
+      "maps_to": "structural: Encounter is never registered with HookSystem",
+      "verdict": "faithful"
+    },
+    "ShouldGiveRewards": {
+      "maps_to": "sts2_rl/monsters/base.py:Encounter.should_give_rewards (default True)",
+      "verdict": "faithful"
+    },
+    "MinGoldReward": {
+      "maps_to": "sts2_rl/rewards.py:GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20)",
+      "verdict": "faithful",
+      "note": "No override in C#; IsWeak does not change the gold ladder (still a Monster room). Poverty multiplier out of scope, not applied in roll_gold_reward."
+    },
+    "MaxGoldReward": {
+      "maps_to": "sts2_rl/rewards.py:GOLD_REWARD_RANGES[RoomType.MONSTER] = (10, 20)",
+      "verdict": "faithful"
+    }
+  },
+  "guards": [],
+  "verdict": "deliberate-divergence",
+  "audited": "2026-08-03"
+}

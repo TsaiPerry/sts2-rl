@@ -36,6 +36,14 @@ class SaveOracle:
     visited_coords: list = field(default_factory=list)
     map_history: list = field(default_factory=list)
     events_seen: list[str] = field(default_factory=list)   # game ids, e.g. "EVENT.WHISPERING_HOLLOW"
+    # `UnlockState` — the PROFILE the recording was made on. Read by the runner
+    # so `ActModel.ApplyDiscoveryOrderModifications` (which overrides an act's
+    # rolled boss for a profile with unseen bosses) is driven by the fixture's
+    # own history instead of an assumption. Both installed Ironclad captures
+    # were made on a fully-unlocked profile (number_of_runs 999999999, all 12
+    # bosses seen), so the pass is provably a no-op for them.
+    encounters_seen: list[str] = field(default_factory=list)   # game ids
+    number_of_runs: int = 0
 
 
 def parse_save(path) -> SaveOracle:
@@ -79,4 +87,6 @@ def parse_save(path) -> SaveOracle:
         visited_coords=d.get("visited_map_coords", []),
         map_history=d.get("map_point_history", []),
         events_seen=d.get("events_seen", []),
+        encounters_seen=player.get("unlock_state", {}).get("encounters_seen", []),
+        number_of_runs=player.get("unlock_state", {}).get("number_of_runs", 0),
     )
