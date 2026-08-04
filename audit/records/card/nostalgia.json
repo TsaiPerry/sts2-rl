@@ -11,7 +11,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     }
   ],
@@ -24,7 +24,7 @@
     "OnPlay": {
       "maps_to": "NostalgiaCard.on_play (colorless_powers.py:196-199)",
       "verdict": "faithful",
-      "rationale": "`PowerCmd.Apply<NostalgiaPower>(choiceContext, Owner.Creature, 1m, Owner.Creature, this)` (Nostalgia.cs:18) == `PowerCmd.apply(ctx.hooks, ctx.player, NostalgiaPower, 1, applier=ctx.player)`. NostalgiaPower is the ported `modify_card_play_result_pile` implementer the sim's play pipeline consults (combat.py:505-509), which is what makes card/havoc's direct exhaust-pile append a recorded (dormant) divergence."
+      "rationale": "`PowerCmd.Apply<NostalgiaPower>(choiceContext, Owner.Creature, 1m, Owner.Creature, this)` (Nostalgia.cs:18) == `PowerCmd.apply(ctx.hooks, ctx.player, NostalgiaPower, 1, applier=ctx.player)`. NostalgiaPower is the ported `modify_card_play_result_pile` implementer the sim's play pipeline consults (combat.py:1095, re-cited from :505-509 -- the surrounding function was relocated, content unchanged), which is what makes card/havoc's direct exhaust-pile append a recorded (dormant) divergence."
     },
     "OnUpgrade": {
       "maps_to": "NostalgiaCard._on_upgrade (colorless_powers.py:193-194)",

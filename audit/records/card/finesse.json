@@ -6,31 +6,31 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_skills.py",
-    "sha256": "1cdf31a3bd59e95b239df163b0724e4f99ef299bd67256cc94fcc683e1ed1840"
+    "sha256": "73d875726c8cb8ca6a213dea6f43267d57717f5a1d6b65d34ca2ecea7f4ab66f"
   },
   "hooks": {
     "GainsBlock": {
-      "maps_to": "FinesseCard.gains_block = True (colorless_skills.py:266)",
+      "maps_to": "FinesseCard.gains_block = True (colorless_skills.py:323)",
       "verdict": "faithful",
       "rationale": "`public override bool GainsBlock => true` (Finesse.cs:13) == the class attribute."
     },
     "ctor": {
-      "maps_to": "class attrs (colorless_skills.py:265-270) + _init_vars (272-275)",
+      "maps_to": "class attrs (colorless_skills.py:317-327) + _init_vars (329-332)",
       "verdict": "faithful",
       "rationale": "`base(0, CardType.Skill, CardRarity.Uncommon, TargetType.Self)` (Finesse.cs:21-24) == cost 0 / SKILL / UNCOMMON / SELF."
     },
     "CanonicalVars": {
-      "maps_to": "_block = 4, _cards = 1 (colorless_skills.py:274-275)",
+      "maps_to": "_block = 4, _cards = 1 (colorless_skills.py:331-332)",
       "verdict": "faithful",
       "rationale": "`new BlockVar(4m, ValueProp.Move)` + `new CardsVar(1)` (Finesse.cs:15-19) == both numbers, both declared. Move without Unpowered -> POWERED block, so NOT in gap G1's blast radius."
     },
     "OnPlay": {
-      "maps_to": "FinesseCard.on_play (colorless_skills.py:280-283)",
+      "maps_to": "FinesseCard.on_play (colorless_skills.py:337-340)",
       "verdict": "faithful",
       "rationale": "Order matches: `CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, cardPlay)` FIRST (Finesse.cs:33) == `BlockCmd.apply(ctx.hooks, ctx.player, self._block, card=self)`, then `CardPileCmd.Draw(choiceContext, DynamicVars.Cards.BaseValue, Owner)` (34) == `DrawCmd.draw(ctx.player, self._cards)`."
     },
     "OnUpgrade": {
-      "maps_to": "FinesseCard._on_upgrade (colorless_skills.py:277-278)",
+      "maps_to": "FinesseCard._on_upgrade (colorless_skills.py:334-335)",
       "verdict": "faithful",
       "rationale": "`DynamicVars.Block.UpgradeValueBy(3m)` (Finesse.cs:28) == `self._block += 3` (4 -> 7). The CARDS var stays 1 when upgraded on both sides. Note C# declares OnUpgrade BEFORE OnPlay in this file, which is the only card in the batch to do so -- no behavioural consequence, but worth stating so the read order is not mistaken for a missing override."
     }

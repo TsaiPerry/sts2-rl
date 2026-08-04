@@ -11,17 +11,17 @@
   "extra_sources": [
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -31,8 +31,33 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
+    },
+    {
+      "path": "sts2_rl/actmap.py",
+      "sha256": "64c5a16873b1fbd176c515a29bd0f6e0d74182e1f179955b9226719247b3378e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/AbstractModel.cs",
+      "sha256": "6dae61e75edc2eb867a02d217089a562a7198564bf5f3823a466e132c7a20137",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/ModelId.cs",
+      "sha256": "820a9d4cf2b46d013108109c60e30dd6dbeaff554fd4680162197c55083fe15d",
+      "side": "game"
     }
   ],
   "hooks": {
@@ -44,7 +69,7 @@
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (whetstone.py:14)",
       "verdict": "faithful",
-      "rationale": "Matches Whetstone.cs:16. Load-bearing beyond display: Relic.is_tradable (sts2_rl/relics/base.py:126-136) excludes has_upon_pickup_effect relics, mirroring RelicModel.IsTradable, so Whetstone is correctly barred from the trade events even though its pickup effect is not implemented."
+      "rationale": "Matches Whetstone.cs:16. Load-bearing beyond display: Relic.is_tradable (sts2_rl/relics/base.py:189-199) excludes has_upon_pickup_effect relics, mirroring RelicModel.IsTradable, so Whetstone is correctly barred from the trade events even though its pickup effect is not implemented."
     },
     "AfterObtained": {
       "maps_to": "after_obtained (sts2_rl/relics/whetstone.py) -- deck Attacks filtered by is_upgradable, stable_shuffle over run.rng_set.niche with _compare_to_key, first 2 upgraded",
@@ -61,7 +86,7 @@
     {
       "what": "N1 (LIVE for RNG parity, dormant for RL): `StableShuffle(Rng.Niche)` names an explicit stream and the stub consumes none",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the pickup effect is implemented. sts2_rl/relics/whetstone.py's `after_obtained` filters the deck to `card_type == CardType.ATTACK and c.is_upgradable`, takes `count = min(2, len(upgradable))` and, on the parity path, `stable_shuffle(list(upgradable), run.rng_set.niche, key=_compare_to_key)[:count]` before upgrading each -- Whetstone.cs:22-27's `Where(Type == Attack && IsUpgradable).StableShuffle(Rng.Niche).Take(CardsVar(2))`. Closed 2026-07-27: the port performs C#'s StableShuffle over the named stream. `actmap.stable_shuffle(items, rng, key)` (sts2_rl/actmap.py:193-201) is ListExtensions.StableShuffle -- `items.sort(key=...)` then the Fisher-Yates -- and the key is `sts2_rl/player.py:23-34 _compare_to_key`, `(card.id.upper(), card.upgrade_level)`, which is CardModel.CompareTo's ordinal compare of the game's UPPERCASE ModelId Entry then CurrentUpgradeLevel (CardModel.cs:2242-2264 -> AbstractModel.cs:87-98 -> ModelId.cs:42-50). WAS: the stub consumed no Rng.Niche draw at all, so every later Niche consumer in the run read at the wrong position."
+      "issue": "Closed 2026-07-27: the pickup effect is implemented. sts2_rl/relics/whetstone.py's `after_obtained` filters the deck to `card_type == CardType.ATTACK and c.is_upgradable`, takes `count = min(2, len(upgradable))` and, on the parity path, `stable_shuffle(list(upgradable), run.rng_set.niche, key=_compare_to_key)[:count]` before upgrading each -- Whetstone.cs:22-27's `Where(Type == Attack && IsUpgradable).StableShuffle(Rng.Niche).Take(CardsVar(2))`. Closed 2026-07-27: the port performs C#'s StableShuffle over the named stream. `actmap.stable_shuffle(items, rng, key)` (sts2_rl/actmap.py:195-...) is ListExtensions.StableShuffle -- `items.sort(key=...)` then the Fisher-Yates -- and the key is `sts2_rl/player.py:26-34 _compare_to_key`, `(card.id.upper(), card.upgrade_level)`, which is CardModel.CompareTo's ordinal compare of the game's UPPERCASE ModelId Entry then CurrentUpgradeLevel (CardModel.cs:2242-2264 -> AbstractModel.cs:87-98 -> ModelId.cs:42-50). WAS: the stub consumed no Rng.Niche draw at all, so every later Niche consumer in the run read at the wrong position."
     },
     {
       "what": "N2: `c.Type == CardType.Attack && c.IsUpgradable` and the `c != null` null-guard (Whetstone.cs:22)",
@@ -76,7 +101,7 @@
     {
       "what": "N4: `undo_after_obtained` is absent from this port",
       "verdict": "faithful",
-      "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart, so a port lacking it is not diverging from the source. Same operational constraint on the fix as relic/war_paint N4: once G1 is implemented the pickup mutates the deck permanently, and the conformance runner's relic swap calls undo_after_obtained on a dropped relic (sts2_rl/conformance/runner.py:461, :694), which cannot un-upgrade a card. A tooling constraint on the fix, not a fidelity gap. Rule 7: sts2_rl/conformance/runner.py is NOT hashed here."
+      "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart, so a port lacking it is not diverging from the source. Same operational constraint on the fix as relic/war_paint N4: once G1 is implemented the pickup mutates the deck permanently, and the conformance runner's relic swap calls undo_after_obtained on a dropped relic (sts2_rl/conformance/runner.py:504, :910), which cannot un-upgrade a card. A tooling constraint on the fix, not a fidelity gap. Rule 7: sts2_rl/conformance/runner.py is NOT hashed here."
     }
   ],
   "verdict": "faithful",

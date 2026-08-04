@@ -16,44 +16,44 @@
     },
     {
       "path": "sts2_rl/creatures.py",
-      "sha256": "1c73063f3ca726775f0a121fe826933fe8a4dfdcbda18bb0e0d4dfacff69de7f",
+      "sha256": "9152cb64c277b8c7e5162bcae7d59af41f160a1a347ac586423c41af5be9c530",
       "side": "sim"
     }
   ],
   "hooks": {
     "CanonicalKeywords": {
-      "maps_to": "MoltenFistCard.exhausts = True (molten_fist.py:332)",
+      "maps_to": "MoltenFistCard.exhausts = True (molten_fist.py:26)",
       "verdict": "faithful",
       "rationale": "`{ CardKeyword.Exhaust }` (MoltenFist.cs:21) == `exhausts = True`."
     },
     "ctor": {
-      "maps_to": "class attrs (molten_fist.py:327-332) + _init_vars (334-336)",
+      "maps_to": "class attrs (molten_fist.py:21-26) + _init_vars (28-30)",
       "verdict": "faithful",
       "rationale": "`base(1, CardType.Attack, CardRarity.Common, TargetType.AnyEnemy)` (MoltenFist.cs:27-30) == cost 1 / ATTACK / COMMON / ANY_ENEMY."
     },
     "CanonicalVars": {
-      "maps_to": "MoltenFistCard._damage = 10 (molten_fist.py:336)",
+      "maps_to": "MoltenFistCard._damage = 10 (molten_fist.py:30)",
       "verdict": "faithful",
       "rationale": "`new DamageVar(10m, ValueProp.Move)` (MoltenFist.cs:23) == `_damage = 10`, powered on both sides."
     },
     "OnPlay": {
-      "maps_to": "MoltenFistCard.on_play (molten_fist.py:341-349)",
+      "maps_to": "MoltenFistCard.on_play (molten_fist.py:35-43)",
       "verdict": "faithful",
       "rationale": "This is the one card in the family where the liveness guard is FAITHFUL rather than a divergence, because C# writes it explicitly: `int num = (cardPlay.Target.IsAlive ? cardPlay.Target.GetPowerAmount<VulnerablePower>() : 0); if (num > 0) await PowerCmd.Apply<VulnerablePower>(...)` (MoltenFist.cs:38-42) == `if not target.is_gone and \"vulnerable\" in target.powers: vuln = ...; if vuln > 0: PowerCmd.apply(...)`. C#'s own `IsAlive` test is what the sim's `is_gone` mirrors, so unlike card/bash, card/break, card/fight_me, card/mangle and card/mad_science this card carries NO CanReceivePowers finding. The doubling amount is right too -- both sides read the target's CURRENT Vulnerable after the attack and apply that much again. Presentation, folded in: WithHitFx, ExtraRunAssetPaths and the Vulnerable hover tip."
     },
     "OnUpgrade": {
-      "maps_to": "MoltenFistCard._on_upgrade (molten_fist.py:338-339)",
+      "maps_to": "MoltenFistCard._on_upgrade (molten_fist.py:32-33)",
       "verdict": "faithful",
       "rationale": "`DynamicVars.Damage.UpgradeValueBy(4m)` (MoltenFist.cs:47) == `self._damage += 4` (10 -> 14)."
     }
   },
   "guards": [
     {
-      "what": "the sim's `is_gone` is `is_dead or escaped` where C#'s `IsAlive` tests only HP (creatures.py:44-46)",
+      "what": "the sim's `is_gone` is `is_dead or escaped` where C#'s `IsAlive` tests only HP (creatures.py:177-179)",
       "verdict": "faithful",
       "rationale": "The extra `escaped` term can only make the sim MORE conservative, and an escaped creature has been removed from C#'s Enemies list anyway (CreatureCmd.Escape, CreatureCmd.cs:579-603), so C# would also find no target. Same outcome."
     }
   ],
   "verdict": "faithful",
-  "audited": "2026-07-26"
+  "audited": "2026-08-04"
 }

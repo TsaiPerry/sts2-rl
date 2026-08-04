@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -34,7 +34,7 @@
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (royal_stamp.py:14)",
       "verdict": "faithful",
-      "rationale": "Matches RoyalStamp.cs:22. Load-bearing beyond display: Relic.is_tradable (relics/base.py:124-125) excludes relics with an upon-pickup effect, so the trade events cannot offer this one -- same as C#'s RelicModel.IsTradable. Worth noting against relic/calling_bell's batch-2 sibling relic/byrdpip, which drops the identical declaration."
+      "rationale": "Matches RoyalStamp.cs:22. Load-bearing beyond display: Relic.is_tradable (relics/base.py:189-198) excludes relics with an upon-pickup effect, so the trade events cannot offer this one -- same as C#'s RelicModel.IsTradable. Worth noting against relic/calling_bell's batch-2 sibling relic/byrdpip, which drops the identical declaration."
     },
     "CanonicalVars": {
       "maps_to": "no counterpart (the port has no amount to carry)",

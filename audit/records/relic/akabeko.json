@@ -11,7 +11,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     }
   ],
@@ -23,7 +23,7 @@
     "AfterSideTurnStart": {
       "maps_to": "on_player_turn_started (akabeko.py:18-22)",
       "verdict": "faithful",
-      "rationale": "Akabeko.cs:23-30 applies VigorPower to its owner on AfterSideTurnStart when the owner is among the participants and PlayerCombatState.TurnNumber <= 1. The sim's on_player_turn_started is the post-draw player-turn-start slot (player.py:186), which is where audit/records/seam/turn_structure.json step 23 puts Hook.AfterSideTurnStart -- correct mapping, unlike relic/bag_of_marbles, whose C# hook is the PRE-block-clear BeforeSideTurnStart and which the sim maps to this same slot. `participants.Contains(Owner.Creature)` is the multiplayer/side filter: on_player_turn_started only ever fires for the player's own turn, so the sim's guardless call is equivalent in single-player. Turn numbering verified by execution (py audit/tools/relic_probes.py turn-order): the sim's self.turn is 1 during the first turn's hooks, so `self.turn <= 1` and `TurnNumber <= 1` select the same turn. Amount 8 matches PowerVar<VigorPower>(8m) (Akabeko.cs:19) and applier is the owner on both sides."
+      "rationale": "Akabeko.cs:23-30 applies VigorPower to its owner on AfterSideTurnStart when the owner is among the participants and PlayerCombatState.TurnNumber <= 1. The sim's on_player_turn_started is the post-draw player-turn-start slot (player.py:418), which is where audit/records/seam/turn_structure.json step 23 puts Hook.AfterSideTurnStart -- correct mapping, unlike relic/bag_of_marbles, whose C# hook is the PRE-block-clear BeforeSideTurnStart and which the sim maps to this same slot. `participants.Contains(Owner.Creature)` is the multiplayer/side filter: on_player_turn_started only ever fires for the player's own turn, so the sim's guardless call is equivalent in single-player. Turn numbering verified by execution (py audit/tools/relic_probes.py turn-order): the sim's self.turn is 1 during the first turn's hooks, so `self.turn <= 1` and `TurnNumber <= 1` select the same turn. Amount 8 matches PowerVar<VigorPower>(8m) (Akabeko.cs:19) and applier is the owner on both sides."
     }
   },
   "guards": [

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -42,18 +42,18 @@
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:2134 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "AfterSideTurnEnd": {
-      "maps_to": "powers.py:2136-2138 on_enemy_turn_end -> Power._tick (powers.py:70-75)",
+      "maps_to": "powers.py on_enemy_turn_end -> Power._tick (powers.py)",
       "verdict": "faithful",
-      "issue": "CLOSED. The unit is on `on_enemy_side_end`, which is Hook.AfterTurnEnd for the enemy side (CombatManager.cs:1256) -- ONE dispatch after every enemy has moved, which is where AbstractModel.AfterSideTurnEnd is dispatched from (Hook.cs:1267-1292). The sim's per-creature enemy slots no longer exist; turn_structure G5 is closed and this entry follows it per binding rule 3. `participants.Contains(Owner)` is `self.owner.side == \"enemy\"`, the idiom the other nineteen `on_enemy_side_end` listeners already used. EXECUTED: test/test_enemy_side_per_side.py. This was the sharpest per-creature case in the batch and the fix is OBSERVABLE, not merely structural: an egg laid during the enemy side is already in `CreaturesOnCurrentSide` when EndEnemyTurnInternal captures the list (CombatManager.cs:1250), so it takes that same side's decrement. ToughEgg.cs:133 confirms it -- Hatch is applied at 2 on the enemy side and 1 elsewhere, a compensation that only makes sense if the same-turn tick happens. test/test_hive.py::test_lays_three_minion_eggs now reads 1 where it read 2.  FIXED 2026-07-28 (round 4). The text it replaced read: SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called ONCE for the whole enemy side (CombatManager.cs:1256) after every enemy has moved; the sim implements it with the PER-ENEMY slot on_enemy_turn_end (combat.py:341), which fires immediately after each enemy's own move. The sim HAS the side-scoped slot and does not use it here: on_enemy_side_end (combat.py:345). turn_structure gap G5 (the enemy side is per-enemy in the sim, per-side in the game) is the owning record and carries the identical `gap` verdict; not re-verdicted here per binding rule 3. DORMANT, and the dormancy is EXECUTED rather than asserted -- see `py audit/tools/power_slot_probes.py rosters` and `enemy-hook-order`. This is the sharpest per-creature case in the batch on paper and still dormant in fact. The Ovicopter lays up to 5 Tough Eggs (monsters/hive/ovicopter.py:24-25, _EGGS_PER_LAY=3 / _EGG_SLOTS=5) and each egg carries its own Hatch, and the eggs are inserted BEFORE the Ovicopter in the enemy list (ovicopter.py:137-150, display order [egg3, egg2, egg1, Ovicopter]) -- so in the sim egg 1's Hatch ticks before eggs 2-3 and the Ovicopter even move, where C# ticks all of them after every move. DORMANT because nothing reads another creature's Hatch amount: the hatch itself is the egg's own HATCH_MOVE (ovicopter.py:65-83) and the Ovicopter's lay condition counts live enemies, not Hatch (ovicopter.py:97-101 reads is_gone). Trigger: any effect keyed on a sibling's Hatch."
+      "issue": "CLOSED. The unit is on `on_enemy_side_end`, which is Hook.AfterTurnEnd for the enemy side (CombatManager.cs:1256) -- ONE dispatch after every enemy has moved, which is where AbstractModel.AfterSideTurnEnd is dispatched from (Hook.cs:1267-1292). The sim's per-creature enemy slots no longer exist; turn_structure G5 is closed and this entry follows it per binding rule 3. `participants.Contains(Owner)` is `self.owner.side == \"enemy\"`, the idiom the other nineteen `on_enemy_side_end` listeners already used. EXECUTED: test/test_enemy_side_per_side.py. This was the sharpest per-creature case in the batch and the fix is OBSERVABLE, not merely structural: an egg laid during the enemy side is already in `CreaturesOnCurrentSide` when EndEnemyTurnInternal captures the list (CombatManager.cs:1250), so it takes that same side's decrement. ToughEgg.cs:133 confirms it -- Hatch is applied at 2 on the enemy side and 1 elsewhere, a compensation that only makes sense if the same-turn tick happens. test/test_hive.py::test_lays_three_minion_eggs now reads 1 where it read 2.  FIXED 2026-07-28 (round 4). The text it replaced read: SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called ONCE for the whole enemy side (CombatManager.cs:1256) after every enemy has moved; the sim implements it with the PER-ENEMY slot on_enemy_turn_end (combat.py), which fires immediately after each enemy's own move. The sim HAS the side-scoped slot and does not use it here: on_enemy_side_end (combat.py). turn_structure gap G5 (the enemy side is per-enemy in the sim, per-side in the game) is the owning record and carries the identical `gap` verdict; not re-verdicted here per binding rule 3. DORMANT, and the dormancy is EXECUTED rather than asserted -- see `py audit/tools/power_slot_probes.py rosters` and `enemy-hook-order`. This is the sharpest per-creature case in the batch on paper and still dormant in fact. The Ovicopter lays up to 5 Tough Eggs (monsters/hive/ovicopter.py, _EGGS_PER_LAY=3 / _EGG_SLOTS=5) and each egg carries its own Hatch, and the eggs are inserted BEFORE the Ovicopter in the enemy list (ovicopter.py:137-150, display order [egg3, egg2, egg1, Ovicopter]) -- so in the sim egg 1's Hatch ticks before eggs 2-3 and the Ovicopter even move, where C# ticks all of them after every move. DORMANT because nothing reads another creature's Hatch amount: the hatch itself is the egg's own HATCH_MOVE (ovicopter.py:65-83) and the Ovicopter's lay condition counts live enemies, not Hatch (ovicopter.py:97-101 reads is_gone). Trigger: any effect keyed on a sibling's Hatch."
     }
   },
   "guards": [
@@ -65,12 +65,12 @@
     {
       "what": "Expiry at Amount 0",
       "verdict": "faithful",
-      "rationale": "The sim uses Power._tick (powers.py:70-75), which decrements and _expire()s at <= 0; C# uses PowerCmd.Decrement -> ShouldRemoveDueToAmount (PowerModel.cs:478-489), which removes a non-AllowNegative Buff at <= 0. Same observable. `_tick` bypassing PowerCmd entirely is also the reason sign-aware-typing arm 2 is inert across the whole power set (the census's typing finding)."
+      "rationale": "The sim uses Power._tick (powers.py), which decrements and _expire()s at <= 0; C# uses PowerCmd.Decrement -> ShouldRemoveDueToAmount (PowerModel.cs:478-489), which removes a non-AllowNegative Buff at <= 0. Same observable. `_tick` bypassing PowerCmd entirely is also the reason sign-aware-typing arm 2 is inert across the whole power set (the census's typing finding)."
     },
     {
       "what": "Initial amount 2 vs 1 depending on which side laid the egg",
       "verdict": "faithful",
-      "rationale": "monsters/hive/ovicopter.py:51-54 applies Hatch 2 when combat.current_side == \"enemy\" and 1 otherwise, citing ToughEgg.AfterAddedToRoom's CurrentSide check. That is the egg's record rather than this power's, but it is the only thing that sets this power's amount, so it is checked here rather than assumed."
+      "rationale": "monsters/hive/ovicopter.py applies Hatch 2 when combat.current_side == \"enemy\" and 1 otherwise, citing ToughEgg.AfterAddedToRoom's CurrentSide check. That is the egg's record rather than this power's, but it is the only thing that sets this power's amount, so it is checked here rather than assumed."
     },
     {
       "what": "IsVisible",

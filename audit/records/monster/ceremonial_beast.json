@@ -59,7 +59,7 @@
     {
       "what": "How phase 2 is entered: PlowPower.cs:42-46 calls SetStunned() and then `CreatureCmd.Stun(Owner, ceremonialBeast.StunnedMove, BeastCryState.StateId)`; the sim's PlowPower calls `CreatureCmd.stun(self._hooks, self, next_move_key='BEAST_CRY')` (ceremonial_beast.py:41-45)",
       "verdict": "faithful",
-      "rationale": "Both defer exactly one turn and resume at BEAST_CRY. C# builds a synthetic MoveState('STUNNED', StunnedMove, StunIntent) with FollowUpStateId = 'BEAST_CRY_MOVE' and MustPerformOnceBeforeTransitioning (monster_state_machine step 40); StunnedMove itself is `IsStunnedByPlowRemoval = false` plus a TriggerAnim (CeremonialBeast.cs:216-220), i.e. no mechanics, so the sim's turn-skip (combat.py:313-329) is the same observable. This unit is the ONE ported caller that passes next_move_key, and it works only because CeremonialBeast is a hand-rolled Monster with a `_move_key` attribute -- that is monster_state_machine G5's dormancy argument and is NOT re-verdicted here. The log-duplication half (G4) cannot be observable on this monster either: it has no RandomBranchState, so no weight reads the state log. Rule 7: PlowPower.cs and sts2_rl/combat.py are hashed in extra_sources."
+      "rationale": "Both defer exactly one turn and resume at BEAST_CRY. C# builds a synthetic MoveState('STUNNED', StunnedMove, StunIntent) with FollowUpStateId = 'BEAST_CRY_MOVE' and MustPerformOnceBeforeTransitioning (monster_state_machine step 40); StunnedMove itself is `IsStunnedByPlowRemoval = false` plus a TriggerAnim (CeremonialBeast.cs:216-220), i.e. no mechanics, so the sim's turn-skip (combat.py:741-771) is the same observable. This unit is the ONE ported caller that passes next_move_key, and it works only because CeremonialBeast is a hand-rolled Monster with a `_move_key` attribute -- that is monster_state_machine G5's dormancy argument and is NOT re-verdicted here. The log-duplication half (G4) cannot be observable on this monster either: it has no RandomBranchState, so no weight reads the state log. Rule 7: PlowPower.cs and sts2_rl/combat.py are hashed in extra_sources. [2026-08-04 re-audit: citation re-pinned; combat.py's stun turn-skip block moved from :313-329 to :741-771 -- upstream comment growth only, content re-verified unchanged.]"
     },
     {
       "what": "STUN_MOVE (CeremonialBeast.cs:148-151, 157, 163) is registered with MustPerformOnceBeforeTransitioning but nothing points at it and it is not the initial state -- the stun uses a synthetic node instead",
@@ -94,7 +94,7 @@
     {
       "what": "Range-bound convention on the initial-HP roll: Rng.NextInt(min, max) is max-EXCLUSIVE (Rng.cs:101-109) where Python's random.randint(a, b) INCLUDES b",
       "verdict": "faithful",
-      "rationale": "Checked as a convention, not just as constants. The GAME's range is [MinInitialHp, MaxInitialHp] INCLUSIVE, because Creature.SetUniqueMonsterHpValue compensates for the exclusive bound explicitly: `int num = Monster.MaxInitialHp + 1` (Creature.cs:378) feeds BOTH `Enumerable.Range(minInitialHp, num - minInitialHp)` (Creature.cs:379) and the fallback `rng.NextInt(minInitialHp, num)` (Creature.cs:383). The sim's parity port matches on both arms: `candidates = [v for v in range(lo, hi + 1) ...]` picked with `niche.next_int_range(0, len(candidates))`, fallback `niche.next_int_range(lo, hi + 1)` (combat.py:224-243), and `next_int_range` is itself max-exclusive (rng.py:182-186) -- so the two `+ 1`s land exactly where C# puts them. This unit's MaxInitialHp is `=> MinInitialHp`, so the range is the single value 252 and no endpoint can be lost; the check is recorded anyway because an off-by-one would turn a one-element candidate list into an empty one and change which ARM of SetUniqueMonsterHpValue runs (NextItem vs NextInt), which is a stream-position difference even when the HP is identical. Executed (`py audit/tools/monster_probes_b01.py hprange`, 400 seeded combats per unit): declared [252,252], observed [252,252], and the observed set is exactly the full inclusive range, so the top endpoint 252 does occur. All 15 units of this batch pass. NOTE the legacy (non-parity) path is also right by a different route: Monster.__init__'s `rng.randint(self.min_hp, self.max_hp)` (monsters/base.py:78) is inclusive on both ends, matching the game's inclusive range, and in parity mode it is overwritten before anything reads it. Rule 7: Creature.cs, Rng.cs, sts2_rl/combat.py and sts2_rl/rng.py are hashed in extra_sources."
+      "rationale": "Checked as a convention, not just as constants. The GAME's range is [MinInitialHp, MaxInitialHp] INCLUSIVE, because Creature.SetUniqueMonsterHpValue compensates for the exclusive bound explicitly: `int num = Monster.MaxInitialHp + 1` (Creature.cs:378) feeds BOTH `Enumerable.Range(minInitialHp, num - minInitialHp)` (Creature.cs:379) and the fallback `rng.NextInt(minInitialHp, num)` (Creature.cs:383). The sim's parity port matches on both arms: `candidates = [v for v in range(lo, hi + 1) ...]` picked with `niche.next_int_range(0, len(candidates))`, fallback `niche.next_int_range(lo, hi + 1)` (combat.py:422-442, `_roll_parity_hp`), and `next_int_range` is itself max-exclusive (rng.py:182-186) -- so the two `+ 1`s land exactly where C# puts them. This unit's MaxInitialHp is `=> MinInitialHp`, so the range is the single value 252 and no endpoint can be lost; the check is recorded anyway because an off-by-one would turn a one-element candidate list into an empty one and change which ARM of SetUniqueMonsterHpValue runs (NextItem vs NextInt), which is a stream-position difference even when the HP is identical. Executed (`py audit/tools/monster_probes_b01.py hprange`, 400 seeded combats per unit): declared [252,252], observed [252,252], and the observed set is exactly the full inclusive range, so the top endpoint 252 does occur. All 15 units of this batch pass. NOTE the legacy (non-parity) path is also right by a different route: Monster.__init__'s `rng.randint(self.min_hp, self.max_hp)` (monsters/base.py:236) is inclusive on both ends, matching the game's inclusive range, and in parity mode it is overwritten before anything reads it. Rule 7: Creature.cs, Rng.cs, sts2_rl/combat.py and sts2_rl/rng.py are hashed in extra_sources."
     }
   ],
   "verdict": "waiver",
@@ -127,7 +127,7 @@
     },
     {
       "path": "sts2_rl\\combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -137,12 +137,27 @@
     },
     {
       "path": "sts2_rl\\powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\rng.py",
       "sha256": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
+      "side": "sim"
+    },
+    {
+      "path": "src\\Core\\Models\\Monsters\\TorchHeadAmalgam.cs",
+      "sha256": "7f16688b97116b98b38ab3cb8a5bb7ff4a5a7f2b48e7ccc7c9aa01d6fc89883a",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Nodes\\Vfx\\Backgrounds\\NCeremonialBeastBgVfx.cs",
+      "sha256": "b16fc5818cbbd07386adc3e3e4f86eab24e51ce5f71d28d58d98f96295f50876",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\monsters\\base.py",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     }
   ]

@@ -6,18 +6,18 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\glory\\knights.py",
-    "sha256": "3d7f439e1c286f0796db5058c5d6cc71f4b2acd3c175f1980202c99f25938354"
+    "sha256": "770bb43ec309cbb39b40367a45e947e09ff94772c17acfd41cc4082a5988ae49"
   },
   "hooks": {
     "RoomType": {
-      "maps_to": "rooms.py:195 `elite_keys=(\"knights\", \"mecha_knight\", \"soul_nexus\")` (glory ActRooms)",
+      "maps_to": "rooms.py:269 `elite_keys=(\"knights\", \"mecha_knight\", \"soul_nexus\")` (glory ActRooms)",
       "verdict": "deliberate-divergence",
       "rationale": "KnightsElite.cs:12 `RoomType => RoomType.Elite`. Modeled structurally by pool membership. One shared mechanism across this batch; see `encounter/_room_type_and_weak` in the report."
     },
     "Tags": {
-      "maps_to": "rooms.py:200-204 `tags={\"knights\": (\"knights\",), ...}` (glory ActRooms) + rooms.py's `_shares_tags`/`_grab_without_repeating_tags`/`_add_without_repeating_tags`",
+      "maps_to": "rooms.py:276-279 `tags={\"knights\": (\"knights\",), ...}` (glory ActRooms) + rooms.py's `_shares_tags`/`_grab_without_repeating_tags`/`_add_without_repeating_tags`",
       "verdict": "deliberate-divergence",
-      "rationale": "KnightsElite.cs:14 `Tags => [EncounterTag.Knights]`. The sim's `Encounter` dataclass has no `Tags` field; the game's tag-avoidance mechanic (`EncounterModel.SharesTagsWith`, EncounterModel.cs:279-286, consumed by `ActModel.AddWithoutRepeatingTags`'s `GrabBag`) is instead modeled at the ROOM-POOL level: `ActRooms.tags` (rooms.py:51-65) maps an encounter id to its tag tuple, transcribed from the C# `EncounterTag` declarations (rooms.py:197-199's own comment names the source: \"the two Scrolls of Biting variants share EncounterTag.Scrolls, Knights carries EncounterTag.Knights\"), and `_shares_tags`/`_grab_without_repeating_tags`/`_add_without_repeating_tags` (rooms.py:243-256, :357-373) consult it when picking the next elite room, refusing a same-tag repeat exactly like the game's GrabBag predicate. EXECUTED (read, not merely declared): `_grab_without_repeating_tags` (rooms.py:357-373) builds its exclusion predicate as `k != last and not _shares_tags(self.rooms, k, last)` and passes it to `grab_and_remove` (sts2_rl/rng.py:333-349), the parity port of `GrabBag.GrabAndRemove` -- so the tag check is load-bearing in the actual draw, not decorative. Cross-referenced to `seam/rooms_and_map`, which owns the encounter-SELECTION mechanism itself; this record verdicts only whether `knights`' own tag membership is faithfully carried into that mechanism, and it is. Same observable, different architecture -- filed under `encounter/_room_type_and_weak`'s sibling shared id is not needed since Knights is the ONLY unit in this batch with a real tag; recorded here directly."
+      "rationale": "KnightsElite.cs:14 `Tags => [EncounterTag.Knights]`. The sim's `Encounter` dataclass has no `Tags` field; the game's tag-avoidance mechanic (`EncounterModel.SharesTagsWith`, EncounterModel.cs:279-286, consumed by `ActModel.AddWithoutRepeatingTags`'s `GrabBag`) is instead modeled at the ROOM-POOL level: `ActRooms.tags` (rooms.py:71, field decl) maps an encounter id to its tag tuple, transcribed from the C# `EncounterTag` declarations (rooms.py:273-275's own comment names the source: \"the two Scrolls of Biting variants share EncounterTag.Scrolls, Knights carries EncounterTag.Knights\"), and `_shares_tags`/`_grab_without_repeating_tags`/`_add_without_repeating_tags` (rooms.py:330, :458-475, :336-344) consult it when picking the next elite room, refusing a same-tag repeat exactly like the game's GrabBag predicate. EXECUTED (read, not merely declared): `_grab_without_repeating_tags` (rooms.py:458-475) builds its exclusion predicate as `k != last and not _shares_tags(self.rooms, k, last)` (rooms.py:469) and passes it to `grab_and_remove` (sts2_rl/rng.py:333-349), the parity port of `GrabBag.GrabAndRemove` -- so the tag check is load-bearing in the actual draw, not decorative. Cross-referenced to `seam/rooms_and_map`, which owns the encounter-SELECTION mechanism itself; this record verdicts only whether `knights`' own tag membership is faithfully carried into that mechanism, and it is. Same observable, different architecture -- filed under `encounter/_room_type_and_weak`'s sibling shared id is not needed since Knights is the ONLY unit in this batch with a real tag; recorded here directly."
     },
     "HasScene": {
       "maps_to": "no sim counterpart",
@@ -46,9 +46,9 @@
       "rationale": "Presentation only. KnightsElite.cs:32-35 returns Vector2.Down*50f. No camera in the headless sim."
     },
     "GenerateMonsters": {
-      "maps_to": "monsters/base.py:408-416 Encounter.create_monsters + KNIGHTS_ELITE (knights.py:151-154)",
+      "maps_to": "monsters/base.py:476-479 Encounter.create_monsters + KNIGHTS_ELITE (knights.py:151-154)",
       "verdict": "faithful",
-      "rationale": "ROSTER: KnightsElite.cs:37-45 returns exactly three pairs `(FlailKnight, \"first\"), (SpectralKnight, \"second\"), (MagiKnight, \"third\")`; `KNIGHTS_ELITE = Encounter(id=\"knights_elite\", monster_classes=[FlailKnight, SpectralKnight, MagiKnight])` (knights.py:151-154) -- same three classes. ORDER: matches exactly, FlailKnight/SpectralKnight/MagiKnight in that order on both sides. SLOT: DIVERGES -- see this record's `verdict`/the report's `encounter/_slot_order` finding below (a dormant `gap`, not folded into this hook's own verdict per rule 3's \"one mechanism, one entry\" -- the roster/order/draw-count facts here are independently faithful). DRAW COUNT: zero on both sides -- `KnightsElite.GenerateMonsters` never touches `base.Rng`, and the sim's fixed-composition path draws nothing (monsters/base.py:408-411)."
+      "rationale": "ROSTER: KnightsElite.cs:37-45 returns exactly three pairs `(FlailKnight, \"first\"), (SpectralKnight, \"second\"), (MagiKnight, \"third\")`; `KNIGHTS_ELITE = Encounter(id=\"knights_elite\", monster_classes=[FlailKnight, SpectralKnight, MagiKnight])` (knights.py:151-154) -- same three classes. ORDER: matches exactly, FlailKnight/SpectralKnight/MagiKnight in that order on both sides. SLOT: DIVERGES -- see this record's `verdict`/the report's `encounter/_slot_order` finding below (a dormant `gap`, not folded into this hook's own verdict per rule 3's \"one mechanism, one entry\" -- the roster/order/draw-count facts here are independently faithful). DRAW COUNT: zero on both sides -- `KnightsElite.GenerateMonsters` never touches `base.Rng`, and the sim's fixed-composition path draws nothing (monsters/base.py:477-479, `create_monsters`'s own comment)."
     },
     "ShouldReceiveCombatHooks": {
       "maps_to": "no sim counterpart (by absence)",
@@ -70,7 +70,7 @@
     {
       "what": "The Niche HP-roll for THREE distinct degenerate ranges in one roster (FlailKnight 101/101, SpectralKnight 93/93, MagiKnight 82/82 -- no duplicated species, so the exclusion-set logic never empties, unlike `encounter/construct_menagerie`)",
       "verdict": "faithful",
-      "rationale": "Each of the three creatures draws exactly one Niche value over its own single-element candidate set (`hashSet={101}`/`{93}`/`{82}` respectively, none excluded by a sibling since no two knights share an HP value): one `NextItem`/`next_int_range(0,1)` draw each, three total, matching in count and per-creature assignment (combat.py:402-431)."
+      "rationale": "Each of the three creatures draws exactly one Niche value over its own single-element candidate set (`hashSet={101}`/`{93}`/`{82}` respectively, none excluded by a sibling since no two knights share an HP value): one `NextItem`/`next_int_range(0,1)` draw each, three total, matching in count and per-creature assignment (combat.py:423-456, `_roll_parity_hp`/`_assign_parity_monster_hp`)."
     },
     {
       "what": "Gold-ladder and ShouldGiveRewards inheritance",
@@ -80,7 +80,7 @@
     {
       "what": "Reachability",
       "verdict": "faithful",
-      "rationale": "rooms.py:195 lists `knights` in Glory's `elite_keys`, and `KNIGHTS_ELITE` is registered in `sts2_rl/monsters/glory/__init__.py`'s `ENCOUNTERS` dict (line 72)."
+      "rationale": "rooms.py:269 lists `knights` in Glory's `elite_keys`, and `KNIGHTS_ELITE` is registered in `sts2_rl/monsters/glory/__init__.py`'s `ENCOUNTERS` dict (line 72)."
     }
   ],
   "verdict": "gap",
@@ -108,17 +108,17 @@
     },
     {
       "path": "sts2_rl\\monsters\\base.py",
-      "sha256": "424336cf4fb7be8026278b7a34af428082d8487fb57f25c3565311fe5c993388",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\combat.py",
-      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     },
     {

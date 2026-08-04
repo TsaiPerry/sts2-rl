@@ -11,12 +11,12 @@
   "extra_sources": [
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -34,12 +34,12 @@
     },
     {
       "what": "FirstChest (SunkenTreasury.cs:39-43): GainGold(SmallChestGold), nothing else",
-      "maps_to": "events/sunken_treasury.py:39-41 gain_gold(self.small_gold). run.gain_gold runs Hook.ModifyGoldGained and truncates (run.py:326-333), which is PlayerCmd.GainGold.",
+      "maps_to": "events/sunken_treasury.py:39-41 gain_gold(self.small_gold). run.gain_gold runs Hook.ModifyGoldGained and truncates (run.py:500-, was :326-333), which is PlayerCmd.GainGold.",
       "verdict": "faithful"
     },
     {
       "what": "SecondChest's ORDER (SunkenTreasury.cs:45-52): GainGold(LargeChestGold) FIRST, THEN AddCurseToDeck<Greed>",
-      "maps_to": "events/sunken_treasury.py:43-46 gain_gold then add_card(make_card('greed')). Order preserved, and it is observable: run.add_card's AfterCardChangedPiles tail (run.py:352-353) fires for the Curse after the gold is banked, so a relic that reacts to gaining a Curse (Darkstone Periapt) sees the post-gold state in both. AddCurseToDeck routes through the same deck-add path as CardPileCmd.Add, so Hook.ModifyCardBeingAddedToDeck runs in both -- this event is in the add_card set, not creature_card_cmds G3's transform radius. The Greed curse is ported: EXECUTED (`py audit/tools/event_probes.py reach`), greed is in _CARD_CLASSES (cards/greed.py).",
+      "maps_to": "events/sunken_treasury.py:43-46 gain_gold then add_card(make_card('greed')). Order preserved, and it is observable: run.add_card's AfterCardChangedPiles tail (run.py:535-536, was :352-353) fires for the Curse after the gold is banked, so a relic that reacts to gaining a Curse (Darkstone Periapt) sees the post-gold state in both. AddCurseToDeck routes through the same deck-add path as CardPileCmd.Add, so Hook.ModifyCardBeingAddedToDeck runs in both -- this event is in the add_card set, not creature_card_cmds G3's transform radius. The Greed curse is ported: EXECUTED (`py audit/tools/event_probes.py reach`), greed is in _CARD_CLASSES (cards/greed.py).",
       "verdict": "faithful"
     },
     {
@@ -49,7 +49,7 @@
     },
     {
       "what": "EV-3: CalculateVars' two draws, `base.Rng.NextInt(16)` and `base.Rng.NextInt(61)` (SunkenTreasury.cs:35-36) rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- both CalculateVars draws run on `self.event_rng` (events/sunken_treasury.py:32-34), matching `base.Rng` (SunkenTreasury.cs:35-36). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- both CalculateVars draws run on `self.event_rng` (events/sunken_treasury.py:32-34), matching `base.Rng` (SunkenTreasury.cs:35-36). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:95-98, was :96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
       "verdict": "faithful"
     },
     {

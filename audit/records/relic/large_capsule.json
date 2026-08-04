@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -36,9 +36,9 @@
       "verdict": "faithful"
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (sts2_rl/relics/large_capsule.py:16-22), dispatched by RunState.add_relic; the two pulls go through RunState.pull_relic_from_front (sts2_rl/run.py:699-742), which now applies Relic.is_allowed before pulling",
+      "maps_to": "after_obtained (sts2_rl/relics/large_capsule.py:16-22), dispatched by RunState.add_relic; the two pulls go through RunState.pull_relic_from_front (sts2_rl/run.py:970-.., renumbered since prior pass, content re-verified this pass), which now applies Relic.is_allowed before pulling",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the pull CAN apply RelicModel.IsAllowed now. RunState.pull_relic_from_front (sts2_rl/run.py:731) calls _drop_disallowed_from_grab_bag (sts2_rl/run.py:769-776) first, which drops every relic whose `Relic.is_allowed(run)` (sts2_rl/relics/base.py:198) is False -- the port of RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:250-271) that RelicFactory.PullNextRelicFromFront goes through. Large Capsule's two pulls therefore see the same bag the game would. WAS: `sts2_rl.relics.base.Relic` declared no is_allowed member and pull_relic_from_front applied no such filter, so the two relics could be ones the game had removed from the bag."
+      "issue": "Closed 2026-07-27: the pull CAN apply RelicModel.IsAllowed now. RunState.pull_relic_from_front (sts2_rl/run.py:970) calls _drop_disallowed_from_grab_bag (sts2_rl/run.py:1080-1087, renumbered since prior pass, content unchanged) first, which drops every relic whose `Relic.is_allowed(run)` (sts2_rl/relics/base.py:252-263, renumbered since prior pass, content re-verified this pass) is False -- the port of RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:250-271) that RelicFactory.PullNextRelicFromFront goes through. Large Capsule's two pulls therefore see the same bag the game would. WAS: `sts2_rl.relics.base.Relic` declared no is_allowed member and pull_relic_from_front applied no such filter, so the two relics could be ones the game had removed from the bag."
     }
   },
   "guards": [
@@ -50,17 +50,17 @@
     {
       "what": "N2: `RelicFactory.PullNextRelicFromFront(base.Owner)` (LargeCapsule.cs:27) vs `run.obtain_relic_from_grab_bag()` (large_capsule.py:20)",
       "verdict": "faithful",
-      "rationale": "The no-rarity overload is `PullNextRelicFromFront(player, RollRarity(player), _ => true)` (RelicFactory.cs), and RollRarity(player) draws one NextFloat off `player.PlayerRng.Rewards`. run.obtain_relic_from_grab_bag (run.py:631-636) calls pull_relic_from_front with no rarity, which rolls on `self.rewards_rng` -- the same stream by that method's own documented default (run.py:576-584) -- and then adds the relic through add_relic, which is RelicCmd.Obtain's after_obtained dispatch. So both the draw count and the stream match, and the project's 'Relic rarity rolls on Rewards' note holds. EXECUTED: 2 pulls, bag 96 -> 94. Rule 7: run.py is not hashed by this record."
+      "rationale": "The no-rarity overload is `PullNextRelicFromFront(player, RollRarity(player), _ => true)` (RelicFactory.cs), and RollRarity(player) draws one NextFloat off `player.PlayerRng.Rewards`. run.obtain_relic_from_grab_bag (run.py:1100-.., renumbered since prior pass, content re-verified this pass) calls pull_relic_from_front with no rarity, which rolls on `self.rewards_rng` -- the same stream by that method's own documented default (run.py:970-994, renumbered since prior pass, content re-verified this pass) -- and then adds the relic through add_relic, which is RelicCmd.Obtain's after_obtained dispatch. So both the draw count and the stream match, and the project's 'Relic rarity rolls on Rewards' note holds. EXECUTED: 2 pulls, bag 96 -> 94. Rule 7: run.py is not hashed by this record."
     },
     {
       "what": "N3: `CardPileCmd.Add(card, PileType.Deck)` twice (LargeCapsule.cs:32-34) vs `run.add_card(make_card(...))` twice (large_capsule.py:21-22)",
       "verdict": "faithful",
-      "rationale": "The no-index Add overload appends at the END of the deck (AddInternal with no index), which is the placement audit/records/seam/creature_card_cmds.json pins for out-of-combat pile adds and which run.transform_card's docstring (run.py:418-428) calls parity-critical because the combat-start UnstableShuffle is order-dependent. EXECUTED here rather than asserted, which is what audit/records/relic/arcane_scroll.json could not do from its own two files: the deck tail after the pickup is ['strike', 'defend'] in that order, i.e. appended, Strike first. add_card also runs modify_card_being_added_to_deck and after_card_added_to_deck (run.py:341-354), the two hooks CardPileCmd.Add runs (CardPileCmd.cs:501, 635) -- so unlike relic/leafy_poultice's transform path this relic does not drop them. Rule 7: run.py and cards/pool.py are not hashed here."
+      "rationale": "The no-index Add overload appends at the END of the deck (AddInternal with no index), which is the placement audit/records/seam/creature_card_cmds.json pins for out-of-combat pile adds and which run.transform_card's docstring (run.py:725-801, renumbered since prior pass, content unchanged) calls parity-critical because the combat-start UnstableShuffle is order-dependent. EXECUTED here rather than asserted, which is what audit/records/relic/arcane_scroll.json could not do from its own two files: the deck tail after the pickup is ['strike', 'defend'] in that order, i.e. appended, Strike first. add_card also runs modify_card_being_added_to_deck and after_card_added_to_deck (run.py:524-537, renumbered since prior pass, content unchanged), the two hooks CardPileCmd.Add runs (CardPileCmd.cs:501, 635) -- so unlike relic/leafy_poultice's transform path this relic does not drop them. Rule 7: run.py and cards/pool.py are not hashed here."
     },
     {
       "what": "N4 (DORMANT): the pull cannot apply RelicModel.IsAllowed, so the two relics can be ones the game would have removed from the bag",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the pull CAN apply RelicModel.IsAllowed now. RunState.pull_relic_from_front (sts2_rl/run.py:731) calls _drop_disallowed_from_grab_bag (sts2_rl/run.py:769-776) first, which drops every relic whose `Relic.is_allowed(run)` (sts2_rl/relics/base.py:198) is False -- the port of RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:250-271) that RelicFactory.PullNextRelicFromFront goes through. Large Capsule's two pulls therefore see the same bag the game would. WAS: `sts2_rl.relics.base.Relic` declared no is_allowed member and pull_relic_from_front applied no such filter, so the two relics could be ones the game had removed from the bag."
+      "issue": "Closed 2026-07-27: the pull CAN apply RelicModel.IsAllowed now. RunState.pull_relic_from_front (sts2_rl/run.py:970) calls _drop_disallowed_from_grab_bag (sts2_rl/run.py:1080-1087, renumbered since prior pass, content unchanged) first, which drops every relic whose `Relic.is_allowed(run)` (sts2_rl/relics/base.py:252-263, renumbered since prior pass, content re-verified this pass) is False -- the port of RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:250-271) that RelicFactory.PullNextRelicFromFront goes through. Large Capsule's two pulls therefore see the same bag the game would. WAS: `sts2_rl.relics.base.Relic` declared no is_allowed member and pull_relic_from_front applied no such filter, so the two relics could be ones the game had removed from the bag."
     },
     {
       "what": "N5: `CardCmd.PreviewCardPileAdd(list, 2f)` and the CardPileAddResult list it is built for (LargeCapsule.cs:30-35), plus CanonicalVars(IntVar('Relics', 2))",
@@ -75,7 +75,7 @@
     {
       "what": "N7: recursion -- each granted relic's own AfterObtained runs inside Large Capsule's",
       "verdict": "faithful",
-      "rationale": "C# `RelicCmd.Obtain(relic, Owner)` fires the granted relic's AfterObtained, and run.add_relic does the same (run.py:550-552), so a pulled Lee's Waffle or Looming Fruit applies its max HP here on both sides. Checked because the sim's add_relic is the recursion point and a pulled Large Capsule would recurse -- impossible in practice because the pull removes the relic from the bag before granting, and Large Capsule is Ancient rarity and not in the transcribed bag at all (EXECUTED, b08-pool: bag='-'). The executed grant ['toxic_egg', 'akabeko'] shows the nesting works. Rule 7: run.py are not hashed by this record."
+      "rationale": "C# `RelicCmd.Obtain(relic, Owner)` fires the granted relic's AfterObtained, and run.add_relic does the same (run.py:957-963, renumbered since prior pass, content unchanged), so a pulled Lee's Waffle or Looming Fruit applies its max HP here on both sides. Checked because the sim's add_relic is the recursion point and a pulled Large Capsule would recurse -- impossible in practice because the pull removes the relic from the bag before granting, and Large Capsule is Ancient rarity and not in the transcribed bag at all (EXECUTED, b08-pool: bag='-'). The executed grant ['toxic_egg', 'akabeko'] shows the nesting works. Rule 7: run.py are not hashed by this record."
     }
   ],
   "verdict": "waiver",

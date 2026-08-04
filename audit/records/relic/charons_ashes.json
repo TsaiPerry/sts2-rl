@@ -21,17 +21,22 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/valueprops.py",
       "sha256": "921396859f69d89b0170584da481bf7ed5e88303f328e739666f976b2c74c3b4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     }
   ],
@@ -43,7 +48,7 @@
     "AfterCardExhausted": {
       "maps_to": "on_card_exhausted (charons_ashes.py:21-27)",
       "verdict": "gap",
-      "issue": "Re-executed rather than re-derived (already fully settled round 13 R8). No change to the verdict. Flagging for the controller: the round-13 witness test in test/test_r13_relic2.py (test_damage_cmd_deal_refuses_the_damage_relics_at_the_is_dead_guard) is currently RED on this tree due to an unrelated cross-lane interaction (see Findings) -- not caused by this entry and not fixed by this lane (test file and hooks.py both outside R4's footprint). A fresh, narrower witness in test/test_r14_relics_a.py confirms the surviving claim.",
+      "issue": "Re-executed rather than re-derived (already fully settled round 13 R8). No change to the verdict. RE-VERIFIED 2026-08-04: the round-13 witness test/test_r13_relic2.py::test_damage_cmd_deal_refuses_the_damage_relics_at_the_is_dead_guard now PASSES (the cross-lane interaction that had it RED is resolved), and test/test_r14_relics_a.py (26 tests) is green too.",
       "live": false
     }
   },
@@ -51,12 +56,12 @@
     {
       "what": "G1 (DORMANT): `HittableEnemies` vs `living_enemies()`",
       "verdict": "gap",
-      "issue": "One verdict per mechanism (binding rule 3): this is the same call-site divergence audit/records/relic/bag_of_marbles.json records as its guard G2, with the same verdict. C# targets `Enemies.Where(e => e.IsHittable)` (CombatState.cs:142), where IsHittable is `!IsDead && Hook.ShouldAllowHitting(...)`; Relic.living_enemies() (relics/base.py:294-297) filters on `not e.is_gone` only. DORMANT AT THIS SITE, and for a stronger reason than at Bag of Marbles': this relic's payload is DAMAGE, and DamageCmd.deal applies the missing predicate itself as a backstop -- `if not hooks.should_allow_hitting(target): return 0` (cmds.py:51-52) -- so an alive-but-unhittable enemy is passed in and then correctly takes nothing. Bag of Marbles routes through PowerCmd.apply, which has no such backstop (audit/records/seam/power_cmd.json gap G6), which is why the same wrong set is observable there and not here. Still recorded as a gap because the call site is wrong on both sides of the rule-3 pair and fixing PowerCmd.apply alone would not fix it; it goes live here if any effect ever reads the returned target list rather than the damage."
+      "issue": "One verdict per mechanism (binding rule 3): this is the same call-site divergence audit/records/relic/bag_of_marbles.json records as its guard G2, with the same verdict. C# targets `Enemies.Where(e => e.IsHittable)` (CombatState.cs:142), where IsHittable is `!IsDead && Hook.ShouldAllowHitting(...)`; Relic.living_enemies() (relics/base.py:486-493, was :294-297) filters on `not e.is_gone` only. DORMANT AT THIS SITE, and for a stronger reason than at Bag of Marbles': this relic's payload is DAMAGE, and DamageCmd.deal applies the missing predicate itself as a backstop -- `if not hooks.should_allow_hitting(target): return 0` (cmds.py:312-313, was :51-52) -- so an alive-but-unhittable enemy is passed in and then correctly takes nothing. Bag of Marbles routes through PowerCmd.apply, which has no such backstop (audit/records/seam/power_cmd.json gap G6), which is why the same wrong set is observable there and not here. Still recorded as a gap because the call site is wrong on both sides of the rule-3 pair and fixing PowerCmd.apply alone would not fix it; it goes live here if any effect ever reads the returned target list rather than the damage."
     },
     {
       "what": "G3: C# damages all enemies in ONE CreatureCmd.Damage call that defers every death to a single batched Kill(); the sim loops DamageCmd.deal per enemy, each with its own inline death processing",
       "verdict": "deliberate-divergence",
-      "rationale": "CreatureCmd.cs:240-411 resolves the whole target list in two passes: pass 1 applies modifiers, block and HP loss to every target, and only then pass 2 fires AfterBlockBroken / AfterCurrentHpChanged / AfterDamageGiven / AfterDamageReceived per result and collects the corpses into `killedCreatures`, which a single `await Kill(killedCreatures)` at line 409 processes last. charons_ashes.py:23-27 iterates living_enemies() and calls DamageCmd.deal per enemy, and each of those calls runs its own should_die / on_death / retained_after_death block (cmds.py:96-111) before the next enemy is touched. audit/records/seam/damage_pipeline.json guard N2 already verdicts this exact structural difference deliberate-divergence and records that no concretely broken interaction was found; cited and matched under binding rule 3 rather than re-derived. It matters here specifically because Charon's Ashes is one of the sim's few genuine simultaneous-AoE sources: a ported on_death effect that damages or buffs (StockPower's Axebot spawn is the shape) would land mid-sweep in the sim and post-sweep in the game."
+      "rationale": "CreatureCmd.cs:240-411 resolves the whole target list in two passes: pass 1 applies modifiers, block and HP loss to every target, and only then pass 2 fires AfterBlockBroken / AfterCurrentHpChanged / AfterDamageGiven / AfterDamageReceived per result and collects the corpses into `killedCreatures`, which a single `await Kill(killedCreatures)` at line 409 processes last. charons_ashes.py:23-27 iterates living_enemies() and calls DamageCmd.deal per enemy, and each of those calls runs its own should_die / on_death / retained_after_death block (cmds.py:126-165ish, _resolve_death, called inline at :402, was :96-111) before the next enemy is touched. audit/records/seam/damage_pipeline.json guard N2 already verdicts this exact structural difference deliberate-divergence and records that no concretely broken interaction was found; cited and matched under binding rule 3 rather than re-derived. It matters here specifically because Charon's Ashes is one of the sim's few genuine simultaneous-AoE sources: a ported on_death effect that damages or buffs (StockPower's Axebot spawn is the shape) would land mid-sweep in the sim and post-sweep in the game."
     },
     {
       "what": "G2: `card.Owner == base.Owner` (CharonsAshes.cs:19)",
@@ -71,7 +76,7 @@
     {
       "what": "N2: `DamageVar(3m, ValueProp.Unpowered)` with `damage.Props` (CharonsAshes.cs:15, 22-23) vs `DAMAGE = 3` with `DamageProps.NON_CARD_UNPOWERED` (charons_ashes.py:19, 26)",
       "verdict": "faithful",
-      "rationale": "3 on both sides, no AscensionHelper call in the file. The props match exactly: valueprops.py:42 defines NON_CARD_UNPOWERED as bare `ValueProp.UNPOWERED` -- no MOVE flag -- which is what `ValueProp.Unpowered` alone means. The consequences are real and both correct: is_powered_attack is false so Strength and Vulnerable do not scale the 3 (cmds.py:55-58), and the absence of MOVE means hooks.on_attacked does NOT fire (cmds.py:69-70), so Curl Up-style on-hit powers are not triggered by the burn. Rule 7: valueprops.py and cmds.py are not hashed here."
+      "rationale": "3 on both sides, no AscensionHelper call in the file. The props match exactly: valueprops.py:42 defines NON_CARD_UNPOWERED as bare `ValueProp.UNPOWERED` -- no MOVE flag -- which is what `ValueProp.Unpowered` alone means. The consequences are real and both correct: is_powered_attack is false so Strength and Vulnerable do not scale the 3 (StrengthPower/VulnerablePower each self-gate with `if not is_powered_attack(props): return 0`, powers.py:225/702; the old citation cmds.py:55-58 no longer resolves to this claim -- re-verified 2026-08-04 that the guard lives in the listener implementations, not in cmds.py itself), and the absence of MOVE means hooks.on_attacked does NOT fire (cmds.py:349-350, was :69-70), so Curl Up-style on-hit powers are not triggered by the burn. Rule 7: valueprops.py, cmds.py and powers.py are all hashed by this record (extra_sources)."
     },
     {
       "what": "N3: dealer = `base.Owner.Creature`, cardSource = null on both sides",
@@ -81,7 +86,7 @@
     {
       "what": "N4: `self._check_win()` (charons_ashes.py:27) has no direct C# counterpart in the relic",
       "verdict": "faithful",
-      "rationale": "The game gets it from the CheckWinCondition that follows the enclosing action rather than from the relic body; Relic._check_win (relics/base.py:299-303) is the sim's stand-in, and its own docstring says so. Placement is right: it runs after the whole enemy loop, matching C#'s post-command check rather than a per-target one. Without it a relic that kills the last enemy would leave the combat running."
+      "rationale": "The game gets it from the CheckWinCondition that follows the enclosing action rather than from the relic body; Relic._check_win (relics/base.py:499-504, was :299-303) is the sim's stand-in, and its own docstring says so. Placement is right: it runs after the whole enemy loop, matching C#'s post-command check rather than a per-target one. Without it a relic that kills the last enemy would leave the combat running."
     },
     {
       "what": "N5: Flash() and CanonicalVars (CharonsAshes.cs:15, 21)",

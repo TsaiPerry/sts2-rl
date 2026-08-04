@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_skills.py",
-    "sha256": "1cdf31a3bd59e95b239df163b0724e4f99ef299bd67256cc94fcc683e1ed1840"
+    "sha256": "73d875726c8cb8ca6a213dea6f43267d57717f5a1d6b65d34ca2ecea7f4ab66f"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -37,27 +37,27 @@
   ],
   "hooks": {
     "CanBeGeneratedInCombat": {
-      "maps_to": "HiddenGemCard.can_be_generated_in_combat = False (colorless_skills.py:298)",
+      "maps_to": "HiddenGemCard.can_be_generated_in_combat = False (colorless_skills.py:358)",
       "verdict": "faithful",
       "rationale": "`=> false` (HiddenGem.cs:16) == the class attribute -- correctly mapped, like card/feed and card/hand_of_greed."
     },
     "ctor": {
-      "maps_to": "class attrs (colorless_skills.py:293-298) + _init_vars (300-302)",
+      "maps_to": "class attrs (colorless_skills.py:353-358) + _init_vars (360-362)",
       "verdict": "faithful",
       "rationale": "`base(1, CardType.Skill, CardRarity.Rare, TargetType.Self)` (HiddenGem.cs:22-25) == cost 1 / SKILL / RARE / SELF."
     },
     "CanonicalVars": {
-      "maps_to": "HiddenGemCard._replay = 2 (colorless_skills.py:302)",
+      "maps_to": "HiddenGemCard._replay = 2 (colorless_skills.py:362)",
       "verdict": "faithful",
       "rationale": "`new IntVar(\"Replay\", 2m)` (HiddenGem.cs:18) == `_replay = 2`, the amount added to the chosen card's `BaseReplayCount`."
     },
     "OnPlay": {
-      "maps_to": "HiddenGemCard.on_play (colorless_skills.py:307-329)",
+      "maps_to": "HiddenGemCard.on_play (colorless_skills.py:367-383)",
       "verdict": "faithful",
       "issue": "Closed 2026-07-29 (round 7): BOTH divergences closed. (1) The pick is `combat_rng.card_selection`, HiddenGem.cs:53's `Rng.CombatCardSelection.NextItem(items)`. (2) THE FILTER READS THE REAL PREDICATE: `Card.enchanted_replay_count()` is `CardModel.GetEnchantedReplayCount()` (CardModel.cs:1129-1132) -- `Enchantment?.EnchantPlayCount(BaseReplayCount) ?? BaseReplayCount`, and the NULL branch returns BaseReplayCount, so a card already replaying for ANY reason is excluded. `_has_replay_enchantment` was naming the two replay enchantments and never looked at `base_replay_count`, so two Hidden Gems could stack on ONE card (5 plays). EXECUTED: two Hidden Gems over a two-card draw pile now raise both cards to 2 rather than one card to 4.  Pinned by test/test_card_residue_gaps.py.  NOT CLOSED: nothing at this site.  The text it replaced read: The empty-pile early return, the two-tier filter and the prefer-then-fall-back structure are all faithful. C#'s obfuscated type tests decode as expected: `(uint)(type - 5) <= 1u` excludes the two type values above Power (Curse and Quest) == the sim's `card_type not in (CardType.CURSE, CardType.QUEST)`, and `(uint)(type - 1) <= 2u` is the Attack/Skill/Power preference == the sim's `preferred` list; `options = preferred or eligible` is exactly C#'s `(list3.Count == 0) ? list2 : list3`. TWO DIVERGENCES. (1) WRONG RNG STREAM: `Owner.RunState.Rng.CombatCardSelection.NextItem(items)` (HiddenGem.cs:53) vs the sim's `ctx.combat._rng.choice(options)` (colorless_skills.py:321), where `ctx.combat.combat_rng.card_selection` maps to `combat_card_selection` (combat_rng.py:21,55). Same mechanism and same verdict as card/anointed's OnPlay entry (rule 3); LIVE, and one of the 21 `shared-rng` cards. (2) THE ALREADY-REPLAYING FILTER IS TOO NARROW: C#'s third clause is `c.GetEnchantedReplayCount() < 1`, and `GetEnchantedReplayCount()` is `Enchantment?.EnchantPlayCount(BaseReplayCount) ?? BaseReplayCount` (CardModel.cs:1129-1132) -- note the null branch returns BASEREPLAYCOUNT, so a card that is already replaying for ANY reason is excluded, including one a previous Hidden Gem raised. The sim's `_has_replay_enchantment` (colorless_skills.py:324-329) only checks whether the enchantment id is `spiral` or `glam`, so it never looks at `base_replay_count` at all. Observable: play two Hidden Gems and the sim can stack both on the SAME draw-pile card (5 plays) where the game must pick two different ones. LIVE -- Hidden Gem is a ported Rare colorless Skill and nothing stops a second copy. Presentation, folded in: TriggerAnim (29) and `CardCmd.Preview` (57). REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
     },
     "OnUpgrade": {
-      "maps_to": "HiddenGemCard._on_upgrade (colorless_skills.py:304-305)",
+      "maps_to": "HiddenGemCard._on_upgrade (colorless_skills.py:364-365)",
       "verdict": "faithful",
       "rationale": "`DynamicVars[\"Replay\"].UpgradeValueBy(1m)` (HiddenGem.cs:63) == `self._replay += 1` (2 -> 3)."
     }
@@ -66,7 +66,7 @@
     {
       "what": "the card raises `BaseReplayCount` on ANOTHER card rather than doing anything itself (HiddenGem.cs:56)",
       "verdict": "faithful",
-      "rationale": "`cardModel.BaseReplayCount += Replay` == `card.base_replay_count += self._replay`, and the sim's normal play path feeds that field into `modify_card_play_count` as `1 + card.base_replay_count` (combat.py:469-470), matching C#'s `GetEnchantedReplayCount() + 1` (CardModel.cs:2017). So Hidden Gem is the card-side SOURCE of gap G4's blast radius, and card/drum_of_battle -- which reads the hook with a bare 1 and so ignores `base_replay_count` -- is the one ported consumer that gets it wrong."
+      "rationale": "`cardModel.BaseReplayCount += Replay` == `card.base_replay_count += self._replay`, and the sim's normal play path feeds that field into `modify_card_play_count` as `1 + card.base_replay_count` (combat.py:1099-1101, was cited at :469-470 pre-move), matching C#'s `GetEnchantedReplayCount() + 1` (CardModel.cs:2017). So Hidden Gem is the card-side SOURCE of gap G4's blast radius, and card/drum_of_battle -- which reads the hook with a bare 1 and so ignores `base_replay_count` -- is the one ported consumer that gets it wrong."
     }
   ],
   "verdict": "faithful",

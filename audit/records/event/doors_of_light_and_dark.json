@@ -11,12 +11,12 @@
   "extra_sources": [
     {
       "path": "sts2_rl/actmap.py",
-      "sha256": "1d4cb7a59c716b79d7b13d8478d0d705b7ea092cb41380fcb241860bd722206a",
+      "sha256": "64c5a16873b1fbd176c515a29bd0f6e0d74182e1f179955b9226719247b3378e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     },
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     }
   ],
@@ -49,7 +49,7 @@
     },
     {
       "what": "Dark (DoorsOfLightAndDark.cs:38-43): FromDeckForRemoval(1) with NO filter, then CardPileCmd.RemoveFromDeck",
-      "maps_to": "events/doors_of_light_and_dark.py:33-36: select_cards('remove', run.removable_cards(), 1) then remove_cards. The unfiltered C# selector still respects IsRemovable inside CardSelectCmd, which is what removable_cards() (run.py:360-362) reproduces.",
+      "maps_to": "events/doors_of_light_and_dark.py:33-36: select_cards('remove', run.removable_cards(), 1) then remove_cards. The unfiltered C# selector still respects IsRemovable inside CardSelectCmd, which is what removable_cards() (run.py) reproduces.",
       "verdict": "faithful"
     },
     {
@@ -59,12 +59,12 @@
     },
     {
       "what": "EV-5: Light's `Deck.Where(IsUpgradable).ToList().StableShuffle(base.Rng).Take(2)` (DoorsOfLightAndDark.cs:28-29) is `...ToList().StableShuffle(base.Rng).Take(n)`; the sim uses `self.rng.sample(upgradable, count)` (events/doors_of_light_and_dark.py:29)",
-      "maps_to": "Closed 2026-07-28: Light's pick is `stable_shuffle(list(upgradable), event_rng, key=_compare_to_key)[:count]` (events/doors_of_light_and_dark.py:36-39), the shape of `Deck.Where(IsUpgradable).ToList().StableShuffle(base.Rng).Take(2)` (DoorsOfLightAndDark.cs:28-29). actmap.stable_shuffle (actmap.py:193-201) is sort-then-Fisher-Yates, the port of ListExtensions.StableShuffle, and the sort key is now the game's -- player._compare_to_key (player.py:23-34) is CardModel.CompareTo, i.e. the UPPERCASE ModelId entry then the upgrade level. Was: `random.sample` / a bare `shuffle`, which drop the stabilizing sort.",
+      "maps_to": "Closed 2026-07-28: Light's pick is `stable_shuffle(list(upgradable), event_rng, key=_compare_to_key)[:count]` (events/doors_of_light_and_dark.py:36-39), the shape of `Deck.Where(IsUpgradable).ToList().StableShuffle(base.Rng).Take(2)` (DoorsOfLightAndDark.cs:28-29). actmap.stable_shuffle (actmap.py) is sort-then-Fisher-Yates, the port of ListExtensions.StableShuffle, and the sort key is now the game's -- player._compare_to_key (player.py) is CardModel.CompareTo, i.e. the UPPERCASE ModelId entry then the upgrade level. Was: `random.sample` / a bare `shuffle`, which drop the stabilizing sort.",
       "verdict": "faithful"
     },
     {
       "what": "EV-3: Light's StableShuffle stream (DoorsOfLightAndDark.cs:28) rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- Light's StableShuffle runs on `self.event_rng` (events/doors_of_light_and_dark.py:36-39), matching `base.Rng` (DoorsOfLightAndDark.cs:28). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- Light's StableShuffle runs on `self.event_rng` (events/doors_of_light_and_dark.py:36-39), matching `base.Rng` (DoorsOfLightAndDark.cs:28). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
       "verdict": "faithful"
     }
   ],

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -26,46 +26,46 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:427 `power_type = PowerType.DEBUFF`",
+      "maps_to": "powers.py:722 `power_type = PowerType.DEBUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-139 Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch anywhere in it). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Both are third-file citations not hashed by this record."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:137-139) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch anywhere in it). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Both are third-file citations not hashed by this record."
     },
     "ModifyDamageMultiplicative": {
-      "maps_to": "powers.py:430-439 WeakPower.modify_damage_multiplicative",
+      "maps_to": "powers.py:724-736 WeakPower.modify_damage_multiplicative",
       "verdict": "gap",
-      "issue": "The sim returns the bare literal 0.75 and has no modifier chain at all, where WeakPower.cs:24-35 threads DamageDecrease = 0.75m through PaperKrane (the TARGET's relic, -0.15m) and then DebilitatePower. Neither is ported -- `ls sts2_rl/relics/ | grep -i paper` returns joss_paper, lead_paperweight and paper_phrog but no paper_krane, and `grep -c DebilitatePower sts2_rl/powers.py` returns 0 -- and there is no modify_weak_multiplier hook in hooks.py for either to attach to (the sim has only modify_vulnerable_multiplier, hooks.py:185-194). Per binding rule 1 an unported C# side is a DORMANT gap, not a waiver. Named trigger: porting Paper Krane or DebilitatePower, either of which needs a new hook rather than just a new listener. Third-file citations, not hashed here."
+      "issue": "The sim returns the bare literal 0.75 and has no modifier chain at all, where WeakPower.cs:24-35 threads DamageDecrease = 0.75m through PaperKrane (the TARGET's relic, -0.15m) and then DebilitatePower. Neither is ported -- `ls sts2_rl/relics/ | grep -i paper` returns joss_paper, lead_paperweight and paper_phrog but no paper_krane, and `grep -c DebilitatePower sts2_rl/powers.py` returns 0 -- and there is no modify_weak_multiplier hook in hooks.py for either to attach to (the sim has only modify_vulnerable_multiplier, hooks.py:1041-1047). Per binding rule 1 an unported C# side is a DORMANT gap, not a waiver. Named trigger: porting Paper Krane or DebilitatePower, either of which needs a new hook rather than just a new listener. Third-file citations, not hashed here. Citations re-verified and renumbered 2026-08-04."
     },
     "AfterSideTurnEnd": {
-      "maps_to": "powers.py:441-442 on_enemy_side_end -> Power._tick_duration",
+      "maps_to": "powers.py:738-739 on_enemy_side_end -> Power._tick_duration",
       "verdict": "faithful",
-      "rationale": "Identical shape to Vulnerable's: `side == CombatSide.Enemy` with no participants filter, PowerCmd.TickDownDuration (WeakPower.cs:38-44) <-> on_enemy_side_end (combat.py:345) + _tick_duration (powers.py:77-84). One of turn_structure step 39's three tick sites."
+      "rationale": "Identical shape to Vulnerable's: `side == CombatSide.Enemy` with no participants filter, PowerCmd.TickDownDuration (WeakPower.cs:38-44) <-> on_enemy_side_end (combat.py:345) + _tick_duration (powers.py:179-187). One of turn_structure step 39's three tick sites."
     }
   },
   "guards": [
     {
       "what": "WeakPower.cs:16-19 `dealer != base.Owner` -> 1m",
       "verdict": "faithful",
-      "rationale": "powers.py:437-438 `dealer is self.owner`. Identical -- note Weak keys on the DEALER where Vulnerable keys on the target, and the sim gets both right."
+      "rationale": "powers.py:734-735 `dealer is self.owner`. Identical -- note Weak keys on the DEALER where Vulnerable keys on the target, and the sim gets both right. Citation renumbered 2026-08-04."
     },
     {
       "what": "WeakPower.cs:20-23 `!props.IsPoweredAttack()` -> 1m",

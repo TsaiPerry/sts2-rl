@@ -6,32 +6,32 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\infested_automaton.py",
-    "sha256": "9f2a892edd9957367fd788a75a09d0e3e50beabfa8302fd4c16557d89084abe5"
+    "sha256": "07e0c7ee92afcdc2df5f4d6d7e2365147513ade98b4b354460cae23ea30be475"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "0e7260041e0b6693c08bf4aa4ddbb8743311d7fd72d6212fdc7c7d358a7c5030",
+      "sha256": "0b6b63592c62386b478927b39f5f758720079c9377ecda32ca94df150369e7e4",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/brain_leech.py",
-      "sha256": "220a635f96c3938d07bb172ecd05641c9808d471f8a5c32575712e33b0188f30",
+      "sha256": "18ff0492ba63d24b23a7fa21c25c7c832094cbeed9cfa5fffeee0a85f5f830f0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -39,7 +39,7 @@
   "guards": [
     {
       "what": "both branches are single-card grants into the deck with the same shape: build CardCreationOptions over the CHARACTER pool with a predicate, CreateForReward(1), null-guard, then CardPileCmd.Add(card, PileType.Deck) (InfestedAutomaton.cs:28-52)",
-      "maps_to": "events/infested_automaton.py:27-39. The pool is right (the sim's default is IRONCLAD_POOL, cards/pool.py:141), the null guard is reproduced (`for card in ...` over a possibly-empty list, and `if candidates:`), and run.add_card runs the deck-entry hooks CardPileCmd.Add runs (run.py:341-354) -- so the egg relics upgrade the grant in both. CanonicalVars is Array.Empty, so there are no constants to check.",
+      "maps_to": "events/infested_automaton.py. The pool is right (the sim's default is IRONCLAD_POOL, cards/pool.py:141), the null guard is reproduced (`for card in ...` over a possibly-empty list, and `if candidates:`), and run.add_card runs the deck-entry hooks CardPileCmd.Add runs (run.py) -- so the egg relics upgrade the grant in both. CanonicalVars is Array.Empty, so there are no constants to check.",
       "verdict": "faithful"
     },
     {
@@ -59,12 +59,12 @@
     },
     {
       "what": "EV-6: both InfestedAutomaton branches (InfestedAutomaton.cs:31, 46) calls `CardFactory.CreateForReward(owner, n, CardCreationOptions.ForNonCombatWithDefaultOdds(pool, filter))`; the sim uses `random_pool_cards` (cards/pool.py:136-161), which is the port of a DIFFERENT factory",
-      "maps_to": "Closed 2026-07-28: both branches now call rewards.create_reward_cards (events/infested_automaton.py:36-43), the faithful CardFactory.CreateForReward port -- rarity roll with escalation off the non-mutating base odds (`mutate_pity=False`, the CardCreationSource.Other path), the act-scaled upgrade draw, the distinct-card constraint, the GetUnlockedCards pool, and `run.rewards_rng` (rewards.py:242-316). Was: `random_pool_cards`, the port of CardFactory.GetForCombat, so all three observables held -- no rarity odds, no upgrade draw, wrong stream (InfestedAutomaton.cs:30-31, 41-46).",
+      "maps_to": "Closed 2026-07-28: both branches now call rewards.create_reward_cards (events/infested_automaton.py), the faithful CardFactory.CreateForReward port -- rarity roll with escalation off the non-mutating base odds (`mutate_pity=False`, the CardCreationSource.Other path), the act-scaled upgrade draw, the distinct-card constraint, the GetUnlockedCards pool, and `run.rewards_rng` (rewards.py). Was: `random_pool_cards`, the port of CardFactory.GetForCombat, so all three observables held -- no rarity odds, no upgrade draw, wrong stream (InfestedAutomaton.cs:30-31, 41-46).",
       "verdict": "faithful"
     },
     {
       "what": "EV-3: TOUCH_CORE's uniform pick (events/infested_automaton.py:38) and STUDY's (via random_pool_cards' rng argument); the source draws these on the per-player Rewards stream inside CreateForReward rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- both branches go through rewards.create_reward_cards, which draws on `run.rewards_rng` (rewards.py:262-264) -- the per-player Rewards stream CreateForReward uses, matching `base.Rng` (InfestedAutomaton.cs:30-31, 41-46). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- both branches go through rewards.create_reward_cards, which draws on `run.rewards_rng` (rewards.py) -- the per-player Rewards stream CreateForReward uses, matching `base.Rng` (InfestedAutomaton.cs:30-31, 41-46). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
       "verdict": "faithful"
     }
   ],

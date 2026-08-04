@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -29,22 +29,22 @@
   "guards": [
     {
       "what": "MaintainControl (AromaOfChaos.cs:38-48): FromDeckForUpgrade(1) then CardCmd.Upgrade",
-      "maps_to": "events/aroma_of_chaos.py:30-34: select_cards('upgrade', run.upgradable_cards(), 1) then chosen[0].upgrade(). CardCmd.Upgrade (CardCmd.cs:254-283) guards on IsUpgradable and calls UpgradeInternal + FinalizeUpgradeInternal; the sim's caller filters on is_upgradable (run.py:368-369, mirroring CardModel.IsUpgradable) so the guard cannot be violated.",
+      "maps_to": "events/aroma_of_chaos.py:30-34: select_cards('upgrade', run.upgradable_cards(), 1) then chosen[0].upgrade(). CardCmd.Upgrade (CardCmd.cs:254-283) guards on IsUpgradable and calls UpgradeInternal + FinalizeUpgradeInternal; the sim's caller filters on is_upgradable (run.py, mirroring CardModel.IsUpgradable) so the guard cannot be violated.",
       "verdict": "faithful"
     },
     {
       "what": "LetGo (AromaOfChaos.cs:28-36): FromDeckForTransformation(1) then CardCmd.TransformToRandom, with the `if (cardModel != null)` guard for an empty/cancelled selection",
-      "maps_to": "events/aroma_of_chaos.py:24-28: select_cards('transform', run.transformable_cards(), 1), `if chosen:`, transform_card(chosen[0]). The candidate filter matches (IsTransformable == IsRemovable in the deck, run.py:364-366) and the null guard is reproduced. WHICH card it becomes is EV-3, and the deck-entry hooks are BR-G3.",
+      "maps_to": "events/aroma_of_chaos.py:24-28: select_cards('transform', run.transformable_cards(), 1), `if chosen:`, transform_card(chosen[0]). The candidate filter matches (IsTransformable == IsRemovable in the deck, run.py) and the null guard is reproduced. WHICH card it becomes is EV-3, and the deck-entry hooks are BR-G3.",
       "verdict": "faithful"
     },
     {
-      "what": "EV-3: CardCmd.TransformToRandom(cardModel, base.Rng, ...) (AromaOfChaos.cs:33) passes the per-event Rng as the roll stream; events/aroma_of_chaos.py:27 calls run.transform_card(chosen[0]) with no `pick_rng`, so run.py:457-458 falls back to `self.rng.choice` rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- events/aroma_of_chaos.py:29 passes `pick_rng=self.event_rng` into run.transform_card, whose parity arm is a `next_item` over the pool-order options (run.py:557-558), matching `base.Rng` (AromaOfChaos.cs:33). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "what": "EV-3: CardCmd.TransformToRandom(cardModel, base.Rng, ...) (AromaOfChaos.cs:33) passes the per-event Rng as the roll stream; events/aroma_of_chaos.py:27 calls run.transform_card(chosen[0]) with no `pick_rng`, so run.py falls back to `self.rng.choice` rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- events/aroma_of_chaos.py:29 passes `pick_rng=self.event_rng` into run.transform_card, whose parity arm is a `next_item` over the pool-order options (run.py), matching `base.Rng` (AromaOfChaos.cs:33). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
       "verdict": "faithful"
     },
     {
-      "what": "BR-G3 (blast radius): AromaOfChaos's LET_GO calls RunState.transform_card (run.py:406-470), which swaps the deck entry without running the deck-entry hooks C#'s CardCmd.Transform fires",
-      "maps_to": "Closed 2026-07-28: RunState.transform_card (run.py:508-584) now runs BOTH deck-entry hooks around the swap -- `relic.modify_card_being_added_to_deck` before the insert and `relic.after_card_added_to_deck` after it -- which is what CardCmd.Transform does for a PileType.Deck transform (Hook.ModifyCardBeingAddedToDeck at CardCmd.cs:430, Hook.AfterCardChangedPiles at CardCmd.cs:447). Was: a bare deck-slot swap, so the egg relics never saw the replacement. This unit is out of seam guard G3's radius on this leg.",
+      "what": "BR-G3 (blast radius): AromaOfChaos's LET_GO calls RunState.transform_card (run.py), which swaps the deck entry without running the deck-entry hooks C#'s CardCmd.Transform fires",
+      "maps_to": "Closed 2026-07-28: RunState.transform_card (run.py) now runs BOTH deck-entry hooks around the swap -- `relic.modify_card_being_added_to_deck` before the insert and `relic.after_card_added_to_deck` after it -- which is what CardCmd.Transform does for a PileType.Deck transform (Hook.ModifyCardBeingAddedToDeck at CardCmd.cs:430, Hook.AfterCardChangedPiles at CardCmd.cs:447). Was: a bare deck-slot swap, so the egg relics never saw the replacement. This unit is out of seam guard G3's radius on this leg.",
       "verdict": "faithful"
     },
     {

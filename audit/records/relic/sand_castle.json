@@ -16,8 +16,33 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
+    },
+    {
+      "path": "sts2_rl/actmap.py",
+      "sha256": "64c5a16873b1fbd176c515a29bd0f6e0d74182e1f179955b9226719247b3378e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Models/CardModel.cs",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/AbstractModel.cs",
+      "sha256": "6dae61e75edc2eb867a02d217089a562a7198564bf5f3823a466e132c7a20137",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/ModelId.cs",
+      "sha256": "820a9d4cf2b46d013108109c60e30dd6dbeaff554fd4680162197c55083fe15d",
+      "side": "game"
     },
     {
       "path": "sts2_rl/relics/fragrant_mushroom.py",
@@ -26,7 +51,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -39,7 +64,7 @@
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (sand_castle.py:13)",
       "verdict": "faithful",
-      "rationale": "Matches SandCastle.cs:18. Load-bearing beyond display: Relic.is_tradable (relics/base.py:132) excludes upon-pickup relics from the trade events, and Ancient rarity excludes it a second time. Rule 7: relics/base.py is not hashed here."
+      "rationale": "Matches SandCastle.cs:18. Load-bearing beyond display: Relic.is_tradable (relics/base.py:189-198) excludes upon-pickup relics from the trade events, and Ancient rarity excludes it a second time."
     },
     "AfterObtained": {
       "maps_to": "after_obtained (sts2_rl/relics/sand_castle.py) -- upgradable deck cards, stable_shuffle over run.rng_set.niche with _compare_to_key, first CardsVar(6) upgraded",
@@ -56,7 +81,7 @@
     {
       "what": "G2: `Rng.Niche` is named in C# and the sim consumes nothing (PROMPT.md bug class 16)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: sts2_rl/relics/sand_castle.py's `after_obtained` takes `count = min(self.CARDS, len(upgradable))` with `CARDS = 6` (SandCastle.cs:20's `new CardsVar(6)`, no AscensionHelper branch in the file) and, on the parity path, `stable_shuffle(list(upgradable), run.rng_set.niche, key=_compare_to_key)[:count]` -- SandCastle.cs:24-25's `Where(IsUpgradable).StableShuffle(Rng.Niche).Take(Cards.IntValue)`. Closed 2026-07-27: the port performs C#'s StableShuffle over the named stream. `actmap.stable_shuffle(items, rng, key)` (sts2_rl/actmap.py:193-201) is ListExtensions.StableShuffle -- `items.sort(key=...)` then the Fisher-Yates -- and the key is `sts2_rl/player.py:23-34 _compare_to_key`, `(card.id.upper(), card.upgrade_level)`, which is CardModel.CompareTo's ordinal compare of the game's UPPERCASE ModelId Entry then CurrentUpgradeLevel (CardModel.cs:2242-2264 -> AbstractModel.cs:87-98 -> ModelId.cs:42-50). WAS: sand_castle.py touched no RNG at all, so the Niche counter did not move across add_relic('sand_castle')."
+      "issue": "Closed 2026-07-27: sts2_rl/relics/sand_castle.py's `after_obtained` takes `count = min(self.CARDS, len(upgradable))` with `CARDS = 6` (SandCastle.cs:20's `new CardsVar(6)`, no AscensionHelper branch in the file) and, on the parity path, `stable_shuffle(list(upgradable), run.rng_set.niche, key=_compare_to_key)[:count]` -- SandCastle.cs:24-25's `Where(IsUpgradable).StableShuffle(Rng.Niche).Take(Cards.IntValue)`. Closed 2026-07-27: the port performs C#'s StableShuffle over the named stream. `actmap.stable_shuffle(items, rng, key)` (sts2_rl/actmap.py:195-...) is ListExtensions.StableShuffle -- `items.sort(key=...)` then the Fisher-Yates -- and the key is `sts2_rl/player.py:26 _compare_to_key`, `(card.id.upper(), card.upgrade_level)`, which is CardModel.CompareTo's ordinal compare of the game's UPPERCASE ModelId Entry then CurrentUpgradeLevel (CardModel.cs:2242-2264 -> AbstractModel.cs:87-98 -> ModelId.cs:42-50). WAS: sand_castle.py touched no RNG at all, so the Niche counter did not move across add_relic('sand_castle')."
     },
     {
       "what": "N1: `CardCmd.Upgrade(item, CardPreviewStyle.GridLayout)` (SandCastle.cs:29) vs the sim's bare `card.upgrade()` -- PROMPT.md bug class 14",
@@ -71,7 +96,7 @@
     {
       "what": "N3: `undo_after_obtained` is not implemented, and the pickup mutates run state outside run.relics",
       "verdict": "faithful",
-      "rationale": "Per PROMPT.md v6 binding item 3, the ABSENCE of undo_after_obtained is faithful at every site: the helper has no C# counterpart -- nothing in the game un-picks a relic -- so a sim lacking it is not diverging from the source. Flagged for its operational consequence only: Sand Castle's upgrades are deck mutations, so when the conformance runner grants a node's relic and then swaps it for the one the save records, the upgrades stay behind and the deck comparison reads high. That is a tooling defect, not a fidelity gap. Rule 7: relics/base.py:143-150 and conformance/runner.py are not hashed here."
+      "rationale": "Per PROMPT.md v6 binding item 3, the ABSENCE of undo_after_obtained is faithful at every site: the helper has no C# counterpart -- nothing in the game un-picks a relic -- so a sim lacking it is not diverging from the source. Flagged for its operational consequence only: Sand Castle's upgrades are deck mutations, so when the conformance runner grants a node's relic and then swaps it for the one the save records, the upgrades stay behind and the deck comparison reads high. That is a tooling defect, not a fidelity gap. Rule 7: conformance/runner.py is not hashed here."
     },
     {
       "what": "N4: NRun.Instance?.GlobalUi.GridCardPreviewContainer.ForceMaxColumnsUntilEmpty(3) (SandCastle.cs:26) and CardPreviewStyle.GridLayout (line 29)",

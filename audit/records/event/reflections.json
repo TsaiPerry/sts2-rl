@@ -31,32 +31,32 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     }
   ],
@@ -70,12 +70,12 @@
   "guards": [
     {
       "what": "GenerateInitialOptions (Reflections.cs:23-30): TOUCH_A_MIRROR then SHATTER, both unconditional; the event declares no IsAllowed at all",
-      "maps_to": "events/reflections.py:27-31, same order, no gates, and the sim declares no is_allowed so it inherits the base True (events/base.py:103-107). Both engines therefore let a deck with nothing upgraded and nothing upgradable walk in and waste the option.",
+      "maps_to": "events/reflections.py:27-31, same order, no gates, and the sim declares no is_allowed so it inherits the base True (events/base.py:127-131, was :103-107). Both engines therefore let a deck with nothing upgraded and nothing upgradable walk in and waste the option.",
       "verdict": "faithful"
     },
     {
       "what": "TouchAMirror's two-phase shape (Reflections.cs:32-58): build `Deck.Cards.Where(IsUpgraded)` ONCE, loop 2 with a `Count <= 0` break, NextItem + Remove-from-candidates + Downgrade each time; THEN RE-DERIVE `Deck.Cards.Where(IsUpgradable)` and loop 4 the same way",
-      "maps_to": "events/reflections.py:33-48 reproduces both phases, both counts (events/reflections.py:8-9 _DOWNGRADES = 2, _UPGRADES = 4), both `if not <list>: break` guards, and -- the load-bearing detail -- the RE-DERIVATION between them, so a card just downgraded is eligible for the upgrade pass. `c.upgrade_level > 0` is IsUpgraded and `c.is_upgradable` is IsUpgradable (the same predicate run.upgradable_cards uses, run.py:368-369). EXECUTED (`py audit/tools/event_probes_a.py reflect`): with 3 upgraded cards in a 10-card starting deck the sim takes 6 picks over list sizes [3, 2, 9, 8, 7, 6] -- the 9 on the third pick is the re-derived list including the two downgrades.",
+      "maps_to": "events/reflections.py:33-48 reproduces both phases, both counts (events/reflections.py:8-9 _DOWNGRADES = 2, _UPGRADES = 4), both `if not <list>: break` guards, and -- the load-bearing detail -- the RE-DERIVATION between them, so a card just downgraded is eligible for the upgrade pass. `c.upgrade_level > 0` is IsUpgraded and `c.is_upgradable` is IsUpgradable (the same predicate run.upgradable_cards uses, run.py:582-583, was :368-369). EXECUTED (`py audit/tools/event_probes_a.py reflect`): with 3 upgraded cards in a 10-card starting deck the sim takes 6 picks over list sizes [3, 2, 9, 8, 7, 6] -- the 9 on the third pick is the re-derived list including the two downgrades.",
       "verdict": "faithful"
     },
     {
@@ -85,7 +85,7 @@
     },
     {
       "what": "Shatter's snapshot (Reflections.cs:65-71): `originalDeckSize` is captured BEFORE the loop and the loop indexes `Deck.Cards[i]`, so the clones being appended are never themselves cloned",
-      "maps_to": "events/reflections.py:51 `for card in list(self.run.deck)` takes the same snapshot. Both append (run.deck.append, run.py:348; CardPileCmd.Add to PileType.Deck), so indices 0..n-1 stay the originals in the source too. EXECUTED (`py audit/tools/event_probes_a.py reflect`): a 10-card starting deck becomes 21 -- 10 originals + 10 clones + Bad Luck.",
+      "maps_to": "events/reflections.py:51 `for card in list(self.run.deck)` takes the same snapshot. Both append (run.deck.append, run.py:532, was :348; CardPileCmd.Add to PileType.Deck), so indices 0..n-1 stay the originals in the source too. EXECUTED (`py audit/tools/event_probes_a.py reflect`): a 10-card starting deck becomes 21 -- 10 originals + 10 clones + Bad Luck.",
       "verdict": "faithful"
     },
     {
@@ -100,17 +100,17 @@
     },
     {
       "what": "both of Shatter's adds run the deck-entry hook, so the egg relics see the clones",
-      "maps_to": "run.add_card runs Hook.ModifyCardBeingAddedToDeck and the AfterCardChangedPiles tail (run.py:341-354), which is what CardPileCmd.Add(PileType.Deck) runs. EXECUTED (`py audit/tools/event_probes_a.py reflect`): holding Molten Egg, SHATTER on the starting deck takes upgraded Attacks from 0 to 6 -- the six cloned Strikes and Bashes -- so the sim reproduces the game's clone-then-upgrade behaviour. This event is in the add_card set and NOT in creature_card_cmds G3's transform radius.",
+      "maps_to": "run.add_card runs Hook.ModifyCardBeingAddedToDeck and the AfterCardChangedPiles tail (run.py:524-537, was :341-354), which is what CardPileCmd.Add(PileType.Deck) runs. EXECUTED (`py audit/tools/event_probes_a.py reflect`): holding Molten Egg, SHATTER on the starting deck takes upgraded Attacks from 0 to 6 -- the six cloned Strikes and Bashes -- so the sim reproduces the game's clone-then-upgrade behaviour. This event is in the add_card set and NOT in creature_card_cmds G3's transform radius.",
       "verdict": "faithful"
     },
     {
       "what": "EV-3: all six of TouchAMirror's `base.Rng.NextItem` draws (Reflections.cs:41, :54), which events/reflections.py:38 and :45 take off `self.rng` via random.Random.choice. Right count on every path (EXECUTED, `py audit/tools/event_probes_a.py reflect`), right candidate lists, wrong stream. Confirmed by `py audit/tools/event_probes.py eventrng`, which lists reflections among the modules that roll ONLY on the shared rng. Shatter rolls nothing on either side rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- all six TouchAMirror picks run on `self.event_rng` (events/reflections.py:36-52), matching `base.Rng` (Reflections.cs:41, 54). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- all six TouchAMirror picks run on `self.event_rng` (events/reflections.py:36-52), matching `base.Rng` (Reflections.cs:41, 54). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:95-98, was :96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
       "verdict": "faithful"
     },
     {
       "what": "BR-step52 (blast radius): audit/records/seam/creature_card_cmds.json step 52 -- CardCmd.Downgrade skips the Enchantment.ModifyCard() re-apply, and step 52's rationale names events/reflections.py:36-41 (TouchAMirror's downgrade loop) as one of its two legs",
-      "maps_to": "Closed 2026-07-28: Card.downgrade (cards/base.py:185-206) now ends in `if self.enchantment is not None: self.enchantment.modify_card()`, the port of CardModel.DowngradeInternal's `Enchantment?.ModifyCard()` (CardModel.cs:2145) that runs right after the card is re-derived from canonical. Was: the rebuild wiped the enchantment's edits and nothing re-applied them, so TouchAMirror's downgrade loop (events/reflections.py:38-44) left a Souls-enchanted card reading exhausts=False until the next combat's Enchantment.reset().",
+      "maps_to": "Closed 2026-07-28: Card.downgrade (cards/base.py:324-353, was :185-206) now ends in `if self.enchantment is not None: self.enchantment.modify_card()`, the port of CardModel.DowngradeInternal's `Enchantment?.ModifyCard()` (CardModel.cs:2145) that runs right after the card is re-derived from canonical. Was: the rebuild wiped the enchantment's edits and nothing re-applied them, so TouchAMirror's downgrade loop (events/reflections.py:38-44) left a Souls-enchanted card reading exhausts=False until the next combat's Enchantment.reset().",
       "verdict": "faithful"
     },
     {

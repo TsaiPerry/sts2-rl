@@ -6,36 +6,36 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_skills.py",
-    "sha256": "1cdf31a3bd59e95b239df163b0724e4f99ef299bd67256cc94fcc683e1ed1840"
+    "sha256": "73d875726c8cb8ca6a213dea6f43267d57717f5a1d6b65d34ca2ecea7f4ab66f"
   },
   "hooks": {
     "GainsBlock": {
-      "maps_to": "PanicButtonCard.gains_block = True (colorless_skills.py:424)",
+      "maps_to": "PanicButtonCard.gains_block = True (colorless_skills.py:489)",
       "verdict": "faithful",
       "rationale": "`public override bool GainsBlock => true` (PanicButton.cs:16) == the class attribute."
     },
     "CanonicalKeywords": {
-      "maps_to": "PanicButtonCard.exhausts = True (colorless_skills.py:429)",
+      "maps_to": "PanicButtonCard.exhausts = True (colorless_skills.py:494)",
       "verdict": "faithful",
       "rationale": "`{ CardKeyword.Exhaust }` (PanicButton.cs:18) == `exhausts = True`."
     },
     "ctor": {
-      "maps_to": "class attrs (colorless_skills.py:423-429) + _init_vars (431-434)",
+      "maps_to": "class attrs (colorless_skills.py:488-494) + _init_vars (496-499)",
       "verdict": "faithful",
       "rationale": "`base(0, CardType.Skill, CardRarity.Uncommon, TargetType.Self)` (PanicButton.cs:26-29) == cost 0 / SKILL / UNCOMMON / SELF."
     },
     "CanonicalVars": {
-      "maps_to": "_block = 30, _turns = 2 (colorless_skills.py:433-434)",
+      "maps_to": "_block = 30, _turns = 2 (colorless_skills.py:498-499)",
       "verdict": "faithful",
       "rationale": "`new BlockVar(30m, ValueProp.Move)` + `new DynamicVar(\"Turns\", 2m)` (PanicButton.cs:20-24) == both numbers, both declared. Move without Unpowered -> POWERED block, so NOT in gap G1's blast radius -- and this card ties card/impervious for the largest block number in the pool, so Vambrace doubling it correctly matters."
     },
     "OnPlay": {
-      "maps_to": "PanicButtonCard.on_play (colorless_skills.py:439-445)",
+      "maps_to": "PanicButtonCard.on_play (colorless_skills.py:504-510)",
       "verdict": "faithful",
       "rationale": "Order matches: `CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, cardPlay)` FIRST (PanicButton.cs:33) == `BlockCmd.apply(ctx.hooks, ctx.player, self._block, card=self)`, then `PowerCmd.Apply<NoBlockPower>(..., DynamicVars[\"Turns\"].BaseValue, ...)` (34) == `PowerCmd.apply(..., NoBlockPower, self._turns, applier=ctx.player)`. The order is load-bearing -- NoBlockPower is applied AFTER the gain, so this card's own 30 block is not zeroed by it -- and is preserved. NoBlockPower is one of the eight C# `ModifyBlockMultiplicative` implementers the creature_card_cmds seam pins for gap G1 (x0), and its sim port (powers.py) is one of the five ported counterparts; the power's own behaviour is the power stream's."
     },
     "OnUpgrade": {
-      "maps_to": "PanicButtonCard._on_upgrade (colorless_skills.py:436-437)",
+      "maps_to": "PanicButtonCard._on_upgrade (colorless_skills.py:501-502)",
       "verdict": "faithful",
       "rationale": "`DynamicVars.Block.UpgradeValueBy(10m)` (PanicButton.cs:39) == `self._block += 10` (30 -> 40). The Turns var stays 2 when upgraded on both sides."
     }

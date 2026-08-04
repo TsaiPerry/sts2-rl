@@ -56,12 +56,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -72,12 +72,12 @@
       "rationale": "Matches ScrollBoxes.cs:21. Obtainable: one of Neow's 14 fixed positive relics (events/neow.py:41), executed via neow_relic_pool -- see the IsAllowedAtNeow entry."
     },
     "IsAllowedAtNeow": {
-      "maps_to": "is_allowed_at_neow = True (inherited from Relic, relics/base.py:159); the sim declares no override on ScrollBoxes",
+      "maps_to": "is_allowed_at_neow = True (inherited from Relic, relics/base.py:266); the sim declares no override on ScrollBoxes",
       "verdict": "faithful",
       "rationale": "Sweep B (.superpowers/sdd/content-relic-sweeps.md) flagged this as a MISMATCH needing a per-unit verdict because C# overrides the member. Settled here BY EXECUTION rather than by reading, per binding rule 5. ScrollBoxes.cs:23-30 returns `CanGenerateBundles(player) ? base.IsAllowedAtNeow(player) : false`. Both halves resolve to true for the only character the sim has: (a) CanGenerateBundles (ScrollBoxes.cs:50-60) needs >= 4 unlocked Commons AND >= 2 unlocked Uncommons in the character's pool, and the executed Ironclad pool has 20 Commons and 35 Uncommons (py audit/tools/relic_probes_b14.py scroll-neow); (b) `base.IsAllowedAtNeow` is `IsAllowed(player.RunState)` (RelicModel.cs:443-446) and ScrollBoxes does not override IsAllowed, so it is the default `true` (RelicModel.cs:434-437) -- which also means this unit is NOT part of sweep B's 17-relic IsBeforeAct3TreasureChest cluster and needs no is_allowed member to be correct. Executed confirmation that the flag has the intended effect: neow_relic_pool(run) contains 'scroll_boxes'. NOTE for the fix ordering PROMPT.md v6 binding item 2 raises: whoever adds `Relic.is_allowed(run)` must make is_allowed_at_neow DELEGATE to it, or this relic's correct-by-accident True becomes a stale flag the moment any override lands. Rule 7: relics/base.py, events/neow.py, cards/pool.py and RelicModel.cs are not hashed here."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (scroll_boxes.py:15-52), dispatched by RunState.add_relic (run.py:552); the choose-a-bundle screen maps to run.select_option('bundle', 2) (scroll_boxes.py:50)",
+      "maps_to": "after_obtained (scroll_boxes.py:15-52), dispatched by RunState.add_relic (run.py:957-963); the choose-a-bundle screen maps to run.select_option('bundle', 2) (scroll_boxes.py:50)",
       "verdict": "deliberate-divergence",
       "issue": "CLOSED 2026-07-29 (round 10, the Tier 1 residue). G1 IS FIXED and its dormancy argument was FALSE. `Hook.ModifyCardRewardCreationOptions` is not missing from the sim -- `Relic.modify_card_reward_creation_options` (relics/base.py) is a chain-style hook that rewards.py already dispatches, and `dingy_rug` implements it IN FULL (relics/dingy_rug.py), contrary to this guard's 'dingy_rug's port implements no card-reward hook'. What was actually missing was ScrollBoxes' own two dispatches. `after_obtained` now builds one `CardCreationOptions` per rarity and runs the relic chain over each, matching ScrollBoxes.cs:71-77's two separate `Hook.ModifyCardRewardCreationOptions` calls at :73 and :75, with `CardCreationSource.OTHER`, `RarityOddsType.UNIFORM` and flags `NoUpgradeRoll | NoRarityModification` (ForNonCombatWithUniformOdds, CardCreationOptions.cs:160-163, plus ScrollBoxes.cs:71). The rarity test is applied AFTER the chain, not folded into the starting pool, because in C# it is `CardPoolFilter` -- a predicate stored on the options and evaluated inside `GetPossibleCards` (CardCreationOptions.cs:168-172) -- so a listener that edits the pool has its edit filtered rather than ignored. THE DORMANCY IS REAL BUT FOR A DIFFERENT REASON, and it is now an ENUMERATION rather than an argument: of the four C# implementers, two (BigGameHunter, CharacterCards) are run modifiers the sim has no concept of, `prismatic_gem`'s arm unions other characters' pools and the sim has one character, and `dingy_rug` -- the one ported implementer of this hook -- gates on `CardCreationFlags.IsCardReward` (DingyRug.cs:23-26), which this creation does not set. Executed: holding Dingy Rug, no bundle card comes from COLORLESS_POOL; a listener that DOES edit the pool changes all 3 granted cards. Bug class 28 applies -- the dispatch is there now whether or not a listener answers it today. N4 (materialise all six cards vs only the chosen bundle's) is unchanged and stays `deliberate-divergence`, which is what this rollup now reads. Pinned by test/test_tier1_residue.py (3 tests). WAS: Rollup of guards G1 and N4 per binding rule 4. The bundle SHAPE is faithful and executed -- 2 bundles, 2 Commons then 1 Uncommon each, all 6 distinct, drawn off PlayerRng.Rewards with NextItem-and-remove, and the Defect-only 1%-Claw arm correctly skipped -- but the port drops both of C#'s Hook.ModifyCardRewardCreationOptions dispatches (G1) and creates only the chosen bundle's cards instead of all six (N4).",
       "rationale": "N4, the only non-faithful leg left: C# materialises all six CardModels through RunState.CreateCard BEFORE the choose-a-bundle screen (ScrollBoxes.cs:36-39) and the sim builds only the chosen bundle's cards. Deliberate: the sim's screen is `run.select_option('bundle', 2)` over id lists, and CreateCard takes no RNG draw, so the six-vs-three difference costs nothing on any stream and is invisible to every observable. The three unchosen models are discarded in both engines."
@@ -112,12 +112,12 @@
     {
       "what": "N5: `CardSelectCmd.FromChooseABundleScreen` (ScrollBoxes.cs:40) is not skippable, and the sim's select_option has no skip either",
       "verdict": "faithful",
-      "rationale": "The C# call has no canSkip argument (contrast LeadPaperweight.cs:24's `canSkip: true`), so the player must take one bundle; run.select_option(purpose, count) returns an index in range and cannot decline (run.py:392-398). Same choice space on both sides. Rule 7: run.py is not hashed here."
+      "rationale": "The C# call has no canSkip argument (contrast LeadPaperweight.cs:24's `canSkip: true`), so the player must take one bundle; run.select_option(purpose, count) returns an index in range and cannot decline (run.py:645-654). Same choice space on both sides. Rule 7: run.py is not hashed here."
     },
     {
       "what": "N6: `undo_after_obtained` is not implemented, and the pickup adds 3 cards to the run deck",
       "verdict": "faithful",
-      "rationale": "The consequence, for the record: a conformance-runner relic swap leaves the three bundle cards in the deck. Per PROMPT.md v6 binding item 3, the ABSENCE of undo_after_obtained is faithful at every site: the helper has no C# counterpart -- nothing in the game un-picks a relic -- so a sim lacking it is not diverging from the source, which is the only question this audit asks. Flagged for its operational consequence only, which is a tooling defect and not a fidelity gap. Rule 7: relics/base.py:143-150 and conformance/runner.py are not hashed here."
+      "rationale": "The consequence, for the record: a conformance-runner relic swap leaves the three bundle cards in the deck. Per PROMPT.md v6 binding item 3, the ABSENCE of undo_after_obtained is faithful at every site: the helper has no C# counterpart -- nothing in the game un-picks a relic -- so a sim lacking it is not diverging from the source, which is the only question this audit asks. Flagged for its operational consequence only, which is a tooling defect and not a fidelity gap. Rule 7: relics/base.py:206-213 and conformance/runner.py are not hashed here."
     },
     {
       "what": "N7: the relic holds no state; nothing to reset (PROMPT.md classes 10, 13)",

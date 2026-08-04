@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -31,22 +31,22 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:2181 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py:2731 `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-140 Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:137-140) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "AfterSideTurnEnd": {
-      "maps_to": "powers.py:2183-2186 on_enemy_turn_end",
+      "maps_to": "powers.py:2733-2736 on_enemy_side_end",
       "verdict": "faithful",
       "issue": "CLOSED. The unit is on `on_enemy_side_end`, which is Hook.AfterTurnEnd for the enemy side (CombatManager.cs:1256) -- ONE dispatch after every enemy has moved, which is where AbstractModel.AfterSideTurnEnd is dispatched from (Hook.cs:1267-1292). The sim's per-creature enemy slots no longer exist; turn_structure G5 is closed and this entry follows it per binding rule 3. `participants.Contains(Owner)` is `self.owner.side == \"enemy\"`, the idiom the other nineteen `on_enemy_side_end` listeners already used. EXECUTED: test/test_enemy_side_per_side.py.  FIXED 2026-07-28 (round 4). The text it replaced read: SLOT. AbstractModel.AfterSideTurnEnd is dispatched by Hook.AfterTurnEnd (Hook.cs:1267-1292), called ONCE for the whole enemy side (CombatManager.cs:1256) after every enemy has moved; the sim implements it with the PER-ENEMY slot on_enemy_turn_end (combat.py:341), which fires immediately after each enemy's own move. The sim HAS the side-scoped slot and does not use it here: on_enemy_side_end (combat.py:345). turn_structure gap G5 (the enemy side is per-enemy in the sim, per-side in the game) is the owning record and carries the identical `gap` verdict; not re-verdicted here per binding rule 3. DORMANT, and the dormancy is EXECUTED rather than asserted -- see `py audit/tools/power_slot_probes.py rosters` and `enemy-hook-order`. Executed: THIEVING_HOPPER_WEAK is a solo encounter (n=1, order=['ThievingHopper'], `py audit/tools/power_slot_probes.py rosters`), so the per-creature slot and the side slot coincide. Trigger: any multi-hopper encounter."
     }
@@ -55,7 +55,7 @@
     {
       "what": "EscapeArtistPower.cs:25 `base.Amount > 1` before decrementing",
       "verdict": "faithful",
-      "rationale": "powers.py:2184 `self.amount > 1`. Identical, and it is why this power never expires: it floors at 1 and the escape itself is the hopper's ESCAPE move (monsters/hive/thieving_hopper.py), not this power. The sim correspondingly hand-decrements (powers.py:2185-2186) instead of calling Power._tick, which would _expire() it -- a deliberate and correct choice, and the one place in this batch where NOT using _tick is right."
+      "rationale": "powers.py:2735 `self.amount > 1`. Identical, and it is why this power never expires: it floors at 1 and the escape itself is the hopper's ESCAPE move (monsters/hive/thieving_hopper.py), not this power. The sim correspondingly hand-decrements (powers.py:2736) instead of calling Power._tick, which would _expire() it -- a deliberate and correct choice, and the one place in this batch where NOT using _tick is right."
     },
     {
       "what": "EscapeArtistPower.cs:29-32 `base.Amount == 1` -> StartPulsing()",
@@ -74,5 +74,5 @@
     }
   ],
   "verdict": "waiver",
-  "audited": "2026-07-26"
+  "audited": "2026-08-04"
 }

@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -37,12 +37,12 @@
       "rationale": "Obtainable: not in the grab bag (Ancient), granted by the ported Neow event -- `py audit/tools/relic_probes_b12.py b12-pool` reports granted_by=['sts2_rl/events/neow.py']."
     },
     "HasUponPickupEffect": {
-      "maps_to": "has_upon_pickup_effect = True (precarious_shears.py:13), read by Relic.is_tradable (relics/base.py:132)",
+      "maps_to": "has_upon_pickup_effect = True (precarious_shears.py:13), read by Relic.is_tradable (relics/base.py:189-198)",
       "verdict": "faithful",
-      "rationale": "Matches PrecariousShears.cs:16, and Ancient rarity independently makes it untradable via relics/base.py:134-136."
+      "rationale": "Matches PrecariousShears.cs:16, and Ancient rarity independently makes it untradable via relics/base.py:197-198 (is_tradable's rarity check)."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (precarious_shears.py:17-20), dispatched by RunState.add_relic (run.py:552)",
+      "maps_to": "after_obtained (precarious_shears.py:17-20), dispatched by RunState.add_relic (run.py:957-963)",
       "verdict": "faithful",
       "issue": "Closed 2026-07-29 (round 6): `Hook.BeforeCardRemoved` exists and every deck removal fires it. `RunState.remove_cards` now has CardPileCmd.RemoveFromDeck's shape (CardPileCmd.cs:52-70): one card at a time, `before_card_removed` BEFORE the unlink. `RunState.before_card_removed` is the dispatcher (Hook.cs:299-305) and walks the DECK as well as the relics, because RunState.IterateHookListeners yields the deck and the hook's only implementer in the whole decompiled game is a CARD -- SpoilsMap.cs:100-116, now ported on sts2_rl/cards/spoils_map.py with its three guards in source order. The four relics that bypassed the verb -- preserved_fog (which called `run.deck.remove` directly), biiig_hug, meat_cleaver and paels_tooth -- go through `remove_cards` now, so precarious_shears and precise_scissors get the dispatch through the path they already used. EXECUTED: with the old bare removal a removed Spoils Map left its treasure-node quest pinned and the node still payable; test_shop_and_map_mods.py::test_spoils_map_unpins_its_quest_when_removed_from_the_deck pins it. NOT closed: the `HasBeenRemovedFromState` marking this entry also named -- no sim card carries the flag and nothing reads it.  The text it replaced read: Rollup of guard G1 per binding rule 4. Both halves land -- two removable cards removed and 16 HP lost, executed at b12-cutters (deck 10 -> 8, hp 80 -> 64) in the source's order (remove, then damage) -- but the removals go through a bare `deck.remove` and drop the Hook.BeforeCardRemoved dispatch (G1)."
     }
@@ -56,7 +56,7 @@
     {
       "what": "N1: `CreatureCmd.Damage(ctx, Owner.Creature, DamageVar(16m, ValueProp.Unpowered), null, null)` (PrecariousShears.cs:30) vs `run.lose_hp(16)` (precarious_shears.py:20)",
       "verdict": "faithful",
-      "rationale": "Two differences, neither observable. (a) FLAGS: the C# DamageVar is Unpowered but NOT Unblockable (PrecariousShears.cs:21), while RunState.lose_hp's docstring describes itself as `Unblockable | Unpowered` (run.py:294-298). Out of combat the player has no Block -- Block is a CombatState-side field on PlayerCombatState, and RunState holds only hp/max_hp -- so the Unblockable flag has nothing to skip and the two produce the same HP loss. (b) HOOKS: CreatureCmd.Damage dispatches Hook.ModifyHpLost over the run state, and lose_hp runs `relic.modify_run_hp_loss(self, loss)` over run.relics (run.py:299-302), which relics/base.py:222-228 documents as exactly that mapping -- so Tungsten Rod's -1 applies on both sides. Also matching: the loss can kill (`self.hp -= ...` with no floor, and RunState.is_dead is `hp <= 0`), which the source likewise allows. EXECUTED (b12-cutters): hp 80 -> 64, i.e. the full 16 with no relic modifiers present. Ordering matches too: C# removes the cards and THEN damages (PrecariousShears.cs:26-30), and precarious_shears.py:18-20 does the same -- which matters because CardSelectCmd's `IsDead` bail (guard N3 of precise_scissors) would suppress the removal if the damage came first. NOTE per binding rule 7: run.py, player.py and relics/base.py are not hashed here."
+      "rationale": "Two differences, neither observable. (a) FLAGS: the C# DamageVar is Unpowered but NOT Unblockable (PrecariousShears.cs:21), while RunState.lose_hp's docstring describes itself as `Unblockable | Unpowered` (run.py:420-424). Out of combat the player has no Block -- Block is a CombatState-side field on PlayerCombatState, and RunState holds only hp/max_hp -- so the Unblockable flag has nothing to skip and the two produce the same HP loss. (b) HOOKS: CreatureCmd.Damage dispatches Hook.ModifyHpLost over the run state, and lose_hp runs `relic.modify_run_hp_loss(self, loss)` over run.relics (run.py:426-427), which relics/base.py:389-395 documents as exactly that mapping -- so Tungsten Rod's -1 applies on both sides. Also matching: the loss can kill (`self.hp -= ...` with no floor, and RunState.is_dead is `hp <= 0`), which the source likewise allows. EXECUTED (b12-cutters): hp 80 -> 64, i.e. the full 16 with no relic modifiers present. Ordering matches too: C# removes the cards and THEN damages (PrecariousShears.cs:26-30), and precarious_shears.py:18-20 does the same -- which matters because CardSelectCmd's `IsDead` bail (guard N3 of precise_scissors) would suppress the removal if the damage came first. NOTE per binding rule 7: run.py, player.py and relics/base.py are not hashed here."
     },
     {
       "what": "N2: `CardsVar(2)` and `DamageVar(16m, ValueProp.Unpowered)` (PrecariousShears.cs:18-22) vs CARDS = 2 and DAMAGE = 16 (precarious_shears.py:14-15)",
@@ -66,7 +66,7 @@
     {
       "what": "N3: the candidate filter and the auto-select semantics",
       "verdict": "faithful",
-      "rationale": "Identical to relic/precise_scissors N1 and N2 and matched per binding rule 3: FromDeckForRemoval filters on CardModel.IsRemovable = `!Keywords.Contains(Eternal)` (src/Core/Models/CardModel.cs:737) and run.removable_cards() is `not c.eternal` (run.py:360-362); the single-argument CardSelectorPrefs makes MinSelect == MaxSelect == 2 so a deck with two or fewer removable cards is auto-taken, and RunState.select_cards clamps to min(count, len(candidates)) (run.py:371-390). One consequence worth naming for THIS relic: if the deck holds fewer than two removable cards the game still deals the 16 damage, and so does the sim, because the damage is unconditional on both sides. NOTE per binding rule 7: CardSelectCmd.cs, CardModel.cs, run.py and precise_scissors.json are not hashed here."
+      "rationale": "Identical to relic/precise_scissors N1 and N2 and matched per binding rule 3: FromDeckForRemoval filters on CardModel.IsRemovable = `!Keywords.Contains(Eternal)` (src/Core/Models/CardModel.cs:737) and run.removable_cards() is `not c.eternal` (run.py:564-566); the single-argument CardSelectorPrefs makes MinSelect == MaxSelect == 2 so a deck with two or fewer removable cards is auto-taken, and RunState.select_cards clamps to min(count, len(candidates)) (run.py:632-634). One consequence worth naming for THIS relic: if the deck holds fewer than two removable cards the game still deals the 16 damage, and so does the sim, because the damage is unconditional on both sides. NOTE per binding rule 7: CardSelectCmd.cs, CardModel.cs, run.py and precise_scissors.json are not hashed here."
     },
     {
       "what": "N4: `ThrowingPlayerChoiceContext`, the RemoveSelectionPrompt LocString and the removal tween",

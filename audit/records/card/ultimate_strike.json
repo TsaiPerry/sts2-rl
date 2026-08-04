@@ -6,31 +6,31 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\event_cards.py",
-    "sha256": "dfd78fff2c2a36323033d8c74d986f9211a6cff57920b7380b731bb6cf9d3a5a"
+    "sha256": "22675c0e8764e2eb8d0aa28341ccb256084aeb94bf28b17a444409586ca6fc54"
   },
   "hooks": {
     "ctor": {
-      "maps_to": "class attrs (event_cards.py:159-164) + _init_vars (166-168)",
+      "maps_to": "class attrs (event_cards.py:161-166) + _init_vars (168-170)",
       "verdict": "faithful",
       "rationale": "`base(1, CardType.Attack, CardRarity.Uncommon, TargetType.AnyEnemy)` (UltimateStrike.cs:18-21) == cost 1 / ATTACK / UNCOMMON / ANY_ENEMY."
     },
     "CanonicalTags": {
-      "maps_to": "UltimateStrikeCard.tags = frozenset({\"strike\"}) (event_cards.py:164)",
+      "maps_to": "UltimateStrikeCard.tags = frozenset({\"strike\"}) (event_cards.py:166)",
       "verdict": "faithful",
       "rationale": "`new HashSet<CardTag> { CardTag.Strike }` (UltimateStrike.cs:14) == the tag set. Load-bearing: an Amalgamator run that combines its Strikes into this card must still count as holding a Strike for card/perfected_strike."
     },
     "CanonicalVars": {
-      "maps_to": "UltimateStrikeCard._damage = 14 (event_cards.py:168)",
+      "maps_to": "UltimateStrikeCard._damage = 14 (event_cards.py:170)",
       "verdict": "faithful",
       "rationale": "`new DamageVar(14m, ValueProp.Move)` (UltimateStrike.cs:16) == `_damage = 14`, powered on both sides."
     },
     "OnPlay": {
-      "maps_to": "UltimateStrikeCard.on_play (event_cards.py:173-178)",
+      "maps_to": "UltimateStrikeCard.on_play (event_cards.py:175-180)",
       "verdict": "faithful",
       "rationale": "`DamageCmd.Attack(14).FromCard(this).Targeting(cardPlay.Target)` (UltimateStrike.cs:26-28) == the sim's single `DamageCmd.deal(..., dealer=ctx.player, card=self)`. No follow-up effect and no guard on either side -- card/strike with bigger numbers."
     },
     "OnUpgrade": {
-      "maps_to": "UltimateStrikeCard._on_upgrade (event_cards.py:170-171)",
+      "maps_to": "UltimateStrikeCard._on_upgrade (event_cards.py:172-173)",
       "verdict": "faithful",
       "rationale": "`DynamicVars.Damage.UpgradeValueBy(6m)` (UltimateStrike.cs:33) == `self._damage += 6` (14 -> 20)."
     }

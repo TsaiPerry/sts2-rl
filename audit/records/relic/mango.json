@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -58,7 +58,7 @@
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (mango.py:14)",
       "verdict": "faithful",
-      "rationale": "Matches Mango.cs:13; also excludes the relic from the trade events via Relic.is_tradable (relics/base.py:132)."
+      "rationale": "Matches Mango.cs:13; also excludes the relic from the trade events via Relic.is_tradable (relics/base.py:188-199, line renumbered since prior pass, content unchanged)."
     },
     "AfterObtained": {
       "maps_to": "after_obtained (mango.py:21-24), plus the sim-only undo_after_obtained (mango.py:26-33)",
@@ -75,7 +75,7 @@
     {
       "what": "N1: `CreatureCmd.GainMaxHp(base.Owner.Creature, base.DynamicVars.MaxHp.BaseValue)` (Mango.cs:19) with `MaxHpVar(14m)` (Mango.cs:15)",
       "verdict": "faithful",
-      "rationale": "14 is the pinned non-ascension value -- no AscensionHelper.GetValueIfAscension call anywhere in Mango.cs -- and `.BaseValue` is the unmodified var, so no hook can change it. run.gain_max_hp (run.py:311-314) is CreatureCmd.GainMaxHp's exact shape: `SetMaxHp(MaxHp + amount)` then `Heal(num)` where num is the max-HP delta actually applied (CreatureCmd.cs:792-798). EXECUTED: 80 -> 94 max, 50 -> 64 current. The MapPointHistoryEntry.MaxHpGained bookkeeping (CreatureCmd.cs:793-797) is replay history, not state."
+      "rationale": "14 is the pinned non-ascension value -- no AscensionHelper.GetValueIfAscension call anywhere in Mango.cs -- and `.BaseValue` is the unmodified var, so no hook can change it. run.gain_max_hp (run.py:477-480, line renumbered since prior pass, content unchanged) is CreatureCmd.GainMaxHp's exact shape: `SetMaxHp(MaxHp + amount)` then `Heal(num)` where num is the max-HP delta actually applied (CreatureCmd.cs:792-798). EXECUTED: 80 -> 94 max, 50 -> 64 current. The MapPointHistoryEntry.MaxHpGained bookkeeping (CreatureCmd.cs:793-797) is replay history, not state."
     }
   ],
   "verdict": "faithful",

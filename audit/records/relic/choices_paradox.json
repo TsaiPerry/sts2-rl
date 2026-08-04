@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/cards/mad_science.py",
-      "sha256": "2ede1a12f1aa80dfde0f095c34997387210e6856011a40c954199fe33aa37c73",
+      "sha256": "51a3413baaa2dcc8b9bbc49b04e5ca2475d4e1f511bf46230bedd9f1e9c8ca33",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "0e7260041e0b6693c08bf4aa4ddbb8743311d7fd72d6212fdc7c7d358a7c5030",
+      "sha256": "0b6b63592c62386b478927b39f5f758720079c9377ecda32ca94df150369e7e4",
       "side": "sim"
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
@@ -61,7 +61,7 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
+      "sha256": "a1aecf30215574f9bc62dd01cb7c73346bbc1b9b84dd5dcc8dabd67101f8c345",
       "side": "sim"
     }
   ],
@@ -85,7 +85,7 @@
     {
       "what": "G2 (DORMANT): AfterPlayerTurnStart (step 22) and AfterSideTurnStart (step 23) are two different C# hooks collapsed onto one sim method",
       "verdict": "faithful",
-      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. AfterPlayerTurnStart (step 22) and AfterSideTurnStart (step 23) are no longer one method. ChoicesParadox.cs:46 declares AfterPlayerTurnStart, so it is on `on_player_turn_started` and is guaranteed ahead of every AfterSideTurnStart listener again -- see relic/mercury_hourglass's g1 for the census and the executed pair.  The gap it replaced read: PROMPT.md bug class 15 -- when the sim maps two C# hooks onto one method, list both call sites. C# fires Hook.AfterPlayerTurnStart at the end of SetupPlayerTurn, per player, immediately after that player's draw (CombatManager.cs:673-675 = audit/records/seam/turn_structure.json step 22), and Hook.AfterSideTurnStart only afterwards, once EVERY player's setup has finished (CombatManager.cs:520-524 = step 23). Both map to the sim's single on_player_turn_started (hooks.py:285-295), so ChoicesParadox's guaranteed position ahead of every AfterSideTurnStart listener becomes listener-registration order. Confirmed by execution that the sim really does have only one slot there (`py audit/tools/relic_probes.py turn-order` prints exactly one on_player_turn_started per turn). Same family as audit/records/seam/turn_structure.json guard G12, which flattens the VeryEarly/Early/Late SUB-phases of a single hook; this is the coarser version -- two distinct hooks, not two sub-phases -- so it is recorded here rather than folded in. DORMANT: the divergence needs an AfterSideTurnStart listener that reads the hand on turn 1, and the ported turn-1 AfterSideTurnStart content does not -- relic/candelabra and relic/chandelier gate on turns 2 and 3, and the turn-1 hand readers (relic/cloak_clasp) sit at turn END. Porting or writing any turn-1 AfterSideTurnStart effect that counts cards in hand makes it live."
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. AfterPlayerTurnStart (step 22) and AfterSideTurnStart (step 23) are no longer one method. ChoicesParadox.cs:46 declares AfterPlayerTurnStart, so it is on `on_player_turn_started` and is guaranteed ahead of every AfterSideTurnStart listener again -- see relic/mercury_hourglass's g1 for the census and the executed pair. RE-VERIFIED 2026-08-04: test/test_turn_start_split.py::test_after_player_turn_start_precedes_after_side_turn_start still passes. The gap it replaced read: PROMPT.md bug class 15 -- when the sim maps two C# hooks onto one method, list both call sites. C# fires Hook.AfterPlayerTurnStart at the end of SetupPlayerTurn, per player, immediately after that player's draw (CombatManager.cs:673-675 = audit/records/seam/turn_structure.json step 22), and Hook.AfterSideTurnStart only afterwards, once EVERY player's setup has finished (CombatManager.cs:520-524 = step 23). Both map to the sim's single on_player_turn_started (hooks.py:285-295), so ChoicesParadox's guaranteed position ahead of every AfterSideTurnStart listener becomes listener-registration order. Confirmed by execution that the sim really does have only one slot there (`py audit/tools/relic_probes.py turn-order` prints exactly one on_player_turn_started per turn). Same family as audit/records/seam/turn_structure.json guard G12, which flattens the VeryEarly/Early/Late SUB-phases of a single hook; this is the coarser version -- two distinct hooks, not two sub-phases -- so it is recorded here rather than folded in. DORMANT: the divergence needs an AfterSideTurnStart listener that reads the hand on turn 1, and the ported turn-1 AfterSideTurnStart content does not -- relic/candelabra and relic/chandelier gate on turns 2 and 3, and the turn-1 hand readers (relic/cloak_clasp) sit at turn END. Porting or writing any turn-1 AfterSideTurnStart effect that counts cards in hand makes it live."
     },
     {
       "what": "G3: the softlock guard -- `if (list.Count == 0) { Log.Error; SentryService.CaptureException; return; }` (ChoicesParadox.cs:35-41) vs `if not options: return` (choices_paradox.py:32-33)",
@@ -105,7 +105,7 @@
     {
       "what": "G6 (NEW GAP, found by the 2026-07-26 fix pass): `CardSelectCmd.FromSimpleGrid(..., new CardSelectorPrefs(prompt, 1))` (ChoicesParadox.cs:46) is MinSelect == MaxSelect == 1 and therefore FORCED, but the sim's \"obtain\" purpose is skippable",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the screen is no longer skippable. sts2_rl/relics/choices_paradox.py:48 now asks with purpose 'choose_a_card', which is NOT in sts2_rl/driver.py:87-89 SKIPPABLE_PURPOSES, so RunDriver._card_selector publishes no skip action and exactly one card comes back -- matching `CardSelectorPrefs(prompt, 1)`, the 2-argument constructor (CardSelectorPrefs.cs:63-67) whose MinSelect == MaxSelect == 1 (ChoicesParadox.cs:46). The comment at choices_paradox.py:43-47 records the reasoning. WAS: the port passed purpose 'obtain', which IS skippable, so a policy could decline a screen the game forces."
+      "issue": "Closed 2026-07-27: the screen is no longer skippable. sts2_rl/relics/choices_paradox.py:48 now asks with purpose 'choose_a_card', which is NOT in sts2_rl/driver.py:140-144 SKIPPABLE_PURPOSES (was :87-89, re-verified 2026-08-04), so RunDriver._card_selector publishes no skip action and exactly one card comes back -- matching `CardSelectorPrefs(prompt, 1)`, the 2-argument constructor (CardSelectorPrefs.cs:63-67) whose MinSelect == MaxSelect == 1 (ChoicesParadox.cs:46). The comment at choices_paradox.py:43-47 records the reasoning. WAS: the port passed purpose 'obtain', which IS skippable, so a policy could decline a screen the game forces."
     },
     {
       "what": "N1: `player != base.Owner` (ChoicesParadox.cs:29)",

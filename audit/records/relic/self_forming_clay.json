@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
@@ -56,7 +56,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -76,7 +76,7 @@
     {
       "what": "G1 (LIVE): `_pending_block` survives the combat, so a fight that ends before the player's next turn hands free Block to the NEXT combat",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the pending Block no longer crosses the combat boundary. sts2_rl/relics/self_forming_clay.py's `reset_for_combat` zeroes `_pending_block`, and Relic.attach runs it on every new CombatState (sts2_rl/relics/base.py:192-195) -- the sim's equivalent of C# banking the block in a SelfFormingClayPower, which dies with the combat (SelfFormingClay.cs:29, SelfFormingClayPower.cs:19-25). WAS: the counter lived on the relic instance, which lives on RunState.relics, so a fight that ended before the player's next turn handed free Block to the next combat."
+      "issue": "Closed 2026-07-27: the pending Block no longer crosses the combat boundary. sts2_rl/relics/self_forming_clay.py's `reset_for_combat` zeroes `_pending_block`, and Relic.attach runs it on every new CombatState (sts2_rl/relics/base.py:247-250) -- the sim's equivalent of C# banking the block in a SelfFormingClayPower, which dies with the combat (SelfFormingClay.cs:29, SelfFormingClayPower.cs:19-25). WAS: the counter lived on the relic instance, which lives on RunState.relics, so a fight that ended before the player's next turn handed free Block to the next combat."
     },
     {
       "what": "G2 (LIVE): the payout moved from AfterBlockCleared (turn_structure step ~11) to on_player_turn_started (step 23), so damage taken IN BETWEEN is paid out the same turn instead of the next",
@@ -96,7 +96,7 @@
     {
       "what": "N2: the killing-blow guard (PROMPT.md class 2) and `CombatManager.Instance.IsInProgress` (SelfFormingClay.cs:27)",
       "verdict": "faithful",
-      "rationale": "C# skips the victim's AfterDamageReceived when the hit kills it (CreatureCmd.cs:392's `!WasTargetKilled || !IsDead`), and the sim honours it at the dispatcher: cmds.py:121 wraps the call in `if not target.is_dead`. So a lethal hit on the player banks nothing on either side -- which matters only if a death is later prevented, and Fairy in a Bottle's revive path goes through after_preventing_death (cmds.py:111-113), not on_damage_received, on both sides. IsInProgress is structurally satisfied: on_damage_received is a combat hook, and out-of-combat HP loss goes through RunState.lose_hp / modify_run_hp_loss instead (relics/base.py:222-228). Rule 7: cmds.py, relics/base.py and CreatureCmd.cs are not hashed here."
+      "rationale": "C# skips the victim's AfterDamageReceived when the hit kills it (CreatureCmd.cs:392's `!WasTargetKilled || !IsDead`), and the sim honours it at the dispatcher: cmds.py:121 wraps the call in `if not target.is_dead`. So a lethal hit on the player banks nothing on either side -- which matters only if a death is later prevented, and Fairy in a Bottle's revive path goes through after_preventing_death (cmds.py:111-113), not on_damage_received, on both sides. IsInProgress is structurally satisfied: on_damage_received is a combat hook, and out-of-combat HP loss goes through RunState.lose_hp / modify_run_hp_loss instead (relics/base.py:389-395). Rule 7: cmds.py, relics/base.py and CreatureCmd.cs are not hashed here."
     },
     {
       "what": "N4: `target == base.Owner.Creature` (SelfFormingClay.cs:27) vs `target is self.player` (self_forming_clay.py:37) -- identity, not side",

@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "424336cf4fb7be8026278b7a34af428082d8487fb57f25c3565311fe5c993388",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     },
     {
@@ -46,13 +46,13 @@
     },
     {
       "path": "sts2_rl/rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     }
   ],
   "hooks": {
     "RoomType": {
-      "maps_to": "RoomType.Boss (WaterfallGiantBoss.cs:10). Sim: 'waterfall_giant' is in ActRooms.boss_keys for underdocks (rooms.py:139) -- drives the (100,100) gold ladder (see guards).",
+      "maps_to": "RoomType.Boss (WaterfallGiantBoss.cs:10). Sim: 'waterfall_giant' is in ActRooms.boss_keys for underdocks (rooms.py:205) -- drives the (100,100) gold ladder (see guards).",
       "verdict": "faithful"
     },
     "CustomBgm": {
@@ -90,7 +90,7 @@
       "verdict": "faithful"
     },
     "ShouldReceiveCombatHooks": {
-      "maps_to": "EncounterModel.cs:39, `=> false`. Sim: Encounter is never registered with HookSystem (combat.py:170-232 registers only the player, cards, and Monsters, monsters/base.py:296-297).",
+      "maps_to": "EncounterModel.cs:39, `=> false`. Sim: Encounter is never registered with HookSystem (combat.py:171-282 registers the player's cards/afflictions/enchantments, monsters via monsters/base.py:296-297, relics, and belt potions; self.encounter at combat.py:239 is never passed to hooks.register).",
       "verdict": "faithful"
     }
   },
@@ -103,7 +103,7 @@
     {
       "what": "N2: Tags -- WaterfallGiantBoss does not override EncounterModel.Tags (defaults Array.Empty<EncounterTag>(), EncounterModel.cs:114)",
       "verdict": "faithful",
-      "rationale": "'waterfall_giant' has no entry in ActRooms.tags for underdocks (rooms.py:140-145) -- consistent absence; boss encounters are singletons per act anyway, so tag-safe repeat-avoidance is moot."
+      "rationale": "'waterfall_giant' has no entry in ActRooms.tags for underdocks (rooms.py:210-215) -- consistent absence; boss encounters are singletons per act anyway, so tag-safe repeat-avoidance is moot."
     }
   ],
   "verdict": "waiver",

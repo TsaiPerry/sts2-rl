@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     },
     {
@@ -61,12 +61,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -131,7 +131,7 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
+      "sha256": "a1aecf30215574f9bc62dd01cb7c73346bbc1b9b84dd5dcc8dabd67101f8c345",
       "side": "sim"
     }
   ],
@@ -144,7 +144,7 @@
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (toy_box.py:16)",
       "verdict": "faithful",
-      "rationale": "ToyBox.cs:30. Not decorative: the sim's Relic.is_tradable (relics/base.py:132) refuses any relic with this flag, which is exactly what RelicModel.IsTradable does, so declaring it keeps Toy Box out of the ported trade events (events/ranwid_the_elder.py:51, events/relic_trader.py:38). Rule 7: relics/base.py and the two event files are not hashed here."
+      "rationale": "ToyBox.cs:30. Not decorative: the sim's Relic.is_tradable (relics/base.py:189) refuses any relic with this flag, which is exactly what RelicModel.IsTradable does, so declaring it keeps Toy Box out of the ported trade events (events/ranwid_the_elder.py:51, events/relic_trader.py:38). Rule 7: relics/base.py and the two event files are not hashed here."
     },
     "IsUsedUp": {
       "maps_to": "is_used_up property (toy_box.py:25-27)",
@@ -164,7 +164,7 @@
     "AfterObtained": {
       "maps_to": "after_obtained (sts2_rl/relics/toy_box.py:29-40) -- four PullNextRelicFromFront pulls, each marked is_wax and offered through RunState.offer_relic",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:475-496) and `RunState.offer_potion` (sts2_rl/run.py:498-506) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. sts2_rl/relics/toy_box.py:33-40 marks each pulled relic `is_wax` and offers it through `run.offer_relic` (ToyBox.cs:96). The four pulls, their order, the IsWax marking and the stream they come off were already faithful. WAS: all four were force-granted and each ran its own after_obtained regardless."
+      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:692-713) and `RunState.offer_potion` (sts2_rl/run.py:715-723) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. sts2_rl/relics/toy_box.py:33-40 marks each pulled relic `is_wax` and offers it through `run.offer_relic` (ToyBox.cs:96). The four pulls, their order, the IsWax marking and the stream they come off were already faithful. WAS: all four were force-granted and each ran its own after_obtained regardless."
     },
     "AfterCombatEnd": {
       "maps_to": "after_combat_end (toy_box.py:37-42), dispatched by RunState.finish_combat",
@@ -176,12 +176,12 @@
     {
       "what": "G1: `RewardsCmd.OfferCustom(base.Owner, list)` (ToyBox.cs:96) is a take-or-skip reward screen for four wax relics; the port grants all four unconditionally",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:475-496) and `RunState.offer_potion` (sts2_rl/run.py:498-506) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. sts2_rl/relics/toy_box.py:33-40 marks each of the four wax relics and offers it through `run.offer_relic`, with the C# citation (ToyBox.cs:96) in the comment. WAS: all four were granted outright."
+      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:692-713) and `RunState.offer_potion` (sts2_rl/run.py:715-723) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. sts2_rl/relics/toy_box.py:33-40 marks each of the four wax relics and offers it through `run.offer_relic`, with the C# citation (ToyBox.cs:96) in the comment. WAS: all four were granted outright."
     },
     {
       "what": "G2 (DORMANT): `RelicCmd.Melt` leaves the relic in `Player.Relics` as an inert entry; the port removes it from run.relics entirely",
       "verdict": "gap",
-      "issue": "MECHANISM: RelicCmd.Melt (RelicCmd.cs:89-93) is `relic.Owner.MeltRelicInternal(relic); await relic.AfterRemoved();` -- the relic STAYS in the list, and the game stops it working by excluding melted relics from both hook-listener walks (RunState.cs:569 `player2.Relics.Where(r => !r.IsMelted)` for the run-level walk, CombatState.cs:428-435 for the combat walk). Its own doc comment says so: 'A melted relic remains in your inventory, but is unusable.' toy_box.py:41-42 does `run.relics.remove(wax)`, and the sim's Relic base has no is_melted member at all (EXECUTED: `hasattr(Relic, 'is_melted')` is False). EXECUTED (`py audit/tools/relic_probes_b16.py toybox-melt`): across six combats the sim's relic count goes 5, 5, 4, 4, 4, 3 where the game's stays 5 for the whole run. REACHABILITY (DORMANT, and the reason is that every reader already filters): the hook walks exclude melted relics on both sides, so the EFFECTS agree; and every other reader of Player.Relics a ported path reaches filters on IsTradable, which itself excludes melted relics -- RanwidTheElder.cs:74/94 and RelicTrader.cs:79-124/109, mirrored at events/ranwid_the_elder.py:35/51 and events/relic_trader.py:33/38 over the sim's Relic.is_tradable (relics/base.py:126-136, whose docstring already reasons about exactly this equivalence). The only unfiltered relic-count reader in the whole game source is ILikeShiny.cs:24 (`Relics.Count >= 25`), an achievement badge and out of scope. What would make it live: porting any effect that reads the relic COUNT or the relic LIST without an IsMelted/IsTradable filter, or a conformance check that treats `len(run.relics)` as a parity signal (conformance/runner.py:792 already samples it, to detect newly-granted relics). Filed as a gap and not a waiver because 'nothing ported observes the difference' is today's content, not the divergence's shape (binding rule 1). Rule 7: RelicCmd.cs, RunState.cs, CombatState.cs, relics/base.py, the two event files and conformance/runner.py are NOT hashed here."
+      "issue": "MECHANISM: RelicCmd.Melt (RelicCmd.cs:89-93) is `relic.Owner.MeltRelicInternal(relic); await relic.AfterRemoved();` -- the relic STAYS in the list, and the game stops it working by excluding melted relics from both hook-listener walks (RunState.cs:569 `player2.Relics.Where(r => !r.IsMelted)` for the run-level walk, CombatState.cs:428-435 for the combat walk). Its own doc comment says so: 'A melted relic remains in your inventory, but is unusable.' toy_box.py:41-42 does `run.relics.remove(wax)`, and the sim's Relic base has no is_melted member at all (EXECUTED: `hasattr(Relic, 'is_melted')` is False). EXECUTED (`py audit/tools/relic_probes_b16.py toybox-melt`): across six combats the sim's relic count goes 5, 5, 4, 4, 4, 3 where the game's stays 5 for the whole run. REACHABILITY (DORMANT, and the reason is that every reader already filters): the hook walks exclude melted relics on both sides, so the EFFECTS agree; and every other reader of Player.Relics a ported path reaches filters on IsTradable, which itself excludes melted relics -- RanwidTheElder.cs:74/94 and RelicTrader.cs:79-124/109, mirrored at events/ranwid_the_elder.py:35/51 and events/relic_trader.py:33/38 over the sim's Relic.is_tradable (relics/base.py:189-199, whose docstring already reasons about exactly this equivalence). The only unfiltered relic-count reader in the whole game source is ILikeShiny.cs:24 (`Relics.Count >= 25`), an achievement badge and out of scope. What would make it live: porting any effect that reads the relic COUNT or the relic LIST without an IsMelted/IsTradable filter, or a conformance check that treats `len(run.relics)` as a parity signal (conformance/runner.py:1044 already samples it, to detect newly-granted relics). Filed as a gap and not a waiver because 'nothing ported observes the difference' is today's content, not the divergence's shape (binding rule 1). Rule 7: RelicCmd.cs, RunState.cs, CombatState.cs, relics/base.py, the two event files and conformance/runner.py are NOT hashed here."
     },
     {
       "what": "N1 (PROMPT.md bug class 13 + the sweep-A pre-diagnosis, SETTLED): `combats_seen` is never reset -- and that is CORRECT",
@@ -191,7 +191,7 @@
     {
       "what": "N2 (EXECUTED): `RelicFactory.PullNextRelicFromFront(base.Owner)` x4 (ToyBox.cs:90-95) and the draws it costs",
       "verdict": "faithful",
-      "rationale": "The port calls run.pull_relic_from_front() four times (toy_box.py:30-31), which is the sim's transcription of the same factory method including the rarity roll off the player's Rewards stream (run.py:559-589 and its docstring). EXECUTED (`py audit/tools/relic_probes_b16.py toybox-melt`): the grab bag goes 96 -> 92, so all four pulls are consumed -- the failure mode audit/records/relic/calling_bell.json G2 records (three unconsumed PullNextRelicFromFront draws, `grab bag 96 -> 96`) does NOT occur here. Also faithful: `relicModel.IsWax = true` before the reward is built (ToyBox.cs:93) vs `relic.is_wax = True` before add_relic (toy_box.py:34), and the port's `if relic is None: break` handles the empty-bag case the C# `.ToMutable()` would throw on. Rule 7: run.py and audit/records/relic/calling_bell.json are not hashed here."
+      "rationale": "The port calls run.pull_relic_from_front() four times (toy_box.py:30-31), which is the sim's transcription of the same factory method including the rarity roll off the player's Rewards stream (run.py:970-1004 and its docstring). EXECUTED (`py audit/tools/relic_probes_b16.py toybox-melt`): the grab bag goes 96 -> 92, so all four pulls are consumed -- the failure mode audit/records/relic/calling_bell.json G2 records (three unconsumed PullNextRelicFromFront draws, `grab bag 96 -> 96`) does NOT occur here. Also faithful: `relicModel.IsWax = true` before the reward is built (ToyBox.cs:93) vs `relic.is_wax = True` before add_relic (toy_box.py:34), and the port's `if relic is None: break` handles the empty-bag case the C# `.ToMutable()` would throw on. Rule 7: run.py and audit/records/relic/calling_bell.json are not hashed here."
     },
     {
       "what": "N3: the wax-relic search predicate -- `r != null && r.IsWax && !r.IsMelted` (ToyBox.cs:105) vs `r.is_wax` (toy_box.py:41)",

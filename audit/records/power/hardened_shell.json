@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -36,17 +36,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
@@ -56,19 +56,19 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:1962 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py:2494 `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-140 Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:137-140) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "ShouldScaleInMultiplayer": {
       "maps_to": "no sim counterpart",
@@ -81,36 +81,36 @@
       "rationale": "HardenedShellPower.cs:25 is `max(0, Amount - damageReceivedThisTurn)` -- the remaining-cap number on the badge. Presentation only."
     },
     "ModifyHpLostBeforeOstyLate": {
-      "maps_to": "powers.py:1974-1983 modify_hp_lost (hooks.py:126-147, called at cmds.py:86)",
+      "maps_to": "powers.py:2506-2515 modify_hp_lost (hooks.py:862-881, called at cmds.py:374-375)",
       "verdict": "gap",
-      "issue": "The FORMULA is exact -- `target != Owner -> amount`, `amount == 0 -> amount`, else `Math.Min(amount, Amount - damageReceivedThisTurn)` (HardenedShellPower.cs:32-43) vs powers.py:1981-1983 -- and the BeforeOsty/AfterOsty phase collapse is already resolved as faithful by damage_pipeline (Osty redirection is waived, so its steps 8 and 11 fold into one `modify_hp_lost` call). What is left is the `Late` sub-phase: hook_dispatch gap G3 (the Early/VeryEarly/Late passes do not exist in the sim) applies, and it matters more here than usual because HardenedShell is the ONLY `ModifyHpLostBeforeOsty*` implementer in the whole decompiled source while all six others are AfterOsty or AfterOstyLate (BufferPower, IntangiblePower, SlipperyPower, BeatingRemnant, TheBoot, TungstenRod) -- so in C# this cap ALWAYS runs first and in the sim it runs wherever registration order puts it, and min-then-adjust is not adjust-then-min. Not re-verdicted (rule 3). DORMANT, and executed rather than asserted: on a SKULKING_COLONY_ELITE combat holding the ported relic The Boot, with 3 HP of cap left and a 2-damage powered card hit, the sim reports hp_lost 5 -- the same answer the game gives (BeforeOstyLate min(2,3)=2, then AfterOstyLate 2<5 -> 5) -- and 2 without the Boot (control), because the sim's registration order happens to be ['HardenedShellPower', 'TheBoot', 'TungstenRod'], reproducing C#'s pass order for the pair that can contend. TheBoot-vs-TungstenRod IS inverted relative to C# (AfterOsty before AfterOstyLate) but those two never share a target. Trigger: any change to registration order, or porting BufferPower (AfterOstyLate). Third-file citations, not hashed here."
+      "issue": "The FORMULA is exact -- `target != Owner -> amount`, `amount == 0 -> amount`, else `Math.Min(amount, Amount - damageReceivedThisTurn)` (HardenedShellPower.cs:32-43) vs powers.py:2513-2515 -- and the BeforeOsty/AfterOsty phase collapse is already resolved as faithful by damage_pipeline (Osty redirection is waived, so its steps 8 and 11 fold into one `modify_hp_lost` call). What is left is the `Late` sub-phase: hook_dispatch gap G3 (the Early/VeryEarly/Late passes do not exist in the sim) applies, and it matters more here than usual because HardenedShell is the ONLY `ModifyHpLostBeforeOsty*` implementer in the whole decompiled source while all six others are AfterOsty or AfterOstyLate (BufferPower, IntangiblePower, SlipperyPower, BeatingRemnant, TheBoot, TungstenRod) -- so in C# this cap ALWAYS runs first and in the sim it runs wherever registration order puts it, and min-then-adjust is not adjust-then-min. Not re-verdicted (rule 3). DORMANT, and executed rather than asserted: on a SKULKING_COLONY_ELITE combat holding the ported relic The Boot, with 3 HP of cap left and a 2-damage powered card hit, the sim reports hp_lost 5 -- the same answer the game gives (BeforeOstyLate min(2,3)=2, then AfterOstyLate 2<5 -> 5) -- and 2 without the Boot (control), because the sim's registration order happens to be ['HardenedShellPower', 'TheBoot', 'TungstenRod'], reproducing C#'s pass order for the pair that can contend. TheBoot-vs-TungstenRod IS inverted relative to C# (AfterOsty before AfterOstyLate) but those two never share a target. Trigger: any change to registration order, or porting BufferPower (AfterOstyLate). RE-VERIFIED 2026-08-04 (line numbers only). Third-file citations, not hashed here."
     },
     "AfterModifyingHpLostBeforeOsty": {
       "maps_to": "no sim counterpart",
       "verdict": "waiver",
-      "rationale": "HardenedShellPower.cs:45-49 is `Flash();` and nothing else -- presentation only. Recorded rather than skipped because the sim DOES have the companion notification for this family (hooks.py:149-154 after_modify_hp_lost, fired at cmds.py:87, which hooks.py:150-151 documents as mirroring AfterModifyingHpLostAfterOsty -- the *AfterOsty* event, not this one), so a behavioural BeforeOsty body would have had nowhere to go. It is power_cmd gap G4's shape one family over and costs nothing here."
+      "rationale": "HardenedShellPower.cs:45-49 is `Flash();` and nothing else -- presentation only. Recorded rather than skipped because the sim DOES have the companion notification for this family (hooks.py:884-889 after_modify_hp_lost, fired at cmds.py:375, which hooks.py:885-886 documents as mirroring AfterModifyingHpLostAfterOsty -- the *AfterOsty* event, not this one), so a behavioural BeforeOsty body would have had nowhere to go. It is power_cmd gap G4's shape one family over and costs nothing here."
     },
     "AfterDamageReceived": {
-      "maps_to": "sts2_rl/powers.py:2096-2105 `HardenedShellPower.on_damage_received` (dispatched from sts2_rl/cmds.py:185-186 behind the killing-blow guard, via sts2_rl/hooks.py:677-690)",
+      "maps_to": "sts2_rl/powers.py:2517-2526 `HardenedShellPower.on_damage_received` (dispatched from sts2_rl/cmds.py:444-445 behind the killing-blow guard, via sts2_rl/hooks.py:1662-1675)",
       "verdict": "faithful",
-      "rationale": "Both halves of the entry are faithful. (a) Killing blow: cmds.py:185 `if not target.is_dead` reproduces CreatureCmd.cs:392's `!WasTargetKilled || !IsDead` skip, as the entry itself conceded. (b) Which number: C#'s `result.UnblockedDamage` (HardenedShellPower.cs:62) is produced by Creature.LoseHpInternal (Creature.cs:445-457) from the value returned by BOTH ModifyHpLost phases (CreatureCmd.cs:266 BeforeOsty -- which per Hook.cs:1735 is where HardenedShellPower.cs:32-43's own cap runs -- then :269 AfterOsty), so it is the ALREADY-CAPPED figure, not a pre-modifier one. The sim accumulates hp_lost from cmds.py:166/186, the same already-capped figure (powers.py:2104-2105). Concretely, shell 20 vs a 30-damage unblocked hit charges 20 on both sides, so the sim's shell absorbs exactly as much per turn as the game's -- the entry's LIVE claim does not reproduce. The `WasFullyBlocked` guard (HardenedShellPower.cs:57, defined at CreatureCmd.cs:274 as unblockedDamage == 0) is equivalent to the sim's `amount > 0` given hooks.py:345's `max(0, amount)` clamp.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: Two divergences, one of them the killing-blow class. (a) KILLING BLOW: the sim's on_damage_received is skipped when the hit killed the victim (cmds.py:121, the CreatureCmd.cs:392 guard) -- and C#'s AfterDamageReceived is subject to the same guard, so that half is faithful. (b) The GUARD DIFFERS: C# returns on `result.WasFullyBlocked` and then accumulates `result.UnblockedDamage` (HardenedShellPower.cs:57-62), where the sim accumulates its `amount` argument on `amount > 0` (powers.py:1993-1994). The sim's argument is hp_lost -- POST-block AND POST-modify_hp_lost (cmds.py:86, 122) -- so the cap counts the ALREADY-CAPPED figure, whereas C# counts UnblockedDamage, which is post-block but PRE-HP-loss-modifier. On any hit the cap actually truncates, the game charges the full unblocked amount against the shell and the sim charges only the truncated amount, so the sim's shell absorbs MORE total damage per turn than the game's. LIVE-shaped and reachable in principle the first time the player over-hits a Skulking Colony (a ported Underdocks elite, monsters/underdocks/skulking_colony.py:32-33, Hardened Shell 20 matching SkulkingColony.cs:56's 20m); marked a gap without an executed number because the arithmetic is decided by the same registration order the previous entry executed, and The Boot can re-raise the figure. NOTE the sim's `amount == 0` arm in modify_hp_lost returns `amount` unchanged and the C# one does too, so a fully-blocked hit charges nothing on either side -- WasFullyBlocked is redundant rather than dropped. Third-file citations, not hashed here."
+      "rationale": "Both halves of the entry are faithful. (a) Killing blow: cmds.py:444 `if not was_lethal` reproduces CreatureCmd.cs:392's `!WasTargetKilled || !IsDead` skip, as the entry itself conceded. (b) Which number: C#'s `result.UnblockedDamage` (HardenedShellPower.cs:62) is produced by Creature.LoseHpInternal (Creature.cs:445-457) from the value returned by BOTH ModifyHpLost phases (CreatureCmd.cs:266 BeforeOsty -- which per Hook.cs:1735 is where HardenedShellPower.cs:32-43's own cap runs -- then :269 AfterOsty), so it is the ALREADY-CAPPED figure, not a pre-modifier one. The sim accumulates hp_lost from cmds.py:374/445, the same already-capped figure (powers.py:2525-2526). Concretely, shell 20 vs a 30-damage unblocked hit charges 20 on both sides, so the sim's shell absorbs exactly as much per turn as the game's -- the entry's LIVE claim does not reproduce. The `WasFullyBlocked` guard (HardenedShellPower.cs:57, defined at CreatureCmd.cs:274 as unblockedDamage == 0) is equivalent to the sim's `amount > 0` given hooks.py:881's `max(0, amount)` clamp.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. RE-VERIFIED 2026-08-04 (line numbers only). The issue it replaced read: Two divergences, one of them the killing-blow class. (a) KILLING BLOW: the sim's on_damage_received is skipped when the hit killed the victim (cmds.py:121, the CreatureCmd.cs:392 guard) -- and C#'s AfterDamageReceived is subject to the same guard, so that half is faithful. (b) The GUARD DIFFERS: C# returns on `result.WasFullyBlocked` and then accumulates `result.UnblockedDamage` (HardenedShellPower.cs:57-62), where the sim accumulates its `amount` argument on `amount > 0` (powers.py:1993-1994). The sim's argument is hp_lost -- POST-block AND POST-modify_hp_lost (cmds.py:86, 122) -- so the cap counts the ALREADY-CAPPED figure, whereas C# counts UnblockedDamage, which is post-block but PRE-HP-loss-modifier. On any hit the cap actually truncates, the game charges the full unblocked amount against the shell and the sim charges only the truncated amount, so the sim's shell absorbs MORE total damage per turn than the game's. LIVE-shaped and reachable in principle the first time the player over-hits a Skulking Colony (a ported Underdocks elite, monsters/underdocks/skulking_colony.py, Hardened Shell 20 matching SkulkingColony.cs:56's 20m); marked a gap without an executed number because the arithmetic is decided by the same registration order the previous entry executed, and The Boot can re-raise the figure. NOTE the sim's `amount == 0` arm in modify_hp_lost returns `amount` unchanged and the C# one does too, so a fully-blocked hit charges nothing on either side -- WasFullyBlocked is redundant rather than dropped. Third-file citations, not hashed here."
     },
     "BeforeSideTurnStart": {
-      "maps_to": "powers.py:1996-2001 on_player_turn_start (player.py:169) + on_enemy_turn_start (combat.py:301)",
+      "maps_to": "powers.py:2528-2536 before_side_turn_start (player.py:314) + before_enemy_side_start (unfiltered, hooks.py:1287-)",
       "verdict": "faithful",
-      "issue": "CLOSED. The enemy half is `before_enemy_side_start` -- Hook.BeforeSideTurnStart (CombatManager.cs:458), once for the side before any block is cleared -- and, matching HardenedShellPower.cs:71-77, it is UNFILTERED: C#'s override tests neither `side` nor `participants`, so the counter resets at the start of BOTH sides' turns. The owner-filtered enemy leg the per-creature slot forced on the sim is gone. EXECUTED: test_enemy_side_per_side.py::test_hardened_shell_resets_on_both_sides_unfiltered.  FIXED 2026-07-28 (round 4). The text it replaced read: STILL OPEN on the enemy half only. The player leg now uses the REAL hook rather than a mapping onto a later slot: HardenedShellPower.cs:71-77 declares BeforeSideTurnStart and the power is on the sim's new `before_side_turn_start` dispatcher (CombatManager.cs:458), fired before the block clear and the energy reset instead of after both. WHAT REMAINS is what this entry always said carried the verdict: the enemy half is turn_structure gap G5 (per-creature where the game is per-side), and rule 3 holds it here.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: C#'s BeforeSideTurnStart (HardenedShellPower.cs:71-77) has NO side filter and NO participants filter, so the cap resets at the start of EVERY side's turn. The sim reproduces that with two listeners: on_player_turn_start unfiltered (powers.py:1996, and BeforeSideTurnStart -> on_player_turn_start is the CORRECT player-side mapping per the section-5 slot table, CombatManager.cs:458) and on_enemy_turn_start filtered to `enemy is self.owner` (powers.py:1999-2000). The enemy half is turn_structure gap G5 (per-creature where the game is per-side) and carries the identical verdict (rule 3). DORMANT, executed: SKULKING_COLONY_ELITE is a solo encounter (n=1, order=['SkulkingColony'], `py audit/tools/power_slot_probes.py rosters`), so the owner's own turn start IS the enemy side start. Trigger: a Skulking Colony fought alongside another enemy AND something that damages the colony during the enemy side before its own turn -- the sim would still be carrying the previous turn's accumulator. Third-file citations, not hashed here."
+      "issue": "CLOSED. The enemy half is `before_enemy_side_start` -- Hook.BeforeSideTurnStart (CombatManager.cs:458), once for the side before any block is cleared -- and, matching HardenedShellPower.cs:71-77, it is UNFILTERED: C#'s override tests neither `side` nor `participants`, so the counter resets at the start of BOTH sides' turns. The owner-filtered enemy leg the per-creature slot forced on the sim is gone. EXECUTED: test_enemy_side_per_side.py::test_hardened_shell_resets_on_both_sides_unfiltered. FIXED 2026-07-28 (round 4). RE-VERIFIED 2026-08-04 (line numbers only) by reading powers.py:2528-2536 -- both legs are now unfiltered `before_side_turn_start`/`before_enemy_side_start` methods with no owner test at all, matching C#'s lack of a side/participants filter exactly (the `maps_to` above was stale, still naming the pre-fix on_player_turn_start/on_enemy_turn_start pair; corrected here). The text it replaced read: STILL OPEN on the enemy half only. The player leg now uses the REAL hook rather than a mapping onto a later slot: HardenedShellPower.cs:71-77 declares BeforeSideTurnStart and the power is on the sim's new `before_side_turn_start` dispatcher (CombatManager.cs:458), fired before the block clear and the energy reset instead of after both. WHAT REMAINS is what this entry always said carried the verdict: the enemy half is turn_structure gap G5 (per-creature where the game is per-side), and rule 3 holds it here.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: C#'s BeforeSideTurnStart (HardenedShellPower.cs:71-77) has NO side filter and NO participants filter, so the cap resets at the start of EVERY side's turn. The sim reproduces that with two listeners: on_player_turn_start unfiltered (powers.py:1996, and BeforeSideTurnStart -> on_player_turn_start is the CORRECT player-side mapping per the section-5 slot table, CombatManager.cs:458) and on_enemy_turn_start filtered to `enemy is self.owner` (powers.py:1999-2000). The enemy half is turn_structure gap G5 (per-creature where the game is per-side) and carries the identical verdict (rule 3). DORMANT, executed: SKULKING_COLONY_ELITE is a solo encounter (n=1, order=['SkulkingColony'], `py audit/tools/power_slot_probes.py rosters`), so the owner's own turn start IS the enemy side start. Trigger: a Skulking Colony fought alongside another enemy AND something that damages the colony during the enemy side before its own turn -- the sim would still be carrying the previous turn's accumulator. Third-file citations, not hashed here."
     }
   },
   "guards": [
     {
       "what": "HardenedShellPower.cs:27-30 InitInternalData / GetInternalData<Data>()",
       "verdict": "faithful",
-      "rationale": "The sim uses a plain instance field `self._damage_received_this_turn` (powers.py:1972). Equivalent while InstanceType is None (this power does not override it), which is exactly the condition power_cmd G5 is about."
+      "rationale": "The sim uses a plain instance field `self._damage_received_this_turn` (powers.py:2504). Equivalent while InstanceType is None (this power does not override it), which is exactly the condition power_cmd G5 is about."
     },
     {
       "what": "HardenedShellPower.cs:42 the cap can go NEGATIVE once the shell is spent",
       "verdict": "faithful",
-      "rationale": "Both sides compute `min(amount, Amount - received)` with no floor, so once received > Amount the modifier returns a negative number -- which the sim then clamps with `max(0, amount)` at hooks.py:147, and which C# clamps downstream in CreatureCmd. Same observable (no HP loss, no healing). Checked because a negative return from an HP-loss modifier is the sort of thing an audit should not wave past."
+      "rationale": "Both sides compute `min(amount, Amount - received)` with no floor, so once received > Amount the modifier returns a negative number -- which the sim then clamps with `max(0, amount)` at hooks.py:881, and which C# clamps downstream in CreatureCmd. Same observable (no HP loss, no healing). Checked because a negative return from an HP-loss modifier is the sort of thing an audit should not wave past."
     },
     {
       "what": "HardenedShellPower.cs:64-67 `Owner.HpDisplay = HpDisplay.InfiniteWithNumbers`",
@@ -129,5 +129,5 @@
     }
   ],
   "verdict": "gap",
-  "audited": "2026-07-26"
+  "audited": "2026-08-04"
 }

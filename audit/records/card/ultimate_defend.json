@@ -6,43 +6,43 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\event_cards.py",
-    "sha256": "dfd78fff2c2a36323033d8c74d986f9211a6cff57920b7380b731bb6cf9d3a5a"
+    "sha256": "22675c0e8764e2eb8d0aa28341ccb256084aeb94bf28b17a444409586ca6fc54"
   },
   "extra_sources": [
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     }
   ],
   "hooks": {
     "GainsBlock": {
-      "maps_to": "UltimateDefendCard.gains_block = True (event_cards.py:189)",
+      "maps_to": "UltimateDefendCard.gains_block = True (event_cards.py:191)",
       "verdict": "faithful",
       "rationale": "`public override bool GainsBlock => true` (UltimateDefend.cs:13) == the class attribute."
     },
     "ctor": {
-      "maps_to": "class attrs (event_cards.py:188-194) + _init_vars (196-198)",
+      "maps_to": "class attrs (event_cards.py:190-196) + _init_vars (198-200)",
       "verdict": "faithful",
       "rationale": "`base(1, CardType.Skill, CardRarity.Uncommon, TargetType.Self)` (UltimateDefend.cs:22-25) == cost 1 / SKILL / UNCOMMON / SELF."
     },
     "CanonicalTags": {
-      "maps_to": "UltimateDefendCard.tags = frozenset({\"defend\"}) (event_cards.py:194)",
+      "maps_to": "UltimateDefendCard.tags = frozenset({\"defend\"}) (event_cards.py:196)",
       "verdict": "faithful",
-      "rationale": "`new HashSet<CardTag> { CardTag.Defend }` (UltimateDefend.cs:18) == the tag set, and the source's own comment says why it matters: \"Yes, Ultimate Defend counts as a Defend for the purposes of effects like Fasten.\" The sim's `defend` tag is what card/fasten's FastenPower and the Fortified enchantment (enchantments.py:286-287) key on, so this is load-bearing rather than cosmetic."
+      "rationale": "`new HashSet<CardTag> { CardTag.Defend }` (UltimateDefend.cs:18) == the tag set, and the source's own comment says why it matters: \"Yes, Ultimate Defend counts as a Defend for the purposes of effects like Fasten.\" The sim's `defend` tag is what card/fasten's FastenPower and the Fortified enchantment (enchantments.py:287-289, moved from :286-287 -- content re-verified current, same `\"defend\" in card.tags` check) key on, so this is load-bearing rather than cosmetic."
     },
     "CanonicalVars": {
-      "maps_to": "UltimateDefendCard._block = 11 (event_cards.py:198)",
+      "maps_to": "UltimateDefendCard._block = 11 (event_cards.py:200)",
       "verdict": "faithful",
       "rationale": "`new BlockVar(11m, ValueProp.Move)` (UltimateDefend.cs:20) == `_block = 11`. Move without Unpowered -> POWERED block, so NOT in gap G1's blast radius."
     },
     "OnPlay": {
-      "maps_to": "UltimateDefendCard.on_play (event_cards.py:203-205)",
+      "maps_to": "UltimateDefendCard.on_play (event_cards.py:205-207)",
       "verdict": "faithful",
       "rationale": "`CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, cardPlay)` (UltimateDefend.cs:34) == `BlockCmd.apply(ctx.hooks, ctx.player, self._block, card=self)`. A single-effect card with no guards and no animation on either side -- card/defend with bigger numbers."
     },
     "OnUpgrade": {
-      "maps_to": "UltimateDefendCard._on_upgrade (event_cards.py:200-201)",
+      "maps_to": "UltimateDefendCard._on_upgrade (event_cards.py:202-203)",
       "verdict": "faithful",
       "rationale": "`DynamicVars.Block.UpgradeValueBy(4m)` (UltimateDefend.cs:29) == `self._block += 4` (11 -> 15). Note C# declares OnUpgrade before OnPlay in this file; no behavioural consequence."
     }

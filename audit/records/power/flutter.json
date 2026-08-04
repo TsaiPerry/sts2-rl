@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/hive/thieving_hopper.py",
-      "sha256": "276bca6f2ac105b94c8b37e3db919ce92039ac43407e88bc9411a9b5766ffd76",
+      "sha256": "f53942cb48feefaaec62ea27439cf446f99ae47ad864aa322180c2bd704bf2ce",
       "side": "sim"
     },
     {
@@ -37,13 +37,13 @@
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:2196 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py:2747 `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-140 Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:137-140) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "ShouldScaleInMultiplayer": {
       "maps_to": "no sim counterpart",
@@ -51,31 +51,31 @@
       "rationale": "Multiplayer-only scaling (MultiplayerScalingModel). Out of scope everywhere; the sim is single-player."
     },
     "ModifyDamageMultiplicative": {
-      "maps_to": "powers.py:2198-2207 modify_damage_multiplicative",
+      "maps_to": "powers.py:2749-2761 modify_damage_multiplicative",
       "verdict": "faithful",
-      "rationale": "Constant checked: FlutterPower.cs:24 declares `new DynamicVar(\"DamageDecrease\", 50m)` and :36 returns it / 100m, i.e. 0.5 -- powers.py:2206. Dyadic, so outside hook_dispatch G9. `target != base.Owner -> 1m` matches powers.py:2205-2207."
+      "rationale": "Constant checked: FlutterPower.cs:24 declares `new DynamicVar(\"DamageDecrease\", 50m)` and :36 returns it / 100m, i.e. 0.5 -- powers.py:2760. Dyadic, so outside hook_dispatch G9. `target != base.Owner -> 1m` matches powers.py:2759-2761."
     },
     "AfterDamageReceived": {
-      "maps_to": "powers.py:2209-2235 on_damage_received",
+      "maps_to": "powers.py:2763-2796 on_damage_received",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the stun's follow-up state is now taken from the last LOGGED state on the MonsterAi stream -- `machine.state_log[-1].get_next_state(self.owner, self.owner._move_rng)` (powers.py:2358-2364), where `_move_rng` is `combat.combat_rng.monster_ai` -- and handed to `CreatureCmd.stun` as `next_move_key`, mirroring FlutterPower.cs:47's `StateLog.Last().GetNextState(owner, RunRng.MonsterAi)`. The machine is no longer mutated by a `roll_move` call. VERIFIED 2026-07-27 by reading powers.py:2308-2364. WAS: `machine.roll_move(self.owner, self.owner._rng)` drew off the monster's construction random.Random, never advanced MonsterAi, and walked the machine a turn early."
+      "issue": "Closed 2026-07-27: the stun's follow-up state is now taken from the last LOGGED state on the MonsterAi stream -- `machine.state_log[-1].get_next_state(self.owner, self.owner._move_rng)` (powers.py:2793-2795), where `_move_rng` is `combat.combat_rng.monster_ai` -- and handed to `CreatureCmd.stun` as `next_move_key`, mirroring FlutterPower.cs:47's `StateLog.Last().GetNextState(owner, RunRng.MonsterAi)`. The machine is no longer mutated by a `roll_move` call. RE-VERIFIED 2026-08-04 (line numbers only) by reading powers.py:2763-2796. WAS: `machine.roll_move(self.owner, self.owner._rng)` drew off the monster's construction random.Random, never advanced MonsterAi, and walked the machine a turn early."
     }
   },
   "guards": [
     {
       "what": "FlutterPower.cs:41 `props.IsPoweredAttack()` in AfterDamageReceived",
       "verdict": "faithful",
-      "rationale": "powers.py:2217-2219 imports valueprops.is_powered_attack and tests `props` directly. This is the CORRECT form and is worth contrasting with SlowPower one file over, which tests the card instead."
+      "rationale": "powers.py:2771-2772 imports valueprops.is_powered_attack and tests `props` directly. This is the CORRECT form and is worth contrasting with SlowPower one file over, which tests the card instead."
     },
     {
       "what": "FlutterPower.cs:44 `base.Amount <= 0` -> stun",
       "verdict": "faithful",
-      "rationale": "powers.py:2222. The sim calls _expire() explicitly where C# leans on PowerCmd.Decrement -> ShouldRemoveDueToAmount; same observable, same note as the other units in this batch."
+      "rationale": "powers.py:2776. The sim calls _expire() explicitly where C# leans on PowerCmd.Decrement -> ShouldRemoveDueToAmount; same observable, same note as the other units in this batch."
     },
     {
       "what": "FlutterPower.cs:50 `((ThievingHopper)base.Owner.Monster).IsHovering = false`",
       "verdict": "faithful",
-      "rationale": "powers.py:2224-2225 guards with hasattr(self.owner, \"is_hovering\") instead of a cast. Defensive rather than divergent: the only applier is the hopper itself."
+      "rationale": "powers.py:2778-2779 guards with hasattr(self.owner, \"is_hovering\") instead of a cast. Defensive rather than divergent: the only applier is the hopper itself."
     },
     {
       "what": "FlutterPower.cs:46,52 TriggerAnim(\"StunTrigger\") / Cmd.Wait(0.25f)",
@@ -94,5 +94,5 @@
     }
   ],
   "verdict": "deliberate-divergence",
-  "audited": "2026-07-26"
+  "audited": "2026-08-04"
 }

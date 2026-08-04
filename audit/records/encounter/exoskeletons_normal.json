@@ -9,16 +9,56 @@
     "sha256": "19c6925ade2440706e673fb8ce4c8fc54443f1141721de53dfd88c6c3b694770"
   },
   "extra_sources": [
-    { "path": "src/Core/Models/EncounterModel.cs", "sha256": "6eaa2f804db14af9d8c90b75ee0762c9b807fcf9d0cfb093b3f217501da89f90", "side": "game" },
-    { "path": "src/Core/Helpers/AscensionHelper.cs", "sha256": "9105f9af7392590a59a7818fed209dd8d3ee817f8995d9a5566786536b515f8a", "side": "game" },
-    { "path": "src/Core/Combat/CombatState.cs", "sha256": "6dc71f2ed75e40551749f77a45d4dd39fd2999904c8d84ef36419efc152fe759", "side": "game" },
-    { "path": "src/Core/Combat/CombatManager.cs", "sha256": "7ae1b7259e72befa07f4aceaa9ab0e23783fc55876bcde6090b9b2cfae65a43e", "side": "game" },
-    { "path": "src/Core/Models/ModelDb.cs", "sha256": "7144c6e265fc4484e40860f4ec7cb288c677a63256675222010f66ab628d6e4f", "side": "game" },
-    { "path": "src/Core/Models/ActModel.cs", "sha256": "55f3a43c7e055aff1e35985c0cd229f22a271698a82b0d0a24a3f01320dcab0b", "side": "game" },
-    { "path": "src/Core/DevConsole/ConsoleCommands/UnlockConsoleCmd.cs", "sha256": "331707da5e8fae33f84d309216dd063a8ec5df95dd338dd136e61d7ba627af35", "side": "game" },
-    { "path": "src/Core/Nodes/Screens/StatsScreen/NGeneralStatsGrid.cs", "sha256": "af26bdcaae7406d49bd923076a158f2574714fa93aa0f71a3da608cf6f856818", "side": "game" },
-    { "path": "src/Core/Models/Monsters/Exoskeleton.cs", "sha256": "e0f2e7828c3d0f22cbe176112dfd95ec7dc29f9617db9d37052561c49a007d1d", "side": "game" },
-    { "path": "sts2_rl/rewards.py", "sha256": "81fa5dbf02a28b7d147ddfc638e29dc62dfbb3b9d80c67870c9b50d9c1a4d5af", "side": "sim" }
+    {
+      "path": "src/Core/Models/EncounterModel.cs",
+      "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Helpers/AscensionHelper.cs",
+      "sha256": "81c7397c24d03c613d7f4d8d887b63ec7fc0accbdd97e1773ea0aacd2e9c2663",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Combat/CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Combat/CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/ModelDb.cs",
+      "sha256": "3ce833579b24f71f74fc5a5d9118ee5eec3030eae07a19de90a38dd7449273d6",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/ActModel.cs",
+      "sha256": "158831cf2c7b7887f2242fa5751fad3ceeb5c8913fbc89d41451645bd822cc9b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/DevConsole/ConsoleCommands/UnlockConsoleCmd.cs",
+      "sha256": "9fd3b7a41e15d1c2e54a4997bab1db88daf97820ac13ed5ab364c522f5246175",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/Screens/StatsScreen/NGeneralStatsGrid.cs",
+      "sha256": "6df922988a4392ab94066d704b902b8c267101f0f0af506b87be7a0926f284e0",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Monsters/Exoskeleton.cs",
+      "sha256": "3e7db5d45be4b8f3fdbcb081c1ab2f3ea1c3cbdecc4edf8ad18a386fafa0c3f1",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
+      "side": "sim"
+    }
   ],
   "hooks": {
     "Tags": {

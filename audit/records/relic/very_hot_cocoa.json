@@ -36,27 +36,27 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     }
   ],
@@ -67,16 +67,16 @@
       "rationale": "VeryHotCocoa.cs:15. Listed Ancient in the transcribed grab bag and additionally granted by the ported Tezcatara shrine (py audit/tools/relic_probes_b17.py pool -> bag=Ancient, granted_by sts2_rl/events/tezcatara.py), so it is obtainable."
     },
     "AfterSideTurnStart": {
-      "maps_to": "on_player_turn_started (very_hot_cocoa.py:21-24), dispatched by HookSystem.on_player_turn_started (hooks.py:285-295) from PlayerCombatState.start_turn (player.py:185)",
+      "maps_to": "on_player_turn_started (very_hot_cocoa.py:21-24), dispatched by HookSystem.on_player_turn_started (hooks.py:1214-...) from PlayerCombatState.start_turn (player.py:418)",
       "verdict": "faithful",
-      "rationale": "VeryHotCocoa.cs:21-27 gains Energy.BaseValue when the owner is among the turn's participants and TurnNumber <= 1. Slot: audit/records/seam/turn_structure.json step 23 IS Hook.AfterSideTurnStart, and the sim's on_player_turn_started is that step's counterpart (executed: py audit/tools/relic_probes.py turn-order prints on_player_turn_started last, after modify_hand_draw). The `participants.Contains(base.Owner.Creature)` clause is what makes the C# hook player-side only, and the sim's on_player_turn_started is only ever fired for the player (player.py:185), so the guard is structurally satisfied rather than dropped. EXECUTED (py audit/tools/relic_probes_b17.py cocoa): turn 1 opens with energy 7 on a base of 3, matching C#'s 3 + 4; turn 2 opens with 3. Rule 7: hooks.py, player.py and audit/records/seam/turn_structure.json are NOT hashed by this record."
+      "rationale": "VeryHotCocoa.cs:21-27 gains Energy.BaseValue when the owner is among the turn's participants and TurnNumber <= 1. Slot: audit/records/seam/turn_structure.json step 23 IS Hook.AfterSideTurnStart, and the sim's on_player_turn_started is that step's counterpart (executed: py audit/tools/relic_probes.py turn-order prints on_player_turn_started last, after modify_hand_draw). The `participants.Contains(base.Owner.Creature)` clause is what makes the C# hook player-side only, and the sim's on_player_turn_started is only ever fired for the player (player.py:418), so the guard is structurally satisfied rather than dropped. EXECUTED (py audit/tools/relic_probes_b17.py cocoa): turn 1 opens with energy 7 on a base of 3, matching C#'s 3 + 4; turn 2 opens with 3. Rule 7: hooks.py, player.py and audit/records/seam/turn_structure.json are NOT hashed by this record."
     }
   },
   "guards": [
     {
       "what": "N1: `base.Owner.PlayerCombatState.TurnNumber <= 1` (VeryHotCocoa.cs:23) vs the sim's `self.turn <= 1` (very_hot_cocoa.py:22), including the extra-turn case",
       "verdict": "faithful",
-      "rationale": "`self.turn` is CombatState.turn, a different object from PlayerCombatState.TurnNumber, so the equivalence had to be established rather than assumed. Both start at 1 (PlayerCombatState.cs:37 `TurnNumber { get; private set; } = 1`; combat.py:108 `self.turn = 1`) and both advance exactly once per player turn, INCLUDING an extra turn: C# calls IncrementTurnNumber for every player in `_playersTakingExtraTurn` on the same SwitchSides path that handles a normal turn (CombatManager.cs:1404-1418, and RoundNumber -- not TurnNumber -- is the one that skips), and the sim's extra-turn branch does `self.turn += 1` before start_turn (combat.py:650-652) exactly as the normal branch does (combat.py:674-675). EXECUTED (py audit/tools/relic_probes_b17.py cocoa): with a listener that claims one extra turn, combat.turn reads 2 after it and the relic does not re-fire -- which is C#'s answer too. For a single-player run the two counters are the same number at every point. Rule 7: PlayerCombatState.cs, CombatManager.cs and combat.py are NOT hashed by this record."
+      "rationale": "`self.turn` is CombatState.turn, a different object from PlayerCombatState.TurnNumber, so the equivalence had to be established rather than assumed. Both start at 1 (PlayerCombatState.cs:37 `TurnNumber { get; private set; } = 1`; combat.py:177 `self.turn = 1`) and both advance exactly once per player turn, INCLUDING an extra turn: C# calls IncrementTurnNumber for every player in `_playersTakingExtraTurn` on the same SwitchSides path that handles a normal turn (CombatManager.cs:1404-1418, and RoundNumber -- not TurnNumber -- is the one that skips), and the sim's extra-turn branch does `self.turn += 1` before start_turn (combat.py:1822 (extra-turn branch)) exactly as the normal branch does (combat.py:1840-1841 (normal-turn branch)). EXECUTED (py audit/tools/relic_probes_b17.py cocoa): with a listener that claims one extra turn, combat.turn reads 2 after it and the relic does not re-fire -- which is C#'s answer too. For a single-player run the two counters are the same number at every point. Rule 7: PlayerCombatState.cs, CombatManager.cs and combat.py are NOT hashed by this record."
     },
     {
       "what": "N2: EnergyVar(4) (VeryHotCocoa.cs:17) read as `Energy.BaseValue` at the call site (:26) vs the sim's ENERGY = 4 (very_hot_cocoa.py:19)",
@@ -84,9 +84,9 @@
       "rationale": "No AscensionHelper.GetValueIfAscension anywhere in VeryHotCocoa.cs, so 4 is the pinned non-ascension value. Re-read against the C# rather than taken from the port's docstring, per PROMPT.md bug class 19."
     },
     {
-      "what": "N3: PlayerCmd.GainEnergy's guards (PlayerCmd.cs:29-43) vs the sim's EnergyCmd.gain (cmds.py:545-554)",
+      "what": "N3: PlayerCmd.GainEnergy's guards (PlayerCmd.cs:29-43) vs the sim's EnergyCmd.gain (cmds.py:1848-1879)",
       "verdict": "faithful",
-      "rationale": "Same trace as relic/venerable_tea_set guard N2, and the same verdict per binding rule 3 -- one mechanism, one verdict. (a) `amount <= 0` cannot fire on the pinned constant 4. (b) C#'s `finalAmount > 0` skip and the sim's unconditional `player.energy += amount` agree at 0, and the only ported modify_energy_gain listener, NoEnergyGainPower (powers.py:554-558), returns exactly 0. (c) Hook.AfterModifyingEnergyGain has one override in the whole game (NoEnergyGainPower.cs:28) and its body is presentation. (d) `!CombatManager.IsEnding` belongs to the combat-over-window family audit/records/seam/creature_card_cmds.json guard G14 verdicts DORMANT, and a turn-setup energy gain cannot occur inside that window. Rule 7: PlayerCmd.cs, cmds.py, powers.py, NoEnergyGainPower.cs, audit/records/relic/venerable_tea_set.json and audit/records/seam/creature_card_cmds.json are NOT hashed by this record."
+      "rationale": "Same trace as relic/venerable_tea_set guard N2, and the same verdict per binding rule 3 -- one mechanism, one verdict. RE-VERIFIED 2026-08-04 alongside that record: (a) `amount <= 0` cannot fire on the pinned constant 4. (b) C#'s `finalAmount > 0` skip and the sim's unconditional `player.energy += amount` agree at 0, and the only ported modify_energy_gain listener, NoEnergyGainPower (powers.py:861-871), returns exactly 0. (c) Hook.AfterModifyingEnergyGain has one override in the whole game (NoEnergyGainPower.cs:28) and its body is presentation. (d) `!CombatManager.IsEnding` is now DIRECTLY ported: EnergyCmd.gain opens with `if is_ending(hooks): return` (cmds.py:1875), so this clause no longer rests on creature_card_cmds/G14's dormant-family argument -- it is simply faithful. Rule 7: PlayerCmd.cs, powers.py, NoEnergyGainPower.cs, audit/records/relic/venerable_tea_set.json and audit/records/seam/creature_card_cmds.json are NOT hashed by this record; cmds.py IS hashed by this record."
     },
     {
       "what": "N4 (checked, and NOT a gap): C# fires this from AfterSideTurnStart, whose dispatcher runs a SECOND full pass of AfterSideTurnStartLate (Hook.cs:1163-1175)",

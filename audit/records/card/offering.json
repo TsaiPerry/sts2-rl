@@ -11,8 +11,13 @@
   "extra_sources": [
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Commands/PlayerCmd.cs",
+      "sha256": "8630f180d829942738c860f96dc6621cae01e7c2402fd33cee871fe21f42f668",
+      "side": "game"
     }
   ],
   "hooks": {

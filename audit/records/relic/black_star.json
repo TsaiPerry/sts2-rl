@@ -11,7 +11,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
       "side": "sim"
     },
     {
@@ -76,17 +76,17 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
+      "sha256": "a1aecf30215574f9bc62dd01cb7c73346bbc1b9b84dd5dcc8dabd67101f8c345",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -98,7 +98,7 @@
     "TryModifyRewards": {
       "maps_to": "modify_combat_rewards (sts2_rl/relics/black_star.py:15-23) -- appends the payload-less RelicReward to an ELITE screen and offers it through RunState.offer_relic",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:475-496) and `RunState.offer_potion` (sts2_rl/run.py:498-506) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. sts2_rl/relics/black_star.py now pulls the relic and calls `run.offer_relic(relic)`. WAS: the port called run.add_relic itself, so the player could not decline and the relic's own after_obtained fired regardless."
+      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:692-713) and `RunState.offer_potion` (sts2_rl/run.py:715-721) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. sts2_rl/relics/black_star.py now pulls the relic and calls `run.offer_relic(relic)`. WAS: the port called run.add_relic itself, so the player could not decline and the relic's own after_obtained fired regardless."
     }
   },
   "guards": [

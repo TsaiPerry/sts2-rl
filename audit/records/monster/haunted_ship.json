@@ -48,7 +48,7 @@
     {
       "what": "StatusIntent(5) loses its count in the sim's Intent",
       "verdict": "waiver",
-      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: HauntedShip.cs:44 telegraphs `new DebuffIntent(), new StatusIntent(HauntDazed)` - the 5 is the NUMBER SHOWN on the status icon. The sim collapses the pair to Intent(DEBUFF, also=(STATUS_CARD,)) (haunted_ship.py:41) and its Intent dataclass has no status-count field (monsters/base.py:36-51). The move still adds five Dazed; only the telegraphed digit is lost. The AbstractIntent vocabulary mapping is monster_state_machine boundary hole 2 and is audited by no record; flagged here rather than silently skipped."
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: HauntedShip.cs:44 telegraphs `new DebuffIntent(), new StatusIntent(HauntDazed)` - the 5 is the NUMBER SHOWN on the status icon. The sim collapses the pair to Intent(DEBUFF, also=(STATUS_CARD,)) (haunted_ship.py:41). RE-VERIFIED 2026-08-04: the Intent dataclass has since GAINED a `status_count: int | None = None` field (monsters/base.py:52-83, was :36-51, cited as 'no status-count field' -- that premise is now stale) but this unit's HAUNT_MOVE construction does not pass it, so it stays None, same as the 13-of-18 sites the field's own docstring names as still uncounted (`monster/_intent_count_lost`, tracked as open, not a formal audit record). Verdict UNCHANGED because the field's own docstring states the observation encoder reads only the STATUS_CARD flag bit and never status_count (full_env.py:571 per that docstring) -- so even where the count IS set, nothing observes it yet; no observable difference today (binding rule 2). The move still adds five Dazed; only the telegraphed digit is lost, and it is lost identically whether or not status_count is populated. The AbstractIntent vocabulary mapping is monster_state_machine boundary hole 2 and is audited by no record; flagged here rather than silently skipped."
     },
     {
       "what": "PROMPT.md bug-class sweep",
@@ -61,7 +61,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl\\monsters\\base.py",
-      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     }
   ]

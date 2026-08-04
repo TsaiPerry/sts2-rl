@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/events/fake_merchant.py",
-      "sha256": "b988afdfbe947f93dc619f6a22907d77137bdba4363fc04de23641f5ed6d87d5",
+      "sha256": "2378d7dce03e5f88f7d0daabe8dab60e890e8d25b7df89745b138a797b7f3f9d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -54,14 +54,14 @@
       "rationale": "The claim is TRUE here, which makes this the rare stub that clears class 12. Three independent checks: (a) FakeMerchantsRug.cs:1-8 read in full declares only Rarity -- no AfterObtained, no AfterRoomEntered, no modifier, no IsAllowed, no MerchantCost; (b) `py audit/tools/relic_probes.py sweep-stubs` reports 37 behaviourless relic ports of 258 of which 35 drop at least one C# behavioural hook, and this relic is NOT among the 35 -- it is one of the two the sweep calls genuinely complete; (c) a grep of the whole game source for FakeMerchantsRug finds four non-declaration references and not one of them is behavioural: EventRelicPool.cs:54 (pool membership), FakeMerchant.cs:26 (a source comment saying it is a combat reward, not stock), FakeMerchant.cs:136 (the RelicReward the fight hands out) and NFakeMerchant.cs:82 (`me.GetRelic<FakeMerchantsRug>() != null`, a UI check so the stall reacts to you owning it). Rule 7: those four files are unhashed here."
     },
     {
-      "what": "N2: the relic is NOT in the sim's Fake Merchant inventory list (events/fake_merchant.py:18-22) and is granted only as a fight reward (events/fake_merchant.py:99)",
+      "what": "N2: the relic is NOT in the sim's Fake Merchant inventory list (events/fake_merchant.py:18-22) and is granted only as a fight reward (events/fake_merchant.py:138, re-pinned 2026-08-04, was :99)",
       "verdict": "faithful",
       "rationale": "Mirrors the source exactly, including the reason: FakeMerchant.cs:26 carries the comment \"don't add FakeMerchantsRug to this list, it's a combat reward, not a relic you can buy\", and FakeMerchant.cs:136 adds it as a RelicReward when the Foul Potion exposes him. The sim's _INVENTORY holds the other nine knock-offs and RewardExtra.of_relic(make_relic('fake_merchants_rug')) is the fight-reward path. Executed (py audit/tools/relic_probes_b05.py b05-pool): the relic is registered, is not in the grab bag, and its only grant site under sts2_rl/ is events/fake_merchant.py. Rule 7: FakeMerchant.cs and events/fake_merchant.py are unhashed here."
     },
     {
       "what": "N3: MerchantCost is NOT overridden, unlike the other nine knock-offs",
       "verdict": "faithful",
-      "rationale": "The sim leaves merchant_cost_override at None, so relics/base.py:111-117 returns the EVENT default 999999999 -- value-for-value RelicModel.cs:304-315. That is the correct answer for a relic that is never stock, and it is the one place where copying the sibling ports' `merchant_cost_override = 50` would have been wrong. Rule 7: RelicModel.cs and relics/base.py are unhashed here."
+      "rationale": "The sim leaves merchant_cost_override at None, so relics/base.py:174-180, re-pinned 2026-08-04, was :111-117 returns the EVENT default 999999999 -- value-for-value RelicModel.cs:304-315. That is the correct answer for a relic that is never stock, and it is the one place where copying the sibling ports' `merchant_cost_override = 50` would have been wrong. Rule 7: RelicModel.cs and relics/base.py are unhashed here."
     }
   ],
   "verdict": "faithful",

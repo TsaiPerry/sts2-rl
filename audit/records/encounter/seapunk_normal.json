@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "424336cf4fb7be8026278b7a34af428082d8487fb57f25c3565311fe5c993388",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     },
     {
@@ -51,22 +51,22 @@
     },
     {
       "path": "sts2_rl/rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "3caf6a189d109feb62c5ab57f03028277542a8bf12311898e7445be27ce199b2",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
   "hooks": {
     "RoomType": {
-      "maps_to": "RoomType.Monster (SeapunkNormal.cs:10). Sim equivalent: 'seapunk_normal' is listed in ActRooms.normal_keys for underdocks (rooms.py:133-137), the structural stand-in for RoomType.Monster -- it also drives the MinGoldReward/MaxGoldReward ladder (see guards) via CombatState.room_type, set at combat creation from the same pool membership (run.py:1415-1421).",
+      "maps_to": "RoomType.Monster (SeapunkNormal.cs:10). Sim equivalent: 'seapunk_normal' is listed in ActRooms.normal_keys for underdocks (rooms.py:199-203), the structural stand-in for RoomType.Monster -- it also drives the MinGoldReward/MaxGoldReward ladder (see guards) via CombatState.room_type, set at combat creation from the same pool membership (run.py, unhashed -- see extra_sources note).",
       "verdict": "faithful"
     },
     "Tags": {
-      "maps_to": "EncounterTag.Seapunk (SeapunkNormal.cs:12). Sim: ActRooms.tags['seapunk_normal'] = ('seapunk',) (rooms.py:144), matching 'seapunk_weak' (rooms.py:143) so the two never repeat back-to-back. The tag lives on the room-layer registry rather than on the Encounter object itself (Encounter has no tags field, monsters/base.py:352-375); the picker mechanism that consumes it (GrabBag-style no-repeat-tag selection) is seam/rooms_and_map's subject, not re-verdicted here -- only the VALUE is checked and it matches.",
+      "maps_to": "EncounterTag.Seapunk (SeapunkNormal.cs:12). Sim: ActRooms.tags['seapunk_normal'] = ('seapunk',) (rooms.py:214), matching 'seapunk_weak' (rooms.py:213) so the two never repeat back-to-back. The tag lives on the room-layer registry rather than on the Encounter object itself (Encounter has no tags field, monsters/base.py:353-381); the picker mechanism that consumes it (GrabBag-style no-repeat-tag selection) is seam/rooms_and_map's subject, not re-verdicted here -- only the VALUE is checked and it matches.",
       "verdict": "faithful"
     },
     "AllPossibleMonsters": {
@@ -75,11 +75,11 @@
       "rationale": "Bestiary display and asset preload have no headless counterpart in this sim; the global MONSTER_IDS vocabulary already makes every monster identity representable, so the narrower per-encounter listing costs nothing observable."
     },
     "GenerateMonsters": {
-      "maps_to": "SeapunkNormal.cs:20-27 returns [(CalcifiedCultist, null), (Seapunk, null)] -- 2 monsters, cultist first, both unslotted, 0 Rng draws. Sim: seapunk.py:67-70, Encounter(id='seapunk_normal', monster_classes=[CalcifiedCultist, Seapunk]) -- same 2 classes in the same order, 0 draws (Encounter.create_monsters, monsters/base.py:408-416, only rolls each monster's per-instance HP off the shared combat rng, mirroring CombatState.CreateCreature's parity Niche roll, not a GenerateMonsters-level draw -- the C# body itself calls no Rng method). Roster, order, slot-nullness and draw count (0) all match element-for-element.",
+      "maps_to": "SeapunkNormal.cs:20-27 returns [(CalcifiedCultist, null), (Seapunk, null)] -- 2 monsters, cultist first, both unslotted, 0 Rng draws. Sim: seapunk.py:67-70, Encounter(id='seapunk_normal', monster_classes=[CalcifiedCultist, Seapunk]) -- same 2 classes in the same order, 0 draws (Encounter.create_monsters, monsters/base.py:476-479, only rolls each monster's per-instance HP off the shared combat rng, mirroring CombatState.CreateCreature's parity Niche roll, not a GenerateMonsters-level draw -- the C# body itself calls no Rng method). Roster, order, slot-nullness and draw count (0) all match element-for-element.",
       "verdict": "faithful"
     },
     "ShouldReceiveCombatHooks": {
-      "maps_to": "EncounterModel.cs:39, `=> false`. Sim: Encounter instances are never registered with HookSystem -- CombatState.__init__ (combat.py:170-232) registers the player, every deck card (plus its affliction/enchantment), and every Monster (Monster.__init__, monsters/base.py:296-297), but never `self.encounter`. The encounter is not a hook listener in either implementation.",
+      "maps_to": "EncounterModel.cs:39, `=> false`. Sim: Encounter instances are never registered with HookSystem -- CombatState.__init__ (combat.py:124-239) registers the player, every deck card (plus its affliction/enchantment), and every Monster (Monster.__init__, monsters/base.py:296-297), but never `self.encounter` (assigned bare at combat.py:239). The encounter is not a hook listener in either implementation.",
       "verdict": "faithful"
     }
   },

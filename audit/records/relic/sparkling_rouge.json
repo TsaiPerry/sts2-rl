@@ -16,22 +16,22 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -79,7 +79,7 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.UNCOMMON (sparkling_rouge.py:17)",
       "verdict": "faithful",
-      "rationale": "SparklingRouge.cs:15 is RelicRarity.Uncommon. EXECUTED (b15-pool): Uncommon in the transcribed grab bag, so it is obtainable from any relic reward -- no event needed. Uncommon also makes it tradable on both sides (relics/base.py:132-136; no HasUponPickupEffect, no pets, not used up)."
+      "rationale": "SparklingRouge.cs:15 is RelicRarity.Uncommon. EXECUTED (b15-pool): Uncommon in the transcribed grab bag, so it is obtainable from any relic reward -- no event needed. Uncommon also makes it tradable on both sides (relics/base.py:188-199; no HasUponPickupEffect, no pets, not used up)."
     },
     "AfterBlockCleared": {
       "maps_to": "on_block_cleared (sparkling_rouge.py:19-24), the sim's correct AfterBlockCleared slot -- same as its two hook-siblings captains_wheel and horn_cleat",
@@ -96,7 +96,7 @@
     {
       "what": "N1: `creature == base.Owner.Creature` (SparklingRouge.cs:31) vs the sim firing on_player_turn_started only for the player",
       "verdict": "faithful",
-      "rationale": "C# needs the check because AfterBlockCleared fires once per creature starting a turn, including every enemy. HookSystem.on_player_turn_started is dispatched only from PlayerCombatState.start_turn (player.py:186), so the sim's slot is player-only by construction. (The sibling ports keep an explicit `target is self.player` because on_block_cleared IS fired for enemies too -- combat.py's enemy arm -- which is why the same guard is load-bearing there and free here.)"
+      "rationale": "C# needs the check because AfterBlockCleared fires once per creature starting a turn, including every enemy. HookSystem.on_player_turn_started is dispatched only from PlayerCombatState.start_turn (player.py:418, RECONFIRMED 2026-08-04 -- only the line number moved), so the sim's slot is player-only by construction. (The sibling ports keep an explicit `target is self.player` because on_block_cleared IS fired for enemies too -- combat.py's enemy arm -- which is why the same guard is load-bearing there and free here.)"
     },
     {
       "what": "N2: `PlayerCombatState.TurnNumber == 3` (SparklingRouge.cs:31) vs `self.turn == 3` (sparkling_rouge.py:20), read at two different points in the turn",

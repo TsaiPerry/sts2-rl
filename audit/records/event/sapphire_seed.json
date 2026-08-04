@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -44,7 +44,7 @@
     },
     {
       "what": "GenerateInitialOptions (SapphireSeed.cs:27-34): EAT then PLANT, both unconditional -- there is NO lock on PLANT even though the enchant can find no candidate",
-      "maps_to": "events/sapphire_seed.py:22-26 offers the same two keys in the same order with no gate. The source really does leave PLANT clickable and relies on FirstOrDefault returning null (SapphireSeed.cs:52), and the sim relies on select_cards returning [] for an empty candidate list (run.py:384-385) -- the same no-op. Note the contrast with spiraling_whirlpool, which gates the whole EVENT on Spiral having a candidate; Sapphire Seed has no IsAllowed at all, so an all-enchanted deck can walk in and waste the option in both engines.",
+      "maps_to": "events/sapphire_seed.py:22-26 offers the same two keys in the same order with no gate. The source really does leave PLANT clickable and relies on FirstOrDefault returning null (SapphireSeed.cs:52), and the sim relies on select_cards returning [] for an empty candidate list (run.py:585-, was :384-385) -- the same no-op. Note the contrast with spiraling_whirlpool, which gates the whole EVENT on Spiral having a candidate; Sapphire Seed has no IsAllowed at all, so an all-enchanted deck can walk in and waste the option in both engines.",
       "verdict": "faithful"
     },
     {
@@ -59,12 +59,12 @@
     },
     {
       "what": "CardCmd.Enchant's tail (CardCmd.cs:532-558) vs Enchantment.attach, for SOWN specifically",
-      "maps_to": "CardCmd.Enchant runs CanEnchant, EnchantInternal, enchantment.ModifyCard() and card.FinalizeUpgradeInternal(); Enchantment.attach (enchantments.py:63-68) runs can_enchant and the back-references. Observationally identical for Sown, which overrides neither OnEnchant nor RecalculateValues (Sown.cs is an OnPlay energy grant, ported at enchantments.py:79-96), so ModifyCard() has nothing to do. Same mapping the field_of_man_sized_holes record made for Perfect Fit. Sown's own behaviour is audited under enchantment/sown.",
+      "maps_to": "CardCmd.Enchant runs CanEnchant, EnchantInternal, enchantment.ModifyCard() and card.FinalizeUpgradeInternal(); Enchantment.attach (enchantments.py:156-163, was :63-68) runs can_enchant and the back-references. Observationally identical for Sown, which overrides neither OnEnchant nor RecalculateValues (Sown.cs is an OnPlay energy grant, ported at enchantments.py (search `class Sown` under `enchantment/sown`'s own audit), was :79-96), so ModifyCard() has nothing to do. Same mapping the field_of_man_sized_holes record made for Perfect Fit. Sown's own behaviour is audited under enchantment/sown.",
       "verdict": "faithful"
     },
     {
       "what": "Enchant's stacking branch (CardCmd.cs:545-549) is unreachable from here",
-      "maps_to": "the sim's base can_enchant is a flat `card.enchantment is None` (enchantments.py:57), where EnchantmentModel.CanEnchant lets a SECOND copy of the same enchantment through when IsStackable is true (EnchantmentModel.cs:289-292), and CardCmd.Enchant then does `Amount += amount`. EXECUTED (`py audit/tools/event_probes.py enchantstack`): EnchantmentModel.IsStackable (EnchantmentModel.cs:173) defaults false and has ZERO overrides among enchantments in the whole game source -- the five IsStackable overrides that exist are all Afflictions or Relics. So the sim's flat check is exactly the source's behaviour and the stacking branch is dead code on both sides. Recorded here rather than asserted, per rule 5. Applies identically at the other four enchant sites in this batch (self_help_book, spiraling_whirlpool, stone_of_all_time, symbiote).",
+      "maps_to": "the sim's base can_enchant is a flat `card.enchantment is None` (enchantments.py:120-131, was :57), where EnchantmentModel.CanEnchant lets a SECOND copy of the same enchantment through when IsStackable is true (EnchantmentModel.cs:289-292), and CardCmd.Enchant then does `Amount += amount`. EXECUTED (`py audit/tools/event_probes.py enchantstack`): EnchantmentModel.IsStackable (EnchantmentModel.cs:173) defaults false and has ZERO overrides among enchantments in the whole game source -- the five IsStackable overrides that exist are all Afflictions or Relics. So the sim's flat check is exactly the source's behaviour and the stacking branch is dead code on both sides. Recorded here rather than asserted, per rule 5. Applies identically at the other four enchant sites in this batch (self_help_book, spiraling_whirlpool, stone_of_all_time, symbiote).",
       "verdict": "faithful"
     },
     {

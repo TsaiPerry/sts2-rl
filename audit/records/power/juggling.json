@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -26,33 +26,33 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:804 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
     },
     "AfterApplied": {
-      "maps_to": "powers.py:806-817 JugglingPower.__init__ seeds _attacks_this_turn from combat.history.attack_plays_this_turn()",
+      "maps_to": "powers.py JugglingPower.__init__ seeds _attacks_this_turn from combat.history.attack_plays_this_turn()",
       "verdict": "faithful"
     },
     "AfterCardPlayed": {
-      "maps_to": "powers.py:819-830 JugglingPower.on_card_played",
+      "maps_to": "powers.py JugglingPower.on_card_played",
       "verdict": "gap",
-      "issue": "The copy is rebuilt from the class rather than cloned. JugglingPower.cs:48 is `cardPlay.Card.CreateClone()`, which reproduces the card's full live state; powers.py:827-829 constructs `type(card)()` and replays `card.upgrade_level` upgrades onto it. Upgrade level is therefore carried and everything else is not -- a this-combat cost override (ConfusedPower/Snecko Eye, powers.py:3867-3873), an affliction (Entangled, Ringing, Smog, Bound, Galvanized, Tainted -- all ported), or a this-turn free flag would all be dropped. DORMANT only in the narrow sense that no test exercises it; the route is a Snecko-Eye or Tangled combat plus a Juggling trigger, both ported. Named trigger: any Juggling copy of a card carrying per-combat state. Third-file citations, not hashed here."
+      "issue": "The copy is rebuilt from the class rather than cloned. JugglingPower.cs:48 is `cardPlay.Card.CreateClone()`, which reproduces the card's full live state; powers.py constructs `type(card)()` and replays `card.upgrade_level` upgrades onto it. Upgrade level is therefore carried and everything else is not -- a this-combat cost override (ConfusedPower/Snecko Eye, powers.py), an affliction (Entangled, Ringing, Smog, Bound, Galvanized, Tainted -- all ported), or a this-turn free flag would all be dropped. DORMANT only in the narrow sense that no test exercises it; the route is a Snecko-Eye or Tangled combat plus a Juggling trigger, both ported. Named trigger: any Juggling copy of a card carrying per-combat state. Third-file citations, not hashed here."
     },
     "AfterSideTurnEnd": {
-      "maps_to": "powers.py:832-834 on_player_turn_end resets _attacks_this_turn",
+      "maps_to": "powers.py on_player_turn_end resets _attacks_this_turn",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the player-side leg moved off the sim's Hook.BeforeTurnEnd slot (`on_player_turn_end`) onto `after_player_turn_end`, which combat.py:809 dispatches AFTER `_process_turn_end_cards` and the hand flush -- the sim's port of Hook.AfterTurnEnd (CombatManager.cs:1307), the dispatcher for AbstractModel.AfterSideTurnEnd (Hook.cs:1267-1292). VERIFIED 2026-07-27 by reading combat.py:781-812 and this power's class in powers.py. WAS: the effect ran inside Hook.BeforeTurnEnd, so its order relative to the turn-end card effects, the flush and Stampede's turn-end auto-plays was hook registration order. The registration-order witness is doubly gone: StampedePower also moved, to `after_auto_post_play_phase_entered` (powers.py:1089), which combat.py:789 fires strictly before this slot."
+      "issue": "Closed 2026-07-27: the player-side leg moved off the sim's Hook.BeforeTurnEnd slot (`on_player_turn_end`) onto `after_player_turn_end`, which combat.py dispatches AFTER `_process_turn_end_cards` and the hand flush -- the sim's port of Hook.AfterTurnEnd (CombatManager.cs:1307), the dispatcher for AbstractModel.AfterSideTurnEnd (Hook.cs:1267-1292). VERIFIED 2026-07-27 by reading combat.py and this power's class in powers.py. WAS: the effect ran inside Hook.BeforeTurnEnd, so its order relative to the turn-end card effects, the flush and Stampede's turn-end auto-plays was hook registration order. The registration-order witness is doubly gone: StampedePower also moved, to `after_auto_post_play_phase_entered` (powers.py), which combat.py fires strictly before this slot."
     }
   },
   "guards": [
@@ -64,22 +64,22 @@
     {
       "what": "JugglingPower.cs:38 `cardPlay.Card.Type != CardType.Attack`",
       "verdict": "faithful",
-      "rationale": "powers.py:821-822 tests CardType.ATTACK before incrementing. Identical."
+      "rationale": "powers.py tests CardType.ATTACK before incrementing. Identical."
     },
     {
       "what": "JugglingPower.cs:43 `attacksPlayedThisTurn == 3` (exact equality)",
       "verdict": "faithful",
-      "rationale": "powers.py:824 uses `== 3` too, not `>= 3`, so Juggling fires on the third Attack only and not on the fourth and fifth. Matching an exact-equality test rather than 'improving' it is the right call and the sim made it."
+      "rationale": "powers.py uses `== 3` too, not `>= 3`, so Juggling fires on the third Attack only and not on the fourth and fifth. Matching an exact-equality test rather than 'improving' it is the right call and the sim made it."
     },
     {
       "what": "JugglingPower.cs:32 the AfterApplied history seed",
       "verdict": "faithful",
-      "rationale": "C# counts Attack CardPlaysStarted this turn belonging to the owner; powers.py:815-817 calls combat.history.attack_plays_this_turn(). The owner filter is a single-player tautology. This is the mechanism that makes a mid-turn Juggling application count the turn's earlier Attacks, and the sim has it."
+      "rationale": "C# counts Attack CardPlaysStarted this turn belonging to the owner; powers.py calls combat.history.attack_plays_this_turn(). The owner filter is a single-player tautology. This is the mechanism that makes a mid-turn Juggling application count the turn's earlier Attacks, and the sim has it."
     },
     {
       "what": "JugglingPower.cs:49 CardPileCmd.AddGeneratedCardToCombat(PileType.Hand)",
       "verdict": "faithful",
-      "rationale": "powers.py:830 CardPileCmd.add_to_hand, which is the sim's generated-card path and fires on_card_entered_combat. Pile-verb semantics (MaxCardsInHand, index) belong to creature_card_cmds, not to this unit."
+      "rationale": "powers.py CardPileCmd.add_to_hand, which is the sim's generated-card path and fires on_card_entered_combat. Pile-verb semantics (MaxCardsInHand, index) belong to creature_card_cmds, not to this unit."
     }
   ],
   "verdict": "gap",

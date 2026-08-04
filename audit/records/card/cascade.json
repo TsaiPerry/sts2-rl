@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\cascade.py",
-    "sha256": "c2a0a15fcdac19951809d4855bc9ecf488bf12f7c042df070119ca6b8b49133d"
+    "sha256": "335d3ff564aed6f1890e9516c31476687d957f477237a145a4100a8735db5784"
   },
   "extra_sources": [
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     }
   ],
@@ -42,9 +42,9 @@
       "rationale": "`base(-1, CardType.Skill, CardRarity.Rare, TargetType.Self)` with `protected override bool HasEnergyCostX => true` (Cascade.cs:10-15) == `energy_cost_x = True` (cards/base.py:84-87) plus `_energy_cost = 0`. The -1 sentinel does NOT carry the unplayable-cost finding here: `CardEnergyCost`'s constructor sets `Canonical = ((!CostsX) ? canonicalCost : 0)` (CardEnergyCost.cs:86), so an X-cost card's base is 0 in C# too -- the sim's 0 is exactly right, and `GetWithModifiers`'s `if (CostsX) return num` short-circuit matches `Card.energy_cost`'s X handling at the play site."
     },
     "OnPlay": {
-      "maps_to": "CascadeCard.on_play (cascade.py:33-61)",
+      "maps_to": "CascadeCard.on_play (cascade.py:33-52), delegating to CardPileCmd.auto_play_from_draw_pile (cmds.py:1714-1776)",
       "verdict": "faithful",
-      "rationale": "`int num = ResolveEnergyXValue(); if (IsUpgraded) num++;` (Cascade.cs:19-23) == `num = self.captured_x + (1 if self.upgrade_level > 0 else 0)`; `captured_x` is set by the play pipeline as `hooks.modify_x_value(card, player.energy)` (combat.py:547-549), which is the sim's ResolveEnergyXValue (the Chemical-X style hook). The sim then reimplements `CardPileCmd.AutoPlayFromDrawPile(num, CardPilePosition.Top, forceExhaust: false)` (Cascade.cs:24) inline and does so faithfully: it pulls all `num` cards off the TOP of the draw pile FIRST, reshuffling the discard in when the pile runs dry, and only then auto-plays them in order -- matching CardPileCmd.cs:937-965's two-phase pull-then-play with its per-iteration ShuffleIfNecessary (CardPileCmd.cs:941) and its `FirstOrDefault()` top-of-pile pick (945; the sim's `draw_pile.pop()` is the same end, since the sim stores its draw pile top-LAST). `forceExhaust: false` needs no counterpart."
+      "rationale": "`int num = ResolveEnergyXValue(); if (IsUpgraded) num++;` (Cascade.cs:19-23) == `num = self.captured_x + (1 if self.upgrade_level > 0 else 0)` (cascade.py:34); `captured_x` is set by the play pipeline as `hooks.modify_x_value(card, self.player.energy)` (combat.py:1443, formerly :547-549 pre-refactor -- same hook, moved), the sim's ResolveEnergyXValue analogue. REVISED 2026-08-04 (stale-sweep re-audit): as of round 13 (R5), `on_play` no longer reimplements `AutoPlayFromDrawPile` inline -- it now calls the shared `CardPileCmd.auto_play_from_draw_pile(hooks, player, num, position='top', force_exhaust=False)` helper (cmds.py:1714), which is a genuine two-phase pull-then-play: phase 1 pulls all `num` cards into a REAL `player.play_pile` (cmds.py:1751-1771, matching CardPileCmd.cs:954's `Add(cardModel, PileType.Play)`, not a local list as the prior audit pass recorded), reshuffling via `player.shuffle_if_necessary()` per pick (:1753, matching ShuffleIfNecessary at CardPileCmd.cs:941/949-952); phase 2 plays them in order via `combat.auto_play_card(card)`, breaking on `player.is_dead` (:1773-1774, matching CardCmd.cs's IsDead break) with `is_over_or_ending` checked once up front (:1749, matching CardPileCmd.cs:933-936). This closes the former deliberate-divergence guard below: the sim now has a real Play-pile parking step, so a listener sweep during the pull sees the same pile membership C# does."
     },
     "OnUpgrade": {
       "maps_to": "handled inline as `+ (1 if self.upgrade_level > 0 else 0)` (cascade.py:34)",
@@ -54,26 +54,26 @@
   },
   "guards": [
     {
-      "what": "Cascade must not auto-play itself when its own effect triggers a reshuffle (Cascade.cs holds the card in PileType.Play; the sim parks it in the discard pile)",
+      "what": "Cascade must not auto-play itself when its own effect triggers a reshuffle",
       "verdict": "faithful",
-      "rationale": "The sim removes itself from `discard_pile` for the duration and restores it in a `finally` (cascade.py:38-40, 59-61), on top of the `_playing_card` limbo marker the reshuffle already honours (combat.py:452-454). Belt-and-braces, and the outcome matches C#'s Play-pile exclusion."
+      "issue": "REVISED 2026-08-04 (stale-sweep re-audit): the prior guard described a now-deleted self-removal dance (`cascade.py:38-40,59-61` pulling itself out of `discard_pile` with a `finally` restore) -- that code is GONE. Cascade's own `on_play` (cascade.py:33-52) is a thin wrapper that never touches `discard_pile` at all; the card it's resolving is wherever the framework's `_playing_card` limbo marker parked it (combat.py:1123-1134, formerly :452-454, same mechanism moved), and the pulled cards live in a real `play_pile` (cmds.py:1751-1771) which `CardPileCmd.shuffle` (the sim's Shuffle) does not read from -- matching `CardPileCmd.cs:870-871`'s Draw/Discard-only scope. Same outcome as before (Cascade itself is excluded from its own reshuffle), reached by a cleaner mechanism; no longer a bespoke per-card workaround."
     },
     {
-      "what": "the pull loop stops when both piles are empty, and again when an AfterShuffle listener drains the pile (cascade.py:46-53)",
+      "what": "the pull loop stops when both piles are empty, and again when an AfterShuffle listener drains the pile",
       "verdict": "faithful",
-      "rationale": "C# `AutoPlayFromDrawPile` breaks on `cardModel == null` after ShuffleIfNecessary (CardPileCmd.cs:949-952), which is the same two conditions. The sim's comment names the Stratagem case explicitly."
+      "rationale": "`cmds.py:1755-1756` breaks when `draw_pile` is empty after `shuffle_if_necessary()`, matching C#'s `AutoPlayFromDrawPile` break on `cardModel == null` after ShuffleIfNecessary (CardPileCmd.cs:949-952)."
     },
     {
-      "what": "the play loop bails on `ctx.combat.is_over or ctx.player.is_dead` (cascade.py:56-57)",
+      "what": "the play loop bails on `player.is_dead`; combat-over is checked once up front",
       "verdict": "faithful",
-      "rationale": "C# breaks the play loop on `item.Owner.Creature.IsDead` (CardPileCmd.cs:958-964) and `CardCmd.AutoPlay` additionally early-returns on `CombatManager.Instance.IsOverOrEnding` (CardCmd.cs:53-56). Both sides stop; the cards already pulled stay out of the draw pile either way."
+      "rationale": "`cmds.py:1749-1750` checks `is_over_or_ending(hooks) or player.is_dead` before phase 1 begins (matching CardPileCmd.cs:933-936), and `cmds.py:1773-1774` breaks the phase-2 play loop on `player.is_dead` (matching CardCmd.cs's IsDead break in the per-card loop). Both sides stop; the cards already pulled stay out of the draw pile either way."
     },
     {
-      "what": "during the PULL phase C# has already moved each card into PileType.Play (CardPileCmd.cs:954); the sim holds them in a local list, in no pile at all (cascade.py:44-54)",
-      "verdict": "deliberate-divergence",
-      "rationale": "Same observable outcome, so this is a re-architecture rather than a gap: the cards are out of the draw pile on both sides and land in their normal result piles after playing. The only difference is which pile a hook listener would see them in DURING the pull, and the sim has no card-in-Play-pile listener category at all (the hook_dispatch seam records the missing Play-pile position as its own finding). Recorded so the difference is visible rather than silent."
+      "what": "during the PULL phase, each card is moved into a real Play-pile before any of them resolve",
+      "verdict": "faithful",
+      "issue": "REVISED 2026-08-04 (stale-sweep re-audit): this guard used to be `deliberate-divergence` because the sim held the pulled cards in a local list, in no pile at all. As of round 13 (R5) the sim moves them into `player.play_pile` (cmds.py:1770), a real pile a reshuffle excludes, matching C#'s `PileType.Play` (CardPileCmd.cs:954) exactly. No longer a divergence of any kind -- verdict upgraded to faithful."
     }
   ],
-  "verdict": "deliberate-divergence",
-  "audited": "2026-07-26"
+  "verdict": "faithful",
+  "audited": "2026-08-04"
 }

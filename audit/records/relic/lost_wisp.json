@@ -36,17 +36,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -66,21 +66,21 @@
       "verdict": "faithful"
     },
     "AfterCardPlayed": {
-      "maps_to": "on_card_played (sts2_rl/relics/lost_wisp.py:30-37), fired once per Replay iteration by CombatState._resolve_card_play (sts2_rl/combat.py:597-600)",
+      "maps_to": "on_card_played (sts2_rl/relics/lost_wisp.py:30-37), fired once per Replay iteration by CombatState._resolve_card_play (sts2_rl/combat.py:1209 (renumbered since prior pass, content unchanged))",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. Every guard, constant, prop flag and target set already matched."
+      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:1155 (renumbered since prior pass, content unchanged)) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:1209 (renumbered since prior pass, content unchanged)) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. Every guard, constant, prop flag and target set already matched."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): AfterCardPlayed fires once per Replay iteration in C# and once per play in the sim, so a replayed Power card triggers Lost Wisp once instead of once per replay",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. "
+      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:1155 (renumbered since prior pass, content unchanged)) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:1209 (renumbered since prior pass, content unchanged)) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. "
     },
     {
       "what": "N1: C# does NOT exclude auto-plays here -- there is no `cardPlay.IsAutoPlay` guard in LostWisp.cs:21, unlike BrilliantScarf.cs:84-87",
       "verdict": "faithful",
-      "rationale": "Checked deliberately because relic/brilliant_scarf's LIVE guard G1 is exactly the opposite shape (C# excludes auto-plays, the sim counts them). Here BOTH sides count auto-plays: C# has no such guard and the sim's auto_play_card routes through the same _resolve_card_play bracket (combat.py:516+), which ends in hooks.on_card_played. An auto-played Power therefore deals the 8 on both sides. The paired-hook lesson of PROMPT.md class 15 in reverse: do not assume the guard set carries over between relics that share a hook."
+      "rationale": "Checked deliberately because relic/brilliant_scarf's LIVE guard G1 is exactly the opposite shape (C# excludes auto-plays, the sim counts them). Here BOTH sides count auto-plays: C# has no such guard and the sim's auto_play_card routes through the same _resolve_card_play bracket (combat.py:1403+, renumbered since prior pass, content unchanged), which ends in hooks.on_card_played. An auto-played Power therefore deals the 8 on both sides. The paired-hook lesson of PROMPT.md class 15 in reverse: do not assume the guard set carries over between relics that share a hook."
     },
     {
       "what": "N2: `cardPlay.Card.Owner == base.Owner` and `CombatManager.Instance.IsInProgress` (LostWisp.cs:21)",
@@ -95,7 +95,7 @@
     {
       "what": "N4: `combatState.HittableEnemies` (LostWisp.cs:24) vs Relic.living_enemies() (sts2_rl/relics/lost_wisp.py:31)",
       "verdict": "faithful",
-      "rationale": "C# passes `combatState.HittableEnemies` == `Enemies.Where(e => e.IsHittable)` (CombatState.cs:142), and IsHittable is `!IsDead && Hook.ShouldAllowHitting(CombatState, this)` (Creature.cs:285-299). The sim passes Relic.living_enemies() (relics/base.py:294-297), which filters only `not e.is_gone` (dead or escaped) -- but the missing predicate IS applied, one target later, by DamageCmd.deal itself: `if not hooks.should_allow_hitting(target): return 0` (cmds.py:51-52). So for a DAMAGE call site the two sets are observationally identical (an alive-but-unhittable enemy is iterated and then takes 0). DELIBERATELY DISTINGUISHED from relic/bag_of_marbles guard G2, which records the same call-site substitution as a gap: that site routes through PowerCmd.apply, which has NO such backstop (audit/records/seam/power_cmd.json gap G6, the missing CanReceivePowers check). Same substitution, different downstream, so different verdicts -- and binding rule 3 is satisfied because the MECHANISM under verdict there is the missing PowerCmd backstop, not living_enemies() itself. The `escaped` half is also covered: an escaped creature is IsDead-or-removed in C# and is_gone in the sim."
+      "rationale": "C# passes `combatState.HittableEnemies` == `Enemies.Where(e => e.IsHittable)` (CombatState.cs:142), and IsHittable is `!IsDead && Hook.ShouldAllowHitting(CombatState, this)` (Creature.cs:285-299). The sim passes Relic.living_enemies() (relics/base.py:486-493, renumbered since prior pass, content unchanged), which filters only `not e.is_gone` (dead or escaped) -- but the missing predicate IS applied, one target later, by DamageCmd.deal itself: `if not hooks.should_allow_hitting(target): return 0` (cmds.py:51-52). So for a DAMAGE call site the two sets are observationally identical (an alive-but-unhittable enemy is iterated and then takes 0). DELIBERATELY DISTINGUISHED from relic/bag_of_marbles guard G2, which records the same call-site substitution as a gap: that site routes through PowerCmd.apply, which has NO such backstop (audit/records/seam/power_cmd.json gap G6, the missing CanReceivePowers check). Same substitution, different downstream, so different verdicts -- and binding rule 3 is satisfied because the MECHANISM under verdict there is the missing PowerCmd backstop, not living_enemies() itself. The `escaped` half is also covered: an escaped creature is IsDead-or-removed in C# and is_gone in the sim."
     },
     {
       "what": "N5: `DamageVar(8m, ValueProp.Unpowered)` (LostWisp.cs:17) read as `.BaseValue` with `.Props`, dealer = Owner.Creature, cardSource = **null** (LostWisp.cs:24)",
@@ -105,7 +105,7 @@
     {
       "what": "N6: the sim adds a `self._check_win()` (sts2_rl/relics/lost_wisp.py:36) that has no line-for-line C# counterpart",
       "verdict": "faithful",
-      "rationale": "It stands in for the CheckWinCondition the game runs after the card-play command; without it a Lost Wisp kill would not end the fight, because relic damage fires outside play_card's own checks (Relic._check_win's docstring, relics/base.py:299-304). Recorded because the sibling relic/mr_struggles OMITS the same call and that omission is a LIVE gap in this batch -- the two ports disagree about the same compensation, which is what made it worth checking here."
+      "rationale": "It stands in for the CheckWinCondition the game runs after the card-play command; without it a Lost Wisp kill would not end the fight, because relic damage fires outside play_card's own checks (Relic._check_win's docstring, relics/base.py:499-504, renumbered since prior pass, content unchanged). Recorded because the sibling relic/mr_struggles OMITS the same call and that omission is a LIVE gap in this batch -- the two ports disagree about the same compensation, which is what made it worth checking here."
     },
     {
       "what": "N7: Flash() (LostWisp.cs:23) and CanonicalVars' display side (LostWisp.cs:17)",

@@ -21,17 +21,17 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
@@ -51,16 +51,16 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / SelectionScreenPrompt / CardPreviewStyle / CardCmd.Preview / VfxCmd are presentation only -- the relic bar's glow, counter, sfx and hover text, the card-screen prompt and layout, and vfx. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. GamePiece.cs:16 overrides FlashSfx to the draw sound."
     },
     "AfterCardPlayed": {
-      "maps_to": "on_card_played (sts2_rl/relics/game_piece.py) -- Power-type test then DrawCmd.draw(1); fired once per Replay iteration by CombatState._resolve_card_play (sts2_rl/combat.py:597-600)",
+      "maps_to": "on_card_played (sts2_rl/relics/game_piece.py) -- Power-type test then DrawCmd.draw(1); fired once per Replay iteration by CombatState._resolve_card_play (sts2_rl/combat.py:1208-1209)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. The condition and the amount already matched."
+      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:1153-1155) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:1208-1209) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. The condition and the amount already matched."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): `Hook.AfterCardPlayed` fires inside C#'s play-count loop and once after the whole loop in the sim, so a replayed Power draws 1 card instead of 2",
       "verdict": "faithful",
-      "rationale": "Today's sim dispatches Hook.AfterCardPlayed once per play-count iteration at sts2_rl/combat.py:599-600, inside the `for play_index in range(play_count)` loop opened at combat.py:574, guarded by `if not self.is_over`. C# CardModel.cs:1904 opens `for (int i = 0; i < playCount; i++)`, and at CardModel.cs:1957-1959 does `if (CombatManager.Instance.IsInProgress) { await Hook.AfterCardPlayed(combatState, choiceContext, cardPlay); }` — same position, same guard. GamePiece.cs:20-28 draws `Cards`(1) on each such dispatch when the card is a Power and the combat is in progress; sts2_rl/relics/game_piece.py:19-23 does the same on each `on_card_played`. Executed: a Throwing-Axe-doubled Inflame now yields Strength 4 AND 2 cards drawn (py audit/tools/relic_probes_b06.py piece-replay), which is the C# result.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: MECHANISM: CardModel.cs:1904-1963 builds a fresh CardPlay inside `for (int i = 0; i < playCount; i++)` and fires Hook.AfterCardPlayed at line 1961 INSIDE that loop, so every replay is a separate AfterCardPlayed. CombatState._resolve_card_play runs the whole play-count loop and calls hooks.on_card_played once, after it (combat.py:515). This is audit/records/seam/hook_dispatch.json gap G4 and audit/records/relic/unsettling_lamp.json G1 at a new site -- one verdict per mechanism, binding rule 3, so this entry does not re-derive the machinery; the seam owns it and this record owns Game Piece's observable, which is a MISSING DRAW rather than the Lamp's doubled debuff. REACHABILITY (LIVE, both sides proved by execution -- `py audit/tools/relic_probes_b06.py piece-replay`): Game Piece is Rare in the transcribed grab bag; Throwing Axe makes the first card of each combat play twice (relics/throwing_axe.py:30-36) and is granted by the ported Tanx shrine; and 33 POWER cards are ported. Probe output: playing Inflame first with Game Piece alone gives Strength 2 and 1 card drawn; with Throwing Axe added it gives Strength 4 -- proving the Power resolved TWICE -- and still only 1 card drawn, where C# draws 1 per iteration = 2. Three further ported replay sources reach the same combat.py play-count hook: the Spiral and Glam enchantments (enchantments.py:146, 220) and Hidden Gem's base_replay_count."
+      "rationale": "Today's sim dispatches Hook.AfterCardPlayed once per play-count iteration at sts2_rl/combat.py:1208-1209, inside the `for play_index in range(play_count)` loop opened at combat.py:1153, guarded by `if not self.is_over`. C# CardModel.cs:1904 opens `for (int i = 0; i < playCount; i++)`, and at CardModel.cs:1957-1959 does `if (CombatManager.Instance.IsInProgress) { await Hook.AfterCardPlayed(combatState, choiceContext, cardPlay); }` \u2014 same position, same guard. GamePiece.cs:20-28 draws `Cards`(1) on each such dispatch when the card is a Power and the combat is in progress; sts2_rl/relics/game_piece.py:19-23 does the same on each `on_card_played`. Executed: a Throwing-Axe-doubled Inflame now yields Strength 4 AND 2 cards drawn (py audit/tools/relic_probes_b06.py piece-replay), which is the C# result.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: MECHANISM: CardModel.cs:1904-1963 builds a fresh CardPlay inside `for (int i = 0; i < playCount; i++)` and fires Hook.AfterCardPlayed at line 1961 INSIDE that loop, so every replay is a separate AfterCardPlayed. CombatState._resolve_card_play runs the whole play-count loop and calls hooks.on_card_played once, after it (combat.py:515). This is audit/records/seam/hook_dispatch.json gap G4 and audit/records/relic/unsettling_lamp.json G1 at a new site -- one verdict per mechanism, binding rule 3, so this entry does not re-derive the machinery; the seam owns it and this record owns Game Piece's observable, which is a MISSING DRAW rather than the Lamp's doubled debuff. REACHABILITY (LIVE, both sides proved by execution -- `py audit/tools/relic_probes_b06.py piece-replay`): Game Piece is Rare in the transcribed grab bag; Throwing Axe makes the first card of each combat play twice (relics/throwing_axe.py:30-36) and is granted by the ported Tanx shrine; and 33 POWER cards are ported. Probe output: playing Inflame first with Game Piece alone gives Strength 2 and 1 card drawn; with Throwing Axe added it gives Strength 4 -- proving the Power resolved TWICE -- and still only 1 card drawn, where C# draws 1 per iteration = 2. Three further ported replay sources reach the same combat.py play-count hook: the Spiral and Glam enchantments (enchantments.py:270, 351) and Hidden Gem's base_replay_count."
     },
     {
       "what": "N1: C# does NOT exclude auto-plays here -- there is no `cardPlay.IsAutoPlay` bail (contrast BrilliantScarf.cs:84-87) -- so the sim counting auto-played Powers is correct",
@@ -75,7 +75,7 @@
     {
       "what": "N3: `CombatManager.Instance.IsInProgress` (GamePiece.cs:22)",
       "verdict": "faithful",
-      "rationale": "Structurally satisfied: on_card_played is a combat hook and combat.py:493-494 breaks the play loop once the combat is decided. Same reasoning and same verdict as relic/brilliant_scarf N1."
+      "rationale": "Structurally satisfied: on_card_played is a combat hook, and combat.py:1208 gates its dispatch on `not self.is_over` inside the play-count loop, so a decided combat stops firing it. Same reasoning and same verdict as relic/brilliant_scarf N1."
     },
     {
       "what": "N4: CardsVar(1) read as **BaseValue** (GamePiece.cs:25) vs the sim's literal 1 (game_piece.py:22)",

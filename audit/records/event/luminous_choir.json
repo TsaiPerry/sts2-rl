@@ -11,18 +11,18 @@
   "extra_sources": [
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
   "hooks": {
     "IsAllowed": {
-      "maps_to": "LuminousChoir.is_allowed (events/luminous_choir.py:34-36) `run.gold >= 149 and run.has_available_relics()`, matching LuminousChoir.cs:23-26. A subtle detail is handled correctly: IsAllowed reads `base.DynamicVars.Gold.BaseValue`, which at eligibility time is still the CANONICAL 149 because CalculateVars has not run yet -- so the gate is against 149, not against the discounted price. The sim uses the literal _BASE_GOLD (149) rather than self.gold_cost, which is exactly that. `p.RelicGrabBag.HasAvailableRelics(runState)` maps to run.has_available_relics (run.py:555-557). Quantifier collapses -- see the multiplayer guard.",
+      "maps_to": "LuminousChoir.is_allowed (events/luminous_choir.py:34-36) `run.gold >= 149 and run.has_available_relics()`, matching LuminousChoir.cs:23-26. A subtle detail is handled correctly: IsAllowed reads `base.DynamicVars.Gold.BaseValue`, which at eligibility time is still the CANONICAL 149 because CalculateVars has not run yet -- so the gate is against 149, not against the discounted price. The sim uses the literal _BASE_GOLD (149) rather than self.gold_cost, which is exactly that. `p.RelicGrabBag.HasAvailableRelics(runState)` maps to run.has_available_relics (run.py). Quantifier collapses -- see the multiplayer guard.",
       "verdict": "faithful"
     },
     "CalculateVars": {
@@ -43,12 +43,12 @@
     },
     {
       "what": "OfferTribute (LuminousChoir.cs:61-67): LoseGold(Gold.IntValue, GoldLossType.Spent) THEN PullNextRelicFromFront -> RelicCmd.Obtain",
-      "maps_to": "events/luminous_choir.py:55-58: lose_gold(self.gold_cost) then obtain_relic_from_grab_bag() (run.py:631-636 = pull_relic_from_front + add_relic, which is the Pull -> Obtain pair). Order preserved.",
+      "maps_to": "events/luminous_choir.py:55-58: lose_gold(self.gold_cost) then obtain_relic_from_grab_bag() (run.py = pull_relic_from_front + add_relic, which is the Pull -> Obtain pair). Order preserved.",
       "verdict": "faithful"
     },
     {
       "what": "EV-3: CalculateVars' `base.Rng.NextInt(0, 50)` (LuminousChoir.cs:30) and OfferTribute's PullNextRelicFromFront rarity roll (LuminousChoir.cs:64) -- obtain_relic_from_grab_bag is called with no rarity_rng, so run.pull_relic_from_front rolls on the shared rng rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- CalculateVars' discount draw runs on `self.event_rng` (events/luminous_choir.py:40-42), and OfferTribute's rarity roll now defaults to `run.rewards_rng` (run.py:734-736), which is what `PullNextRelicFromFront(base.Owner)` -> RollRarity(player) rolls on, matching `base.Rng` (LuminousChoir.cs:30, 64). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- CalculateVars' discount draw runs on `self.event_rng` (events/luminous_choir.py:40-42), and OfferTribute's rarity roll now defaults to `run.rewards_rng` (run.py), which is what `PullNextRelicFromFront(base.Owner)` -> RollRarity(player) rolls on, matching `base.Rng` (LuminousChoir.cs:30, 64). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
       "verdict": "faithful"
     },
     {

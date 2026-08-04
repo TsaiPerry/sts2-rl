@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -50,7 +50,7 @@
     {
       "what": "N1: `!CombatManager.Instance.IsInProgress -> return amount` on the cap (BeatingRemnant.cs:44-47) -- the relic must NOT cap out-of-combat HP loss",
       "verdict": "faithful",
-      "rationale": "The sim keeps combat HP loss and run HP loss on different hooks: modify_hp_lost is combat-only and Relic.modify_run_hp_loss (relics/base.py:222-228) is the out-of-combat chain the game reaches through the run state. beating_remnant.py implements the combat one and NOT the run one, so event damage is uncapped in the sim exactly as C#'s IsInProgress guard makes it uncapped there. This is the kind of absence that is easy to misread as a missing port; it is the correct behaviour."
+      "rationale": "The sim keeps combat HP loss and run HP loss on different hooks: modify_hp_lost is combat-only and Relic.modify_run_hp_loss (relics/base.py:389-...) is the out-of-combat chain the game reaches through the run state. beating_remnant.py implements the combat one and NOT the run one, so event damage is uncapped in the sim exactly as C#'s IsInProgress guard makes it uncapped there. This is the kind of absence that is easy to misread as a missing port; it is the correct behaviour."
     },
     {
       "what": "N2: the same IsInProgress guard on AfterDamageReceived (BeatingRemnant.cs:63-66)",

@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     }
   ],
@@ -33,7 +33,7 @@
     "BeforeCombatStart": {
       "maps_to": "reset_for_combat + on_combat_start (sts2_rl/relics/belt_buckle.py:24-27, 33-34) -- the flag reset and the potionless Dexterity grant",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: `reset_for_combat` clears `_applied` on every attach (sts2_rl/relics/belt_buckle.py:24-27, run from sts2_rl/relics/base.py:192-195), which is BOTH of C#'s resets -- BeltBuckle.cs:47-54 BeforeCombatStart and :87-92 AfterCombatVictory. WAS: nothing set the flag back, so the relic worked in the first combat of a run only. The third thing BeforeCombatStart does -- ApplyDexterity when potionless -- was already in on_combat_start; RefreshStatus is presentation."
+      "issue": "Closed 2026-07-27: `reset_for_combat` clears `_applied` on every attach (sts2_rl/relics/belt_buckle.py:24-27, run from sts2_rl/relics/base.py:247-250), which is BOTH of C#'s resets -- BeltBuckle.cs:47-54 BeforeCombatStart and :87-92 AfterCombatVictory. WAS: nothing set the flag back, so the relic worked in the first combat of a run only. The third thing BeforeCombatStart does -- ApplyDexterity when potionless -- was already in on_combat_start; RefreshStatus is presentation."
     },
     "AfterCombatEnd": {
       "maps_to": "no counterpart (RefreshStatus() only)",
@@ -53,19 +53,19 @@
     "AfterPotionUsed": {
       "maps_to": "on_potion_used (belt_buckle.py:32-33)",
       "verdict": "faithful",
-      "rationale": "BeltBuckle.cs:81-88 re-applies the Dexterity when using a potion leaves the player potionless in combat; belt_buckle.py:32-33 calls the same _apply_if_potionless helper with the same `not held_potions` condition (belt_buckle.py:23 vs `!base.Owner.Potions.Any()`, whose definition player.py:140-143 mirrors). The one C# guard the sim omits here, `CombatManager.Instance.IsInProgress`, is structurally satisfied: on_potion_used is a combat hook."
+      "rationale": "BeltBuckle.cs:81-88 re-applies the Dexterity when using a potion leaves the player potionless in combat; belt_buckle.py:32-33 calls the same _apply_if_potionless helper with the same `not held_potions` condition (belt_buckle.py:23 vs `!base.Owner.Potions.Any()`, whose definition player.py:289-293 mirrors). The one C# guard the sim omits here, `CombatManager.Instance.IsInProgress`, is structurally satisfied: on_potion_used is a combat hook."
     },
     "AfterCombatVictory": {
       "maps_to": "reset_for_combat (sts2_rl/relics/belt_buckle.py:24-27), run by Relic.attach on every new CombatState",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: `reset_for_combat` clears `_applied` on every attach (sts2_rl/relics/belt_buckle.py:24-27, run from sts2_rl/relics/base.py:192-195), which is BOTH of C#'s resets -- BeltBuckle.cs:47-54 BeforeCombatStart and :87-92 AfterCombatVictory. WAS: nothing set the flag back, so the relic worked in the first combat of a run only. C#'s second, deliberately redundant reset is covered by the same per-combat boundary."
+      "issue": "Closed 2026-07-27: `reset_for_combat` clears `_applied` on every attach (sts2_rl/relics/belt_buckle.py:24-27, run from sts2_rl/relics/base.py:247-250), which is BOTH of C#'s resets -- BeltBuckle.cs:47-54 BeforeCombatStart and :87-92 AfterCombatVictory. WAS: nothing set the flag back, so the relic worked in the first combat of a run only. C#'s second, deliberately redundant reset is covered by the same per-combat boundary."
     }
   },
   "guards": [
     {
       "what": "G2 (LIVE): `DexterityApplied` is reset in TWO places in C# (BeltBuckle.cs:49 BeforeCombatStart, :92 AfterCombatVictory) and NOWHERE in the sim, so `self._applied` latches True for the rest of the run and the relic works in the first combat only",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/belt_buckle.py:24-27 clears `_applied` (BeltBuckle.cs:47-54 BeforeCombatStart, :87-92 AfterCombatVictory). WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:215-228) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:247-250) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/belt_buckle.py:24-27 clears `_applied` (BeltBuckle.cs:47-54 BeforeCombatStart, :87-92 AfterCombatVictory). WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
     },
     {
       "what": "N1: RefreshStatus() (BeltBuckle.cs:117-127) and Flash() (lines 102, 112)",
@@ -85,7 +85,7 @@
     {
       "what": "N4: the `!base.Owner.Potions.Any()` condition is evaluated AFTER RefreshStatus in every C# handler, and the sim's held_potions filters empty slots",
       "verdict": "faithful",
-      "rationale": "Player.cs's `Potions => _potionSlots.Where(p => p != null)` is mirrored exactly by PlayerCombatState.held_potions (player.py:140-143), which the sim's own docstring cites. So 'potionless' means the same thing on both sides -- empty slots do not count as held potions -- which matters because relic/alchemical_coffer hands out four slots at once."
+      "rationale": "Player.cs's `Potions => _potionSlots.Where(p => p != null)` is mirrored exactly by PlayerCombatState.held_potions (player.py:289-293), which the sim's own docstring cites. So 'potionless' means the same thing on both sides -- empty slots do not count as held potions -- which matters because relic/alchemical_coffer hands out four slots at once."
     }
   ],
   "verdict": "gap",

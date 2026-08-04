@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -51,12 +51,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -67,11 +67,11 @@
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:1542 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack (not overridden)",
+      "maps_to": "powers.py Power.on_stack (not overridden)",
       "verdict": "faithful",
       "rationale": "PowerStackType.Single and the sim does NOT override on_stack, so it adds -- which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Nothing on either side reads Minion's Amount; it is a pure marker power. Faithful, and the correct handling of Single -- worth contrasting with the 15 units that override on_stack to `pass`."
     },
@@ -81,19 +81,19 @@
       "rationale": "Presentation only."
     },
     "OwnerIsSecondaryEnemy": {
-      "maps_to": "combat.py:276 `primaries = [e for e in self.enemies if \"minion\" not in e.powers]`",
+      "maps_to": "combat.py `primaries = [e for e in self.enemies if \"minion\" not in e.powers]`",
       "verdict": "faithful",
-      "rationale": "C# reads it through Creature.IsSecondaryEnemy (`Creature.cs:276`, `Powers.Any(p => p.OwnerIsSecondaryEnemy)`); the sim tests the power id directly in `_all_enemies_dead` (combat.py:272-277), so combat is won once every PRIMARY enemy is gone. Same predicate, and the `or self.enemies` fallback correctly handles an all-minion board. Third-file citations, not hashed here."
+      "rationale": "C# reads it through Creature.IsSecondaryEnemy (`Creature.cs:276`, `Powers.Any(p => p.OwnerIsSecondaryEnemy)`); the sim tests the power id directly in `_all_enemies_dead` (combat.py), so combat is won once every PRIMARY enemy is gone. Same predicate, and the `or self.enemies` fallback correctly handles an all-minion board. Third-file citations, not hashed here."
     },
     "ShouldPowerBeRemovedAfterOwnerDeath": {
       "maps_to": "no sim counterpart",
       "verdict": "faithful",
-      "rationale": "`ShouldPowerBeRemovedAfterOwnerDeath() => false`. C# strips a dead creature's powers at CreatureCmd.cs:533 (`creature.RemoveAllPowersAfterDeath()`, then each power's AfterRemoved) and this override opts out so the power survives the death it is supposed to react to. The sim never removes powers on death at all -- a grep of cmds.py's kill/death path finds no `powers.clear()` or per-power removal, and cmds.py:96-105 goes straight from the HP write to should_die / should_remove_from_combat_after_death / on_death -- so `false` is the sim's universal behaviour and this override is satisfied for free. Faithful HERE. The inverse is a real machinery gap owned by nobody: the C# DEFAULT is `true`, so every power WITHOUT this override should be stripped on its owner's death and in the sim none is. That is reported in content-power-report-b.md section 3 rather than verdicted on this unit, because it is an engine-wide absence and not this power's divergence. Third-file citations, not hashed here. ENGINE-LEVEL SIBLING (added 2026-07-26): the INVERSE finding -- that C#'s DEFAULT is `true` so every power WITHOUT this override should be stripped on its owner's death and in the sim none is -- now carries a verdict of its own at audit/records/seam/creature_card_cmds.json step 8b (`gap`, LIVE, executed on the Decimillipede). It used to exist only as prose in content-power-report-b.md section 3c. This entry stays `faithful` because the override asks for exactly the behaviour the sim gives for free; the engine-wide absence is step 8b's, not this unit's."
+      "rationale": "`ShouldPowerBeRemovedAfterOwnerDeath() => false`. C# strips a dead creature's powers at CreatureCmd.cs:533 (`creature.RemoveAllPowersAfterDeath()`, then each power's AfterRemoved) and this override opts out so the power survives the death it is supposed to react to. The sim never removes powers on death at all -- a grep of cmds.py's kill/death path finds no `powers.clear()` or per-power removal, and cmds.py goes straight from the HP write to should_die / should_remove_from_combat_after_death / on_death -- so `false` is the sim's universal behaviour and this override is satisfied for free. Faithful HERE. The inverse is a real machinery gap owned by nobody: the C# DEFAULT is `true`, so every power WITHOUT this override should be stripped on its owner's death and in the sim none is. That is reported in content-power-report-b.md section 3 rather than verdicted on this unit, because it is an engine-wide absence and not this power's divergence. Third-file citations, not hashed here. ENGINE-LEVEL SIBLING (added 2026-07-26): the INVERSE finding -- that C#'s DEFAULT is `true` so every power WITHOUT this override should be stripped on its owner's death and in the sim none is -- now carries a verdict of its own at audit/records/seam/creature_card_cmds.json step 8b (`gap`, LIVE, executed on the Decimillipede). It used to exist only as prose in content-power-report-b.md section 3c. This entry stays `faithful` because the override asks for exactly the behaviour the sim gives for free; the engine-wide absence is step 8b's, not this unit's."
     },
     "ShouldOwnerDeathTriggerFatal": {
       "maps_to": "no sim counterpart",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-29 (round 7): `PowerModel.ShouldOwnerDeathTriggerFatal` EXISTS in the sim now. `Power.should_owner_death_trigger_fatal` defaults to True (PowerModel.cs:646) and the two non-mock overrides are ported at their own sites -- MinionPower unconditionally (MinionPower.cs:20-23) and ReattachPower as `_all_others_down()` (ReattachPower.cs:106-109, whose own comment says \"shouldn't trigger fatal unless all other segments are dead too\"). `cmds.should_trigger_fatal(target)` is the `Target.Powers.All(...)` test, and BOTH Fatal cards call it BEFORE their attack, which is where C# reads it and is load-bearing: the killing blow strips the very powers the test asks about (Creature.RemoveAllPowersAfterDeath). This is NOT death prevention -- the minion really dies -- which is exactly why the `is_dead` check both cards already had did not cover it. MinionPower's override is the unconditional one. Its three ported appliers -- the Fabricator's bots, the Queen's minions and the Ovicopter's eggs -- are what made this live.  Pinned by test/test_card_residue_gaps.py.  NOT CLOSED: nothing at this site.  The text it replaced read: **LIVE.** C# reads this at three card sites -- `Feed.cs:38`, `HandOfGreed.cs:49`, `TheHunt.cs:41`, each `cardPlay.Target.Powers.All(p => p.ShouldOwnerDeathTriggerFatal())` computed BEFORE the attack -- and MinionPower returns **false**, so killing a minion never triggers a Fatal payoff. The sim has no such hook anywhere (`hooks.py` defines none) and `cards/feed.py:45` tests only `target.is_dead`. **EXECUTED**: Feed played into a 4-HP Tough Egg carrying MinionPower 1 raises the sim player's max HP from 80 to 83 (delta **3**) where the game raises it by **0**; the control -- the same egg without MinionPower -- gives delta 3 on both sides, so the divergence is the marker power and nothing else. Rule-6 co-occurrence: Feed is a ported Rare Ironclad Attack (cards/feed.py) and Tough Eggs receive MinionPower from the ported Act-2 Hive Ovicopter (monsters/hive/ovicopter.py:153, `PowerCmd.apply(ctx.hooks, egg, MinionPower, 1, applier=self)`), which lays up to five of them; the Kin Followers are a second ported source. Hand of Greed and The Hunt are unported, so Feed is the whole live surface today -- and it is enough. The fix is a `should_owner_death_trigger_fatal` hook plus one line in cards/feed.py, both outside audit scope. Third-file citations, not hashed here."
+      "issue": "Closed 2026-07-29 (round 7): `PowerModel.ShouldOwnerDeathTriggerFatal` EXISTS in the sim now. `Power.should_owner_death_trigger_fatal` defaults to True (PowerModel.cs:646) and the two non-mock overrides are ported at their own sites -- MinionPower unconditionally (MinionPower.cs:20-23) and ReattachPower as `_all_others_down()` (ReattachPower.cs:106-109, whose own comment says \"shouldn't trigger fatal unless all other segments are dead too\"). `cmds.should_trigger_fatal(target)` is the `Target.Powers.All(...)` test, and BOTH Fatal cards call it BEFORE their attack, which is where C# reads it and is load-bearing: the killing blow strips the very powers the test asks about (Creature.RemoveAllPowersAfterDeath). This is NOT death prevention -- the minion really dies -- which is exactly why the `is_dead` check both cards already had did not cover it. MinionPower's override is the unconditional one. Its three ported appliers -- the Fabricator's bots, the Queen's minions and the Ovicopter's eggs -- are what made this live.  Pinned by test/test_card_residue_gaps.py.  NOT CLOSED: nothing at this site.  The text it replaced read: **LIVE.** C# reads this at three card sites -- `Feed.cs:38`, `HandOfGreed.cs:49`, `TheHunt.cs:41`, each `cardPlay.Target.Powers.All(p => p.ShouldOwnerDeathTriggerFatal())` computed BEFORE the attack -- and MinionPower returns **false**, so killing a minion never triggers a Fatal payoff. The sim has no such hook anywhere (`hooks.py` defines none) and `cards/feed.py` tests only `target.is_dead`. **EXECUTED**: Feed played into a 4-HP Tough Egg carrying MinionPower 1 raises the sim player's max HP from 80 to 83 (delta **3**) where the game raises it by **0**; the control -- the same egg without MinionPower -- gives delta 3 on both sides, so the divergence is the marker power and nothing else. Rule-6 co-occurrence: Feed is a ported Rare Ironclad Attack (cards/feed.py) and Tough Eggs receive MinionPower from the ported Act-2 Hive Ovicopter (monsters/hive/ovicopter.py, `PowerCmd.apply(ctx.hooks, egg, MinionPower, 1, applier=self)`), which lays up to five of them; the Kin Followers are a second ported source. Hand of Greed and The Hunt are unported, so Feed is the whole live surface today -- and it is enough. The fix is a `should_owner_death_trigger_fatal` hook plus one line in cards/feed.py, both outside audit scope. Third-file citations, not hashed here."
     }
   },
   "guards": [

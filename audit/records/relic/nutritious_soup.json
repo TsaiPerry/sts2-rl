@@ -26,17 +26,17 @@
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -46,7 +46,7 @@
       "verdict": "faithful"
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (nutritious_soup.py:16-26), dispatched by RunState.add_relic (run.py:546-553)",
+      "maps_to": "after_obtained (nutritious_soup.py:16-26), dispatched by RunState.add_relic (run.py)",
       "verdict": "faithful",
       "rationale": "NutritiousSoup.cs:21-37 snapshots the deck pile, and for each card that is Basic rarity AND carries CardTag.Strike AND passes `ModelDb.Enchantment<TezcatarasEmber>().CanEnchant(item)` calls `CardCmd.Enchant<TezcatarasEmber>(item, 1m)`. nutritious_soup.py:20-26 iterates `list(run.deck)` (the same snapshot) with the same three-clause filter and calls `make_enchantment('tezcataras_ember').attach(card)`. EXECUTED (py audit/tools/relic_probes_b10.py nutritious): on a 5-Strike / 4-Defend / 1-Bash deck all five Strikes come out enchanted with cost 0 and eternal True, and the Defends and Bash are untouched -- which also confirms the enchantment's own OnEnchant effects (TezcatarasEmber.cs:15-19: reduce the base cost to 0 and add the Eternal keyword) are reproduced by enchantments.py's attach. Rule 7: TezcatarasEmber.cs, enchantments.py and run.py are unhashed here."
     }
@@ -55,22 +55,22 @@
     {
       "what": "N1: `CardCmd.Enchant<T>` (CardCmd.cs:518-559) does four things -- CanEnchant assert, EnchantInternal, enchantment.ModifyCard(), FinalizeUpgradeInternal -- and the sim's attach does two",
       "verdict": "faithful",
-      "rationale": "Mapped statement by statement. The CanEnchant assert is pre-satisfied by the caller's own filter on both sides (and the sim's attach raises the same way, enchantments.py:65-66). EnchantInternal + ModifyCard is `card.enchantment = self` plus the enchantment's own card mutation, which enchantments.py:322-325 performs inline (`card._energy_cost = 0; card.eternal = True`) -- the sim has no separate ModifyCard step because the enchantment classes do the mutation in attach(). FinalizeUpgradeInternal re-derives the card's printed numbers, which the sim does through _init_vars/_on_upgrade at the same moment. The CardsEnchanted history entry (CardCmd.cs:553-557) is the game's save bookkeeping. Rule 7: CardCmd.cs and enchantments.py are unhashed here."
+      "rationale": "Mapped statement by statement. The CanEnchant assert is pre-satisfied by the caller's own filter on both sides (and the sim's attach raises the same way, enchantments.py). EnchantInternal + ModifyCard is `card.enchantment = self` plus the enchantment's own card mutation, which enchantments.py performs inline (`card._energy_cost = 0; card.eternal = True`) -- the sim has no separate ModifyCard step because the enchantment classes do the mutation in attach(). FinalizeUpgradeInternal re-derives the card's printed numbers, which the sim does through _init_vars/_on_upgrade at the same moment. The CardsEnchanted history entry (CardCmd.cs:553-557) is the game's save bookkeeping. Rule 7: CardCmd.cs and enchantments.py are unhashed here."
     },
     {
-      "what": "N2: EnchantmentModel.CanEnchant's four clauses (EnchantmentModel.cs:273-294) vs the sim's Enchantment.can_enchant (enchantments.py:51-61)",
+      "what": "N2: EnchantmentModel.CanEnchant's four clauses (EnchantmentModel.cs:273-294) vs the sim's Enchantment.can_enchant (enchantments.py)",
       "verdict": "faithful",
       "rationale": "Clause by clause. (1) `(uint)(type - 4) <= 2u` bars CardType 4-6, which the sim writes out as STATUS / CURSE / QUEST. (2) CanEnchantCardType is virtual-true on the base and TezcatarasEmber does not override it. (3) The Unplayable clause is scoped to DECK-pile cards in C# and the sim applies `not card.is_playable` everywhere -- equivalent at this call site, which is a deck walk. (4) `card.Enchantment != null && (!IsStackable || different type)` reduces to `card.Enchantment != null` because IsStackable is default-false (EnchantmentModel.cs:173) and EXECUTED -- `grep -rn IsStackable src/Core/Models/Enchantments/` returns ZERO overrides -- so the stackable arm is dead code in the C# source itself, exactly like the power.IsVisible finding in batch 1. The sim's `card.enchantment is None` is therefore complete. EXECUTED at this site (relic_probes_b10.py nutritious): a Strike already carrying Swift is left alone, cost still 1. Rule 7: EnchantmentModel.cs and enchantments.py are unhashed here."
     },
     {
       "what": "N3: NutritiousSoup.cs does NOT override HasUponPickupEffect, and the port leaves has_upon_pickup_effect at the base False",
       "verdict": "faithful",
-      "rationale": "Worth stating because four of the other relics in this batch (neows_talisman, neows_torment, new_leaf, nutritious_oyster) DO declare it and this one must not -- the flag feeds Relic.is_tradable (relics/base.py:126-136), and mismatching it would change trade-event eligibility. Ancient rarity already excludes this relic from trades, so the observable is unchanged either way, but the declaration matches the source. Rule 7: relics/base.py is unhashed here."
+      "rationale": "Worth stating because four of the other relics in this batch (neows_talisman, neows_torment, new_leaf, nutritious_oyster) DO declare it and this one must not -- the flag feeds Relic.is_tradable (relics/base.py), and mismatching it would change trade-event eligibility. Ancient rarity already excludes this relic from trades, so the observable is unchanged either way, but the declaration matches the source. Rule 7: relics/base.py is unhashed here."
     },
     {
       "what": "N4: the amount argument -- `Enchant<TezcatarasEmber>(item, 1m)` (NutritiousSoup.cs:28) vs make_enchantment's default amount",
       "verdict": "faithful",
-      "rationale": "Enchantment.__init__ defaults amount=1 (enchantments.py:42-43) and make_enchantment passes nothing (enchantments.py:32-33), so the attached amount is 1 on both sides. It is load-bearing: TezcatarasEmber's damage bonus reads DamageVar(3m).BaseValue rather than the amount (TezcatarasEmber.cs:27), so a wrong amount would not show up in the damage -- it would show up only if the enchantment were ever stacked, which N2 proves it cannot be. A FRESH INSTANCE per card: make_enchantment is called inside the loop (nutritious_soup.py:26), matching C#'s `ModelDb.Enchantment<T>().ToMutable()` per call (CardCmd.cs:520) -- one enchantment object shared across five Strikes would have made all five point at one card. Rule 7: enchantments.py and TezcatarasEmber.cs are unhashed here."
+      "rationale": "Enchantment.__init__ defaults amount=1 (enchantments.py) and make_enchantment passes nothing (enchantments.py), so the attached amount is 1 on both sides. It is load-bearing: TezcatarasEmber's damage bonus reads DamageVar(3m).BaseValue rather than the amount (TezcatarasEmber.cs:27), so a wrong amount would not show up in the damage -- it would show up only if the enchantment were ever stacked, which N2 proves it cannot be. A FRESH INSTANCE per card: make_enchantment is called inside the loop (nutritious_soup.py:26), matching C#'s `ModelDb.Enchantment<T>().ToMutable()` per call (CardCmd.cs:520) -- one enchantment object shared across five Strikes would have made all five point at one card. Rule 7: enchantments.py and TezcatarasEmber.cs are unhashed here."
     },
     {
       "what": "N5: NCardEnchantVfx.Create / GlobalUi.CardPreviewContainer.AddChildSafely (NutritiousSoup.cs:29-33) and ExtraHoverTips (:19)",
@@ -80,7 +80,7 @@
     {
       "what": "N6: no numeric constants and no AscensionHelper call in NutritiousSoup.cs; the relic's numbers all live in the enchantment",
       "verdict": "faithful",
-      "rationale": "Checked against the non-ascension-branch requirement: the only literal in the file is the enchant amount of N4. TezcatarasEmber's DamageVar(3m) is the enchantment kind's constant and belongs to the enchantment stream's audit, not this record; the sim pins it at enchantments.py:320 as damage = 3, which matches TezcatarasEmber.cs:13. Rule 7: TezcatarasEmber.cs and enchantments.py are unhashed here."
+      "rationale": "Checked against the non-ascension-branch requirement: the only literal in the file is the enchant amount of N4. TezcatarasEmber's DamageVar(3m) is the enchantment kind's constant and belongs to the enchantment stream's audit, not this record; the sim pins it at enchantments.py as damage = 3, which matches TezcatarasEmber.cs:13. Rule 7: TezcatarasEmber.cs and enchantments.py are unhashed here."
     }
   ],
   "verdict": "waiver",

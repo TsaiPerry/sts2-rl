@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -42,9 +42,9 @@
       "rationale": "Matches SignetRing.cs:11. Obtainable: the ported Nonupeipe shrine offers it (events/nonupeipe.py:13)."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (signet_ring.py:16-17), dispatched by RunState.add_relic (run.py:552)",
+      "maps_to": "after_obtained (signet_ring.py:16-17), dispatched by RunState.add_relic (run.py:963)",
       "verdict": "faithful",
-      "rationale": "SignetRing.cs:15-18 is one statement: `PlayerCmd.GainGold(base.DynamicVars.Gold.BaseValue, base.Owner)` with GoldVar(999) (line 13). signet_ring.py:17 is `run.gain_gold(self.GOLD)` with GOLD = 999. The command semantics match on the parts that are observable: PlayerCmd.GainGold runs Hook.ModifyGoldGained first and bails on a non-positive result (PlayerCmd.cs:141-149), and RunState.gain_gold runs the same relic chain then truncates toward zero and bails unless positive (run.py:325-333). EXECUTED (py audit/tools/relic_probes_b14.py signet-ring): gold 99 -> 1098 on a fresh run, and 99 -> 99 with Ectoplasm held, because relics/ectoplasm.py:26's modify_gold_gained returns 0 -- which is what C# also produces. The only C# member with no sim counterpart is Hook.AfterModifyingGoldGained (PlayerCmd.cs:145), covered by guard N2. Rule 7: run.py, relics/ectoplasm.py and PlayerCmd.cs are not hashed here."
+      "rationale": "RECONFIRMED 2026-08-04 (stale-sweep: content unchanged, only line numbers moved). SignetRing.cs:15-18 is one statement: `PlayerCmd.GainGold(base.DynamicVars.Gold.BaseValue, base.Owner)` with GoldVar(999) (line 13). signet_ring.py:17 is `run.gain_gold(self.GOLD)` with GOLD = 999. The command semantics match on the parts that are observable: PlayerCmd.GainGold runs Hook.ModifyGoldGained first and bails on a non-positive result (PlayerCmd.cs:141-149), and RunState.gain_gold runs the same relic chain then truncates toward zero and bails unless positive (run.py:500-516). EXECUTED (py audit/tools/relic_probes_b14.py signet-ring): gold 99 -> 1098 on a fresh run, and 99 -> 99 with Ectoplasm held, because relics/ectoplasm.py:26's modify_gold_gained returns 0 -- which is what C# also produces. The only C# member with no sim counterpart is Hook.AfterModifyingGoldGained (PlayerCmd.cs:145), covered by guard N2. Rule 7: run.py, relics/ectoplasm.py and PlayerCmd.cs are not hashed here."
     }
   },
   "guards": [
@@ -56,17 +56,17 @@
     {
       "what": "N2: Hook.AfterModifyingGoldGained (PlayerCmd.cs:145) has no sim counterpart",
       "verdict": "gap",
-      "issue": "MECHANISM: C#'s gold pipeline is the same two-phase shape as its damage and power pipelines -- ModifyGoldGained collects the listeners that changed the amount, then AfterModifyingGoldGained notifies exactly those listeners with the final figure. The sim's chain (run.py:329-330) has the modify half only; `grep -rn after_modify_gold_gained sts2_rl/` returns nothing, and sweep C's survey already lists AfterGoldGained among the dropped hooks that would need a new base member. DORMANT, with the concrete unported thing named: a companion event is only observable if some model implements it, and the sim's single modify_gold_gained implementer is relics/ectoplasm.py:26, whose C# counterpart implements no companion. Porting any relic that reacts to having modified a gold gain makes it live. This is the same shape as relic/bag_of_preparation N1 (the missing AfterModifyingHandDraw companion) and carries the same verdict per binding rule 3. Filed against Signet Ring rather than passed over because Signet Ring is the largest single gold gain in the game and is the natural test case for the fix. Rule 7: run.py, relics/ectoplasm.py, PlayerCmd.cs and audit/records/relic/bag_of_preparation.json are not hashed here."
+      "issue": "RECONFIRMED 2026-08-04 (content unchanged, only line numbers moved). MECHANISM: C#'s gold pipeline is the same two-phase shape as its damage and power pipelines -- ModifyGoldGained collects the listeners that changed the amount, then AfterModifyingGoldGained notifies exactly those listeners with the final figure. The sim's chain (run.py:510-516) has the modify half only; `grep -rn after_modify_gold_gained sts2_rl/` returns nothing, and sweep C's survey already lists AfterGoldGained among the dropped hooks that would need a new base member. DORMANT, with the concrete unported thing named: a companion event is only observable if some model implements it, and the sim's single modify_gold_gained implementer is relics/ectoplasm.py:26, whose C# counterpart implements no companion. Porting any relic that reacts to having modified a gold gain makes it live. This is the same shape as relic/bag_of_preparation N1 (the missing AfterModifyingHandDraw companion) and carries the same verdict per binding rule 3. Filed against Signet Ring rather than passed over because Signet Ring is the largest single gold gain in the game and is the natural test case for the fix. Rule 7: run.py, relics/ectoplasm.py, PlayerCmd.cs and audit/records/relic/bag_of_preparation.json are not hashed here."
     },
     {
       "what": "N3: `HasUponPickupEffect` is NOT declared on either side, even though the relic's whole effect is a pickup effect",
       "verdict": "faithful",
-      "rationale": "Checked because the neighbouring units in this batch (sand_castle, sere_talon, sea_glass) all declare it and getting it wrong would silently change tradability. SignetRing.cs has exactly three members -- Rarity, CanonicalVars, AfterObtained -- and no HasUponPickupEffect override, so it inherits the base false; signet_ring.py likewise leaves has_upon_pickup_effect at the base default (relics/base.py:96). Both agree, and it is moot in effect anyway: Relic.is_tradable also excludes Ancient rarity (relics/base.py:134-136). Rule 7: relics/base.py is not hashed here."
+      "rationale": "Checked because the neighbouring units in this batch (sand_castle, sere_talon, sea_glass) all declare it and getting it wrong would silently change tradability. SignetRing.cs has exactly three members -- Rarity, CanonicalVars, AfterObtained -- and no HasUponPickupEffect override, so it inherits the base false; signet_ring.py likewise leaves has_upon_pickup_effect at the base default (relics/base.py:159). Both agree, and it is moot in effect anyway: Relic.is_tradable also excludes Ancient rarity (relics/base.py:188-199). Rule 7: relics/base.py is not hashed here."
     },
     {
       "what": "N4: `undo_after_obtained` is not implemented, and the pickup moves the run's gold ledger by 999",
       "verdict": "faithful",
-      "rationale": "The consequence, for the record, and it is the largest of any relic in this batch: a conformance-runner relic swap leaves 999 gold behind, which propagates into every later shop purchase and every Seal of Gold spend. Per PROMPT.md v6 binding item 3, the ABSENCE of undo_after_obtained is faithful at every site: the helper has no C# counterpart -- nothing in the game un-picks a relic -- so a sim lacking it is not diverging from the source, which is the only question this audit asks. Flagged for its operational consequence only, which is a tooling defect and not a fidelity gap. Rule 7: relics/base.py:143-150 and conformance/runner.py are not hashed here."
+      "rationale": "The consequence, for the record, and it is the largest of any relic in this batch: a conformance-runner relic swap leaves 999 gold behind, which propagates into every later shop purchase and every Seal of Gold spend. Per PROMPT.md v6 binding item 3, the ABSENCE of undo_after_obtained is faithful at every site: the helper has no C# counterpart -- nothing in the game un-picks a relic -- so a sim lacking it is not diverging from the source, which is the only question this audit asks. Flagged for its operational consequence only, which is a tooling defect and not a fidelity gap. Rule 7: relics/base.py:206-213 and conformance/runner.py are not hashed here."
     },
     {
       "what": "N5: the relic holds no state and has no combat hooks (PROMPT.md classes 10, 13); the sfx branch in PlayerCmd.GainGold and the map-point history bookkeeping (PlayerCmd.cs:150-166)",

@@ -31,17 +31,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -53,7 +53,7 @@
     "MerchantCost": {
       "maps_to": "merchant_cost_override = 50 (fake_blood_vial.py:19)",
       "verdict": "faithful",
-      "rationale": "RelicModel.MerchantCost is virtual and the Fake Merchant's knock-offs all pin 50; relics/base.py:111-117 reads merchant_cost_override first and falls back to _MERCHANT_COST_BY_RARITY (relics/base.py:54-62), whose table is value-for-value the source's switch (RelicModel.cs:304-315, checked: Common 175 / Uncommon 225 / Rare 275 / Shop 200 / Ancient, Starter, Event 999999999). No AscensionHelper branch anywhere, so 50 is the pinned non-ascension price. Rule 7: RelicModel.cs and relics/base.py are not hashed by this record."
+      "rationale": "RelicModel.MerchantCost is virtual and the Fake Merchant's knock-offs all pin 50; relics/base.py:174-180, re-pinned 2026-08-04, was :111-117 reads merchant_cost_override first and falls back to _MERCHANT_COST_BY_RARITY (relics/base.py:71-79, re-pinned 2026-08-04, was :54-62), whose table is value-for-value the source's switch (RelicModel.cs:304-315, checked: Common 175 / Uncommon 225 / Rare 275 / Shop 200 / Ancient, Starter, Event 999999999). No AscensionHelper branch anywhere, so 50 is the pinned non-ascension price. Rule 7: RelicModel.cs and relics/base.py are not hashed by this record."
     },
     "AfterPlayerTurnStartLate": {
       "maps_to": "on_player_turn_started (fake_blood_vial.py:23-27)",
@@ -75,7 +75,7 @@
     {
       "what": "N1: `player == base.Owner` (FakeBloodVial.cs:21) has no sim counterpart",
       "verdict": "faithful",
-      "rationale": "Structurally satisfied: the sim's on_player_turn_started is dispatched once, for the one player (player.py:186), so there is no other player to filter out. A multiplayer-only param per the shared contract's scope section -- noted in the mapping, not a divergence. Rule 7: player.py is unhashed here."
+      "rationale": "Structurally satisfied: the sim's on_player_turn_started is dispatched once, for the one player (player.py:418, re-pinned 2026-08-04, was :186), so there is no other player to filter out. A multiplayer-only param per the shared contract's scope section -- noted in the mapping, not a divergence. Rule 7: player.py is unhashed here."
     },
     {
       "what": "N2: `base.Owner.PlayerCombatState.TurnNumber <= 1` (FakeBloodVial.cs:21) vs `self.turn <= 1` (fake_blood_vial.py:24)",
@@ -85,7 +85,7 @@
     {
       "what": "N3: CreatureCmd.Heal(Owner.Creature, Heal.IntValue) (FakeBloodVial.cs:23) vs CreatureCmd.heal(hooks, player, 1) (fake_blood_vial.py:27)",
       "verdict": "faithful",
-      "rationale": "IntValue of HealVar(1m) is 1 with no AscensionHelper branch in the file, matching HEAL = 1 (fake_blood_vial.py:21). The sim's CreatureCmd.heal (cmds.py:158-166) bails on a dead target, caps at max HP and fires on_hp_changed, which is the mechanical core of CreatureCmd.Heal (CreatureCmd.cs:691) minus its vfx. The sim passes the PlayerCombatState where C# passes the player's Creature; the sim's PlayerCombatState IS its player creature (it carries hp/max_hp/is_dead), so the two are the same object role. Rule 7: cmds.py and CreatureCmd.cs are unhashed here."
+      "rationale": "IntValue of HealVar(1m) is 1 with no AscensionHelper branch in the file, matching HEAL = 1 (fake_blood_vial.py:21). The sim's CreatureCmd.heal (cmds.py:532-540, re-pinned 2026-08-04, was :158-166) bails on a dead target, caps at max HP and fires on_hp_changed, which is the mechanical core of CreatureCmd.Heal (CreatureCmd.cs:691) minus its vfx. The sim passes the PlayerCombatState where C# passes the player's Creature; the sim's PlayerCombatState IS its player creature (it carries hp/max_hp/is_dead), so the two are the same object role. Rule 7: cmds.py and CreatureCmd.cs are unhashed here."
     }
   ],
   "verdict": "faithful",

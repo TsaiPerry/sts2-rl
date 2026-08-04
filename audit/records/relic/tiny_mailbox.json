@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
+      "sha256": "a1aecf30215574f9bc62dd01cb7c73346bbc1b9b84dd5dcc8dabd67101f8c345",
       "side": "sim"
     },
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -52,9 +52,9 @@
       "rationale": "TinyMailbox.cs:12. Executed: Uncommon in the transcribed grab bag (relic_pools.py:142 'RELIC.TINY_MAILBOX'), `py audit/tools/relic_probes_b16.py pool`."
     },
     "TryModifyRestSiteHealRewards": {
-      "maps_to": "modify_rest_site_heal_rewards (sts2_rl/relics/tiny_mailbox.py), dispatched by RunState.rest_heal_rewards (sts2_rl/run.py:1265-1267)",
+      "maps_to": "modify_rest_site_heal_rewards (sts2_rl/relics/tiny_mailbox.py), dispatched by RunState.rest_heal_rewards (sts2_rl/run.py:1647)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/tiny_mailbox.py's `modify_rest_site_heal_rewards` appends POTIONS = 2 entries to `rewards.special_potions` -- the field sts2_rl/rewards.py documents as independent take-or-skip potion offers and the driver surfaces as such -- rolled by `generate_random_potion(run.rewards_rng)` on the parity path. That is TinyMailbox.cs:14-24's two `new PotionReward(player)` entries. RunState.rest_heal_rewards dispatches the hook over every relic (sts2_rl/run.py:1265-1267). WAS: a class body with only id/name/rarity."
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/tiny_mailbox.py's `modify_rest_site_heal_rewards` appends POTIONS = 2 entries to `rewards.special_potions` -- the field sts2_rl/rewards.py documents as independent take-or-skip potion offers and the driver surfaces as such (sts2_rl/driver.py:583, one at a time via `_offer_potion`) -- rolled by `generate_random_potion(run.rewards_rng)` on the parity path. That is TinyMailbox.cs:14-24's two `new PotionReward(player)` entries. RunState.rest_heal_rewards dispatches the hook over every relic (sts2_rl/run.py:1647-1659). WAS: a class body with only id/name/rarity."
     },
     "ModifyExtraRestSiteHealText": {
       "maps_to": "no counterpart",
@@ -66,7 +66,7 @@
     {
       "what": "G1 (LIVE): the two potion rewards after a Rest are missing entirely, and the stub's stated premise is false",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/tiny_mailbox.py's `modify_rest_site_heal_rewards` appends POTIONS = 2 entries to `rewards.special_potions` -- the field sts2_rl/rewards.py documents as independent take-or-skip potion offers and the driver surfaces as such -- rolled by `generate_random_potion(run.rewards_rng)` on the parity path. That is TinyMailbox.cs:14-24's two `new PotionReward(player)` entries. RunState.rest_heal_rewards dispatches the hook over every relic (sts2_rl/run.py:1265-1267). WAS: a class body with only id/name/rarity."
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/tiny_mailbox.py's `modify_rest_site_heal_rewards` appends POTIONS = 2 entries to `rewards.special_potions` -- the field sts2_rl/rewards.py documents as independent take-or-skip potion offers and the driver surfaces as such (sts2_rl/driver.py:583) -- rolled by `generate_random_potion(run.rewards_rng)` on the parity path. That is TinyMailbox.cs:14-24's two `new PotionReward(player)` entries. RunState.rest_heal_rewards dispatches the hook over every relic (sts2_rl/run.py:1647-1659). WAS: a class body with only id/name/rarity."
     },
     {
       "what": "N1: `player != base.Owner` (TinyMailbox.cs:16-19) and `LocalContext.IsMe(base.Owner)` (:28-31)",
@@ -81,7 +81,7 @@
     {
       "what": "N3: `rewards.Add(new PotionReward(player))` TWICE rather than one two-potion reward",
       "verdict": "faithful",
-      "rationale": "Recorded for whoever implements G1: they are two independent take-or-skip offers, not a pick-one-of-two, so the fix is two appends to CombatRewards.special_potions (which driver.py:388-390 already offers one at a time) and NOT the single `rewards.potion` pity slot. Each PotionReward rolls its own potion, so the fix also costs two potion-generation draws -- relevant to RNG parity, and the reason a one-line 'give 2 potions' shortcut would be wrong."
+      "rationale": "Recorded for whoever implements G1: they are two independent take-or-skip offers, not a pick-one-of-two, so the fix is two appends to CombatRewards.special_potions (which driver.py:583 already offers one at a time) and NOT the single `rewards.potion` pity slot. Each PotionReward rolls its own potion, so the fix also costs two potion-generation draws -- relevant to RNG parity, and the reason a one-line 'give 2 potions' shortcut would be wrong."
     },
     {
       "what": "N4: no `is_allowed` / `is_allowed_at_neow` override in the C#",

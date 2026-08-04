@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     }
   ],
@@ -41,12 +41,12 @@
     {
       "what": "G1 (DORMANT): C# carries the upgrade with a single `if (starterCard.IsUpgraded) CardCmd.Upgrade(cardModel)` (ArchaicTooth.cs:154-157); the sim loops `for _ in range(original.upgrade_level)` (archaic_tooth.py:30-32)",
       "verdict": "gap",
-      "issue": "C# grants exactly ONE upgrade level regardless of how many the original had; the sim grants as many as the original had. They agree only while upgrade_level is 0 or 1. REACHABILITY (DORMANT): the sim's Card.max_upgrade_level defaults to 1 (cards/base.py:101) and an executed census (py -c over sts2_rl.cards.base._CARD_CLASSES) finds 168 cards at max level 1 and 35 at max level 0 -- ZERO above 1 -- and the only transcendable Ironclad card is Bash, at 1. Porting any card with MaxUpgradeLevel > 1 (Searing-Blow-shaped content; CardModel.cs:781 makes it virtual, so the game supports it) into the transcendence table makes it live. Note the sim's loop is ALSO unguarded by is_upgradable, unlike C#'s CardCmd.Upgrade (CardCmd.cs, `if (!card.IsUpgradable)` skip) -- same defect family as relic/astrolabe's G1, but unreachable here because a transcendence target is always a fresh upgradable card."
+      "issue": "C# grants exactly ONE upgrade level regardless of how many the original had; the sim grants as many as the original had. They agree only while upgrade_level is 0 or 1. REACHABILITY (DORMANT): the sim's Card.max_upgrade_level defaults to 1 (cards/base.py:207) and an executed census (py -c over sts2_rl.cards.base._CARD_CLASSES) finds 168 cards at max level 1 and 35 at max level 0 -- ZERO above 1 -- and the only transcendable Ironclad card is Bash, at 1. Porting any card with MaxUpgradeLevel > 1 (Searing-Blow-shaped content; CardModel.cs:781 makes it virtual, so the game supports it) into the transcendence table makes it live. Note the sim's loop is ALSO unguarded by is_upgradable, unlike C#'s CardCmd.Upgrade (CardCmd.cs, `if (!card.IsUpgradable)` skip) -- same defect family as relic/astrolabe's G1, but unreachable here because a transcendence target is always a fresh upgradable card."
     },
     {
       "what": "G2 (DORMANT): the sim adds a `can_enchant(transformed)` condition C# does not have, and MOVES the enchantment instead of cloning it (archaic_tooth.py:33-38 vs ArchaicTooth.cs:158-162)",
       "verdict": "gap",
-      "issue": "C# clones the enchantment (`(EnchantmentModel)starterCard.Enchantment.MutableClone()`) and enchants unconditionally; the sim detaches the original object, then re-attaches it ONLY if `enchantment.can_enchant(transformed)` -- so where the replacement fails the eligibility test, C# produces an enchanted Break and the sim produces a BARE Break with the enchantment silently destroyed (it was already cleared off the original at line 35-36, so it is not merely un-transferred, it is lost). REACHABILITY (DORMANT): needs an enchantment that can sit on Bash but not on Break. The one eligibility predicate narrow enough to matter in the ported set is Swift's (enchantments.py:160-164: BASIC rarity and a strike/defend tag), and Bash is neither BASIC nor tagged, so Swift cannot be on Bash to begin with. Porting an enchantment whose can_enchant distinguishes Bash from Break makes it live. The clone-vs-move half is unobservable while the transform consumes the original card."
+      "issue": "C# clones the enchantment (`(EnchantmentModel)starterCard.Enchantment.MutableClone()`) and enchants unconditionally; the sim detaches the original object, then re-attaches it ONLY if `enchantment.can_enchant(transformed)` -- so where the replacement fails the eligibility test, C# produces an enchanted Break and the sim produces a BARE Break with the enchantment silently destroyed (it was already cleared off the original at line 35-36, so it is not merely un-transferred, it is lost). REACHABILITY (DORMANT): needs an enchantment that can sit on Bash but not on Break. Re-checked against all 21 currently registered enchantment classes: Swift (enchantments.py:473-493) has NO `can_enchant` override at all today (the audit's earlier citation naming it as the narrow BASIC+tag predicate is stale -- that restriction belongs to SpiralEnchantment, enchantments.py:270-289, `card.rarity == CardRarity.BASIC and (strike-tag or defend-tag)`), and neither Spiral's nor any other registered enchantment's predicate distinguishes Bash from Break specifically. Porting an enchantment whose can_enchant distinguishes Bash from Break makes it live. The clone-vs-move half is unobservable while the transform consumes the original card."
     },
     {
       "what": "N1: TranscendenceUpgrades restricted to {bash: break} (archaic_tooth.py:18) vs C#'s five entries (ArchaicTooth.cs:26-48)",

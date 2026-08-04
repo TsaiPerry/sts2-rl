@@ -173,27 +173,27 @@
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f"
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c"
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e"
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3"
     },
     {
       "path": "sts2_rl/creatures.py",
-      "sha256": "1c73063f3ca726775f0a121fe826933fe8a4dfdcbda18bb0e0d4dfacff69de7f"
+      "sha256": "9152cb64c277b8c7e5162bcae7d59af41f160a1a347ac586423c41af5be9c530"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
     },
     {
       "path": "sts2_rl/monsters/hive/flail_knight.py",
-      "sha256": "becbe219001dd78582bdba64cbdbf1184546b597a655b3d586caef6b721e32a4"
+      "sha256": "e4de06f5ecdc64df31727e4a7b82c119d68b9f9e51551cd051d9be86c7fff1e9"
     },
     {
       "path": "sts2_rl/monsters/hive/hunter_killer.py",
@@ -205,7 +205,7 @@
     },
     {
       "path": "sts2_rl/monsters/hive/decimillipede.py",
-      "sha256": "244ffa9562b7b0ede9c2fc54332f3d74755a86379cf079447e9ce1bbf24fc788"
+      "sha256": "77ec76f14c949895218e4e144732f82cef52cfeb63f7f831437139f4d1da2222"
     },
     {
       "path": "sts2_rl/monsters/glory/scroll_of_biting.py",
@@ -213,11 +213,11 @@
     },
     {
       "path": "sts2_rl/monsters/glory/knights.py",
-      "sha256": "c0ef52dd119eee94e8cdf1d8f4a25ab2e22cb35c3589c30f1a099b10563c418c"
+      "sha256": "770bb43ec309cbb39b40367a45e947e09ff94772c17acfd41cc4082a5988ae49"
     },
     {
       "path": "sts2_rl/monsters/glory/fabricator.py",
-      "sha256": "789a1a3297f11e8b4097b8c315c4d63c2509d5e1d68a164d4d56ce40a4326284"
+      "sha256": "b3df21ebed6055dabca3cef5e5a0d1efc96279b98aae518d80ad669b6fbfeb3e"
     },
     {
       "path": "sts2_rl/monsters/glory/soul_nexus.py",
@@ -225,7 +225,7 @@
     },
     {
       "path": "sts2_rl/monsters/fake_merchant.py",
-      "sha256": "fdfe33aa23b58cd08022468f2cc63cc6c8d906c5563eb23b71490d7b23f101e0"
+      "sha256": "3cdf97cef9fdd75e1e6e5eb7dc945cc8b915f78d95060cd9132d6fe8c6badd59"
     },
     {
       "path": "sts2_rl/monsters/underdocks/fossil_stalker.py",
@@ -237,7 +237,7 @@
     },
     {
       "path": "sts2_rl/monsters/underdocks/two_tailed_rat.py",
-      "sha256": "0a7574ce54f7643bd788be49487ec18f43936cc10d3dc7cce7cea447ddcef24c"
+      "sha256": "0c3c7f99c153687606afd0c2ff15d77524f1cb23dce4825ff5f50e3bd11219d6"
     },
     {
       "path": "sts2_rl/monsters/overgrowth/flyconid.py",
@@ -265,7 +265,7 @@
     },
     {
       "path": "sts2_rl/monsters/overgrowth/fogmog.py",
-      "sha256": "e5161c53f584695d3b8bcd0447f1255f2698f2cc54d7d0d42e12f07ec8aa403a"
+      "sha256": "7b30f626b55b5758bd4492f5f03ae77d6eb5f19b63a7440d4bbe3fa22056d439"
     },
     {
       "path": "sts2_rl/monsters/overgrowth/ceremonial_beast.py",
@@ -273,7 +273,7 @@
     },
     {
       "path": "sts2_rl/monsters/overgrowth/fuzzy_wurm_crawler.py",
-      "sha256": "709fd5010a01839534bb6ec922456ceaddec9b655bd492c90be4ae8d04d027a9"
+      "sha256": "59b21a1f6c5020a8aae3ca09fb75867b17ac6df50aebe697091b6ddc8094e91f"
     },
     {
       "path": "sts2_rl/monsters/overgrowth/shrinker_beetle.py",
@@ -285,7 +285,7 @@
     },
     {
       "path": "sts2_rl/monsters/hive/thieving_hopper.py",
-      "sha256": "276bca6f2ac105b94c8b37e3db919ce92039ac43407e88bc9411a9b5766ffd76"
+      "sha256": "f53942cb48feefaaec62ea27439cf446f99ae47ad864aa322180c2bd704bf2ce"
     },
     {
       "path": "sts2_rl/monsters/hive/slumbering_beetle.py",
@@ -313,15 +313,15 @@
     },
     {
       "path": "sts2_rl/events/fake_merchant.py",
-      "sha256": "b988afdfbe947f93dc619f6a22907d77137bdba4363fc04de23641f5ed6d87d5"
+      "sha256": "2378d7dce03e5f88f7d0daabe8dab60e890e8d25b7df89745b138a797b7f3f9d"
     },
     {
       "path": "sts2_rl/rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb"
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f"
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040"
     },
     {
       "path": "sts2_rl/relics/tanxs_whistle.py",
@@ -341,7 +341,7 @@
     },
     {
       "path": "sts2_rl/monsters/hive/the_obscura.py",
-      "sha256": "8ffc0b4fdb22396d575ec4c72534b1c7812a85f2e220e75661b888346d578029"
+      "sha256": "a9357ba59776300e71f962e6e455d9591a84fbe2be72196a0f0b18fa0472e6e3"
     },
     {
       "path": "sts2_rl/monsters/underdocks/living_fog.py",
@@ -405,7 +405,7 @@
     {
       "what": "11. The parameterless MoveState() builds an 'UNSET_MOVE' whose perform delegate throws, and MonsterModel.NextMove is initialised to one (MonsterModel.cs:239; MoveState.cs:43-46, 77-80) \u2014 a monster that has never rolled holds a non-null but unusable move with an EMPTY intent list",
       "verdict": "faithful",
-      "maps_to": "no sim analogue; MachineMonster.__init__ rolls at construction (state_machine.py:300-301)",
+      "maps_to": "no sim analogue; MachineMonster.__init__ rolls at construction (state_machine.py:470-476; line re-resolved 2026-08-04)",
       "issue": "CLOSED 2026-07-29 (round 10, the Tier 1 residue) \u2014 by turn_structure step 2's fix, under binding rule 3: same mechanism (G9), same verdict. `MachineMonster.__init__` no longer rolls. It starts on UNSET_MOVE \u2014 `MoveState(UNSET_STATE_ID, _unset_move, Intent(MoveType.UNKNOWN))`, the port of `MonsterModel.NextMove`'s initial `new MoveState()` (MonsterModel.cs:239 -> MoveState.cs:42-45), whose perform body RAISES exactly as `MoveState.UnsetMove` throws (MoveState.cs:77-80). The roll moved to `CombatState.after_creature_added`, the port of CombatManager.cs:858-867, which carries the `CurrentSide == CombatSide.Player` gate \u2014 so an enemy added during the ENEMY side is left on the placeholder and first rolled by the player-turn-start pass, at its position in the enemy list. Nothing can perform an UNSET_MOVE in either engine: `ExecuteEnemyTurn` iterates the `_state.Enemies.ToList()` snapshot (CombatManager.cs:1072) and the sim's `_side_participants` does the same, so a mid-turn spawn does not act that turn. The remaining arm \u2014 a NON-enemy monster added on the player's side \u2014 still has no sim representative (`py audit/tools/state_machine_probes.py spawn-roll`: every ported monster is side='enemy'), which is a dormancy argument for that arm only, not for this mechanism. Pinned by test/test_tier1_residue.py and test_hook_order.py::test_a_mid_combat_spawn_rolls_its_move_exactly_once. WAS: GAP G9, DORMANT. C# leaves a freshly added enemy on UNSET_MOVE (no intent) until the next player-turn roll \u2014 CombatManager.AfterCreatureAdded only rolls when CurrentSide == Player (CombatManager.cs:863-866) \u2014 while the sim rolls in the constructor, so a monster summoned during the ENEMY side holds a rolled move and a displayable intent that the game would not have yet. Dormancy executed: combat.py:286-345 runs the whole enemy side to completion before returning, so the interim state is never rendered or queried by any sim consumer; only the draw ORDERING differs. That ordering half is turn_structure's G9 (its record owns where the roll is placed) and is cross-referenced, not re-verdicted, here \u2014 same gap verdict at both sites per governing rule 3. Step 48 records clause (b) of this same gap: the `rollNewMove: false` suppression at CreatureCmd.cs:72-75, which is the hand-off creature_card_cmds step 3 deferred to this record. Named trigger: a sim consumer that reads an enemy's intent mid-enemy-side (a per-enemy observation build, or an interruptible enemy phase)."
     },
     {
@@ -570,7 +570,7 @@
       "issue": "Closed 2026-07-27, both divergences at that line. (i) STREAM: the call is now `self.owner._move_rng` (sts2_rl/powers.py), i.e. combat_rng.monster_ai, matching FlutterPower.cs:47's `Owner.Monster.RunRng.MonsterAi`. (ii) DRAW COUNT: the sim no longer walks the machine here -- it calls `state_log[-1].get_next_state(...)`, which on a MoveState is `follow_up.id`, deterministic (MoveState.cs:67-70), so the splice consumes no branch draw and any branch is resolved by the post-stun roll instead of a turn early. WAS: machine.roll_move on the shared combat random.Random, one draw early and off-stream."
     },
     {
-      "what": "42. MachineMonster.__init__ builds the machine and rolls immediately, so _current_move is never the UNSET_MOVE placeholder \u2014 state_machine.py:300-301. By step 30 that first roll returns the initial state unchanged and draws nothing when the initial state is a MoveState, and draws once when it is a branch (LeafSlimeS.cs:59, Flyconid.cs:52, TwoTailedRat.cs:139 all start on a branch)",
+      "what": "42. MachineMonster.__init__ builds the machine and rolls immediately, so _current_move is never the UNSET_MOVE placeholder \u2014 state_machine.py:470-476 (line number re-resolved 2026-08-04; content unchanged). By step 30 that first roll returns the initial state unchanged and draws nothing when the initial state is a MoveState, and draws once when it is a branch (LeafSlimeS.cs:33, Flyconid.cs:49, TwoTailedRat.cs:136 all start on a branch; line numbers re-resolved 2026-08-04, content unchanged)",
       "verdict": "faithful",
       "maps_to": "the C# equivalent is CombatManager.AfterCreatureAdded's roll (CombatManager.cs:863-866), which draws under exactly the same condition; the PLACEMENT difference is step 11's gap G9 and turn_structure's G9"
     },
@@ -599,13 +599,13 @@
     {
       "what": "47. The spawn-roll contract, handed to this record by creature_card_cmds step 3 (audit/seams/creature_card_cmds.md:174-177). CreatureCmd.Add runs, in order: (i) `await CombatManager.AfterCreatureAdded(creature)`, which rolls a move IFF `creature.IsEnemy && _state.CurrentSide == CombatSide.Player` (CombatManager.cs:860-867); then (ii) `if (combatState.CurrentSide != CombatSide.Enemy && creature.IsMonster)` -> `creature.PrepareForNextTurn(players, rollNewMove: false)` (CreatureCmd.cs:72-75). With the flag FALSE the whole body of PrepareForNextTurn (Creature.cs:546-554) reduces to NCombatRoom...RefreshIntents(), so step (ii) contributes no mechanics; the flag's mechanical content is a DOUBLE-ROLL GUARD \u2014 it stops (ii) re-rolling what (i) already rolled. Net rolls per mid-combat monster spawn: exactly ONE for an enemy added on the player's side, and ZERO on every other side/kind combination (CombatSide has three values, CombatSide.cs:3-8)",
       "verdict": "faithful",
-      "maps_to": "cmds.py:237-266 CreatureCmd.add contains no roll at all, and MachineMonster.__init__ rolls exactly once (state_machine.py:300-301), so a sim spawn also rolls exactly once and can never double-roll",
+      "maps_to": "cmds.py:800-848 CreatureCmd.add (line re-resolved 2026-08-04, was :237-266) contains no roll at all, and MachineMonster.__init__ rolls exactly once (state_machine.py:470-476; line re-resolved 2026-08-04), so a sim spawn also rolls exactly once and can never double-roll",
       "rationale": "The exactly-once property matches on the player-side-enemy path, which is the only path where C# rolls. Executed (probe spawn-roll): C#'s two PrepareForNextTurn call sites are CombatManager.cs:482 (default true, the turn loop, turn_structure's) and CreatureCmd.cs:74 (the only `rollNewMove: false`); on the sim side, constructing a MachineMonster and then CreatureCmd.add-ing it mid-combat gives `roll_move calls during __init__: 1`, `roll_move calls during CreatureCmd.add: 0`, state_log ['LATCH_MOVE'] before and after the add, and _current_move never the UNSET_MOVE placeholder. The RefreshIntents residue of step (ii) is presentation and is already guard N2's (it lists Creature.cs:553, the line the call reduces to). The PLACEMENT of the turn-loop roll remains turn_structure's, per its boundary section."
     },
     {
       "what": "48. The other side of the same flag: on every side/kind combination but `Player + enemy`, no roll happens at all and the monster keeps MonsterModel.NextMove's UNSET_MOVE placeholder (step 11) \u2014 an enemy added during the ENEMY side (neither guard fires), a NON-enemy monster added on the player's side (AfterCreatureAdded's IsEnemy fails and step (ii) is suppressed by rollNewMove: false), and CombatSide.None",
       "verdict": "faithful",
-      "maps_to": "no sim analogue; MachineMonster.__init__ rolls unconditionally at construction (state_machine.py:300-301) regardless of the side or the creature's kind",
+      "maps_to": "no sim analogue; MachineMonster.__init__ rolls unconditionally at construction (state_machine.py:470-476; line re-resolved 2026-08-04) regardless of the side or the creature's kind",
       "issue": "CLOSED 2026-07-29 (round 10, the Tier 1 residue) \u2014 by turn_structure step 2's fix, under binding rule 3: same mechanism (G9), same verdict. `MachineMonster.__init__` no longer rolls. It starts on UNSET_MOVE \u2014 `MoveState(UNSET_STATE_ID, _unset_move, Intent(MoveType.UNKNOWN))`, the port of `MonsterModel.NextMove`'s initial `new MoveState()` (MonsterModel.cs:239 -> MoveState.cs:42-45), whose perform body RAISES exactly as `MoveState.UnsetMove` throws (MoveState.cs:77-80). The roll moved to `CombatState.after_creature_added`, the port of CombatManager.cs:858-867, which carries the `CurrentSide == CombatSide.Player` gate \u2014 so an enemy added during the ENEMY side is left on the placeholder and first rolled by the player-turn-start pass, at its position in the enemy list. Nothing can perform an UNSET_MOVE in either engine: `ExecuteEnemyTurn` iterates the `_state.Enemies.ToList()` snapshot (CombatManager.cs:1072) and the sim's `_side_participants` does the same, so a mid-turn spawn does not act that turn. The remaining arm \u2014 a NON-enemy monster added on the player's side \u2014 still has no sim representative (`py audit/tools/state_machine_probes.py spawn-roll`: every ported monster is side='enemy'), which is a dormancy argument for that arm only, not for this mechanism. Pinned by test/test_tier1_residue.py and test_hook_order.py::test_a_mid_combat_spawn_rolls_its_move_exactly_once. WAS: GAP G9 (clause b), DORMANT. Same mechanism as step 11 \u2014 C# gates the spawn roll on the combat side and the sim does not gate it at all \u2014 so it carries step 11's verdict per governing rule 3 and is recorded as a second clause rather than a new gap. What is new is the NON-ENEMY arm, which step 11 did not name: C# suppresses the roll for a player-side monster even on the player's turn, and `rollNewMove: false` is what makes that suppression stick. Dormancy executed (probe spawn-roll): every buildable ported monster reports side 'enemy' \u2014 creatures.py:21 defaults side='enemy' and no ported monster changes it \u2014 so the non-enemy arm has no sim representative at all; and all 11 sim CreatureCmd.add call sites (glory/fabricator.py:181, hive/ovicopter.py:150 and :152, hive/the_obscura.py:96, overgrowth/fogmog.py:95, underdocks/living_fog.py:94, underdocks/two_tailed_rat.py:132, powers.py:1418, :1704, :1706, :2979) fire from a monster move, a monster death or a power, i.e. during the ENEMY side \u2014 which is step 11's arm, whose dormancy argument (combat.py:286-345 runs the whole enemy side to completion before returning, so no sim consumer observes the interim state) covers it unchanged. NOT PINNED, for step 11's reason: the sim's enemy side is atomic, so there is no assertion that would fail today for the reason stated. Named trigger: the same as step 11 (a sim consumer that reads an enemy's intent mid-enemy-side) or, for the new arm, the first player-side monster the sim ever ports."
     },
     {

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\overgrowth\\fuzzy_wurm_crawler.py",
-    "sha256": "709fd5010a01839534bb6ec922456ceaddec9b655bd492c90be4ae8d04d027a9"
+    "sha256": "59b21a1f6c5020a8aae3ca09fb75867b17ac6df50aebe697091b6ddc8094e91f"
   },
   "hooks": {
     "MinInitialHp": {
@@ -59,7 +59,7 @@
     {
       "what": "Range-bound convention on the initial-HP roll: Rng.NextInt(min, max) is max-EXCLUSIVE (Rng.cs:101-109) where Python's random.randint(a, b) INCLUDES b",
       "verdict": "faithful",
-      "rationale": "Checked as a convention, not just as constants. The GAME's range is [MinInitialHp, MaxInitialHp] INCLUSIVE, because Creature.SetUniqueMonsterHpValue compensates for the exclusive bound explicitly: `int num = Monster.MaxInitialHp + 1` (Creature.cs:378) feeds BOTH `Enumerable.Range(minInitialHp, num - minInitialHp)` (Creature.cs:379) and the fallback `rng.NextInt(minInitialHp, num)` (Creature.cs:383). The sim's parity port matches on both arms: `candidates = [v for v in range(lo, hi + 1) ...]` picked with `niche.next_int_range(0, len(candidates))`, fallback `niche.next_int_range(lo, hi + 1)` (combat.py:224-243), and `next_int_range` is itself max-exclusive (rng.py:182-186) -- so the two `+ 1`s land exactly where C# puts them. This unit has a real 3-wide range, so a top-end off-by-one would be silently observable as HP 57 never occurring. Executed (`py audit/tools/monster_probes_b01.py hprange`, 400 seeded combats per unit): declared [55,57], observed [55,57], and the observed set is exactly the full inclusive range, so the top endpoint 57 does occur. All 15 units of this batch pass. NOTE the legacy (non-parity) path is also right by a different route: Monster.__init__'s `rng.randint(self.min_hp, self.max_hp)` (monsters/base.py:78) is inclusive on both ends, matching the game's inclusive range, and in parity mode it is overwritten before anything reads it. Rule 7: Creature.cs, Rng.cs, sts2_rl/combat.py and sts2_rl/rng.py are hashed in extra_sources."
+      "rationale": "Checked as a convention, not just as constants. The GAME's range is [MinInitialHp, MaxInitialHp] INCLUSIVE, because Creature.SetUniqueMonsterHpValue compensates for the exclusive bound explicitly: `int num = Monster.MaxInitialHp + 1` (Creature.cs:378) feeds BOTH `Enumerable.Range(minInitialHp, num - minInitialHp)` (Creature.cs:379) and the fallback `rng.NextInt(minInitialHp, num)` (Creature.cs:383). The sim's parity port matches on both arms: `candidates = [v for v in range(lo, hi + 1) ...]` picked with `niche.next_int_range(0, len(candidates))`, fallback `niche.next_int_range(lo, hi + 1)` (combat.py:224-243), and `next_int_range` is itself max-exclusive (rng.py:182-186) -- so the two `+ 1`s land exactly where C# puts them. This unit has a real 3-wide range, so a top-end off-by-one would be silently observable as HP 57 never occurring. Executed (`py audit/tools/monster_probes_b01.py hprange`, 400 seeded combats per unit): declared [55,57], observed [55,57], and the observed set is exactly the full inclusive range, so the top endpoint 57 does occur. All 15 units of this batch pass. NOTE the legacy (non-parity) path is also right by a different route: Monster.__init__'s `rng.randint(self.min_hp, self.max_hp)` (monsters/base.py:236, re-cited 2026-08-04, was :78, logic unchanged) is inclusive on both ends, matching the game's inclusive range, and in parity mode it is overwritten before anything reads it. Rule 7: Creature.cs, Rng.cs, sts2_rl/combat.py and sts2_rl/rng.py are hashed in extra_sources. [Re-verified 2026-08-04: the parity-roll logic moved within combat.py from :224-243 to `_roll_parity_hp`/`_assign_parity_monster_hp` at :423-451, content unchanged (candidates list, niche.next_int_range fallback); no re-verdict needed.]"
     }
   ],
   "verdict": "waiver",
@@ -77,12 +77,12 @@
     },
     {
       "path": "sts2_rl\\combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\monsters\\base.py",
-      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     },
     {

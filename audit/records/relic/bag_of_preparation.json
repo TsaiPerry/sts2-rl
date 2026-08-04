@@ -11,12 +11,12 @@
   "extra_sources": [
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     }
   ],
@@ -28,14 +28,14 @@
     "ModifyHandDraw": {
       "maps_to": "modify_hand_draw (bag_of_preparation.py:18-21)",
       "verdict": "faithful",
-      "rationale": "BagOfPreparation.cs:14-25 returns `count + CardsVar(2).BaseValue` for its owner on TurnNumber <= 1 and the untouched count otherwise; bag_of_preparation.py:19-21 returns `count + 2` on `self.turn == 1`. `TurnNumber > 1 -> return count` and `self.turn == 1 -> +2` partition identically given the executed turn numbering (py audit/tools/relic_probes.py turn-order: the first modify_hand_draw fires at turn=1, and turn is a positive counter so there is no turn-0 case where the two spellings differ). The sim dispatches modify_hand_draw as a chain over listeners (hooks.py:217-221) at player.py:171, which is where audit/records/seam/turn_structure.json step 20 puts Hook.ModifyHandDraw, and the base count is 5 on both sides (CombatManager's baseHandDrawCount const vs PlayerCombatState.DRAW_PER_TURN). BaseValue not IntValue is the non-ascension read the contract pins. `player != base.Owner` is the multiplayer filter, out of scope."
+      "rationale": "BagOfPreparation.cs:14-25 returns `count + CardsVar(2).BaseValue` for its owner on TurnNumber <= 1 and the untouched count otherwise; bag_of_preparation.py:19-21 returns `count + 2` on `self.turn == 1`. `TurnNumber > 1 -> return count` and `self.turn == 1 -> +2` partition identically given the executed turn numbering (py audit/tools/relic_probes.py turn-order: the first modify_hand_draw fires at turn=1, and turn is a positive counter so there is no turn-0 case where the two spellings differ). The sim dispatches modify_hand_draw as a chain over listeners (hooks.py:1069-1084) at player.py:381, which is where audit/records/seam/turn_structure.json step 20 puts Hook.ModifyHandDraw, and the base count is 5 on both sides (CombatManager's baseHandDrawCount const vs PlayerCombatState.DRAW_PER_TURN). BaseValue not IntValue is the non-ascension read the contract pins. `player != base.Owner` is the multiplayer filter, out of scope."
     }
   },
   "guards": [
     {
       "what": "N1: the chain's out-parameter `modifiers` and the AfterModifyingHandDraw companion event (CombatManager.cs, turn_structure step 20)",
-      "verdict": "gap",
-      "issue": "C# collects which listeners changed the draw count and fires Hook.AfterModifyingHandDraw over them; the sim's modify_hand_draw returns a bare int with no companion event (hooks.py:217-221). This is the missing-AfterModifying-companion family that audit/records/seam/turn_structure.json step 20 and audit/records/seam/power_cmd.json gap G4 both record, observed at this relic's dispatcher; one verdict per mechanism, binding rule 3. DORMANT for this unit specifically: Bag of Preparation itself overrides no AfterModifyingHandDraw (BagOfPreparation.cs declares only Rarity, CanonicalVars and ModifyHandDraw), so nothing of ITS behaviour is lost. It becomes live for the DRAW hook when any relic that does implement the companion is ported; recorded here so the sweep of the remaining 243 relics has the pointer."
+      "verdict": "faithful",
+      "issue": "CLOSED since this record was last read: audit/records/seam/turn_structure.json step 20 was fixed 2026-07-31 (tier-2 campaign, Task 11) -- `hooks.py`'s `modify_hand_draw` (hooks.py:1069-1084) now takes an out-list `modifiers` and `after_modifying_hand_draw` (hooks.py:1087-...) fires over it from `player.py:387`, matching CombatManager.cs:654-655 and Hook.cs:739-749's dedup-by-identity shape. This entry previously matched the seam's OLD open finding under rule 3; the seam is now faithful, and this unit must match the new answer, not the old one. Bag of Preparation itself overrides no AfterModifyingHandDraw (BagOfPreparation.cs declares only Rarity, CanonicalVars and ModifyHandDraw), so it was never itself a live site -- both of the seam's ported implementers (Pocketwatch, PollinousCore) are cosmetic per the seam record."
     },
     {
       "what": "N2: interaction with relic/big_mushroom's opposite-signed modify_hand_draw on the same turn",
@@ -43,6 +43,6 @@
       "rationale": "Both are pure additive chain steps with no ordering-sensitive state (+2 and -2 on turn 1), so C#'s and the sim's different listener orders produce the same total. Checked because they are the only two ported modify_hand_draw listeners in this batch and holding both is a real deck state."
     }
   ],
-  "verdict": "gap",
-  "audited": "2026-07-26"
+  "verdict": "faithful",
+  "audited": "2026-08-04"
 }

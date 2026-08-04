@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -39,7 +39,7 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.EVENT (royal_poison.py:21)",
       "verdict": "faithful",
-      "rationale": "Matches RoyalPoison.cs:14. Event rarity is never in the grab bag and never shop-stocked; obtainability is the ported Round Tea Party event's Enjoy Tea option (events/round_tea_party.py:40), executed by `py audit/tools/relic_probes_b13.py pool`. Event rarity also makes the relic untradable on both sides (Relic.is_tradable, relics/base.py:128-131)."
+      "rationale": "Matches RoyalPoison.cs:14. Event rarity is never in the grab bag and never shop-stocked; obtainability is the ported Round Tea Party event's Enjoy Tea option (events/round_tea_party.py:40), executed by `py audit/tools/relic_probes_b13.py pool`. Event rarity also makes the relic untradable on both sides (Relic.is_tradable, relics/base.py:189-198)."
     },
     "CanonicalVars": {
       "maps_to": "DAMAGE = 4 with props=DamageProps.NON_CARD_HP_LOSS (royal_poison.py:24, 30-32)",
@@ -47,9 +47,9 @@
       "rationale": "RoyalPoison.cs:16 is `new DamageVar(4m, ValueProp.Unblockable | ValueProp.Unpowered)` and AfterPlayerTurnStart passes the DynamicVar itself to CreatureCmd.Damage (line 23). DamageProps.NON_CARD_HP_LOSS is defined as exactly `ValueProp.UNBLOCKABLE | ValueProp.UNPOWERED` (valueprops.py:44), so the prop pair matches bit for bit -- Unblockable means Block never absorbs it and Unpowered means no Strength/Vulnerable/Weak scaling. No AscensionHelper.GetValueIfAscension in the file, so 4 is the non-ascension value. EXECUTED (`py audit/tools/relic_probes_b13.py royal-poison`): 80 HP -> 76 on turn 1, and a turn 2 entered with 99 Block takes no further loss. NOTE per binding rule 7: valueprops.py is not hashed by this record."
     },
     "AfterPlayerTurnStart": {
-      "maps_to": "on_player_turn_started (sts2_rl/relics/royal_poison.py) -- the post-draw turn-start slot; CombatState._check_win_condition (sts2_rl/combat.py:413-426) follows the setup at :230, :830 and :841-847",
+      "maps_to": "on_player_turn_started (sts2_rl/relics/royal_poison.py) -- the post-draw turn-start slot; CombatState._check_win_condition (sts2_rl/combat.py:794-809) follows the setup at :230, :830 and :841-847",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: CheckWinCondition runs after the turn setup. CombatState._check_win_condition (sts2_rl/combat.py:413-426) RECOMPUTES the condition -- player death first, then all-enemies-dead -- and is called after the combat-start turn-1 setup (sts2_rl/combat.py:230), after the extra-turn setup (sts2_rl/combat.py:830) and after each ordinary turn's setup (sts2_rl/combat.py:841-847), which is CombatManager.cs:573. The slot and the damage were already right; the missing CheckWinCondition was the rollup's only gap."
+      "issue": "Closed 2026-07-27: CheckWinCondition runs after the turn setup. CombatState._check_win_condition (sts2_rl/combat.py:794-809) RECOMPUTES the condition -- player death first, then all-enemies-dead -- and is called after the combat-start turn-1 setup (sts2_rl/combat.py:369), after the extra-turn setup (sts2_rl/combat.py:1827) and after each ordinary turn's setup (sts2_rl/combat.py:1852), which is CombatManager.cs:573. The slot and the damage were already right; the missing CheckWinCondition was the rollup's only gap."
     },
     "ExtraHoverTips": {
       "maps_to": "no counterpart",
@@ -61,7 +61,7 @@
     {
       "what": "G1 (LIVE): the sim runs no CheckWinCondition after the turn-1 setup, and this relic is the seam record's own named witness",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: CheckWinCondition runs after the turn setup. CombatState._check_win_condition (sts2_rl/combat.py:413-426) RECOMPUTES the condition -- player death first, then all-enemies-dead -- and is called after the combat-start turn-1 setup (sts2_rl/combat.py:230), after the extra-turn setup (sts2_rl/combat.py:830) and after each ordinary turn's setup (sts2_rl/combat.py:841-847), which is CombatManager.cs:573. A player the relic kills during turn-1 setup no longer keeps playing: `_check_win_condition` tests `self.player.is_dead` first and ends the combat. WAS: the turn-1 setup was followed by nothing, so the sim handed a dead player a full turn."
+      "issue": "Closed 2026-07-27: CheckWinCondition runs after the turn setup. CombatState._check_win_condition (sts2_rl/combat.py:794-809) RECOMPUTES the condition -- player death first, then all-enemies-dead -- and is called after the combat-start turn-1 setup (sts2_rl/combat.py:369), after the extra-turn setup (sts2_rl/combat.py:1827) and after each ordinary turn's setup (sts2_rl/combat.py:1852), which is CombatManager.cs:573. A player the relic kills during turn-1 setup no longer keeps playing: `_check_win_condition` tests `self.player.is_dead` first and ends the combat. WAS: the turn-1 setup was followed by nothing, so the sim handed a dead player a full turn."
     },
     {
       "what": "N1: `TurnNumber <= 1` (RoyalPoison.cs:20) vs the port's `self.turn != 1` (royal_poison.py:27)",

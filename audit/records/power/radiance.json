@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "63c0df752ca09e9de59285b0c9bc9be809da18e69b61b65424d75f37ee1ffc6b",
+      "sha256": "416789386ad4af19cb52a3c275a2c39c1708bb90ebc4dc5c8fb4e88a7055d557",
       "side": "sim"
     },
     {
@@ -51,46 +51,46 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:4029 power_type = PowerType.BUFF",
+      "maps_to": "powers.py:4980 power_type = PowerType.BUFF",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-139 Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:137-139) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "AfterEnergyReset": {
-      "maps_to": "powers.py:4032-4037 RadiancePower.on_energy_reset (player.py:168)",
+      "maps_to": "powers.py:4983-4988 RadiancePower.on_energy_reset",
       "verdict": "faithful",
-      "rationale": "Same correct slot and order as power/energy_next_turn's -- C# CombatManager.cs:650, sim player.py:168, both immediately after the energy reset and before the hand draw. The one difference from EnergyNextTurn is the tail: C# Decrements (RadiancePower.cs:26) where EnergyNextTurn Removes, so Radiance pays out once per turn for Amount turns, and the sim mirrors that with _tick (powers.py:4037) rather than _expire. Correct on both counts."
+      "rationale": "Same correct slot and order as power/energy_next_turn's -- C# CombatManager.cs:650, sim's on_energy_reset dispatch, both immediately after the energy reset and before the hand draw. The one difference from EnergyNextTurn is the tail: C# Decrements (RadiancePower.cs:26) where EnergyNextTurn Removes, so Radiance pays out once per turn for Amount turns, and the sim mirrors that with _tick (powers.py:4988) rather than _expire. Correct on both counts."
     }
   },
   "guards": [
     {
       "what": "RadiancePower.cs:23 player == base.Owner.Player",
       "verdict": "faithful",
-      "rationale": "powers.py:4033-4034. Identical."
+      "rationale": "powers.py:4984-4985. Identical."
     },
     {
       "what": "RadiancePower.cs:25 DynamicVars.Energy.IntValue is the amount gained, NOT base.Amount",
       "verdict": "faithful",
-      "rationale": "The energy per turn is 1 and the STACK COUNT is the number of turns -- two different numbers, and the sim keeps them apart correctly: RadiancePower.cs:19's CanonicalVars is new EnergyVar(1) and powers.py:4030 sets ENERGY = 1, gained at :4036, while self.amount is what _tick decrements. Getting this backwards would make a 3-stack Radiance grant 3 energy per turn. Non-ascension by construction (no AscensionHelper call in the file). Third-file citation, not hashed here."
+      "rationale": "The energy per turn is 1 and the STACK COUNT is the number of turns -- two different numbers, and the sim keeps them apart correctly: RadiancePower.cs:19's CanonicalVars is new EnergyVar(1) and powers.py:4981 sets ENERGY = 1, gained at :4987, while self.amount is what _tick decrements. Getting this backwards would make a 3-stack Radiance grant 3 energy per turn. Non-ascension by construction (no AscensionHelper call in the file). Third-file citation, not hashed here."
     },
     {
       "what": "PowerCmd.Decrement vs the sim's _tick",
       "verdict": "faithful",
-      "rationale": "The sim's Power._tick (powers.py:70-75) decrements the field directly and _expires at <= 0, where C# routes through PowerCmd.Decrement -> ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:215-250). Observationally identical for a Buff: the only unconditional modifier leg ModifyAmount runs is Hook.ModifyPowerAmountReceived (PowerCmd.cs:234), whose ported listeners are ArtifactPower (Debuff-only, ArtifactPower.cs:24) and RuinedHelmet (StrengthPower-only), and neither GetTypeForAmount arm can turn a Counter/!AllowNegative/Buff power into a Debuff at a negative amount (PowerModel.cs:460-471; py audit/tools/power_census.py typing). Same mechanism and same faithful verdict as audit/records/power/colossus.json's AfterSideTurnEnd guard, per binding rule 3. Third-file citations, not hashed here."
+      "rationale": "The sim's Power._tick (powers.py:170-176) decrements the field directly and _expires at <= 0, where C# routes through PowerCmd.Decrement -> ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:215-250). Observationally identical for a Buff: the only unconditional modifier leg ModifyAmount runs is Hook.ModifyPowerAmountReceived (PowerCmd.cs:234), whose ported listeners are ArtifactPower (Debuff-only, ArtifactPower.cs:24) and RuinedHelmet (StrengthPower-only), and neither GetTypeForAmount arm can turn a Counter/!AllowNegative/Buff power into a Debuff at a negative amount (PowerModel.cs:460-471; py audit/tools/power_census.py typing). Same mechanism and same faithful verdict as audit/records/power/colossus.json's AfterSideTurnEnd guard, per binding rule 3. Third-file citations, not hashed here."
     },
     {
-      "what": "N: the power's sole applier is Radiant Tincture -- a PORTED potion, not a scope boundary (RadiantTincture.cs:30-35 vs sts2_rl/potions.py:845-865)",
+      "what": "N: the power's sole applier is Radiant Tincture -- a PORTED potion, not a scope boundary (RadiantTincture.cs:30-35 vs sts2_rl/potions.py:963-982)",
       "verdict": "faithful",
-      "rationale": "RE-VERDICTED 2026-07-26 (potion-scope re-verdict pass), from waiver. The shared contract's 'Out of scope everywhere: potions (deferred by Perry)' has been DELETED on Perry's instruction (\"don't ignore potions anymore\"). `potion` is now an ordinary audit kind -- 51 sim units, audit/records/potion/, `harness.py roster potion` -- and it is UNAUDITED, exactly like `monster`. The previous pass had already narrowed this guard until the only thing left standing on the clause was 'there is no audit/records/potion/ tier for this potion to live in'. That sentence is no longer a scope statement, it is a coverage statement, and coverage is not a waiver. So the guard is re-derived on its merits: the applier potion is read in full against its C# model and verdicted here.\nTHE APPLIER IS FAITHFUL, AND IT CARRIES THE SAME TWO-NUMBER TRAP THIS RECORD'S GUARD ON RadiancePower.cs:25 DESCRIBES. src/Core/Models/Potions/RadiantTincture.cs:24-28 declares TWO vars, new EnergyVar(1) and new PowerVar<RadiancePower>(3m), with no AscensionHelper.GetValueIfAscension in the file: 1 is the energy per turn and 3 is the STACK COUNT (the number of turns). RadiantTincture.cs:33 spends the first as an immediate `PlayerCmd.GainEnergy(DynamicVars.Energy.IntValue, target.Player)` and RadiantTincture.cs:34 applies RadiancePower with the second. sts2_rl/potions.py:856-857 keeps them apart the same way (ENERGY = 1, RADIANCE = 3) and sts2_rl/potions.py:862-865 keeps the order -- EnergyCmd.gain first, PowerCmd.apply second -- so the immediate energy is not routed through the power. Swapping the two numbers would give 1 turn of 3 energy instead of 3 turns of 1. APPLIER: C#'s fourth argument is `base.Owner.Creature` (parameter `Creature? applier`, src/Core/Commands/PowerCmd.cs:101), matching `applier=ctx.player`. TargetType.AnyPlayer (RadiantTincture.cs:20) and AssertValidForTargetedPotion (RadiantTincture.cs:32) are the multiplayer target-validity path, waived as multiplayer; ExtraHoverTips (RadiantTincture.cs:22) is presentation. REACHABILITY IS ESTABLISHED, NOT WAIVED (binding rule 6): @register_potion puts it in ALL_POTIONS and it is in the generation pool at sts2_rl/potion_pools.py:58 (uncommon); the conformance runner asserts the belt slot by slot (sts2_rl/conformance/runner.py:625-631). WHAT IS STILL NOT JUDGED HERE is a coverage fact, not a verdict: `potion/radiant_tincture` has no record yet because the whole potion kind is unaudited. Nothing in this record depends on it. ROLLUP NOTE: this was the record's only non-faithful entry, so re-verdicting it moves the RECORD from waiver to faithful."
+      "rationale": "RE-VERDICTED 2026-07-26 (potion-scope re-verdict pass), from waiver. The shared contract's 'Out of scope everywhere: potions (deferred by Perry)' has been DELETED on Perry's instruction (\"don't ignore potions anymore\"). `potion` is now an ordinary audit kind -- 51 sim units, audit/records/potion/, `harness.py roster potion` -- and it is UNAUDITED, exactly like `monster`. The previous pass had already narrowed this guard until the only thing left standing on the clause was 'there is no audit/records/potion/ tier for this potion to live in'. That sentence is no longer a scope statement, it is a coverage statement, and coverage is not a waiver. So the guard is re-derived on its merits: the applier potion is read in full against its C# model and verdicted here.\nTHE APPLIER IS FAITHFUL, AND IT CARRIES THE SAME TWO-NUMBER TRAP THIS RECORD'S GUARD ON RadiancePower.cs:25 DESCRIBES. src/Core/Models/Potions/RadiantTincture.cs:24-28 declares TWO vars, new EnergyVar(1) and new PowerVar<RadiancePower>(3m), with no AscensionHelper.GetValueIfAscension in the file: 1 is the energy per turn and 3 is the STACK COUNT (the number of turns). RadiantTincture.cs:33 spends the first as an immediate `PlayerCmd.GainEnergy(DynamicVars.Energy.IntValue, target.Player)` and RadiantTincture.cs:34 applies RadiancePower with the second. sts2_rl/potions.py:973-974 keeps them apart the same way (ENERGY = 1, RADIANCE = 3) and sts2_rl/potions.py:979-982 keeps the order -- EnergyCmd.gain first, PowerCmd.apply second -- so the immediate energy is not routed through the power. Swapping the two numbers would give 1 turn of 3 energy instead of 3 turns of 1. APPLIER: C#'s fourth argument is `base.Owner.Creature` (parameter `Creature? applier`, src/Core/Commands/PowerCmd.cs:101), matching `applier=ctx.player`. TargetType.AnyPlayer (RadiantTincture.cs:20) and AssertValidForTargetedPotion (RadiantTincture.cs:32) are the multiplayer target-validity path, waived as multiplayer; ExtraHoverTips (RadiantTincture.cs:22) is presentation. REACHABILITY IS ESTABLISHED, NOT WAIVED (binding rule 6): @register_potion puts it in ALL_POTIONS and it is in the generation pool at sts2_rl/potion_pools.py:65 (uncommon); the conformance runner asserts the belt slot by slot (sts2_rl/conformance/runner.py:838-846). WHAT IS STILL NOT JUDGED HERE is a coverage fact, not a verdict: `potion/radiant_tincture` has no record yet because the whole potion kind is unaudited. Nothing in this record depends on it. ROLLUP NOTE: this was the record's only non-faithful entry, so re-verdicting it moves the RECORD from waiver to faithful."
     }
   ],
   "verdict": "faithful",

@@ -27,7 +27,7 @@
     "AfterAddedToRoom": {
       "maps_to": "GlobeHead.__init__ -> PowerCmd.apply(hooks, self, GalvanicPower, 6) (globe_head.py:33-37)",
       "verdict": "deliberate-divergence",
-      "rationale": "SHARED-FINDINGS section 2 (monster stream), copied verbatim per governing rule 3 and not re-derived. The sim has no add-to-room phase -- creature creation *is* construction -- so AfterAddedToRoom's effect is applied from __init__ (globe_head.py:33-37). Same observable today, established by execution rather than assumed, on all three clauses: (a) listener set -- the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:26-40 / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on `target is self.player` / `applier is self.player` / `card is not None`, and a monster's starting power is self-applied with no card, so none of them can fire. sts2_rl/potions.py implements none of the four hooks. (b) HP-roll inversion -- the sim applies the power before the Niche roll and the game after it; of the 35 constructor-applied power classes only IllusionPower mentions max_hp at all and only inside revive() (powers.py:1581), never at apply time. (c) roll ordering -- MachineMonster.__init__ rolls the first move (state_machine.py:301) *before* the subclass applies its powers, and `py audit/tools/monster_probes.py roll-order` shows all 29 machine sites are sticky-no-op: this unit's initial state is a MoveState, so monster_state_machine step 30's early return fires and the first roll evaluates no branch and reads no power. Concrete trigger that would make it a gap: any relic, potion or power that listens on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. RULE 7: the four relic files and powers.py cited above are NOT hashed by this record (powers.py IS hashed here for other entries); flagged explicitly as the shared finding instructs. ESCALATION CHECK: GlobeHead.cs:41-45 applies GalvanicPower 6m to itself and does nothing else; the amount matches _GALVANIC = 6 (globe_head.py:19). Galvanic afflicts the PLAYER's Power cards, so unlike a plain self-buff it reaches the player's deck -- but it does so through the power's own card-entered-combat listener, not through the apply, so the shared finding's clause (a) still covers it: no ported modify_power_amount / modify_block_* listener fires on a monster self-application. The unit's initial state is the MoveState SHOCKING_SLAP, so clause (c) is a sticky no-op. GlobeHead does not read hooks.combat from __init__."
+      "rationale": "SHARED-FINDINGS section 2 (monster stream), copied verbatim per governing rule 3 and not re-derived. The sim has no add-to-room phase -- creature creation *is* construction -- so AfterAddedToRoom's effect is applied from __init__ (globe_head.py:33-37). Same observable today, established by execution rather than assumed, on all three clauses: (a) listener set -- the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:26-40 / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on `target is self.player` / `applier is self.player` / `card is not None`, and a monster's starting power is self-applied with no card, so none of them can fire. sts2_rl/potions.py implements none of the four hooks. (b) HP-roll inversion -- the sim applies the power before the Niche roll and the game after it; of the 35 constructor-applied power classes only IllusionPower mentions max_hp at all and only inside revive() (powers.py:2063, re-verified 2026-08-04, was :1581, logic unchanged), never at apply time. (c) roll ordering -- MachineMonster.__init__ rolls the first move (state_machine.py:301) *before* the subclass applies its powers, and `py audit/tools/monster_probes.py roll-order` shows all 29 machine sites are sticky-no-op: this unit's initial state is a MoveState, so monster_state_machine step 30's early return fires and the first roll evaluates no branch and reads no power. Concrete trigger that would make it a gap: any relic, potion or power that listens on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. RULE 7: the four relic files and powers.py cited above are NOT hashed by this record (powers.py IS hashed here for other entries); flagged explicitly as the shared finding instructs. ESCALATION CHECK: GlobeHead.cs:41-45 applies GalvanicPower 6m to itself and does nothing else; the amount matches _GALVANIC = 6 (globe_head.py:19). Galvanic afflicts the PLAYER's Power cards, so unlike a plain self-buff it reaches the player's deck -- but it does so through the power's own card-entered-combat listener, not through the apply, so the shared finding's clause (a) still covers it: no ported modify_power_amount / modify_block_* listener fires on a monster self-application. The unit's initial state is the MoveState SHOCKING_SLAP, so clause (c) is a sticky no-op. GlobeHead does not read hooks.combat from __init__."
     },
     "GenerateMoveStateMachine": {
       "maps_to": "GlobeHead.build_machine (globe_head.py:39-55)",
@@ -49,7 +49,7 @@
     {
       "what": "Multi-hit attack semantics",
       "verdict": "faithful",
-      "rationale": "Thunder Strike is `DamageCmd.Attack(6).WithHitCount(3)` -- one attack command, three hits -- and the sim's _execute_attack(ctx, 6, 3) (monsters/base.py:107-118) brackets all three hits in a single before_attack/after_attack pair and breaks early if either combatant dies, which is the same shape as AttackCommand's BeforeAttack/AfterAttack bracket. OnlyPlayAnimOnce() (GlobeHead.cs:66) is presentation."
+      "rationale": "Thunder Strike is `DamageCmd.Attack(6).WithHitCount(3)` -- one attack command, three hits -- and the sim's _execute_attack(ctx, 6, 3) (monsters/base.py:338-349, re-verified 2026-08-04, was :107-118, logic unchanged) brackets all three hits in a single before_attack/after_attack pair and breaks early if either combatant dies, which is the same shape as AttackCommand's BeforeAttack/AfterAttack bracket. OnlyPlayAnimOnce() (GlobeHead.cs:66) is presentation."
     }
   ],
   "verdict": "deliberate-divergence",
@@ -62,17 +62,42 @@
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\monsters\\base.py",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\relics\\ruined_helmet.py",
+      "sha256": "55ff84a9f9bd2ae1fc0430d9c5b18b2720e662458b66c8338fd30b361d9df3c8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\relics\\unsettling_lamp.py",
+      "sha256": "fc3c134fc62f28d8c30b2ac40a1ece7bbd914dd9b2766fbca402a96c939bba82",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\relics\\vambrace.py",
+      "sha256": "3f4d5d4857301e75e94419023238c8c8b76caa390e23a33e56b540eb5443132e",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\relics\\paels_legion.py",
+      "sha256": "25577547faf4d53ebee6dff486879f28933427be49b1d57ab41ff0f220ee577c",
       "side": "sim"
     }
   ]

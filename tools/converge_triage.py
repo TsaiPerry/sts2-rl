@@ -51,6 +51,7 @@ from sts2_rl.conformance.recording import parse_recording
 from sts2_rl.conformance.runner import ReplayRunner
 from sts2_rl.conformance.save import parse_save
 from sts2_rl.conformance.tripwire import Tripwire
+from sts2_rl.conformance.triage import assess
 
 REC = _DESKTOP / "RunReplays" / "RunReplays" / "Resources"
 SRC = _DESKTOP / "Slay the Spire 2" / "src"
@@ -106,6 +107,18 @@ def _mon_source(mon_name: str) -> str:
     return str(hits[0].relative_to(SRC.parent)) if hits else "(source not found)"
 
 
+def fmt_hp_line(d) -> str:
+    delta = (d.actual - d.expected) if isinstance(d.actual, int) else "?"
+    hi = isinstance(delta, int) and delta > 0
+    return (f"  act {d.command_index} {d.stream}: expected {d.expected} "
+            f"got {d.actual} (sim {'high' if hi else 'low'} by "
+            f"{abs(delta) if isinstance(delta, int) else delta})")
+
+
+def fmt_floor_line(d) -> str:
+    return f"      {d.stream}: expected {d.expected!r} got {d.actual!r}"
+
+
 def main(seed: str, floor: str, stop_after_act: int) -> None:
     base = REC / seed / floor
     rec = parse_recording(base / "actions.sts2replay")
@@ -136,7 +149,8 @@ def main(seed: str, floor: str, stop_after_act: int) -> None:
                             player_checkpoints=checkpoints,
                             resync_player=True,
                             floor_saves=floor_saves,
-                            resync_floors=True)
+                            resync_floors=True,
+                            check_room_stats=True)
     finally:
         run_mod.RunState.__init__ = orig_init
 
@@ -167,7 +181,9 @@ def main(seed: str, floor: str, stop_after_act: int) -> None:
     # ---- DETECTOR 3: player-state deltas (HP / max-HP fidelity) ----
     hp_divs = [d for d in result.divergences
                if d.stream in ("player_hp", "player_max_hp")]
-    print(f"\n[DETECTOR 3] player-state deltas at act boundaries: {len(hp_divs)}")
+    print(f"\n[DETECTOR 3] player-state deltas at act boundaries "
+          f"(oracle: run-END truncation saves "
+          f"Resources/<seed>/floor_{{18,34,49}}/run.save): {len(hp_divs)}")
     _HP_SRC = {
         "player_hp": "damage/heal pipeline (DamageCmd/BlockCmd, relic heals "
                      "like BurningBlood on_combat_end, rest-site heal).",
@@ -175,10 +191,7 @@ def main(seed: str, floor: str, stop_after_act: int) -> None:
                          "relics like Meat on the Bone / Black Blood).",
     }
     for d in hp_divs:
-        delta = (d.actual - d.expected) if isinstance(d.actual, int) else "?"
-        print(f"  act {d.command_index} {d.stream}: expected {d.expected} "
-              f"got {d.actual} (sim {'high' if isinstance(delta,int) and delta>0 else 'low'} "
-              f"by {abs(delta) if isinstance(delta,int) else delta})")
+        print(fmt_hp_line(d))
         print(f"      -> {_HP_SRC[d.stream]}")
 
     # ---- DETECTOR 4: per-floor full-state deltas (resynced => independent) --
@@ -188,6 +201,8 @@ def main(seed: str, floor: str, stop_after_act: int) -> None:
     for d in floor_divs:
         by_floor.setdefault(d.command_index, []).append(d)
     print(f"\n[DETECTOR 4] per-floor state deltas "
+          f"(oracle: per-floor backup saves; capture moment per "
+          f"tools/oracle_semantics_probe.py) "
           f"({len(floor_saves)} checkpoints, resync ON — each floor's deltas "
           f"are INDEPENDENT bugs): {len(by_floor)} divergent floor(s)")
     for floor in sorted(by_floor):
@@ -195,8 +210,7 @@ def main(seed: str, floor: str, stop_after_act: int) -> None:
                             for d in by_floor[floor])
         print(f"  floor {floor:2d}: {streams}")
         for d in by_floor[floor][:4]:
-            print(f"      {d.stream}: expected {d.expected!r} "
-                  f"got {d.actual!r}")
+            print(fmt_floor_line(d))
         if len(by_floor[floor]) > 4:
             print(f"      ... +{len(by_floor[floor]) - 4} more (see streams above)")
 
@@ -212,11 +226,20 @@ def main(seed: str, floor: str, stop_after_act: int) -> None:
     print(f"\n  (benign constructor HP rolls, overwritten by Niche parity roll: "
           f"{len(benign)} site(s) / {sum(benign.values())} draws)")
 
-    clean = (not bugs and not stream_divs and not move_divs and not hp_divs
-             and not floor_divs
-             and result.forced_combats == 0
-             and not result.unresolved_play_card_ids)
-    print(f"\n=== {'FULLY CONVERGED' if clean else 'DIVERGENCES REMAIN'} ===")
+    # ---- DETECTOR 5: per-room player-state walk (map_point_history) --------
+    room_divs = [d for d in result.divergences if d.stream.startswith("room_")]
+    print(f"\n[DETECTOR 5] per-room state deltas vs map_point_history "
+          f"(run-END capture, resync never applied): {len(room_divs)}")
+    for d in room_divs[:12]:
+        print(f"  floor {d.command_index:2d} {d.stream}: expected {d.expected} "
+              f"got {d.actual}  ({d.detail})")
+    if len(room_divs) > 12:
+        print(f"  ... +{len(room_divs) - 12} more")
+
+    verdict = assess(result, tripwire_bug_sites=bugs)
+    print(f"\n=== {'FULLY CONVERGED' if verdict.clean else 'DIVERGENCES REMAIN'} ===")
+    for r in verdict.reasons:
+        print(f"    {r}")
 
 
 if __name__ == "__main__":

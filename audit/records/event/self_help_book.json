@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     }
   ],
@@ -39,7 +39,7 @@
     },
     {
       "what": "GenerateInitialOptions' all-or-nothing shape (SelfHelpBook.cs:43-81): compute all three availability flags FIRST; if ANY is true, emit all three options, each either live or a null-onChosen _LOCKED variant; if none, emit the single NO_OPTIONS exit instead",
-      "maps_to": "events/self_help_book.py:47-63 reproduces it exactly, including the `if not any(available.values())` short-circuit and the `_LOCKED` key suffix with on_chosen None (EventOption.locked, events/base.py:62-64, and choose() refuses it, events/base.py:153-154). The three flags are computed before any option is built in both.",
+      "maps_to": "events/self_help_book.py:47-63 reproduces it exactly, including the `if not any(available.values())` short-circuit and the `_LOCKED` key suffix with on_chosen None (EventOption.locked, events/base.py:63-64, and choose() refuses it, events/base.py:298-312, was :62-64 and :153-154). The three flags are computed before any option is built in both.",
       "verdict": "faithful"
     },
     {

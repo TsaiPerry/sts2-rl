@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -36,7 +36,7 @@
       "rationale": "Matches JewelryBox.cs:17; same is_tradable consequence recorded for relic/golden_pearl in this batch."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (jewelry_box.py:15-18) -> run.add_card(make_card('apotheosis')) (run.py:341-354)",
+      "maps_to": "after_obtained (jewelry_box.py:15-18) -> run.add_card(make_card('apotheosis')) (run.py:524-537, renumbered since prior pass, content unchanged)",
       "verdict": "faithful",
       "rationale": "JewelryBox.cs:19-23 creates an Apotheosis on the run and adds it to PileType.Deck. run.add_card runs modify_card_being_added_to_deck before the append and after_card_added_to_deck after it -- the two deck-add hooks the sim models -- and appends at the END of the deck, which is the position CardCmd.cs:437 pins for out-of-combat additions. EXECUTED (py audit/tools/relic_probes_b07.py box-apotheosis): deck 10 -> 11 with 'apotheosis' as the last entry. The card is ported (cards/apotheosis.py, an Ancient 2-cost Skill). Rule 7: run.py and cards/apotheosis.py are not hashed by this record."
     }
@@ -50,7 +50,7 @@
     {
       "what": "N2: `RunState.CreateCard<Apotheosis>(Owner)` vs `make_card('apotheosis')` -- the C# card is created ON THE RUN and owned by the player; the sim's make_card has no owner",
       "verdict": "faithful",
-      "rationale": "Ownership is a multiplayer concept (`card.Owner == base.Owner` guards exist all over the source for exactly that reason) and collapses in a single-player sim, where every card in run.deck belongs to the one player. Checked deliberately because CreateCard also assigns the card its combat scope; run.add_card's card enters combat through CombatState.__init__'s pile build (combat.py:72-209), which is the sim's equivalent binding. Rule 7: combat.py is not hashed by this record."
+      "rationale": "Ownership is a multiplayer concept (`card.Owner == base.Owner` guards exist all over the source for exactly that reason) and collapses in a single-player sim, where every card in run.deck belongs to the one player. Checked deliberately because CreateCard also assigns the card its combat scope; run.add_card's card enters combat through CombatState.__init__'s pile build (combat.py:121-..., class CombatState, renumbered since prior pass, content unchanged), which is the sim's equivalent binding. Rule 7: combat.py is not hashed by this record."
     },
     {
       "what": "N3: the sim's Relic.undo_after_obtained is not implemented, so a Jewelry Box the conformance runner grants and then un-picks leaves an Apotheosis in the deck",

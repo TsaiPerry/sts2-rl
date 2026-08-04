@@ -11,12 +11,12 @@
   "extra_sources": [
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -75,7 +75,7 @@
     {
       "what": "N7: the DISPATCH POINT -- AfterRoomEntered fires as the room is entered in C#, and the sim's after_shop_entered fires after the inventory is stocked",
       "verdict": "faithful",
-      "rationale": "C# reaches the inventory through `merchantRoom.GetLocalInventory()`, so the stock must already exist when AfterRoomEntered runs; the sim makes that ordering explicit by building MerchantInventory.create(self) first and then dispatching a dedicated hook (run.py:1022-1028, whose own comment says the merchant branch 'needs the stocked inventory (Lord's Parasol buys everything), so the sim fires a dedicated hook'). The generic Relic.after_room_entered is also dispatched for the shop room, earlier (run.py:981-983) -- before the stock exists -- which is the slot relic/silver_crucible uses for its treasure counting. Splitting one C# hook into two sim hooks with a well-defined order is a modelling choice with the same observable, so faithful rather than deliberate-divergence: any relic needing the pre-stock moment has after_room_entered and any relic needing the post-stock moment has after_shop_entered, and C#'s single hook sees the post-stock state. Rule 7: run.py and relics/silver_crucible.py are not hashed by this record."
+      "rationale": "C# reaches the inventory through `merchantRoom.GetLocalInventory()`, so the stock must already exist when AfterRoomEntered runs; the sim makes that ordering explicit by building MerchantInventory.create(self) first and then dispatching a dedicated hook (run.py:1570-1578, renumbered since prior pass, content unchanged, whose own comment says the merchant branch 'needs the stocked inventory (Lord's Parasol buys everything), so the sim fires a dedicated hook'). The generic Relic.after_room_entered is also dispatched for the shop room, earlier (run.py:1499-1502, renumbered since prior pass, content unchanged) -- before the stock exists -- which is the slot relic/silver_crucible uses for its treasure counting. Splitting one C# hook into two sim hooks with a well-defined order is a modelling choice with the same observable, so faithful rather than deliberate-divergence: any relic needing the pre-stock moment has after_room_entered and any relic needing the post-stock moment has after_shop_entered, and C#'s single hook sees the post-stock state. Rule 7: run.py and relics/silver_crucible.py are not hashed by this record."
     }
   ],
   "verdict": "waiver",

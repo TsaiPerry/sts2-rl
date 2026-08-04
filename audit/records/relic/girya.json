@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -71,7 +71,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -91,9 +91,9 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / SelectionScreenPrompt / CardPreviewStyle / CardCmd.Preview / VfxCmd are presentation only -- the relic bar's glow, counter, sfx and hover text, the card-screen prompt and layout, and vfx. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. Girya.cs:26 is `DisplayAmount => TimesLifted`, a direct readout of state the sim keeps."
     },
     "IsAllowed": {
-      "maps_to": "is_allowed (sts2_rl/relics/girya.py:46) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:82-84), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) before every pool pull",
+      "maps_to": "is_allowed (sts2_rl/relics/girya.py:46) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:89-91), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:1080) before every pool pull",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/girya.py:46), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:253, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/girya.py:46), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:1080) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:970), pull_relic_from_back (run.py:1023) and the Shop-rarity bag (run.py:1089) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:250-272), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:266-277 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:84) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     "AfterRoomEntered": {
       "maps_to": "on_combat_start (girya.py:22-29)",
@@ -101,7 +101,7 @@
       "issue": "See guard G2. Girya.cs:50-57 applies StrengthPower equal to TimesLifted when `TimesLifted > 0 && room is CombatRoom`; girya.py:22-29 does the same at combat start, two dispatch points later (C#'s AfterRoomEntered for a combat room fires at CombatRoom.cs:228, before StartCombatInternal's AfterCreatureAdded loop and BeforeCombatStart, CombatManager.cs:394-403). DORMANT (G2). The `room is CombatRoom` filter maps exactly, including event combats (EventModel.cs:625 builds a real CombatRoom), and on_combat_start fires for elite and boss fights too, as `room is CombatRoom` does."
     },
     "TryModifyRestSiteOptions": {
-      "maps_to": "modify_rest_site_options (girya.py:31-34), dispatched over run.relics (relics/base.py:233-237)",
+      "maps_to": "modify_rest_site_options (girya.py:31-34), dispatched over run.relics (relics/base.py:407)",
       "verdict": "faithful",
       "rationale": "Girya.cs:59-71 adds a LiftRestSiteOption unless `TimesLifted >= 3`; girya.py:32-34 returns early on `self.times_lifted >= self.MAX_LIFTS` (= 3, matching `public const int maxLifts = 3`, Girya.cs:20) and otherwise appends RestSiteOption('LIFT', ...) -- the same OptionId string LiftRestSiteOption exposes (LiftRestSiteOption.cs:32). LiftRestSiteOption.OnSelect is `Owner.GetRelic<Girya>().TimesLifted++` and returns true (LiftRestSiteOption.cs:39-43), which is exactly girya.py:36-37's `_lift`; its Description/vfx overrides are presentation. Executed (`py audit/tools/relic_probes_b06.py b06-misc`): times_lifted 0 offers ['LIFT'], times_lifted 3 offers []. The dropped `player != base.Owner` guard is the single-player waiver (N1). Note C# returns bool 'did modify' where the sim mutates in place -- a bookkeeping return the sim's hook shape has no use for."
     }
@@ -110,7 +110,7 @@
     {
       "what": "G1 (LIVE): `IsAllowed` -> `IsBeforeAct3TreasureChest` (TotalFloor < 41) is entirely unmodelled",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/girya.py:46), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:253, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/girya.py:46), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:1080) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:970), pull_relic_from_back (run.py:1023) and the Shop-rarity bag (run.py:1089) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:250-272), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:266-277 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:84) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     {
       "what": "G2 (DORMANT): the Strength lands at BeforeCombatStart in the sim and at AfterRoomEntered in C#, two dispatch points earlier -- and the sim's slot is interleaved with other relics' on_combat_start by registration order where C#'s always precedes every BeforeCombatStart listener",
@@ -145,7 +145,7 @@
     {
       "what": "R7 (bookkeeping, binding rule 7): the third-party files this record cites with line numbers and does NOT hash -- so a change in any of them goes stale invisibly here",
       "verdict": "faithful",
-      "rationale": "This record hashes only relic/girya's own two files (the game_source / sim_source pair above). Every other file it cites by line is listed here so the staleness blind spot is visible, per binding rule 7 and the UNHASHED reminder that `py audit/tools/citation_check.py audit/records/relic` prints: src/Core/Combat/CombatManager.cs, src/Core/Entities/RestSite/LiftRestSiteOption.cs, src/Core/Models/EventModel.cs, src/Core/Models/RelicModel.cs, src/Core/Rooms/CombatRoom.cs, sts2_rl/cards/base.py, sts2_rl/relic_pools.py, sts2_rl/relics/ember_tea.py, sts2_rl/relics/philosophers_stone.py, sts2_rl/relics/sling_of_courage.py, sts2_rl/relics/sword_of_jade.py, sts2_rl/relics/unsettling_lamp.py, sts2_rl/run.py. The individually load-bearing ones are also named inline in the guard or hook entry that leans on them."
+      "rationale": "This record hashes only relic/girya's own two files (the game_source / sim_source pair above). Every other file it cites by line is listed here so the staleness blind spot is visible, per binding rule 7 and the UNHASHED reminder that `py audit/tools/citation_check.py audit/records/relic` prints: src/Core/Combat/CombatManager.cs, src/Core/Entities/RestSite/LiftRestSiteOption.cs, src/Core/Models/EventModel.cs, src/Core/Models/RelicModel.cs, src/Core/Rooms/CombatRoom.cs, src/Core/Runs/RelicGrabBag.cs, sts2_rl/cards/base.py, sts2_rl/events/neow.py, sts2_rl/relic_pools.py, sts2_rl/relics/ember_tea.py, sts2_rl/relics/philosophers_stone.py, sts2_rl/relics/sling_of_courage.py, sts2_rl/relics/sword_of_jade.py, sts2_rl/relics/unsettling_lamp.py, sts2_rl/run.py. The individually load-bearing ones are also named inline in the guard or hook entry that leans on them."
     }
   ],
   "verdict": "gap",

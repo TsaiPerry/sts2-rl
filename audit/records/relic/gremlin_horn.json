@@ -15,6 +15,11 @@
       "side": "game"
     },
     {
+      "path": "src/Core/Models/Powers/AdaptablePower.cs",
+      "sha256": "d52696c9f8e9b8753844c46a7d9e1a8644bcadcf332a93042fa8440ad91285d4",
+      "side": "game"
+    },
+    {
       "path": "src/Core/Models/Monsters/Fogmog.cs",
       "sha256": "adb0ae07239973c167d7c35a3c36ae8b4cafd764b4bc44e7e44b04f91874d7b9",
       "side": "game"
@@ -26,17 +31,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/overgrowth/fogmog.py",
-      "sha256": "e5161c53f584695d3b8bcd0447f1255f2698f2cc54d7d0d42e12f07ec8aa403a",
+      "sha256": "7b30f626b55b5758bd4492f5f03ae77d6eb5f19b63a7440d4bbe3fa22056d439",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     }
   ],
@@ -46,7 +51,7 @@
       "verdict": "faithful"
     },
     "AfterDeath": {
-      "maps_to": "on_death (gremlin_horn.py:18-22), dispatched by DamageCmd.deal (cmds.py:105) and CreatureCmd.kill (cmds.py:203)",
+      "maps_to": "on_death (gremlin_horn.py:18-22), dispatched from _resolve_death (cmds.py:126-219, called by DamageCmd.deal at cmds.py:270-277+ and CreatureCmd.kill at cmds.py:713-714)",
       "verdict": "gap",
       "issue": "REASONING REPLACED at the hooks-level rollup. G1 was already closed faithful in round 7 (2026-07-29) at the guard level -- the hooks-level issue text quoted in the brief (\"WHICH deaths reach the hook (G1)\") was never refreshed after that closure and is stale. Re-confirmed directly: neither IllusionPower nor AdaptablePower defines should_die; both define should_remove_from_combat_after_death, and an executed two-enemy kill confirms the payout lands on a real Illusion death. G2's own CENSUS has also gone stale (the record says \"no sim power implements on_damage_dealt at all\" -- now false, ImbalancedPower and PaperCutsPower both do) though its VERDICT has not: neither implementer reads the dealer's energy or hand, so Gremlin Horn's own payout (the thing an ordering bug would expose) still has no observer. Propose narrowing the hooks-level issue text to name G2 alone, with its reachability argument updated to the two-implementer census.",
       "live": false

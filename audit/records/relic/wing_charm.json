@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
       "side": "sim"
     }
   ],
@@ -44,10 +44,10 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.SHOP (wing_charm.py:13)",
       "verdict": "faithful",
-      "rationale": "WingCharm.cs:18. Shop rarity in the transcribed grab bag (py audit/tools/relic_probes_b17.py pool -> bag=Shop), and Relic.is_allowed_in_shops defaults True (sts2_rl/relics/base.py:90), so it is buyable. Merchant price 200 via the rarity table (sts2_rl/relics/base.py:54-62), no override in the C#."
+      "rationale": "WingCharm.cs:18. Shop rarity in the transcribed grab bag (py audit/tools/relic_probes_b17.py pool -> bag=Shop), and Relic.is_allowed_in_shops defaults True (sts2_rl/relics/base.py:145), so it is buyable. Merchant price 200 via the rarity table (sts2_rl/relics/base.py:71-80), no override in the C#."
     },
     "TryModifyCardRewardOptionsLate": {
-      "maps_to": "modify_card_reward_options_late (sts2_rl/relics/wing_charm.py:19-31), dispatched in the second complete pass of rewards.create_reward_cards (sts2_rl/rewards.py:314-315)",
+      "maps_to": "modify_card_reward_options_late (sts2_rl/relics/wing_charm.py:19-31), dispatched in the second complete pass of rewards.create_reward_cards (sts2_rl/rewards.py:469-474)",
       "verdict": "faithful",
       "issue": "Closed 2026-07-27: the port implements the hook (sts2_rl/relics/wing_charm.py:19-31) -- can_enchant filter, empty-list early return, one `run.rng_set.niche.next_item` pick, SwiftEnchantment(1) attached -- and rewards.py:314-315 dispatches it in its own complete Late pass. WAS: the port did nothing at all."
     }
@@ -76,12 +76,12 @@
     {
       "what": "N4: the hook is the LATE pass of a two-pass dispatcher -- Hook.TryModifyCardRewardOptions runs TryModifyCardRewardOptions then TryModifyCardRewardOptionsLate (Hook.cs:1445-1468) -- and the sim's modify_card_reward_options is one pass",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the card-reward dispatch is two complete passes now. rewards.create_reward_cards runs every relic's `modify_card_reward_options` and THEN every relic's `modify_card_reward_options_late` (sts2_rl/rewards.py:304-315), mirroring Hook.TryModifyCardRewardOptions (Hook.cs:1444-1466), and the base declares both members separately (sts2_rl/relics/base.py:241-251). Wing Charm is a Late implementer (wing_charm.py:19) and is now guaranteed to run after every plain-pass listener. WAS: one flat loop over run.relics, so the phase guarantee was registration-order luck."
+      "issue": "Closed 2026-07-27: the card-reward dispatch is two complete passes now. rewards.create_reward_cards runs every relic's `modify_card_reward_options` and THEN every relic's `modify_card_reward_options_late` (sts2_rl/rewards.py:468-476), mirroring Hook.TryModifyCardRewardOptions (Hook.cs:1444-1466), and the base declares both members separately (sts2_rl/relics/base.py:319-...(modify_card_reward_options_late)). Wing Charm is a Late implementer (wing_charm.py:19) and is now guaranteed to run after every plain-pass listener. WAS: one flat loop over run.relics, so the phase guarantee was registration-order luck."
     },
     {
       "what": "N5: `player != base.Owner` (WingCharm.cs:26), DynamicVar('SwiftAmount', 1m) and ExtraHoverTips (WingCharm.cs:20, 22)",
       "verdict": "waiver",
-      "rationale": "The owner check is a multiplayer ownership guard -- each player has their own card reward -- and the sim has one player whose relics rewards.py:297-301 iterates. DynamicVar/ExtraHoverTips are presentation (hover text). Both waived under the shared contract's multiplayer and presentation exclusions, not under an unreachability claim. The VALUE 1 is not waived: there is no AscensionHelper branch anywhere in WingCharm.cs, so a fix must use Swift amount 1 -- worth stating because the ported relic/beautiful_bracelet grants Swift with amount 3, so the family does not share the number (PROMPT.md bug class 29)."
+      "rationale": "The owner check is a multiplayer ownership guard -- each player has their own card reward -- and the sim has one player whose relics rewards.py: (relics iteration in create_reward_cards) iterates. DynamicVar/ExtraHoverTips are presentation (hover text). Both waived under the shared contract's multiplayer and presentation exclusions, not under an unreachability claim. The VALUE 1 is not waived: there is no AscensionHelper branch anywhere in WingCharm.cs, so a fix must use Swift amount 1 -- worth stating because the ported relic/beautiful_bracelet grants Swift with amount 3, so the family does not share the number (PROMPT.md bug class 29)."
     },
     {
       "what": "N6: `undo_after_obtained` is absent from this port",

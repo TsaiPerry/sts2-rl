@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -50,7 +50,7 @@
     {
       "what": "N1: the `room is CombatRoom` type test (Gorget.cs:23) is what makes the divergent hook choice safe",
       "verdict": "faithful",
-      "rationale": "C# fires AfterRoomEntered for EVERY room and self-filters to combat rooms, so binding the port to on_combat_start reproduces the filter for free. Same reasoning and same verdict as bronze_scales guard N1 (binding rule 3). A port that used the sim's run-level after_room_entered (relics/base.py:194) without a room-type check would try to apply a power outside combat, where the sim has no container to hold it. Rule 7: relics/base.py and bronze_scales.json are not hashed by this record."
+      "rationale": "C# fires AfterRoomEntered for EVERY room and self-filters to combat rooms, so binding the port to on_combat_start reproduces the filter for free. Same reasoning and same verdict as bronze_scales guard N1 (binding rule 3). A port that used the sim's run-level after_room_entered (relics/base.py:350) without a room-type check would try to apply a power outside combat, where the sim has no container to hold it. Rule 7: relics/base.py and bronze_scales.json are not hashed by this record."
     },
     {
       "what": "N2: `base.DynamicVars[\"PlatingPower\"].BaseValue` (Gorget.cs:26) -- the key is the POWER TYPE NAME, not 'Plating'",
@@ -63,9 +63,9 @@
       "rationale": "PowerCmd.cs:67's signature is (choiceContext, target, amount, applier, cardSource), so the fourth argument is the applier and it is the player's own creature -- matched exactly. This matters because relic/unsettling_lamp's doubling and several power guards branch on the applier: contrast relic/belt_buckle guard N3, where BOTH sides pass null. Here both sides pass the player, so the two relics are correctly distinguished. cardSource is null on both sides, so no card-sourced interaction exists. Rule 7: PowerCmd.cs and belt_buckle.json are not hashed by this record."
     },
     {
-      "what": "N4 (DORMANT): PlatingPower's own port diverges on WHERE it decays -- the sim decays from on_player_turn_start (pre-draw) where PlatingPower.cs:70-83 decays from AfterSideTurnStart (post-draw)",
-      "verdict": "gap",
-      "issue": "MECHANISM: PlatingPower.cs:70-83 decrements in AfterSideTurnStart with a `TurnNumber != 1` guard for a player owner (turn_structure spec step 23, after the hand draw); powers.py:1063-1074's PlatingPower._decay runs from on_player_turn_start with `combat.turn > 1`, which the executed hook order (py audit/tools/relic_probes.py turn-order) places BEFORE modify_hand_draw and the draw. So for a window of one draw the sim's Plating amount is one lower than the game's. RECORDED AT GORGET'S SITE BECAUSE GORGET IS THE ONLY PORTED PLAYER-SIDE SOURCE OF PLATING (`grep -rn PlatingPower sts2_rl/ --include=*.py` outside powers.py returns relics/gorget.py and the enemy-side appliers), but the DIVERGENCE BELONGS TO THE POWER, not the relic -- audit/records/power/ does not exist yet, so no record owns it and none is issued here beyond this flag. DORMANT: nothing in the draw window reads a Plating amount (no ported modify_hand_draw listener or draw-time effect consults it), and the block Plating grants is computed at turn END from the then-current amount, which is the same number on both sides. Goes live with any turn-start effect between the two slots that scales off a Plating stack. VERIFIED SAFE FOR THE COMBAT-START GRANT, which is the half that could have broken Gorget outright: PlatingPower.cs:41-55's BeforeSideTurnStart returns early `if (base.Owner.IsPlayer)`, so the game does NOT give a Plating-holding player block at combat start, and powers.py:1054-1056 gates the same grant on `self.owner.side == 'enemy'` -- executed (probe gorget-plating): block 0 at combat start on both sides. Rule 7: sts2_rl/powers.py, PlatingPower.cs and relics/base.py are not hashed by this record."
+      "what": "N4 (CLOSED, REVISED on this re-audit pass): PlatingPower's own port used to diverge on WHERE it decays -- the sim decayed from on_player_turn_start (pre-draw) where PlatingPower.cs:70-83 decays from AfterSideTurnStart (post-draw)",
+      "verdict": "faithful",
+      "issue": "The premise is now false: `PlatingPower._decay` (sts2_rl/powers.py:1436-1439) is called from `after_side_turn_start` (powers.py:1449-1455, for a player owner) and `after_enemy_side_start` (powers.py:1464-1466, for an enemy owner) -- the post-draw side-turn-start slot the source uses, matching `PlatingPower.cs:70` (AfterSideTurnStart) exactly, not the pre-draw `on_player_turn_start` this entry previously described. The `player is self.owner` test at powers.py:1454 is the port's own comment for `participants.Contains(Owner)` (PlatingPower.cs:70), and the combat-start grant this entry separately verified safe is unchanged: `before_side_turn_start` (powers.py:1419-1429) still gates the round-1 block grant on `self.owner.side == 'enemy'`, matching `PlatingPower.cs:41-56`'s `if (base.Owner.IsPlayer) return;`. RECORDED AT GORGET'S SITE BECAUSE GORGET IS THE ONLY PORTED PLAYER-SIDE SOURCE OF PLATING (`grep -rn PlatingPower sts2_rl/ --include=*.py` outside powers.py returns relics/gorget.py and the enemy-side appliers), but the mechanism belongs to the power, not the relic -- audit/records/power/ still does not exist, so this closure is recorded here rather than on a power record. Verified by reading powers.py:1409-1467 directly on this pass; the one-draw-window gap this entry used to describe no longer exists because the decay hook itself moved to the correct slot. Rule 7: sts2_rl/powers.py, PlatingPower.cs and relics/base.py are not hashed by this record."
     },
     {
       "what": "N5: Flash() and the Plating hover tip (Gorget.cs:17, 25)",
@@ -73,6 +73,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "deliberate-divergence",
   "audited": "2026-07-26"
 }

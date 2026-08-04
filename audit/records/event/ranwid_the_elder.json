@@ -51,13 +51,13 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "3caf6a189d109feb62c5ab57f03028277542a8bf12311898e7445be27ce199b2",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
   "hooks": {
     "IsAllowed": {
-      "maps_to": "RanwidTheElder.is_allowed (events/ranwid_the_elder.py:31-38) is the four source clauses in the source's order (RanwidTheElder.cs:51-70): `run.act_index != 0` for the early `CurrentActIndex == 0 -> false`; `any(r.is_tradable for r in run.relics)` for `!GetValidRelics(p).Any()` (GetValidRelics is `Relics.Where(r => r.IsTradable)`, RanwidTheElder.cs:72-75 -- the same filter relic_trader uses, and Relic.is_tradable (relics/base.py:125-135) is that record's clause-for-clause port of RelicModel.IsTradable); `run.gold >= 100`; and `len(run.held_potions) > 0` for `!p.Potions.Any()`, where run.held_potions is Player.cs's null-filtered Potions (run.py:501-507). Quantifiers collapse -- see the multiplayer guard.",
+      "maps_to": "RanwidTheElder.is_allowed (events/ranwid_the_elder.py:31-38) is the four source clauses in the source's order (RanwidTheElder.cs:51-70): `run.act_index != 0` for the early `CurrentActIndex == 0 -> false`; `any(r.is_tradable for r in run.relics)` for `!GetValidRelics(p).Any()` (GetValidRelics is `Relics.Where(r => r.IsTradable)`, RanwidTheElder.cs:72-75 -- the same filter relic_trader uses, and Relic.is_tradable (relics/base.py:189-199, was :125-135) is that record's clause-for-clause port of RelicModel.IsTradable); `run.gold >= 100`; and `len(run.held_potions) > 0` for `!p.Potions.Any()`, where run.held_potions is Player.cs's null-filtered Potions (run.py:878-883, was :501-507). Quantifiers collapse -- see the multiplayer guard.",
       "verdict": "faithful"
     }
   },
@@ -74,12 +74,12 @@
     },
     {
       "what": "both LOCKED branches (RanwidTheElder.cs:89-92, :103-106): a null onChosen option when NextItem returns null",
-      "maps_to": "events/ranwid_the_elder.py:49 and :57 emit EventOption('POTION_LOCKED', None) / ('RELIC_LOCKED', None), and EventOption.locked + choose()'s refusal (events/base.py:62-64, :153-154) reproduce the unclickable option. Dead code in BOTH engines -- IsAllowed already requires a potion and a tradable relic -- and the sim reproduces the dead branch rather than dropping it, exactly as it does for relic_trader's `Count == 0 -> PROCEED` fallback.",
+      "maps_to": "events/ranwid_the_elder.py:49 and :57 emit EventOption('POTION_LOCKED', None) / ('RELIC_LOCKED', None), and EventOption.locked + choose()'s refusal (events/base.py:63-64, :298-312, was :62-64, :153-154) reproduce the unclickable option. Dead code in BOTH engines -- IsAllowed already requires a potion and a tradable relic -- and the sim reproduces the dead branch rather than dropping it, exactly as it does for relic_trader's `Count == 0 -> PROCEED` fallback.",
       "verdict": "faithful"
     },
     {
       "what": "GivePotion (RanwidTheElder.cs:110-116): PotionCmd.Discard(potion) THEN one PullNextRelicFromFront -> RelicCmd.Obtain",
-      "maps_to": "events/ranwid_the_elder.py:66-69 discard_potion(potion) then _obtain_grab_bag(1). Order preserved. run.discard_potion nulls the named slot without compacting the belt (run.py:487-490), matching Player.DiscardPotionInternal, and the potion is identified by IDENTITY in both (the C# closure captures the PotionModel; the sim's lambda captures the instance and list.index is identity-based for a Potion, which defines no __eq__).",
+      "maps_to": "events/ranwid_the_elder.py:66-69 discard_potion(potion) then _obtain_grab_bag(1). Order preserved. run.discard_potion nulls the named slot without compacting the belt (run.py:832-, was :487-490), matching Player.DiscardPotionInternal, and the potion is identified by IDENTITY in both (the C# closure captures the PotionModel; the sim's lambda captures the instance and list.index is identity-based for a Potion, which defines no __eq__).",
       "verdict": "faithful"
     },
     {
@@ -89,7 +89,7 @@
     },
     {
       "what": "GiveGold (RanwidTheElder.cs:118-124): PlayerCmd.LoseGold(100, GoldLossType.Spent) THEN PullNextRelicFromFront -> RelicCmd.Obtain",
-      "maps_to": "events/ranwid_the_elder.py:71-74 lose_gold(100) then _obtain_grab_bag(1). Order preserved, and run.lose_gold (run.py:335-337) `max(0, gold - int(amount))` is exactly PlayerCmd.LoseGold's `int.Max(0, Gold - (int)amount)` (PlayerCmd.cs:198). GoldLossType.Spent adds only `PlayerMapPointHistoryEntry.GoldSpent += (int)amount` (PlayerCmd.cs:185-188) -- a run-history counter with no gameplay reader, and Spent is the ordinary purchase annotation the luminous_choir record already mapped as faithful (rule 3). Only GoldLossType.Stolen's extra MarkLootStolen call is recorded as a divergence, on morphic_grove.",
+      "maps_to": "events/ranwid_the_elder.py:71-74 lose_gold(100) then _obtain_grab_bag(1). Order preserved, and run.lose_gold (run.py:518-, was :335-337) `max(0, gold - int(amount))` is exactly PlayerCmd.LoseGold's `int.Max(0, Gold - (int)amount)` (PlayerCmd.cs:198). GoldLossType.Spent adds only `PlayerMapPointHistoryEntry.GoldSpent += (int)amount` (PlayerCmd.cs:185-188) -- a run-history counter with no gameplay reader, and Spent is the ordinary purchase annotation the luminous_choir record already mapped as faithful (rule 3). Only GoldLossType.Stolen's extra MarkLootStolen call is recorded as a divergence, on morphic_grove.",
       "verdict": "faithful"
     },
     {
@@ -99,12 +99,12 @@
     },
     {
       "what": "all three branches pull on the right stream: the one-argument `RelicFactory.PullNextRelicFromFront(base.Owner)` rolls rarity on `player.PlayerRng.Rewards` (RelicFactory.cs:28, :82)",
-      "maps_to": "events/ranwid_the_elder.py:62 run.pull_relic_from_front() with no rarity_rng falls back to run.rewards_rng (run.py:588-589), which is PlayerRng.Rewards in parity runs (run.py:271-274). EV-3 does NOT apply to the four grab-bag pulls -- only to the two option-generation NextItem draws. Same derivation the relic_trader and round_tea_party records made.",
+      "maps_to": "events/ranwid_the_elder.py:62 run.pull_relic_from_front() with no rarity_rng falls back to run.rewards_rng (run.py:1007, was :588-589), which is PlayerRng.Rewards in parity runs (run.py:368, was :271-274). EV-3 does NOT apply to the four grab-bag pulls -- only to the two option-generation NextItem draws. Same derivation the relic_trader and round_tea_party records made.",
       "verdict": "faithful"
     },
     {
       "what": "EV-3: GenerateInitialOptions' two `base.Rng.NextItem` draws -- the potion (RanwidTheElder.cs:80) and the tradable relic (RanwidTheElder.cs:94) -- which events/ranwid_the_elder.py:44 and :52 take off `self.rng` via random.Random.choice. Right count, right order, right candidate lists; wrong stream. Confirmed by `py audit/tools/event_probes.py eventrng`, which lists ranwid_the_elder among the modules that roll ONLY on the shared rng rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- both GenerateInitialOptions picks run on `self.event_rng` (events/ranwid_the_elder.py:45-61), matching `base.Rng` (RanwidTheElder.cs:80, 94). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- both GenerateInitialOptions picks run on `self.event_rng` (events/ranwid_the_elder.py:45-61), matching `base.Rng` (RanwidTheElder.cs:80, 94). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:95-98, was :96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
       "verdict": "faithful"
     },
     {

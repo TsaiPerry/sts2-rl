@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -22,11 +22,11 @@
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:1287 `power_type = PowerType.DEBUFF`",
+      "maps_to": "powers.py:1703 `power_type = PowerType.DEBUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-139 Power.on_stack",
       "verdict": "faithful",
       "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
@@ -36,9 +36,9 @@
       "rationale": "Multiplayer-only scaling (MultiplayerScalingModel). Out of scope; the sim is single-player."
     },
     "AfterDamageReceived": {
-      "maps_to": "powers.py:1289-1306 on_damage_received",
+      "maps_to": "powers.py:1705-1722 on_damage_received",
       "verdict": "gap",
-      "issue": "Right hook and right slot; the threshold matches exactly (`target != base.Owner || result.UnblockedDamage <= 0 || target.CurrentHp > base.Amount -> return`, PlowPower.cs:30, vs powers.py:1297-1300). Three divergences. (1) The sim ADDS `self.owner.is_dead` to the early-out (powers.py:1297) where C# has no such guard -- recurring gap shape 8; dormant because the Ceremonial Beast is removed on death and a dead beast's stun is unobservable. (2) C# removes every `TemporaryStrengthPower` INSTANCE first and then `StrengthPower` (PlowPower.cs:35-40); the sim removes only `\"strength\"` (powers.py:1302). Dormant because TemporaryStrengthPower is unported (`grep -n '^class TemporaryStrengthPower' sts2_rl/powers.py` returns nothing) -- a named-unported-content dormancy, which per binding rule 1 is a dormant gap and not a waiver. (3) The STUN's follow-up state is delegated: C# calls `ceremonialBeast.SetStunned()` then `CreatureCmd.Stun(base.Owner, ceremonialBeast.StunnedMove, ceremonialBeast.BeastCryState.StateId)` and falls back to a bare `CreatureCmd.Stun(base.Owner)` for a non-Beast owner (PlowPower.cs:41-50); the sim calls a single `on_plow_broken()` on the monster if it exists and does NOT stun at all otherwise (powers.py:1303-1305). So a non-Ceremonial-Beast Plow holder is stunned in the game and not in the sim -- dormant, since monsters/glory/ceremonial_beast.py is the only applier -- and the named follow-up state is the same shape as FlutterPower's, which is LIVE (audit/records/power/flutter.json). Third-file citations, not hashed here."
+      "issue": "Right hook and right slot; the threshold matches exactly (`target != base.Owner || result.UnblockedDamage <= 0 || target.CurrentHp > base.Amount -> return`, PlowPower.cs:30, vs powers.py:1713-1716). Three divergences. (1) The sim ADDS `self.owner.is_dead` to the early-out (powers.py:1713) where C# has no such guard -- recurring gap shape 8; dormant because the Ceremonial Beast is removed on death and a dead beast's stun is unobservable. (2) C# removes every `TemporaryStrengthPower` INSTANCE first and then `StrengthPower` (PlowPower.cs:35-40); the sim removes only `\"strength\"` (powers.py:1718). Dormant because TemporaryStrengthPower is unported (`grep -n '^class TemporaryStrengthPower' sts2_rl/powers.py` returns nothing) -- a named-unported-content dormancy, which per binding rule 1 is a dormant gap and not a waiver. (3) The STUN's follow-up state is delegated: C# calls `ceremonialBeast.SetStunned()` then `CreatureCmd.Stun(base.Owner, ceremonialBeast.StunnedMove, ceremonialBeast.BeastCryState.StateId)` and falls back to a bare `CreatureCmd.Stun(base.Owner)` for a non-Beast owner (PlowPower.cs:41-50); the sim calls a single `on_plow_broken()` on the monster if it exists and does NOT stun at all otherwise (powers.py:1719-1722). So a non-Ceremonial-Beast Plow holder is stunned in the game and not in the sim -- dormant, since monsters/glory/ceremonial_beast.py is the only applier -- and the named follow-up state is the same shape as FlutterPower's, which is LIVE (audit/records/power/flutter.json). Third-file citations, not hashed here."
     }
   },
   "guards": [
@@ -50,7 +50,7 @@
     {
       "what": "Order: strength removal BEFORE the stun on both sides",
       "verdict": "faithful",
-      "rationale": "PlowPower.cs:35-45 vs powers.py:1302-1305. Load-bearing: the beast must lose its Strength before its telegraphed move is replaced, or the replaced move would be computed against the old Strength."
+      "rationale": "PlowPower.cs:35-45 vs powers.py:1718-1722. Load-bearing: the beast must lose its Strength before its telegraphed move is replaced, or the replaced move would be computed against the old Strength."
     },
     {
       "what": "IsVisible",

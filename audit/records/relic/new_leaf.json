@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/events/endless_conveyor.py",
-      "sha256": "f1f3376a63944caa95f66a03937f6f4fff6535a0be0911e15d8bd96868be0bd9",
+      "sha256": "94c8467ffdc814be297161ff03db48d7c9424ec8be69b286b619a5606b1ccc5b",
       "side": "sim"
     },
     {
@@ -66,7 +66,7 @@
     },
     {
       "path": "sts2_rl/events/trial.py",
-      "sha256": "8f46160beb6bafaeba5f3881cf62af0b6ad2ac435db461cf5770d7ea23145d31",
+      "sha256": "3e5ddc7548d78145997988b5aa274ad08bd4947c170e93eed084ed23f30beadf",
       "side": "sim"
     },
     {
@@ -81,7 +81,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -96,7 +96,7 @@
       "rationale": "Matches NewLeaf.cs:16."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (new_leaf.py:15-17), dispatched by RunState.add_relic (run.py:546-553)",
+      "maps_to": "after_obtained (new_leaf.py:15-17), dispatched by RunState.add_relic (run.py)",
       "verdict": "gap",
       "issue": "Rollup of guards N1 and G1 per binding rule 4. Count, selection prompt and deck placement are all faithful; the named Niche RNG stream is dropped (N1, live for RNG parity) and the candidate list omits C#'s Quest-card exclusion (G1, dormant)."
     }
@@ -110,7 +110,7 @@
     {
       "what": "G1 (DORMANT): CardSelectCmd.FromDeckForTransformation also excludes Quest cards; run.transformable_cards() filters only Eternal",
       "verdict": "gap",
-      "issue": "MECHANISM: CardSelectCmd.FromDeckForTransformation (CardSelectCmd.cs:485-491) builds its candidate list as `Cards.Where(c => c.Type != CardType.Quest && c.IsTransformable)`. run.transformable_cards() (run.py:364-366) returns removable_cards(), i.e. every non-Eternal deck card, with no Quest clause -- its own docstring says 'in the deck this equals IsRemovable', which is true of IsTransformable (CardModel.cs:739-750) but ignores the caller's extra filter. So the sim can offer a Quest card for transformation where the game cannot. REACHABILITY (DORMANT, and the concrete blocker is named): the three ported Quest cards -- byrdonis_egg, lantern_key, spoils_map (executed census; all three have eternal=False, so nothing else excludes them) -- enter the deck only through later events (events/byrdonis_nest.py:45, events/the_lantern_key.py:44, events/the_legends_were_true.py:41), while New Leaf is granted ONLY at floor 0, by Neow or by relic/neows_bones drawing from the same pool, when the deck is still the pristine starting deck. What would make it live: any grant path for New Leaf after floor 0 (a relic-trade event that can hand out Ancient relics, or a second source). NOTE THE POOL-WIDE SHAPE, filed in .superpowers/sdd/relic-batch-10-lessons.md: run.transformable_cards() is the shared helper for relic/leafy_poultice and five ported events (events/endless_conveyor.py:97, morphic_grove.py:44, symbiote.py:52, trial.py:99, whispering_hollow.py:66), all of which ARE reachable after a Quest card can be in the deck -- so the mechanism is live somewhere, just not at this relic's site. Rule 7: CardSelectCmd.cs, CardModel.cs, run.py and every events/*.py named above are NOT hashed by this record."
+      "issue": "MECHANISM: CardSelectCmd.FromDeckForTransformation (CardSelectCmd.cs:485-491) builds its candidate list as `Cards.Where(c => c.Type != CardType.Quest && c.IsTransformable)`. run.transformable_cards() (run.py) returns removable_cards(), i.e. every non-Eternal deck card, with no Quest clause -- its own docstring says 'in the deck this equals IsRemovable', which is true of IsTransformable (CardModel.cs:739-750) but ignores the caller's extra filter. So the sim can offer a Quest card for transformation where the game cannot. REACHABILITY (DORMANT, and the concrete blocker is named): the three ported Quest cards -- byrdonis_egg, lantern_key, spoils_map (executed census; all three have eternal=False, so nothing else excludes them) -- enter the deck only through later events (events/byrdonis_nest.py:45, events/the_lantern_key.py:44, events/the_legends_were_true.py:41), while New Leaf is granted ONLY at floor 0, by Neow or by relic/neows_bones drawing from the same pool, when the deck is still the pristine starting deck. What would make it live: any grant path for New Leaf after floor 0 (a relic-trade event that can hand out Ancient relics, or a second source). NOTE THE POOL-WIDE SHAPE, filed in .superpowers/sdd/relic-batch-10-lessons.md: run.transformable_cards() is the shared helper for relic/leafy_poultice and five ported events (events/endless_conveyor.py:97, morphic_grove.py:44, symbiote.py:52, trial.py, whispering_hollow.py:66), all of which ARE reachable after a Quest card can be in the deck -- so the mechanism is live somewhere, just not at this relic's site. Rule 7: CardSelectCmd.cs, CardModel.cs, run.py and every events/*.py named above are NOT hashed by this record."
     },
     {
       "what": "N2: CardsVar(1) (NewLeaf.cs:18) read as `.IntValue` into CardSelectorPrefs (NewLeaf.cs:24) vs the literal 1 (new_leaf.py:16)",
@@ -120,12 +120,12 @@
     {
       "what": "N3: FromDeckForTransformation's auto-select shortcut -- `if (list.Count <= prefs.MinSelect && !RequireManualConfirmation) enumerable = list;` (CardSelectCmd.cs:493-496)",
       "verdict": "faithful",
-      "rationale": "run.select_cards (run.py:371-390) clamps `count = min(count, len(candidates))` and returns everything when the pool is at or below the requested count, which is the same behaviour: with one transformable card left, both sides transform it with no choice offered. The sim delegates the actual pick to run.card_selector when installed and otherwise samples with the run rng, which is the house model for a player choice."
+      "rationale": "run.select_cards (run.py) clamps `count = min(count, len(candidates))` and returns everything when the pool is at or below the requested count, which is the same behaviour: with one transformable card left, both sides transform it with no choice offered. The sim delegates the actual pick to run.card_selector when installed and otherwise samples with the run rng, which is the house model for a player choice."
     },
     {
       "what": "N4: deck placement of the replacement (PROMPT.md bug class 8)",
       "verdict": "faithful",
-      "rationale": "CardCmd.Transform on a DECK pile removes the original and APPENDS the replacement at the end of the deck (CardCmd.cs:437); run.transform_card's docstring (run.py:418-428) cites that line and implements the end-placement for the parity path, which is what keeps the combat-start shuffle in parity. Nothing relic-specific diverges here; recorded because the class was checked."
+      "rationale": "CardCmd.Transform on a DECK pile removes the original and APPENDS the replacement at the end of the deck (CardCmd.cs:437); run.transform_card's docstring (run.py) cites that line and implements the end-placement for the parity path, which is what keeps the combat-start shuffle in parity. Nothing relic-specific diverges here; recorded because the class was checked."
     },
     {
       "what": "N5: ExtraHoverTips (StaticHoverTip.Transform, NewLeaf.cs:20)",

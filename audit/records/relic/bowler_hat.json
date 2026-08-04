@@ -16,12 +16,22 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Runs/RelicGrabBag.cs",
+      "sha256": "9bb001cbc618f21cebaf7ceb324812010972d92b7a6ed043f268e56fce5a541c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/neow.py",
+      "sha256": "df11695f9bff2d43c3408f0fb60403bdd3957015edcc052b424c4e1d242bde6c",
       "side": "sim"
     }
   ],
@@ -35,14 +45,14 @@
       "verdict": "faithful"
     },
     "IsAllowed": {
-      "maps_to": "is_allowed (sts2_rl/relics/bowler_hat.py:22) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:82-84), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) before every pool pull",
+      "maps_to": "is_allowed (sts2_rl/relics/bowler_hat.py:22) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:89-91), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:1080-1087) before every pool pull",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/bowler_hat.py:22), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
+      "issue": "Closed 2026-07-27, re-verified 2026-08-04 after a line-shift-only re-audit: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:253-263, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/bowler_hat.py:22), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:1080-1087) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:970), pull_relic_from_back (run.py:1023) and the Shop-rarity bag (run.py:1089-1098) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:265-277 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     "ModifyGoldGained": {
-      "maps_to": "modify_gold_gained (sts2_rl/relics/bowler_hat.py), folded by RunState.gain_gold (sts2_rl/run.py:384-392)",
+      "maps_to": "modify_gold_gained (sts2_rl/relics/bowler_hat.py), folded by RunState.gain_gold (sts2_rl/run.py:500-514)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/bowler_hat.py's `modify_gold_gained` returns `amount * 1.25` (BowlerHat.cs:18-25's DynamicVar 'GoldIncrease'), and RunState.gain_gold folds the chain over every relic and truncates the product with `int(amount)` (sts2_rl/run.py:384-392), like PlayerCmd.GainGold. WAS: a behaviourless stub whose docstring claimed the sim has no gold system."
+      "issue": "Closed 2026-07-27, re-verified 2026-08-04 (line-shift only): the relic is implemented. sts2_rl/relics/bowler_hat.py's `modify_gold_gained` returns `amount * 1.25` (BowlerHat.cs:18-25's DynamicVar 'GoldIncrease'), and RunState.gain_gold folds the chain over every relic and truncates the product with `int(amount)` (sts2_rl/run.py:500-514), like PlayerCmd.GainGold. WAS: a behaviourless stub whose docstring claimed the sim has no gold system."
     },
     "AfterModifyingGoldGained": {
       "maps_to": "no counterpart (Flash() only)",
@@ -54,7 +64,7 @@
     {
       "what": "N1: the multiplier is 1.25m DECIMAL and gold is an integer quantity -- rounding is unspecified by this file",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/bowler_hat.py's `modify_gold_gained` returns `amount * 1.25` (BowlerHat.cs:18-25's DynamicVar 'GoldIncrease'), and RunState.gain_gold folds the chain over every relic and truncates the product with `int(amount)` (sts2_rl/run.py:384-392), like PlayerCmd.GainGold. WAS: a behaviourless stub whose docstring claimed the sim has no gold system."
+      "issue": "Closed 2026-07-27, re-verified 2026-08-04 (line-shift only): the relic is implemented. sts2_rl/relics/bowler_hat.py's `modify_gold_gained` returns `amount * 1.25` (BowlerHat.cs:18-25's DynamicVar 'GoldIncrease'), and RunState.gain_gold folds the chain over every relic and truncates the product with `int(amount)` (sts2_rl/run.py:500-514), like PlayerCmd.GainGold. WAS: a behaviourless stub whose docstring claimed the sim has no gold system."
     },
     {
       "what": "N2: `player != base.Owner` (BowlerHat.cs:20-23)",

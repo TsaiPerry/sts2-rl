@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -46,8 +46,13 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
+      "sha256": "a1aecf30215574f9bc62dd01cb7c73346bbc1b9b84dd5dcc8dabd67101f8c345",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Rewards/RelicReward.cs",
+      "sha256": "10f2bdbe8533bc384e2f5b637a81b1efbeee6906a7829bef891586918a49f1bd",
+      "side": "game"
     }
   ],
   "hooks": {
@@ -58,7 +63,7 @@
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (orrery.py:14)",
       "verdict": "faithful",
-      "rationale": "Matches Orrery.cs:15, and it is load-bearing here rather than belt-and-braces: Orrery is SHOP rarity, not Ancient, so this flag is the only thing keeping it out of the trade events via Relic.is_tradable (relics/base.py:126-136). Rule 7: relics/base.py is unhashed here."
+      "rationale": "Matches Orrery.cs:15, and it is load-bearing here rather than belt-and-braces: Orrery is SHOP rarity, not Ancient, so this flag is the only thing keeping it out of the trade events via Relic.is_tradable (relics/base.py). Rule 7: relics/base.py is unhashed here."
     },
     "AfterObtained": {
       "maps_to": "after_obtained (sts2_rl/relics/orrery.py:24-33) -- five create_reward_cards screens populated first, then offered one at a time through the skippable 'card_reward' selector",
@@ -70,12 +75,12 @@
     {
       "what": "G1 (LIVE): the whole relic is a no-op stub, and the stub's premise -- 'an out-of-combat card reward, so this is a no-op stub' -- is FALSE",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:475-496) and `RunState.offer_potion` (sts2_rl/run.py:498-506) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. Orrery's five screens are CARD rewards, and sts2_rl/relics/orrery.py:31-33 runs each through `run.select_cards('card_reward', options, 1)`; 'card_reward' is in sts2_rl/driver.py:87-89 SKIPPABLE_PURPOSES, so RunDriver._card_selector issues a real DecisionRequest whose legal_actions() carries the skip index. WAS: the port resolved the screens with no decline available."
+      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py) and `RunState.offer_potion` (sts2_rl/run.py) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. Orrery's five screens are CARD rewards, and sts2_rl/relics/orrery.py:31-33 runs each through `run.select_cards('card_reward', options, 1)`; 'card_reward' is in sts2_rl/driver.py SKIPPABLE_PURPOSES, so RunDriver._card_selector issues a real DecisionRequest whose legal_actions() carries the skip index. WAS: the port resolved the screens with no decline available."
     },
     {
       "what": "G2: `RewardsCmd.OfferCustom` (Orrery.cs:27) is SKIPPABLE -- unlike relic/neows_bones in this batch, Orrery does not call WithSkippingDisallowed",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:475-496) and `RunState.offer_potion` (sts2_rl/run.py:498-506) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. Orrery's five screens are CARD rewards offered through `run.select_cards('card_reward', options, 1)` (sts2_rl/relics/orrery.py:31-33), and 'card_reward' is in sts2_rl/driver.py:87-89 SKIPPABLE_PURPOSES. All five are also POPULATED before any is offered (orrery.py:26-30 builds the list of five option sets first), which is RewardsSet.GenerateWithoutOffering's populate-then-offer order."
+      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py) and `RunState.offer_potion` (sts2_rl/run.py) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. Orrery's five screens are CARD rewards offered through `run.select_cards('card_reward', options, 1)` (sts2_rl/relics/orrery.py:31-33), and 'card_reward' is in sts2_rl/driver.py SKIPPABLE_PURPOSES. All five are also POPULATED before any is offered (orrery.py:26-30 builds the list of five option sets first), which is RewardsSet.GenerateWithoutOffering's populate-then-offer order."
     },
     {
       "what": "N1: Orrery.cs declares no IsAllowed, no IsAllowedInShops and no combat hooks",
@@ -85,7 +90,7 @@
     {
       "what": "N2: `Owner.Character.CardPool` (Orrery.cs:22) as the single pool entry",
       "verdict": "faithful",
-      "rationale": "The sim is Ironclad-only and create_reward_cards' default pool IS the character pool (rewards.py:258-267 -- reward_pool_card_ids() on the parity path, pool_card_ids() on the legacy one), so a port needs to pass no pool override. Contrast relic/lead_paperweight, which passes the Colorless pool explicitly and is the reason the `pool` parameter exists. Recorded because getting this wrong is how the reward pool findings in batch 3 arose (the full GetUnlockedCards pool vs FilterForCombat). Rule 7: rewards.py and relics/lead_paperweight.py are unhashed here."
+      "rationale": "The sim is Ironclad-only and create_reward_cards' default pool IS the character pool (rewards.py -- reward_pool_card_ids() on the parity path, pool_card_ids() on the legacy one), so a port needs to pass no pool override. Contrast relic/lead_paperweight, which passes the Colorless pool explicitly and is the reason the `pool` parameter exists. Recorded because getting this wrong is how the reward pool findings in batch 3 arose (the full GetUnlockedCards pool vs FilterForCombat). Rule 7: rewards.py and relics/lead_paperweight.py are unhashed here."
     }
   ],
   "verdict": "faithful",

@@ -31,17 +31,17 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     },
     {
       "path": "test/test_hook_order.py",
-      "sha256": "38ffe006ed83a6aceffdbfacf5dae020894ea923c55c40b5c9149fef783adec0",
+      "sha256": "2e1c761e7fc76fdc7492d87a6cba5b9145af79ae9be1ba98ba858cde3da4de75",
       "side": "sim"
     }
   ],
@@ -66,7 +66,7 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     },
     "AfterCardPlayed": {
-      "maps_to": "on_card_played (iron_club.py:31-37), dispatched inside the per-Replay play-count loop by CombatState._resolve_card_play (combat.py:574, 597-600)",
+      "maps_to": "on_card_played (iron_club.py:31-37), dispatched inside the per-Replay play-count loop by CombatState._resolve_card_play (combat.py:1153, 1208-1209)",
       "verdict": "faithful",
       "rationale": "STALE 2026-07-30: this rollup was written 2026-07-27 naming guard G1 (the threshold) as 'WHAT REMAINS', but G1 was itself closed 'faithful' on 2026-07-29 (round 7) -- one round after this hooks-level entry was written and never regenerated, the exact stale-rollup shape this triage round exists to catch. RE-VERIFIED against today's code: sts2_rl/relics/iron_club.py:25 pins `CARDS = 4` with the citation `IronClub.cs:38 -- CanonicalVars => ... new CardsVar(4)`, matching the source exactly (no AscensionHelper.GetValueIfAscension in the file, so 4 is the pinned non-ascension value). Guard G2 (the per-Replay dispatch bracket) was separately closed 2026-07-27 and both guards in this record now read `verdict: faithful`. No open guard remains at this hook."
     }
@@ -80,7 +80,7 @@
     {
       "what": "G2 (LIVE): C# fires Hook.AfterCardPlayed INSIDE the play-count loop, so a replayed card advances CardsPlayed once per iteration; the sim fires on_card_played once for the whole play",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. "
+      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:1153-1155) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:1208-1209) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. "
     },
     {
       "what": "N1: `CardsPlayed` is a [SavedProperty] (IronClub.cs:54-67) with NO combat-boundary reset, and the port's cards_played is likewise never reset -- so both carry across combats for the whole run",
@@ -90,12 +90,12 @@
     {
       "what": "N2: `CombatManager.Instance.IsInProgress && CardsPlayed % intValue == 0` (IronClub.cs:89) -- the counter increments even when the combat is over, but the draw is skipped",
       "verdict": "faithful",
-      "rationale": "Structurally satisfied, and verified on the source rather than assumed: the sim's on_card_played is a combat hook, and the C# guard can only ever be false if IsInProgress flipped during the play. It cannot: CheckWinCondition is the only thing that clears IsInProgress, and an executed `grep -rn 'CheckWinCondition()' src/Core/` finds no call inside the card-play path -- the nearest is ActionExecutor.cs:170, AFTER the whole action. CardModel.cs:1955-1957 additionally re-checks IsInProgress before firing AfterCardPlayed at all, so on a killing-blow play the game still fires the hook, still increments, and still draws. The sim matches: combat.py:514 fires on_card_played unconditionally at the end of _resolve_card_play, and play_card only ends the combat afterwards. Checked deliberately because the obvious reading -- 'the killing blow does not count' -- would have made the counters drift by one per combat. Rule 7: CardModel.cs, ActionExecutor.cs and sts2_rl/combat.py are not hashed by this record."
+      "rationale": "Structurally satisfied, and verified on the source rather than assumed: the sim's on_card_played is a combat hook, and the C# guard can only ever be false if IsInProgress flipped during the play. It cannot: CheckWinCondition is the only thing that clears IsInProgress, and an executed `grep -rn 'CheckWinCondition()' src/Core/` finds no call inside the card-play path -- the nearest is ActionExecutor.cs:170, AFTER the whole action. CardModel.cs:1955-1957 additionally re-checks IsInProgress before firing AfterCardPlayed at all, so on a killing-blow play the game still fires the hook, still increments, and still draws. The sim matches: combat.py:1209 fires on_card_played unconditionally at the end of _resolve_card_play, and play_card only ends the combat afterwards. Checked deliberately because the obvious reading -- 'the killing blow does not count' -- would have made the counters drift by one per combat. Rule 7: CardModel.cs, ActionExecutor.cs and sts2_rl/combat.py are not hashed by this record."
     },
     {
       "what": "N3: `CardPileCmd.Draw(choiceContext, 1m, base.Owner)` (IronClub.cs:92) vs DrawCmd.draw(self.player, 1) (iron_club.py:31) -- the draw amount is a literal 1, NOT the CardsVar",
       "verdict": "faithful",
-      "rationale": "Easy to get wrong in the direction of drawing CardsVar cards. Both sides draw exactly one, and both route through the standard draw path so the hand cap, the reshuffle-on-empty and the per-card draw hooks fire identically (player._draw, player.py:276-292). Rule 7: sts2_rl/cmds.py and sts2_rl/player.py are not hashed by this record."
+      "rationale": "Easy to get wrong in the direction of drawing CardsVar cards. Both sides draw exactly one, and both route through the standard draw path so the hand cap, the reshuffle-on-empty and the per-card draw hooks fire identically (player._draw, player.py:634-). Rule 7: sts2_rl/cmds.py and sts2_rl/player.py are not hashed by this record."
     },
     {
       "what": "N4: `cardPlay.Card.Owner == base.Owner` (IronClub.cs:85) and the PlayerChoiceContext threaded into the draw",

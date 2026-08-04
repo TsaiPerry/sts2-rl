@@ -11,7 +11,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     }
   ],
@@ -29,7 +29,7 @@
     "CanonicalTags": {
       "maps_to": "DefendCard.tags = frozenset({\"defend\"}) (defend.py:19)",
       "verdict": "faithful",
-      "rationale": "`new HashSet<CardTag> { CardTag.Defend }` (DefendIronclad.cs:15) == the tag set. Load-bearing: the Fortified enchantment gates on `\"defend\" in card.tags` (enchantments.py:286-287)."
+      "rationale": "`new HashSet<CardTag> { CardTag.Defend }` (DefendIronclad.cs:15) == the tag set. Load-bearing: re-verified 2026-08-04 (enchantments.py moved) -- the sim's `SpiralEnchantment.can_enchant` gates on `card.rarity == BASIC and (\"strike\" in card.tags or \"defend\" in card.tags)` (enchantments.py:287-289, was :286-287) and `GoopyEnchantment.can_enchant` gates on `\"defend\" in card.tags` alone (enchantments.py:436) -- both unchanged in substance, only shifted down by one line; content re-read and matches."
     },
     "CanonicalVars": {
       "maps_to": "DefendCard._block = 5 (defend.py:23)",

@@ -27,7 +27,7 @@
     "AfterAddedToRoom": {
       "maps_to": "FrogKnight.__init__ -> PowerCmd.apply(hooks, self, PlatingPower, 15) and self._has_beetle_charged = False (frog_knight.py:37-42)",
       "verdict": "deliberate-divergence",
-      "rationale": "SHARED-FINDINGS section 2 (monster stream), copied verbatim per governing rule 3 and not re-derived. The sim has no add-to-room phase -- creature creation *is* construction -- so AfterAddedToRoom's effect is applied from __init__ (frog_knight.py:37-42). Same observable today, established by execution rather than assumed, on all three clauses: (a) listener set -- the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:26-40 / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on `target is self.player` / `applier is self.player` / `card is not None`, and a monster's starting power is self-applied with no card, so none of them can fire. sts2_rl/potions.py implements none of the four hooks. (b) HP-roll inversion -- the sim applies the power before the Niche roll and the game after it; of the 35 constructor-applied power classes only IllusionPower mentions max_hp at all and only inside revive() (powers.py:1581), never at apply time. (c) roll ordering -- MachineMonster.__init__ rolls the first move (state_machine.py:301) *before* the subclass applies its powers, and `py audit/tools/monster_probes.py roll-order` shows all 29 machine sites are sticky-no-op: this unit's initial state is a MoveState, so monster_state_machine step 30's early return fires and the first roll evaluates no branch and reads no power. Concrete trigger that would make it a gap: any relic, potion or power that listens on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. RULE 7: the four relic files and powers.py cited above are NOT hashed by this record (powers.py IS hashed here for other entries); flagged explicitly as the shared finding instructs. ESCALATION CHECK: FrogKnight.cs:60-65 does TWO things -- PlatingPower at PlatingAmount and `HasBeetleCharged = false`. The amount is GetValueIfAscension(ToughEnemies, 19, 15) -> 15 = _PLATING (frog_knight.py:23). The flag reset is a no-op against a freshly constructed sim instance (a sim monster is never reused across combats; CombatState builds new ones at combat.py:134), and the sim sets the same field to False anyway. One ORDERING subtlety the shared finding does not cover, checked rather than assumed: the sim assigns _has_beetle_charged AFTER super().__init__() has already built the machine and rolled, and the HALF_HEALTH branch's lambdas read that attribute -- but the initial state is the MoveState TONGUE_LASH, so the constructor roll takes step 30's sticky early return, evaluates no condition and never touches the attribute. Executed: `py audit/tools/monster_probes_b07.py branch-order` constructs a live FrogKnight and prints its branch without raising AttributeError."
+      "rationale": "SHARED-FINDINGS section 2 (monster stream), copied verbatim per governing rule 3 and not re-derived. The sim has no add-to-room phase -- creature creation *is* construction -- so AfterAddedToRoom's effect is applied from __init__ (frog_knight.py:37-42). Same observable today, established by execution rather than assumed, on all three clauses: (a) listener set -- the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:26-40 / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on `target is self.player` / `applier is self.player` / `card is not None`, and a monster's starting power is self-applied with no card, so none of them can fire. sts2_rl/potions.py implements none of the four hooks. (b) HP-roll inversion -- the sim applies the power before the Niche roll and the game after it; of the 35 constructor-applied power classes only IllusionPower mentions max_hp at all and only inside revive() (powers.py:2067), never at apply time. (c) roll ordering -- MachineMonster.__init__ rolls the first move (state_machine.py:301) *before* the subclass applies its powers, and `py audit/tools/monster_probes.py roll-order` shows all 29 machine sites are sticky-no-op: this unit's initial state is a MoveState, so monster_state_machine step 30's early return fires and the first roll evaluates no branch and reads no power. Concrete trigger that would make it a gap: any relic, potion or power that listens on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. RULE 7: the four relic files and powers.py cited above are NOT hashed by this record (powers.py IS hashed here for other entries); flagged explicitly as the shared finding instructs. ESCALATION CHECK: FrogKnight.cs:60-65 does TWO things -- PlatingPower at PlatingAmount and `HasBeetleCharged = false`. The amount is GetValueIfAscension(ToughEnemies, 19, 15) -> 15 = _PLATING (frog_knight.py:23). The flag reset is a no-op against a freshly constructed sim instance (a sim monster is never reused across combats; CombatState builds new ones at combat.py:241), and the sim sets the same field to False anyway. One ORDERING subtlety the shared finding does not cover, checked rather than assumed: the sim assigns _has_beetle_charged AFTER super().__init__() has already built the machine and rolled, and the HALF_HEALTH branch's lambdas read that attribute -- but the initial state is the MoveState TONGUE_LASH, so the constructor roll takes step 30's sticky early return, evaluates no condition and never touches the attribute. Executed: `py audit/tools/monster_probes_b07.py branch-order` constructs a live FrogKnight and prints its branch without raising AttributeError."
     },
     "GenerateAnimator": {
       "maps_to": "(dropped)",
@@ -72,17 +72,22 @@
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\combat.py",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     }
   ]

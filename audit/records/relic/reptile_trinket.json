@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -37,7 +37,7 @@
       "rationale": "ReptileTrinket.cs:18 pins `new PowerVar<StrengthPower>(3m)` and line 27 passes `DynamicVars.Strength.BaseValue`. No AscensionHelper.GetValueIfAscension in the file, so 3 is the non-ascension value. BaseValue at the only call site, so there is no IntValue/BaseValue split."
     },
     "AfterPotionUsed": {
-      "maps_to": "on_potion_used (reptile_trinket.py:23-29), dispatched from CombatState.use_potion (combat.py:610)",
+      "maps_to": "on_potion_used (reptile_trinket.py:23-29), dispatched from CombatState.use_potion (combat.py:1589-1631, hook fired at :1631)",
       "verdict": "faithful",
       "rationale": "ReptileTrinket.cs:22-29 applies `ReptileTrinketPower` with amount 3, target and applier both the owner's creature, cardSource null; reptile_trinket.py:26-29 does the same with `applier=self.player`. The power is ported and matches the source's inheritance: ReptileTrinketPower.cs:5 is `: TemporaryStrengthPower` with only an OriginModel override (presentation), and powers.py's ReptileTrinketPower is likewise a bare TemporaryStrengthPower subclass with power_type BUFF. EXECUTED (`py audit/tools/relic_probes_b13.py reptile-trinket`): one use gives [('reptile_trinket', 3), ('strength', 3)], a second stacks to 6/6, and the turn end reverts both to nothing -- which is what TemporaryStrengthPower means. SCOPE NOTE: the shared contract defers potions, but the relic's own behaviour is a Strength grant, so it is audited rather than skipped; the potion is only the trigger, the same disposition batch 1 recorded for relic/belt_buckle's potion hooks."
     },
@@ -51,7 +51,7 @@
     {
       "what": "N1: `potion.Owner == base.Owner && CombatManager.Instance.IsInProgress` (ReptileTrinket.cs:24) -- both dropped by the port",
       "verdict": "faithful",
-      "rationale": "Both are structurally satisfied rather than missing. The owner check is single-player. The IsInProgress check is the load-bearing one, and it is EXECUTED-checked rather than assumed: `grep -rn on_potion_used sts2_rl/` shows exactly one dispatch site outside hooks.py and the listeners -- combat.py:610, inside CombatState.use_potion -- so an out-of-combat potion use cannot reach this relic in the sim. Checked deliberately because the relic would otherwise apply a combat power with no combat state and crash on self.player. NOTE per binding rule 7: combat.py and hooks.py are not hashed by this record."
+      "rationale": "Both are structurally satisfied rather than missing. The owner check is single-player. The IsInProgress check is the load-bearing one, and it is EXECUTED-checked rather than assumed: `grep -rn on_potion_used sts2_rl/` shows exactly one dispatch site outside hooks.py and the listeners -- combat.py:1631, inside CombatState.use_potion (def at :1589) -- so an out-of-combat potion use cannot reach this relic in the sim. Checked deliberately because the relic would otherwise apply a combat power with no combat state and crash on self.player. NOTE per binding rule 7: combat.py and hooks.py are not hashed by this record."
     },
     {
       "what": "N2: the relic grants ReptileTrinketPower, a temporary-Strength WRAPPER, not StrengthPower directly -- and that is what makes it safe against two other relics",

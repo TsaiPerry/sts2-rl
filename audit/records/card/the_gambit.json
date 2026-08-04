@@ -6,31 +6,31 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_skills.py",
-    "sha256": "1cdf31a3bd59e95b239df163b0724e4f99ef299bd67256cc94fcc683e1ed1840"
+    "sha256": "73d875726c8cb8ca6a213dea6f43267d57717f5a1d6b65d34ca2ecea7f4ab66f"
   },
   "hooks": {
     "GainsBlock": {
-      "maps_to": "TheGambitCard.gains_block = True (colorless_skills.py:755)",
+      "maps_to": "TheGambitCard.gains_block = True (colorless_skills.py:828)",
       "verdict": "faithful",
       "rationale": "`public override bool GainsBlock => true` (TheGambit.cs:14) == the class attribute."
     },
     "ctor": {
-      "maps_to": "class attrs (colorless_skills.py:754-759) + _init_vars (761-763)",
+      "maps_to": "class attrs (colorless_skills.py:827-832) + _init_vars (834-836)",
       "verdict": "faithful",
       "rationale": "`base(0, CardType.Skill, CardRarity.Rare, TargetType.Self)` (TheGambit.cs:18-21) == cost 0 / SKILL / RARE / SELF. No keywords."
     },
     "CanonicalVars": {
-      "maps_to": "TheGambitCard._block = 50 (colorless_skills.py:763)",
+      "maps_to": "TheGambitCard._block = 50 (colorless_skills.py:836)",
       "verdict": "faithful",
       "rationale": "`new BlockVar(50m, ValueProp.Move)` (TheGambit.cs:16) == `_block = 50` -- the largest block number in the pool, beating card/impervious's and card/panic_button's 30. Move without Unpowered -> POWERED block, so Vambrace doubles it to 100 on both sides and this card is NOT in gap G1's blast radius, which matters more here than anywhere else in the pool."
     },
     "OnPlay": {
-      "maps_to": "TheGambitCard.on_play (colorless_skills.py:768-772)",
+      "maps_to": "TheGambitCard.on_play (colorless_skills.py:841-845)",
       "verdict": "faithful",
       "rationale": "Order matches: `CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, cardPlay)` FIRST (TheGambit.cs:25) == `BlockCmd.apply`, then `PowerCmd.Apply<TheGambitPower>(..., 1m, ...)` (26) == `PowerCmd.apply(..., TheGambitPower, 1, applier=ctx.player)`. The order is load-bearing -- the die-on-unblocked-damage power is applied AFTER the 50 block exists -- and is preserved."
     },
     "OnUpgrade": {
-      "maps_to": "TheGambitCard._on_upgrade (colorless_skills.py:765-766)",
+      "maps_to": "TheGambitCard._on_upgrade (colorless_skills.py:838-839)",
       "verdict": "faithful",
       "rationale": "`DynamicVars.Block.UpgradeValueBy(25m)` (TheGambit.cs:31) == `self._block += 25` (50 -> 75). The largest upgrade delta in the pool."
     }

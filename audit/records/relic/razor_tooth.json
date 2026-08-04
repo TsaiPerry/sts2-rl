@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -56,7 +56,7 @@
     {
       "what": "N3: 'for the rest of the combat' -- the upgrade must not reach the run deck",
       "verdict": "faithful",
-      "rationale": "C# upgrades the combat CardModel instance (CardCmd.Upgrade(cardPlay.Card)); the sim upgrades the combat Card instance. The sim's combat piles are a deepcopy of the run deck (RunState.create_combat, run.py:1136, whose docstring says 'the game clones canonical cards into each combat the same way'), so the upgrade cannot leak. EXECUTED end to end above: after finish_combat the run deck's upgrade levels are all 0 even though the played Strike reached level 1 in combat. NOTE per binding rule 7: run.py is not hashed by this record."
+      "rationale": "C# upgrades the combat CardModel instance (CardCmd.Upgrade(cardPlay.Card)); the sim upgrades the combat Card instance. The sim's combat piles are a deepcopy of the run deck (RunState.create_combat, run.py:1680-1685, whose docstring says 'the game clones canonical cards into each combat the same way'), so the upgrade cannot leak. EXECUTED end to end above: after finish_combat the run deck's upgrade levels are all 0 even though the played Strike reached level 1 in combat. NOTE per binding rule 7: run.py is not hashed by this record."
     },
     {
       "what": "N4: C# has NO IsAutoPlay exclusion and no IsInProgress guard here",

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_skills.py",
-    "sha256": "1cdf31a3bd59e95b239df163b0724e4f99ef299bd67256cc94fcc683e1ed1840"
+    "sha256": "73d875726c8cb8ca6a213dea6f43267d57717f5a1d6b65d34ca2ecea7f4ab66f"
   },
   "extra_sources": [
     {
@@ -16,30 +16,30 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     }
   ],
   "hooks": {
     "CanonicalKeywords": {
-      "maps_to": "ScrawlCard.exhausts = True (colorless_skills.py:579)",
+      "maps_to": "ScrawlCard.exhausts = True (colorless_skills.py:645)",
       "verdict": "faithful",
       "rationale": "`{ CardKeyword.Exhaust }` (Scrawl.cs:11) == `exhausts = True`."
     },
     "ctor": {
-      "maps_to": "class attrs (colorless_skills.py:574-579) + _init_vars (581-583)",
+      "maps_to": "class attrs (colorless_skills.py:640-645) + _init_vars (647-649)",
       "verdict": "faithful",
       "rationale": "`base(1, CardType.Skill, CardRarity.Rare, TargetType.Self)` (Scrawl.cs:13-16) == cost 1 / SKILL / RARE / SELF. No CanonicalVars -- the draw count is computed."
     },
     "OnPlay": {
-      "maps_to": "ScrawlCard.on_play (colorless_skills.py:588-590)",
+      "maps_to": "ScrawlCard.on_play (colorless_skills.py:654-656)",
       "verdict": "faithful",
-      "rationale": "`int num = CardPile.MaxCardsInHand - Owner.PlayerCombatState.Hand.Cards.Count; await CardPileCmd.Draw(choiceContext, num, Owner)` (Scrawl.cs:20-21) == `DrawCmd.draw(ctx.player, ctx.player.MAX_HAND_SIZE - len(ctx.player.hand))`. MaxCardsInHand is 10 on both sides (CardPile.cs:21, player.py:56), and Scrawl itself is out of the hand when the count is taken on both sides (Play pile in C#, discard-pile limbo in the sim), so it draws to a FULL hand rather than one short."
+      "rationale": "`int num = CardPile.MaxCardsInHand - Owner.PlayerCombatState.Hand.Cards.Count; await CardPileCmd.Draw(choiceContext, num, Owner)` (Scrawl.cs:20-21) == `DrawCmd.draw(ctx.player, ctx.player.MAX_HAND_SIZE - len(ctx.player.hand))`. MaxCardsInHand is 10 on both sides (CardPile.cs:21, player.py:68), and Scrawl itself is out of the hand when the count is taken on both sides (Play pile in C#, discard-pile limbo in the sim), so it draws to a FULL hand rather than one short."
     },
     "OnUpgrade": {
-      "maps_to": "ScrawlCard._on_upgrade (colorless_skills.py:585-586)",
+      "maps_to": "ScrawlCard._on_upgrade (colorless_skills.py:651-652)",
       "verdict": "faithful",
-      "rationale": "`AddKeyword(CardKeyword.Retain)` (Scrawl.cs:26) == `self.retain = True`, and the flag IS re-seeded in `_init_vars` (`self.retain = False`, colorless_skills.py:583), so `downgrade()` restores it -- `py audit/tools/card_probes.py downgrade` does not list scrawl. The correct pattern, unlike card/wish, which gains the same keyword and does not re-seed."
+      "rationale": "`AddKeyword(CardKeyword.Retain)` (Scrawl.cs:26) == `self.retain = True`, and the flag IS re-seeded in `_init_vars` (`self.retain = False`, colorless_skills.py:649), so `downgrade()` restores it -- `py audit/tools/card_probes.py downgrade` does not list scrawl. The correct pattern, unlike card/wish, which gains the same keyword and does not re-seed."
     }
   },
   "guards": [],

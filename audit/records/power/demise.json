@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -41,43 +41,43 @@
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "63c0df752ca09e9de59285b0c9bc9be809da18e69b61b65424d75f37ee1ffc6b",
+      "sha256": "416789386ad4af19cb52a3c275a2c39c1708bb90ebc4dc5c8fb4e88a7055d557",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:4050 `power_type = PowerType.DEBUFF`",
+      "maps_to": "powers.py:5001 `power_type = PowerType.DEBUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-140 Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:137-140) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
     },
     "AfterSideTurnEnd": {
-      "maps_to": "powers.py:4052-4065 DemisePower._fire via on_player_turn_end / on_enemy_side_end",
+      "maps_to": "powers.py:5003-5016 DemisePower._fire via after_player_turn_end / on_enemy_side_end",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the player-side leg moved off the sim's Hook.BeforeTurnEnd slot (`on_player_turn_end`) onto `after_player_turn_end`, which combat.py:809 dispatches AFTER `_process_turn_end_cards` and the hand flush -- the sim's port of Hook.AfterTurnEnd (CombatManager.cs:1307), the dispatcher for AbstractModel.AfterSideTurnEnd (Hook.cs:1267-1292). VERIFIED 2026-07-27 by reading combat.py:781-812 and this power's class in powers.py. WAS: the effect ran inside Hook.BeforeTurnEnd, so its order relative to the turn-end card effects, the flush and Stampede's turn-end auto-plays was hook registration order. The registration-order witness is doubly gone: StampedePower also moved, to `after_auto_post_play_phase_entered` (powers.py:1089), which combat.py:789 fires strictly before this slot."
+      "issue": "Closed 2026-07-27: the player-side leg moved off the sim's Hook.BeforeTurnEnd slot (`on_player_turn_end`) onto `after_player_turn_end`, which combat.py:1796 dispatches AFTER `_process_turn_end_cards` (combat.py:1776) and the hand flush -- the sim's port of Hook.AfterTurnEnd (CombatManager.cs:1307), the dispatcher for AbstractModel.AfterSideTurnEnd (Hook.cs:1267-1292). VERIFIED 2026-08-04 by re-reading combat.py:1755-1799 and this power's class in powers.py (DemisePower now at powers.py:4991-5016). WAS: the effect ran inside Hook.BeforeTurnEnd, so its order relative to the turn-end card effects, the flush and Stampede's turn-end auto-plays was hook registration order. The registration-order witness is doubly gone: StampedePower also moved, to `after_auto_post_play_phase_entered` (powers.py:1384), which combat.py:1763 fires strictly before this slot."
     }
   },
   "guards": [
     {
       "what": "DemisePower.cs:21 `participants.Contains(base.Owner)`",
       "verdict": "faithful",
-      "rationale": "Self-filtered on both legs (powers.py:4060, :4064)."
+      "rationale": "Self-filtered on both legs (powers.py:5011, :5015)."
     },
     {
       "what": "DemisePower.cs:24 ValueProp.Unblockable | ValueProp.Unpowered, dealer null",
       "verdict": "faithful",
-      "rationale": "powers.py:4055-4057 passes DamageProps.NON_CARD_HP_LOSS, which is exactly UNBLOCKABLE | UNPOWERED (valueprops.py:45), and omits the dealer, matching C#'s explicit null. Exact on both."
+      "rationale": "powers.py:5006-5008 passes DamageProps.NON_CARD_HP_LOSS, which is exactly UNBLOCKABLE | UNPOWERED (valueprops.py:45), and omits the dealer, matching C#'s explicit null. Exact on both."
     },
     {
       "what": "The stack never decrements, so the damage repeats every turn",
       "verdict": "faithful",
-      "rationale": "C# neither decrements nor removes; powers.py:4052-4057 likewise only damages. The sim's docstring states it and the code matches."
+      "rationale": "C# neither decrements nor removes; powers.py:5003-5008 likewise only damages. The sim's docstring states it and the code matches."
     }
   ],
   "verdict": "faithful",
-  "audited": "2026-07-26"
+  "audited": "2026-08-04"
 }

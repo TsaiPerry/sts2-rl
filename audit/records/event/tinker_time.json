@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/cards/mad_science.py",
-      "sha256": "2ede1a12f1aa80dfde0f095c34997387210e6856011a40c954199fe33aa37c73",
+      "sha256": "51a3413baaa2dcc8b9bbc49b04e5ca2475d4e1f511bf46230bedd9f1e9c8ca33",
       "side": "sim"
     },
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -54,7 +54,7 @@
     },
     {
       "what": "RiderChosen (TinkerTime.cs:153-160): CreateCard<MadScience> with TinkerTimeType = ChosenCardType and TinkerTimeRider = rider, then CardPileCmd.Add(card, PileType.Deck)",
-      "maps_to": "events/tinker_time.py:72-77 MadScienceCard().configure(type, rider) then run.add_card, which runs the deck-entry hook CardPileCmd.Add runs (run.py:341-354) -- so this is NOT in creature_card_cmds G3's radius. The option keys mirror GetRiderLocKey's suffixes (SAPPING, VIOLENCE, CHOKING, ENERGIZED, WISDOM, CHAOS, EXPERTISE, CURIOUS, IMPROVEMENT) via `rider.upper()`, and the type keys mirror ATTACK / SKILL / POWER.",
+      "maps_to": "events/tinker_time.py:72-77 MadScienceCard().configure(type, rider) then run.add_card, which runs the deck-entry hook CardPileCmd.Add runs (run.py:524-537, was :341-354) -- so this is NOT in creature_card_cmds G3's radius. The option keys mirror GetRiderLocKey's suffixes (SAPPING, VIOLENCE, CHOKING, ENERGIZED, WISDOM, CHAOS, EXPERTISE, CURIOUS, IMPROVEMENT) via `rider.upper()`, and the type keys mirror ATTACK / SKILL / POWER.",
       "verdict": "faithful"
     },
     {

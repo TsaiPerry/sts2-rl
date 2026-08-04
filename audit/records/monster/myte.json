@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\hive\\myte.py",
-    "sha256": "bc6ef4c204d408d2df040defecd1139441a2dc87b165c3b6c0f5456016f2190f"
+    "sha256": "8217e2d8750af4e2d7b8ee780858714fb8e311699ac944381c2f77d459495ef9"
   },
   "hooks": {
     "MinInitialHp": {
@@ -73,6 +73,11 @@
     {
       "path": "src\\Core\\Models\\Encounters\\MytesNormal.cs",
       "sha256": "a692069de3319666bc1703ffa7260ac5bf7019aacfdc727b54a747cb30cd7594",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\MonsterMoves\\MonsterMoveStateMachine\\MonsterMoveStateMachine.cs",
+      "sha256": "467f003e8a7586372fb8a16756a05b40c552e52cf19d32441ed2e2924cec8dd3",
       "side": "game"
     }
   ]

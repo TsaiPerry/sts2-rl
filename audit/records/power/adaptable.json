@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -71,17 +71,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
@@ -91,12 +91,12 @@
     },
     {
       "path": "sts2_rl/monsters/hive/the_obscura.py",
-      "sha256": "8ffc0b4fdb22396d575ec4c72534b1c7812a85f2e220e75661b888346d578029",
+      "sha256": "a9357ba59776300e71f962e6e455d9591a84fbe2be72196a0f0b18fa0472e6e3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/overgrowth/fogmog.py",
-      "sha256": "e5161c53f584695d3b8bcd0447f1255f2698f2cc54d7d0d42e12f07ec8aa403a",
+      "sha256": "7b30f626b55b5758bd4492f5f03ae77d6eb5f19b63a7440d4bbe3fa22056d439",
       "side": "sim"
     },
     {
@@ -111,13 +111,13 @@
     },
     {
       "path": "sts2_rl/rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:3350 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py:4211 `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
@@ -175,7 +175,7 @@
     {
       "what": "The prevention branch's HP contract: sim `hp = 1` vs C# leaving the creature at 0 and re-entering KillWithoutCheckingWinCondition",
       "verdict": "faithful",
-      "issue": "The record misidentified the mechanism this unit reaches. AdaptablePower has no `ShouldDie` override, so it never takes `_resolve_death`'s prevention (else) arm at all — it takes the real-death arm, exactly as `cmds.py:126-220` and `powers.py:4237-4250` already implement (both carry their own citations to this effect). The record's own \"prevention branch's HP contract\" framing, and its \"re-entry not modelled\" residue, both belong to true `ShouldDie` preventers, not this unit. Nothing to fix here; replaced the record's reasoning, not its intent. Verified by execution (test_r14_power_cmd.py)."
+      "issue": "The record misidentified the mechanism this unit reaches. AdaptablePower has no `ShouldDie` override, so it never takes `_resolve_death`'s prevention (else) arm at all \u2014 it takes the real-death arm, exactly as `cmds.py:126-220` and `powers.py:4237-4250` already implement (both carry their own citations to this effect). The record's own \"prevention branch's HP contract\" framing, and its \"re-entry not modelled\" residue, both belong to true `ShouldDie` preventers, not this unit. Nothing to fix here; replaced the record's reasoning, not its intent. Verified by execution (test_r14_power_cmd.py)."
     },
     {
       "what": "The non-damage kill path: CreatureCmd.kill reproduces both arms but fires no on_damage_received",

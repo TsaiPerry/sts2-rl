@@ -26,17 +26,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -65,12 +65,12 @@
     {
       "what": "N2: `CreatureCmd.GainMaxHp(Owner.Creature, MaxHp.BaseValue)` (ChosenCheese.cs:19) vs `self.player.max_hp += 1` followed by `CreatureCmd.heal(hooks, player, 1)` (chosen_cheese.py:25-26)",
       "verdict": "faithful",
-      "rationale": "GainMaxHp is SetMaxHp followed by Heal of the same delta (CreatureCmd.cs:786-799), which is what the two inlined lines do -- and the sim even has the packaged version, CreatureCmd.gain_max_hp (cmds.py:169-177), doing precisely this. The heal half matters: without it the relic would raise the cap without filling it. Heal runs no hook chain in either codebase (CreatureCmd.cs:691-703), so the inlining loses nothing. Rule 7: CreatureCmd.cs and cmds.py are not hashed here."
+      "rationale": "GainMaxHp is SetMaxHp followed by Heal of the same delta (CreatureCmd.cs:786-799), which is what the two inlined lines do -- and the sim even has the packaged version, CreatureCmd.gain_max_hp (cmds.py:590-597, was :169-177), doing precisely this. The heal half matters: without it the relic would raise the cap without filling it. Heal runs no hook chain in either codebase (CreatureCmd.cs:691-703), so the inlining loses nothing. Rule 7: CreatureCmd.cs and cmds.py are not hashed here."
     },
     {
       "what": "N3: the Max HP must survive the combat -- combat-state max_hp vs the run's",
       "verdict": "faithful",
-      "rationale": "The relic writes to `self.player.max_hp`, which is the PlayerCombatState's copy; a relic whose whole payoff is permanent Max HP is worthless if that copy is discarded. RunState.finish_combat syncs it back (`self.max_hp = combat.player.max_hp`, run.py:1178). EXECUTED (`py audit/tools/relic_probes.py batch3`): a run with the relic goes `run max_hp/hp (80, 80) -> (81, 81)` across a won combat, matching C#. Checked because batch 1's relic/big_mushroom failed the analogous question and lost 20 Max HP on the add_relic path. Rule 7: run.py is not hashed here."
+      "rationale": "The relic writes to `self.player.max_hp`, which is the PlayerCombatState's copy; a relic whose whole payoff is permanent Max HP is worthless if that copy is discarded. RunState.finish_combat syncs it back (`self.max_hp = combat.player.max_hp`, run.py:1741, was :1178). EXECUTED (`py audit/tools/relic_probes.py batch3`): a run with the relic goes `run max_hp/hp (80, 80) -> (81, 81)` across a won combat, matching C#. Checked because batch 1's relic/big_mushroom failed the analogous question and lost 20 Max HP on the add_relic path. Rule 7: run.py is not hashed here."
     },
     {
       "what": "N4: `MaxHpVar(1m).BaseValue` (ChosenCheese.cs:14, 19) vs `MAX_HP = 1` (chosen_cheese.py:17)",

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\hive\\decimillipede.py",
-    "sha256": "244ffa9562b7b0ede9c2fc54332f3d74755a86379cf079447e9ce1bbf24fc788"
+    "sha256": "77ec76f14c949895218e4e144732f82cef52cfeb63f7f831437139f4d1da2222"
   },
   "hooks": {
     "MinInitialHp": {
@@ -65,9 +65,9 @@
       "rationale": "SHARED-FINDINGS section 4 says not to reflex-waive this one, so it was traced: the only reader in the entire game is DoomPower.cs:90, inside `PlayVfx`, feeding StartDoomAnim and NDoomVfx.Create as the 'does the sprite vanish' flag (DoomPower.cs:80-144). DoomKill itself never consults it. So `false` (DecimillipedeSegment.cs:93) only stops the doom animation from making a segment disappear -- fitting, since a segment's corpse is meant to stay on the board. Presentation."
     },
     "AfterAddedToRoom": {
-      "maps_to": "adjust_hp_after_added (decimillipede.py:54-68), called from combat.py:255-257, plus the ReattachPower application in __init__ (decimillipede.py:50-52)",
+      "maps_to": "adjust_hp_after_added (decimillipede.py:54-68), called from combat.py:483-512 (after_creature_added), plus the ReattachPower application in __init__ (decimillipede.py:50-52)",
       "verdict": "deliberate-divergence",
-      "rationale": "SHARED-FINDINGS section 2, copied verbatim in substance: the sim has no add-to-room phase -- creature creation IS construction -- so AfterAddedToRoom's effect is applied from __init__ (decimillipede.py:50-52). The game runs it from MonsterModel.AfterAddedToRoom awaited by CombatManager.AfterCreatureAdded (CombatManager.cs:860-867) inside StartCombatInternal (CombatManager.cs:393-398), i.e. after every creature is on the board and before Hook.BeforeCombatStart. Same observable today on all three of section 2's clauses (listener set / HP-roll inversion / roll ordering); the concrete trigger that would make it a gap is a relic, potion or power listening on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. Rule 7: the four relic files and sts2_rl/powers.py that section 2's clause (a)/(b) argument cites are NOT hashed by this record. This unit's override does TWO things (DecimillipedeSegment.cs:120-144) and the sim splits them. (1) The even-and-unique HP pass: round MaxHp up to even, then add 2 while any teammate already holds that value, wrapping MaxInitialHp back to MinInitialHp, then CreatureCmd.SetMaxAndCurrentHp. The sim runs this from `adjust_hp_after_added`, which combat.py:255-257 invokes for each enemy AFTER the parity Niche HP roll -- the correct order, because C# also rolls HP at creature creation and only then runs AfterAddedToRoom. The teammate set is right too: CombatManager.StartCombatInternal loops `foreach (creature in _state.Creatures) await AfterCreatureAdded(creature)` (CombatManager.cs:393-398, 860-867), so every segment is already on the board with its raw rolled HP when the first segment runs its pass -- exactly what `[o for o in enemies if o is not e]` gives. (2) PowerCmd.Apply<ReattachPower>(Creature, 25m) -> PowerCmd.apply(hooks, self, ReattachPower, 25) in __init__. The sim therefore applies the power BEFORE the HP pass and the game after it; the amount is the literal 25 on both sides and ReattachPower reads no HP at apply time, so the inversion is not observable. Executed: monster_probes_b04.py deci-hp."
+      "rationale": "SHARED-FINDINGS section 2, copied verbatim in substance: the sim has no add-to-room phase -- creature creation IS construction -- so AfterAddedToRoom's effect is applied from __init__ (decimillipede.py:50-52). The game runs it from MonsterModel.AfterAddedToRoom awaited by CombatManager.AfterCreatureAdded (CombatManager.cs:860-867) inside StartCombatInternal (CombatManager.cs:393-398), i.e. after every creature is on the board and before Hook.BeforeCombatStart. Same observable today on all three of section 2's clauses (listener set / HP-roll inversion / roll ordering); the concrete trigger that would make it a gap is a relic, potion or power listening on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. Rule 7: the four relic files and sts2_rl/powers.py that section 2's clause (a)/(b) argument cites are NOT hashed by this record. This unit's override does TWO things (DecimillipedeSegment.cs:120-144) and the sim splits them. (1) The even-and-unique HP pass: round MaxHp up to even, then add 2 while any teammate already holds that value, wrapping MaxInitialHp back to MinInitialHp, then CreatureCmd.SetMaxAndCurrentHp. The sim runs this from `adjust_hp_after_added`, which combat.py:483-512 (`after_creature_added`) invokes for each enemy AFTER the parity Niche HP roll -- the correct order, because C# also rolls HP at creature creation and only then runs AfterAddedToRoom. The teammate set is right too: CombatManager.StartCombatInternal loops `foreach (creature in _state.Creatures) await AfterCreatureAdded(creature)` (CombatManager.cs:393-398, 860-867), so every segment is already on the board with its raw rolled HP when the first segment runs its pass -- exactly what `[o for o in enemies if o is not e]` gives. (2) PowerCmd.Apply<ReattachPower>(Creature, 25m) -> PowerCmd.apply(hooks, self, ReattachPower, 25) in __init__. The sim therefore applies the power BEFORE the HP pass and the game after it; the amount is the literal 25 on both sides and ReattachPower reads no HP at apply time, so the inversion is not observable. Executed: monster_probes_b04.py deci-hp."
     },
     "AfterDeath": {
       "maps_to": "(none -- presentation)",
@@ -89,7 +89,7 @@
     {
       "what": "death is NOT removal: a withered segment keeps taking turns",
       "verdict": "faithful",
-      "rationale": "This is the shape PROMPT.md bug class 21 warns about, and the port gets it RIGHT -- checked deliberately because the stream prompt asked. C#: ReattachPower.ShouldCreatureBeRemovedFromCombatAfterDeath returns false for its owner (ReattachPower.cs:87-94), so the segment really dies (AfterDeath fires) and only its REMOVAL from Enemies is vetoed; ReattachPower.AfterDeath (:52-70) then sets isReviving and calls SetMoveImmediate(DeadState). The sim ports it onto the matching hook, `should_remove_from_combat_after_death` (powers.py:2338-2341, dispatched by hooks.py:603-610), NOT onto `should_die`: cmds.py:96-110 and :190-206 take the `should_die` TRUE arm, set `retained_after_death = not should_remove_from_combat_after_death(target)` and then fire `hooks.on_death`. combat.py:286-306's enemy loop skips only enemies that are gone AND not retained, so the corpse keeps taking turns. Executed (monster_probes_b04.py deci-death): killing a segment gives hp=0, is_dead=True, retained_after_death=True, `on_death dispatches: ['Decimillipede']` (a should_die veto would have fired none), the move parked on DEAD_MOVE, and the next four enemy sides run DEAD -> REATTACH -> WRITHE(25 hp) -> CONSTRICT(25) -> BULK(25). Contrast waterfall_giant, where the same C# member IS ported onto should_die and the gap is live."
+      "rationale": "This is the shape PROMPT.md bug class 21 warns about, and the port gets it RIGHT -- checked deliberately because the stream prompt asked. C#: ReattachPower.ShouldCreatureBeRemovedFromCombatAfterDeath returns false for its owner (ReattachPower.cs:87-94), so the segment really dies (AfterDeath fires) and only its REMOVAL from Enemies is vetoed; ReattachPower.AfterDeath (:52-70) then sets isReviving and calls SetMoveImmediate(DeadState). The sim ports it onto the matching hook, `should_remove_from_combat_after_death` (powers.py:2976-2978, dispatched by hooks.py:1892-1899), NOT onto `should_die`: cmds.py:96-110 and :190-206 take the `should_die` TRUE arm, set `retained_after_death = not should_remove_from_combat_after_death(target)` and then fire `hooks.on_death`. combat.py:733-771's enemy loop skips only enemies that are gone AND not retained, so the corpse keeps taking turns. Executed (monster_probes_b04.py deci-death): killing a segment gives hp=0, is_dead=True, retained_after_death=True, `on_death dispatches: ['Decimillipede']` (a should_die veto would have fired none), the move parked on DEAD_MOVE, and the next four enemy sides run DEAD -> REATTACH -> WRITHE(25 hp) -> CONSTRICT(25) -> BULK(25). Contrast waterfall_giant, where the same C# member IS ported onto should_die and the gap is live."
     },
     {
       "what": "creature_card_cmds step 26 (SetMaxAndCurrentHp raw-assigned) -- does Decimillipede make it LIVE?",
@@ -99,7 +99,7 @@
     {
       "what": "the HP pass is implemented TWICE in the sim",
       "verdict": "deliberate-divergence",
-      "rationale": "decimillipede.py:54-68 (`adjust_hp_after_added`, the faithful port, driven by combat.py:255-257) and decimillipede.py:159-167 (an inline copy inside DecimillipedeEncounter.create_monsters) implement the same even-and-unique rule. The duplication is deliberate coverage of the two modes: the encounter copy is what runs in LEGACY mode, where combat.py:252-257 is gated behind `if self._niche is not None` and `adjust_hp_after_added` is never called; in PARITY mode the encounter copy's result is overwritten by the Niche roll and then reshaped by the real port. Executed (monster_probes_b04.py deci-hp): both modes end with three even, distinct, positive HP values with hp == max_hp (legacy 40/46/44, parity 46/42/44), and re-running adjust_hp_after_added on top is idempotent (values unchanged, 0 hook calls). Same observable, two routes -- the maintenance hazard (two copies of one rule) is a code smell, not a fidelity divergence."
+      "rationale": "decimillipede.py:54-68 (`adjust_hp_after_added`, the faithful port, driven by combat.py:483-512) and decimillipede.py:159-167 (an inline copy inside DecimillipedeEncounter.create_monsters) implement the same even-and-unique rule. The duplication is deliberate coverage of the two modes: the encounter copy is what runs in LEGACY mode, where combat.py:266-268 is gated behind `if self._niche is not None` and `adjust_hp_after_added` is never called; in PARITY mode the encounter copy's result is overwritten by the Niche roll and then reshaped by the real port. Executed (monster_probes_b04.py deci-hp): both modes end with three even, distinct, positive HP values with hp == max_hp (legacy 40/46/44, parity 46/42/44), and re-running adjust_hp_after_added on top is idempotent (values unchanged, 0 hook calls). Same observable, two routes -- the maintenance hazard (two copies of one rule) is a code smell, not a fidelity divergence."
     },
     {
       "what": "AddBranch integer arguments",
@@ -114,7 +114,7 @@
     {
       "what": "enter_dead_state is unguarded where C# calls SetMoveImmediate",
       "verdict": "faithful",
-      "rationale": "ReattachPower.AfterDeath uses SetMoveImmediate(DeadState) with forceTransition defaulted to FALSE (ReattachPower.cs:62), so C# honours the NextMove.CanTransitionAway guard (MonsterModel.cs:420-432) while the sim's enter_dead_state (decimillipede.py:102-106) forces the state unconditionally. monster_state_machine G5 names DecimillipedeSegment as a trigger for exactly this missing guard, so it was checked (G5 itself is not re-verdicted). The guard can only bite while NextMove is the one must-perform-once move, REATTACH_MOVE, i.e. during the wither window -- and in that window the sim's ReattachPower early-returns on `self.is_reviving` before ever calling enter_dead_state (powers.py:2343-2352), so the forced transition is never attempted. Both sides therefore do nothing; the sim reaches that outcome one layer earlier."
+      "rationale": "ReattachPower.AfterDeath uses SetMoveImmediate(DeadState) with forceTransition defaulted to FALSE (ReattachPower.cs:62), so C# honours the NextMove.CanTransitionAway guard (MonsterModel.cs:420-432) while the sim's enter_dead_state (decimillipede.py:102-106) forces the state unconditionally. monster_state_machine G5 names DecimillipedeSegment as a trigger for exactly this missing guard, so it was checked (G5 itself is not re-verdicted). The guard can only bite while NextMove is the one must-perform-once move, REATTACH_MOVE, i.e. during the wither window -- and in that window the sim's ReattachPower early-returns on `self.is_reviving` before ever calling enter_dead_state (powers.py:2981-2991), so the forced transition is never attempted. Both sides therefore do nothing; the sim reaches that outcome one layer earlier."
     },
     {
       "what": "ReattachMove's IsLiveCombat guard",
@@ -177,22 +177,22 @@
     },
     {
       "path": "sts2_rl\\powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
@@ -202,8 +202,23 @@
     },
     {
       "path": "sts2_rl\\monsters\\hive\\decimillipede.py",
-      "sha256": "244ffa9562b7b0ede9c2fc54332f3d74755a86379cf079447e9ce1bbf24fc788",
+      "sha256": "77ec76f14c949895218e4e144732f82cef52cfeb63f7f831437139f4d1da2222",
       "side": "sim"
+    },
+    {
+      "path": "src\\Core\\Models\\Monsters\\Crusher.cs",
+      "sha256": "0a13fd0f53e6660990457d555507d64a1a43300532cbb2198122c46b7fe5de9b",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Monsters\\Rocket.cs",
+      "sha256": "64ce4ca6aa17ca7c94c9d184dedcf9c4c2adf8f493298a90036b79f8fd9f1ca7",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Powers\\NecroMasteryPower.cs",
+      "sha256": "c935df958d7601b89f85cf56b55c3e871677f805a61d114e877e294beb324c1c",
+      "side": "game"
     }
   ]
 }

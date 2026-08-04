@@ -1,84 +1,84 @@
 {
- "unit": "card/beat_down",
- "game_source": {
-  "path": "src\\Core\\Models\\Cards\\BeatDown.cs",
-  "sha256": "55f57d14071137e07984b667e80c5a2b2fe63b1a827b026ef139bc2137b46308"
- },
- "sim_source": {
-  "path": "sts2_rl\\cards\\colorless_skills.py",
-  "sha256": "1cdf31a3bd59e95b239df163b0724e4f99ef299bd67256cc94fcc683e1ed1840"
- },
- "extra_sources": [
-  {
-   "path": "src/Core/Commands/CardCmd.cs",
-   "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
-   "side": "game"
+  "unit": "card/beat_down",
+  "game_source": {
+    "path": "src\\Core\\Models\\Cards\\BeatDown.cs",
+    "sha256": "55f57d14071137e07984b667e80c5a2b2fe63b1a827b026ef139bc2137b46308"
   },
-  {
-   "path": "src/Core/Extensions/ListExtensions.cs",
-   "sha256": "026d54e616e257fe09c7d5cc82dabe26a2d29c82f419da7c973501179258f4f1",
-   "side": "game"
+  "sim_source": {
+    "path": "sts2_rl\\cards\\colorless_skills.py",
+    "sha256": "73d875726c8cb8ca6a213dea6f43267d57717f5a1d6b65d34ca2ecea7f4ab66f"
   },
-  {
-   "path": "sts2_rl/combat.py",
-   "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
-   "side": "sim"
+  "extra_sources": [
+    {
+      "path": "src/Core/Commands/CardCmd.cs",
+      "sha256": "8520d56b8db0c5c996dd0701f381d4e173e20731e50b056eed96c93ad4551904",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Extensions/ListExtensions.cs",
+      "sha256": "026d54e616e257fe09c7d5cc82dabe26a2d29c82f419da7c973501179258f4f1",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat_rng.py",
+      "sha256": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
+      "side": "sim"
+    },
+    {
+      "path": "test/test_rng_tripwire.py",
+      "sha256": "2265d317d867d7f296c12774adb73b43d9828aca995f80bb15e1a53deb29451f",
+      "side": "sim"
+    }
+  ],
+  "hooks": {
+    "ctor": {
+      "maps_to": "class attrs (colorless_skills.py:95-99) + _init_vars (101-103)",
+      "verdict": "faithful",
+      "rationale": "`base(3, CardType.Skill, CardRarity.Rare, TargetType.RandomEnemy)` (BeatDown.cs:18-21) == cost 3 / SKILL / RARE / RANDOM_ENEMY. No keywords, no tags."
+    },
+    "CanonicalVars": {
+      "maps_to": "BeatDownCard._cards = 3 (colorless_skills.py:103)",
+      "verdict": "faithful",
+      "rationale": "`new CardsVar(3)` (BeatDown.cs:16) == `_cards = 3`, read as `DynamicVars.Cards.IntValue` at the Take site."
+    },
+    "OnPlay": {
+      "maps_to": "BeatDownCard.on_play (colorless_skills.py:108-117)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-07-29 (round 7): All THREE divergences this entry stacked are closed at once. BeatDown.cs:26 is `.ToList().StableShuffle(Rng.Shuffle).Take(3)`, and `player.stable_shuffled_cards` is exactly that verb: it SORTS first by CardModel.CompareTo (ListExtensions.cs:22-31), which is what stops the pick depending on discard-pile order, and only then Fisher-Yates on the named **Shuffle** stream. colorless_skills.py calls it in place of `ctx.combat._rng.shuffle(candidates)`. Note this is StableShuffle, NOT the TakeRandom/UnstableShuffle its five siblings in this batch use -- the two verbs differ by that sort, and using the wrong one here would reintroduce the order dependence.  Pinned by test/test_take_random_streams.py, which gives every named accessor its own Random and asserts the site advanced the one its C# names and did NOT touch the shared `combat._rng`.  The auto-play still advances CombatTargets, which is correct (CardCmd.cs:77). NOT CLOSED: nothing at this site.  The text it replaced read: The candidate FILTER is faithful (`c.Type == CardType.Attack && !c.Keywords.Contains(CardKeyword.Unplayable)` on the discard pile, BeatDown.cs:26, == `c.card_type == CardType.ATTACK and c.is_playable` over `ctx.player.discard_pile`), and so is the per-card auto-play with the loop's early exit. THE SELECTION IS NOT. C# does `.ToList().StableShuffle(Owner.RunState.Rng.Shuffle).Take(IntValue)`: StableShuffle first SORTS the list (`list2.Sort()`, ListExtensions.cs:22-31 -- by CardModel.CompareTo, i.e. the canonical UPPERCASE-id order noted in the seed facts) so the result no longer depends on discard-pile order, THEN Fisher-Yates shuffles it on the named **Shuffle** stream. The sim calls `ctx.combat._rng.shuffle(candidates)` (colorless_skills.py:113): the unseeded shared `random.Random`, not `ctx.combat.combat_rng.shuffle` (the accessor exists -- combat_rng.py:17,50), with NO pre-sort, and Python's `random.shuffle` is a different Fisher-Yates variant. Three independent divergences stack: wrong stream, missing stabilising sort (so identical discard contents in a different order pick different cards), and a different draw sequence. Observable: under a string-seeded parity run Beat Down auto-plays a different set of attacks than the recorded run and desyncs the Shuffle stream for every later reshuffle. LIVE -- Beat Down is a ported Rare colorless Skill and the Shuffle parity stream is already wired (`CombatRng.parity`, combat_rng.py:41-46). REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
+    },
+    "OnUpgrade": {
+      "maps_to": "BeatDownCard._on_upgrade (colorless_skills.py:105-106)",
+      "verdict": "faithful",
+      "rationale": "`DynamicVars.Cards.UpgradeValueBy(1m)` (BeatDown.cs:49) == `self._cards += 1` (3 -> 4). Downgrade-safe; `card_probes.py downgrade` does not list beat_down."
+    }
   },
-  {
-   "path": "sts2_rl/combat_rng.py",
-   "sha256": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
-   "side": "sim"
-  },
-  {
-   "path": "sts2_rl/run.py",
-   "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
-   "side": "sim"
-  },
-  {
-   "path": "test/test_rng_tripwire.py",
-   "sha256": "2265d317d867d7f296c12774adb73b43d9828aca995f80bb15e1a53deb29451f",
-   "side": "sim"
-  }
- ],
- "hooks": {
-  "ctor": {
-   "maps_to": "class attrs (colorless_skills.py:95-99) + _init_vars (101-103)",
-   "verdict": "faithful",
-   "rationale": "`base(3, CardType.Skill, CardRarity.Rare, TargetType.RandomEnemy)` (BeatDown.cs:18-21) == cost 3 / SKILL / RARE / RANDOM_ENEMY. No keywords, no tags."
-  },
-  "CanonicalVars": {
-   "maps_to": "BeatDownCard._cards = 3 (colorless_skills.py:103)",
-   "verdict": "faithful",
-   "rationale": "`new CardsVar(3)` (BeatDown.cs:16) == `_cards = 3`, read as `DynamicVars.Cards.IntValue` at the Take site."
-  },
-  "OnPlay": {
-   "maps_to": "BeatDownCard.on_play (colorless_skills.py:108-117)",
-   "verdict": "faithful",
-   "issue": "Closed 2026-07-29 (round 7): All THREE divergences this entry stacked are closed at once. BeatDown.cs:26 is `.ToList().StableShuffle(Rng.Shuffle).Take(3)`, and `player.stable_shuffled_cards` is exactly that verb: it SORTS first by CardModel.CompareTo (ListExtensions.cs:22-31), which is what stops the pick depending on discard-pile order, and only then Fisher-Yates on the named **Shuffle** stream. colorless_skills.py calls it in place of `ctx.combat._rng.shuffle(candidates)`. Note this is StableShuffle, NOT the TakeRandom/UnstableShuffle its five siblings in this batch use -- the two verbs differ by that sort, and using the wrong one here would reintroduce the order dependence.  Pinned by test/test_take_random_streams.py, which gives every named accessor its own Random and asserts the site advanced the one its C# names and did NOT touch the shared `combat._rng`.  The auto-play still advances CombatTargets, which is correct (CardCmd.cs:77). NOT CLOSED: nothing at this site.  The text it replaced read: The candidate FILTER is faithful (`c.Type == CardType.Attack && !c.Keywords.Contains(CardKeyword.Unplayable)` on the discard pile, BeatDown.cs:26, == `c.card_type == CardType.ATTACK and c.is_playable` over `ctx.player.discard_pile`), and so is the per-card auto-play with the loop's early exit. THE SELECTION IS NOT. C# does `.ToList().StableShuffle(Owner.RunState.Rng.Shuffle).Take(IntValue)`: StableShuffle first SORTS the list (`list2.Sort()`, ListExtensions.cs:22-31 -- by CardModel.CompareTo, i.e. the canonical UPPERCASE-id order noted in the seed facts) so the result no longer depends on discard-pile order, THEN Fisher-Yates shuffles it on the named **Shuffle** stream. The sim calls `ctx.combat._rng.shuffle(candidates)` (colorless_skills.py:113): the unseeded shared `random.Random`, not `ctx.combat.combat_rng.shuffle` (the accessor exists -- combat_rng.py:17,50), with NO pre-sort, and Python's `random.shuffle` is a different Fisher-Yates variant. Three independent divergences stack: wrong stream, missing stabilising sort (so identical discard contents in a different order pick different cards), and a different draw sequence. Observable: under a string-seeded parity run Beat Down auto-plays a different set of attacks than the recorded run and desyncs the Shuffle stream for every later reshuffle. LIVE -- Beat Down is a ported Rare colorless Skill and the Shuffle parity stream is already wired (`CombatRng.parity`, combat_rng.py:41-46). REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
-  },
-  "OnUpgrade": {
-   "maps_to": "BeatDownCard._on_upgrade (colorless_skills.py:105-106)",
-   "verdict": "faithful",
-   "rationale": "`DynamicVars.Cards.UpgradeValueBy(1m)` (BeatDown.cs:49) == `self._cards += 1` (3 -> 4). Downgrade-safe; `card_probes.py downgrade` does not list beat_down."
-  }
- },
- "guards": [
-  {
-   "what": "the per-iteration `if (!CombatManager.Instance.IsOverOrEnding) { ... } else break;` bail-out (BeatDown.cs:30-43)",
-   "verdict": "faithful",
-   "rationale": "== `if ctx.combat.is_over or ctx.player.is_dead: break` (colorless_skills.py:115-116). Both stop auto-playing the remaining attacks once the combat has been decided mid-loop."
-  },
-  {
-   "what": "target selection for AnyEnemy attacks: C# rolls `Rng.CombatTargets.NextItem(CombatState.HittableEnemies)` in BeatDown itself and passes it to AutoPlay; the sim lets `auto_play_card` roll (BeatDown.cs:32-40)",
-   "verdict": "faithful",
-   "issue": "Closed 2026-08-03. FIXED, and the DORMANT label it carried was WRONG -- refuted by execution, not by argument. The divergence is real and is exactly as recorded: BeatDown.cs:32-40 rolls `Rng.CombatTargets.NextItem(CombatState.HittableEnemies)` ITSELF and passes the result into `CardCmd.AutoPlay`, while `AutoPlay` tests the Unplayable keyword (CardCmd.cs:58-62) and `Hook.ShouldPlay` (:63-72) BEFORE its own `target == null` roll (:73-81) -- so Beat Down's draw is spent whether or not the play then survives the veto, and the sim's roll (inside `auto_play_card`, AFTER the veto, combat.py) was not. THE DORMANCY CLAIM ('no such preventer is ported that fires on an auto-played Attack') WAS FALSE. Census of all 8 ported `should_play_card` implementers: FIVE can veto an auto-played Attack. Three do so unconditionally, checking neither `auto_play` nor card type -- `SlothPower` (powers.py, `_cards_played_this_turn < amount`), reached as a Knowledge Demon curse (cards/knowledge_curses.py); `VelvetChoker` (relics/velvet_choker.py, same shape), a Darv event reward (events/darv.py); and `NormalityCard` (cards/normality.py), whose own comment already said the game blocks an auto-played card in that window. Two more veto an Attack that carries their affliction, and neither affliction is type-restricted: `RingingPower` (afflicts any affliction-free card, then vetoes once any play has STARTED this turn -- and Beat Down's own play has) and `ChainsOfBindingPower` (Bound). Only three cannot: `ClashCard` and `EnthralledCard` exempt auto-plays explicitly, and `SmoggyPower` afflicts SKILLS only. MEASURED before the fix, three AnyEnemy Attacks in the discard pile (one CombatTargets draw each in C#): baseline 3 draws; with SlothPower(1) the sim drew 1; with Velvet Choker at its cap, 0. Under seed parity that is a stream desync for the rest of the combat. FIX: `BeatDownCard.on_play` (cards/colorless_skills.py) now rolls the target itself and passes `target_idx` in, mirroring BeatDown.cs:32-40, including the empty-HittableEnemies arm (CardCmd.cs:78-81, card spent unplayed). Beat Down is the ONLY pre-roll caller in the game source (`grep -rn 'CombatTargets.NextItem' src/` returns this site and CardCmd.cs's own two), so no other `auto_play_card` caller needed touching and this is not a partial port. Pinned by test/test_take_random_streams.py::test_beat_down_spends_a_combat_targets_draw_even_when_the_play_is_vetoed, verified to FAIL (1 != 3) against the pre-fix tree."
-  },
-  {
-   "what": "cards are taken from the DISCARD pile and auto-played from there; the played card ends in its normal result pile",
-   "verdict": "faithful",
-   "rationale": "`auto_play_card` removes the card from whichever of hand/draw/discard/exhaust holds it before resolving (combat.py:526-535) and routes it through `_resolve_card_play`, matching CardCmd.AutoPlay's pile handling. Beat Down itself is in the discard-pile limbo while this runs (combat.py:452-454) but is a Skill, so it is never its own candidate."
-  }
- ],
- "verdict": "faithful",
- "audited": "2026-07-26"
+  "guards": [
+    {
+      "what": "the per-iteration `if (!CombatManager.Instance.IsOverOrEnding) { ... } else break;` bail-out (BeatDown.cs:30-43)",
+      "verdict": "faithful",
+      "rationale": "== `if ctx.combat.is_over or ctx.player.is_dead: break` (colorless_skills.py:115-116). Both stop auto-playing the remaining attacks once the combat has been decided mid-loop."
+    },
+    {
+      "what": "target selection for AnyEnemy attacks: C# rolls `Rng.CombatTargets.NextItem(CombatState.HittableEnemies)` in BeatDown itself and passes it to AutoPlay; the sim lets `auto_play_card` roll (BeatDown.cs:32-40)",
+      "verdict": "faithful",
+      "issue": "Closed 2026-08-03. FIXED, and the DORMANT label it carried was WRONG -- refuted by execution, not by argument. The divergence is real and is exactly as recorded: BeatDown.cs:32-40 rolls `Rng.CombatTargets.NextItem(CombatState.HittableEnemies)` ITSELF and passes the result into `CardCmd.AutoPlay`, while `AutoPlay` tests the Unplayable keyword (CardCmd.cs:58-62) and `Hook.ShouldPlay` (:63-72) BEFORE its own `target == null` roll (:73-81) -- so Beat Down's draw is spent whether or not the play then survives the veto, and the sim's roll (inside `auto_play_card`, AFTER the veto, combat.py) was not. THE DORMANCY CLAIM ('no such preventer is ported that fires on an auto-played Attack') WAS FALSE. Census of all 8 ported `should_play_card` implementers: FIVE can veto an auto-played Attack. Three do so unconditionally, checking neither `auto_play` nor card type -- `SlothPower` (powers.py, `_cards_played_this_turn < amount`), reached as a Knowledge Demon curse (cards/knowledge_curses.py); `VelvetChoker` (relics/velvet_choker.py, same shape), a Darv event reward (events/darv.py); and `NormalityCard` (cards/normality.py), whose own comment already said the game blocks an auto-played card in that window. Two more veto an Attack that carries their affliction, and neither affliction is type-restricted: `RingingPower` (afflicts any affliction-free card, then vetoes once any play has STARTED this turn -- and Beat Down's own play has) and `ChainsOfBindingPower` (Bound). Only three cannot: `ClashCard` and `EnthralledCard` exempt auto-plays explicitly, and `SmoggyPower` afflicts SKILLS only. MEASURED before the fix, three AnyEnemy Attacks in the discard pile (one CombatTargets draw each in C#): baseline 3 draws; with SlothPower(1) the sim drew 1; with Velvet Choker at its cap, 0. Under seed parity that is a stream desync for the rest of the combat. FIX: `BeatDownCard.on_play` (cards/colorless_skills.py) now rolls the target itself and passes `target_idx` in, mirroring BeatDown.cs:32-40, including the empty-HittableEnemies arm (CardCmd.cs:78-81, card spent unplayed). Beat Down is the ONLY pre-roll caller in the game source (`grep -rn 'CombatTargets.NextItem' src/` returns this site and CardCmd.cs's own two), so no other `auto_play_card` caller needed touching and this is not a partial port. Pinned by test/test_take_random_streams.py::test_beat_down_spends_a_combat_targets_draw_even_when_the_play_is_vetoed, verified to FAIL (1 != 3) against the pre-fix tree."
+    },
+    {
+      "what": "cards are taken from the DISCARD pile and auto-played from there; the played card ends in its normal result pile",
+      "verdict": "faithful",
+      "rationale": "`auto_play_card` removes the card from whichever of hand/draw/discard/exhaust holds it before resolving (combat.py:526-535) and routes it through `_resolve_card_play`, matching CardCmd.AutoPlay's pile handling. Beat Down itself is in the discard-pile limbo while this runs (combat.py:452-454) but is a Skill, so it is never its own candidate."
+    }
+  ],
+  "verdict": "faithful",
+  "audited": "2026-07-26"
 }

@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "0e7260041e0b6693c08bf4aa4ddbb8743311d7fd72d6212fdc7c7d358a7c5030",
+      "sha256": "0b6b63592c62386b478927b39f5f758720079c9377ecda32ca94df150369e7e4",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -41,17 +41,17 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -81,14 +81,14 @@
       "rationale": "PaelsEye.cs:86-107 writes base.Status (presentation) and WasOwnerPartOfLastPlayerTurn (the multiplayer field waived on AfterObtained above). In single-player `participants` always contains the owner, so the branch taken is always lines 98-99 and the field is always re-set True -- the value the sim's absence is equivalent to."
     },
     "ShouldTakeExtraTurn": {
-      "maps_to": "should_take_extra_turn (sts2_rl/relics/paels_eye.py:55-59), evaluated at the end of CombatState.end_turn (sts2_rl/combat.py:823)",
+      "maps_to": "should_take_extra_turn (sts2_rl/relics/paels_eye.py:55-59), evaluated at the end of CombatState._end_turn_internal (sts2_rl/combat.py:1814)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: all three guards in this rollup are fixed. G1 -- `reset_for_combat` clears `used_this_combat` on every attach (sts2_rl/relics/paels_eye.py:27-29 = PaelsEye.cs:142-147). G2 -- the history carries `is_auto_play` (sts2_rl/history.py:41-46, 91-93) and the predicate filters `if not e.is_auto_play` (sts2_rl/relics/paels_eye.py:50-53 = PaelsEye.cs:155). G3 -- CombatState.end_turn evaluates ShouldTakeExtraTurn LAST, after on_player_turn_end, _process_turn_end_cards, the flush and after_player_turn_end (sts2_rl/combat.py:796-823), mirroring CombatManager.cs:1179-1366."
+      "issue": "Closed 2026-07-27, re-verified 2026-08-04 (combat.py/hooks.py had grown and drifted, logic unchanged): all three guards in this rollup are fixed. G1 -- `reset_for_combat` clears `used_this_combat` on every attach (sts2_rl/relics/paels_eye.py:27-29 = PaelsEye.cs:142-147). G2 -- the history carries `is_auto_play` (sts2_rl/history.py:41-46, 91-93) and the predicate filters `if not e.is_auto_play` (sts2_rl/relics/paels_eye.py:50-53 = PaelsEye.cs:155). G3 -- CombatState._end_turn_internal (the method `end_turn` now defers to, for the turn-1-setup-window case) evaluates ShouldTakeExtraTurn LAST, after on_player_turn_end, _process_turn_end_cards, the flush and after_player_turn_end (sts2_rl/combat.py:1751-1819), mirroring CombatManager.cs:1179-1366."
     },
     "BeforeSideTurnEndEarly": {
       "maps_to": "on_player_turn_end_early (sts2_rl/relics/paels_eye.py:61-78) -- the EARLY phase of the on_player_turn_end walk",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the exhaust has its real home. sts2_rl/relics/paels_eye.py:61-78 overrides `on_player_turn_end_early` -- the EARLY phase of HookSystem's on_player_turn_end walk (sts2_rl/hooks.py:36-38, 153-180) -- which is Hook.BeforeTurnEnd's second sub-slot (Hook.cs:1250), and it re-derives the same condition ShouldTakeExtraTurn uses, as PaelsEye.cs:118-128 does. WAS: the sim folded the exhaust into on_extra_turn, which fires AFTER the decision and INSTEAD of the turn-end pass."
+      "issue": "Closed 2026-07-27, re-verified 2026-08-04 (hooks.py's phase machinery moved but is unchanged): the exhaust has its real home. sts2_rl/relics/paels_eye.py:61-78 overrides `on_player_turn_end_early` -- the EARLY phase of HookSystem's on_player_turn_end walk (the generic `_PHASES`/`_phase_hooks` machinery, sts2_rl/hooks.py:47-50, 164-182) -- which is Hook.BeforeTurnEnd's second sub-slot (Hook.cs:1250), and it re-derives the same condition ShouldTakeExtraTurn uses, as PaelsEye.cs:118-128 does. WAS: the sim folded the exhaust into on_extra_turn, which fires AFTER the decision and INSTEAD of the turn-end pass."
     },
     "AfterTakingExtraTurn": {
       "maps_to": "folded into on_extra_turn's `self.used_this_combat = True` (paels_eye.py:47)",
@@ -98,14 +98,14 @@
     "AfterCombatEnd": {
       "maps_to": "reset_for_combat (sts2_rl/relics/paels_eye.py:27-29)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/paels_eye.py:27-29 clears `used_this_combat` (PaelsEye.cs:142-147; the base.Status half is presentation). WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:215-228) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:247-250) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/paels_eye.py:27-29 clears `used_this_combat` (PaelsEye.cs:142-147; the base.Status half is presentation). WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): `used_this_combat` is never reset, so the extra turn fires in the FIRST combat of a run only (PROMPT.md bug class 13)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/paels_eye.py:27-29 clears `used_this_combat` (PaelsEye.cs:129-134 AfterCombatEnd). WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:215-228) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:247-250) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/paels_eye.py:27-29 clears `used_this_combat` (PaelsEye.cs:129-134 AfterCombatEnd). WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
     },
     {
       "what": "G2 (LIVE): `AnyCardsPlayedThisTurn` -- C# excludes AUTO-plays and filters by actor (PaelsEye.cs:156); the sim counts every CardPlayedEntry (paels_eye.py:27-34)",
@@ -115,7 +115,7 @@
     {
       "what": "G3 (LIVE): the sim's extra-turn path SKIPS the entire turn-end pass -- Hook.BeforeTurnEnd, DoTurnEnd, the hand flush and Hook.AfterTurnEnd all fail to fire",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the extra turn is decided LAST, so the turn-end pass still runs. CombatState.end_turn now runs _process_turn_end_cards, the flush and `after_player_turn_end` FIRST and only then tests `self.hooks.should_take_extra_turn(self.player)` (sts2_rl/combat.py:796-830), mirroring CombatManager: Hook.BeforeTurnEnd, DoTurnEnd, FlushPlayerHand and Hook.AfterTurnEnd all precede SwitchFromPlayerToEnemySide's ShouldTakeExtraTurn check (CombatManager.cs:1179-1366). The comment at sts2_rl/combat.py:816-822 records the trace the old top-of-end_turn test produced. Pael's Eye's own hand exhaust moved to its real home too -- `on_player_turn_end_early` (sts2_rl/relics/paels_eye.py:61-78) = BeforeSideTurnEndEarly (PaelsEye.cs:118-128). WAS: the sim asked first and returned, skipping on_player_turn_end, _process_turn_end_cards, the flush and after_player_turn_end on the turn that grants the extra turn."
+      "issue": "Closed 2026-07-27, re-verified 2026-08-04 (combat.py had grown substantially; same shape at new lines): the extra turn is decided LAST, so the turn-end pass still runs. CombatState._end_turn_internal now runs _process_turn_end_cards, the flush and `after_player_turn_end` FIRST and only then tests `self.hooks.should_take_extra_turn(self.player)` (sts2_rl/combat.py:1751-1819), mirroring CombatManager: Hook.BeforeTurnEnd, DoTurnEnd, FlushPlayerHand and Hook.AfterTurnEnd all precede SwitchFromPlayerToEnemySide's ShouldTakeExtraTurn check (CombatManager.cs:1179-1366). The comment at sts2_rl/combat.py:1803-1809 records the trace the old top-of-end_turn test produced. Pael's Eye's own hand exhaust moved to its real home too -- `on_player_turn_end_early` (sts2_rl/relics/paels_eye.py:61-78) = BeforeSideTurnEndEarly (PaelsEye.cs:118-128). WAS: the sim asked first and returned, skipping on_player_turn_end, _process_turn_end_cards, the flush and after_player_turn_end on the turn that grants the extra turn."
     },
     {
       "what": "N1: the WhisperingEarring turn-1 special case (PaelsEye.cs:152-155) -- on turn 1, holding Whispering Earring makes AnyCardsPlayedThisTurn return true unconditionally; the sim has no such clause",
@@ -130,7 +130,7 @@
     {
       "what": "N3: `participants.Contains(base.Owner.Creature)` on BeforeSideTurnEndEarly (PaelsEye.cs:120) and AfterSideTurnStart (:96)",
       "verdict": "faithful",
-      "rationale": "The sim's on_extra_turn/should_take_extra_turn are player-side hooks reached only from CombatState.end_turn on the player's own turn (combat.py:648-649), so the participation test is structurally satisfied. Multiplayer-only in effect, per the shared contract's exclusion."
+      "rationale": "The sim's on_extra_turn/should_take_extra_turn are player-side hooks reached only from CombatState._end_turn_internal on the player's own turn (combat.py:1737-1751), so the participation test is structurally satisfied. Multiplayer-only in effect, per the shared contract's exclusion."
     },
     {
       "what": "N4: Flash() and base.Status = RelicStatus.Active/Normal (PaelsEye.cs:82, 98, 103, 136-137, 144)",

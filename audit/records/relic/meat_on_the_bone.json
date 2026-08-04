@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
@@ -48,6 +48,11 @@
       "path": "sts2_rl/relics/chosen_cheese.py",
       "sha256": "b911157377229e4b51723fdbfac4839e1442a5201991f5235a28bcf93b8e6847",
       "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -68,14 +73,14 @@
     "AfterCombatVictoryEarly": {
       "maps_to": "on_combat_victory_early (meat_on_the_bone.py), reached through hooks.on_combat_victory's `_early` phase pass",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the AfterCombatVictoryEarly / AfterCombatVictory two-pass dispatch is real. On the combat side, HookSystem._each walks the phases very_early -> early -> plain -> late as COMPLETE separate passes whenever any listener declares a phase variant (sts2_rl/hooks.py:36, 153-180); on the run side RunState.finish_combat runs `after_combat_end_early` over every relic and only then `after_combat_end` (sts2_rl/run.py:1371-1381). Both mirror Hook.AfterCombatVictory (Hook.cs:340-352). sts2_rl/relics/meat_on_the_bone.py:25-31 rides the Early pass and its docstring pins the reasoning. WAS: the relic sat in the single flat on_combat_end walk."
+      "issue": "Closed 2026-07-27: the AfterCombatVictoryEarly / AfterCombatVictory two-pass dispatch is real. On the combat side, HookSystem._each walks the phases very_early -> early -> plain -> late as COMPLETE separate passes whenever any listener declares a phase variant (sts2_rl/hooks.py, 153-180); on the run side RunState.finish_combat runs `after_combat_end_early` over every relic and only then `after_combat_end` (sts2_rl/run.py:1371-1381). Both mirror Hook.AfterCombatVictory (Hook.cs:340-352). sts2_rl/relics/meat_on_the_bone.py:25-31 rides the Early pass and its docstring pins the reasoning. WAS: the relic sat in the single flat on_combat_end walk."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): AfterCombatVictoryEarly is a SEPARATE, EARLIER full pass in C# and this relic is the ONLY implementer in the whole game; the sim's single on_combat_end pass lets Burning Blood heal first and push the HP above the 50% threshold",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the AfterCombatVictoryEarly / AfterCombatVictory two-pass dispatch is real. On the combat side, HookSystem._each walks the phases very_early -> early -> plain -> late as COMPLETE separate passes whenever any listener declares a phase variant (sts2_rl/hooks.py:36, 153-180); on the run side RunState.finish_combat runs `after_combat_end_early` over every relic and only then `after_combat_end` (sts2_rl/run.py:1371-1381). Both mirror Hook.AfterCombatVictory (Hook.cs:340-352). sts2_rl/relics/meat_on_the_bone.py:25-31 implements `on_combat_end_early`, so its `CurrentHp <= MaxHp * 50/100` test (MeatOnTheBone.cs:47-58) reads the HP the fight ended on. WAS: the sim had one flat on_combat_end pass in RunState.relics order, so index-0 Burning Blood healed first and pushed the HP above the threshold -- 44 where the game gives 56 at 38/80."
+      "issue": "Closed 2026-07-27: the AfterCombatVictoryEarly / AfterCombatVictory two-pass dispatch is real. On the combat side, HookSystem._each walks the phases very_early -> early -> plain -> late as COMPLETE separate passes whenever any listener declares a phase variant (sts2_rl/hooks.py, 153-180); on the run side RunState.finish_combat runs `after_combat_end_early` over every relic and only then `after_combat_end` (sts2_rl/run.py:1371-1381). Both mirror Hook.AfterCombatVictory (Hook.cs:340-352). sts2_rl/relics/meat_on_the_bone.py:25-31 implements `on_combat_end_early`, so its `CurrentHp <= MaxHp * 50/100` test (MeatOnTheBone.cs:47-58) reads the HP the fight ended on. WAS: the sim had one flat on_combat_end pass in RunState.relics order, so index-0 Burning Blood healed first and pushed the HP above the threshold -- 44 where the game gives 56 at 38/80."
     },
     {
       "what": "N1: the threshold arithmetic -- `(int)((decimal)MaxHp * (DynamicVars['HpThreshold'].BaseValue / 100m))` (MeatOnTheBone.cs:63) vs `self.player.max_hp * 50 // 100` (meat_on_the_bone.py:20)",
@@ -85,7 +90,7 @@
     {
       "what": "N2: `if (!base.Owner.Creature.IsDead)` (MeatOnTheBone.cs:49) vs `self.player.is_dead` (meat_on_the_bone.py:18)",
       "verdict": "faithful",
-      "rationale": "Mirrored, and non-vacuous: the sim's on_combat_end fires from _end_combat (combat.py:347-350) on defeats too, and the sim has paths that end a combat with a dead player and player_won=False (combat.py:309). The same guard is present in the three sibling combat-end relics."
+      "rationale": "Mirrored, and non-vacuous: the sim's on_combat_end fires from _end_combat (combat.py) on defeats too, and the sim has paths that end a combat with a dead player and player_won=False (combat.py). The same guard is present in the three sibling combat-end relics."
     },
     {
       "what": "N3: the hook fires only on VICTORY in C#; the sim's on_combat_end fires on any conclusion and the port re-derives the restriction",

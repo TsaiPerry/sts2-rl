@@ -98,6 +98,12 @@ class MadScienceCard(Card):
     def base_block(self) -> int | None:
         return self._block if self.tinker_type == CardType.SKILL else None
 
+    @property
+    def gains_block(self) -> bool:  # type: ignore[override]
+        # MadScience.cs:94 — `GainsBlock => TinkerTimeType == CardType.Skill`.
+        # Read by Nimble's CanEnchant (Nimble.cs:8-14).
+        return self.tinker_type == CardType.SKILL
+
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         if self.tinker_type == CardType.ATTACK:
             self._play_attack(ctx, target_idx)

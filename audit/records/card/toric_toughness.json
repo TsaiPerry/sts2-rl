@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\event_cards.py",
-    "sha256": "dfd78fff2c2a36323033d8c74d986f9211a6cff57920b7380b731bb6cf9d3a5a"
+    "sha256": "22675c0e8764e2eb8d0aa28341ccb256084aeb94bf28b17a444409586ca6fc54"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     }
   ],
@@ -37,7 +37,7 @@
       "rationale": "`new DynamicVar(\"Turns\", 2m)` + `new BlockVar(5m, ValueProp.Move)` (ToricToughness.cs:19-23) == both numbers, both declared. Move without Unpowered -> POWERED block, so NOT in gap G1's blast radius."
     },
     "OnPlay": {
-      "maps_to": "ToricToughnessCard.on_play (event_cards.py:140-149)",
+      "maps_to": "ToricToughnessCard.on_play (event_cards.py:140-151)",
       "verdict": "faithful",
       "rationale": "`decimal blockAmount = await CreatureCmd.GainBlock(Owner.Creature, DynamicVars.Block, cardPlay);` then `(await PowerCmd.Apply<ToricToughnessPower>(..., DynamicVars[\"Turns\"].BaseValue, ...))?.SetBlock(blockAmount)` (ToricToughness.cs:34-35) == `gained = BlockCmd.apply(...)` then apply the power and `power.set_block(gained)`. The load-bearing detail is that the power carries the block ACTUALLY GAINED rather than the printed 5 -- so Vambrace's doubling or Frail's reduction propagates into the next two turns' regain -- and the sim threads `BlockCmd.apply`'s return value through in exactly the same way. The Turns value is the power's AMOUNT and the block is set separately, the same two-step shape as card/the_bomb. Presentation, folded in: the Block hover tip (25)."
     },
@@ -49,9 +49,9 @@
   },
   "guards": [
     {
-      "what": "C# skips SetBlock when Apply returns NULL via `?.`; the sim re-fetches by id and skips on None (ToricToughness.cs:35 vs event_cards.py:147-149)",
+      "what": "C# skips SetBlock when Apply returns NULL via `?.`; the sim holds the direct return value from `PowerCmd.apply` and skips on None (ToricToughness.cs:35 vs event_cards.py:147-151)",
       "verdict": "gap",
-      "issue": "Same mechanism and same verdict as card/crimson_mantle's and card/inferno's guards (rule 3): `PowerCmd.Apply<T>` returns null when combat is ending, when `!target.CanReceivePowers`, or when a stacking `ModifyAmount` resolves to 0 (PowerCmd.cs:29-34, 68-87), and the sim's re-fetch cannot distinguish those from a successful apply -- so a second Toric Toughness whose amount was zeroed would still overwrite the stored block. DORMANT: no ported effect modifies a positive self-applied buff down to exactly 0 (Artifact intercepts only debuffs, cmds.py:299-306), and the other two null cases imply the combat is over. This is the third of the pool's three `?.`-after-Apply sites."
+      "issue": "Same mechanism and same verdict as card/crimson_mantle's and card/inferno's guards (rule 3): `PowerCmd.Apply<T>` returns null when combat is ending, when `!target.CanReceivePowers`, or when a stacking `ModifyAmount` resolves to 0 (PowerCmd.cs:29-34, 68-87), and the sim's null-check cannot distinguish those from a successful apply -- so a second Toric Toughness whose amount was zeroed would still overwrite the stored block. Re-verified this stale-sweep pass: the sim's mechanism here is now a direct held reference, NOT a re-fetch by id (the card's own comment at event_cards.py:144-146 explains why -- ToricToughnessPower is Instanced, so a by-id re-fetch would be a FirstOrDefault over every instance and answer with the wrong one, the same fix already applied to card/the_bomb); the guard's substance (does the sim distinguish a zeroed-amount None from success?) is unchanged. DORMANT: no ported effect modifies a positive self-applied buff down to exactly 0 (Artifact intercepts debuffs -- the exact line has drifted and is not re-pinned this pass; see `sts2_rl/cmds.py` generally), and the other two null cases imply the combat is over. This is the third of the pool's three `?.`-after-Apply sites."
     }
   ],
   "verdict": "gap",

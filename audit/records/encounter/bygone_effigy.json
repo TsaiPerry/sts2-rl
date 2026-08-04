@@ -12,7 +12,7 @@
     "RoomType": {
       "maps_to": "ENCOUNTERS['bygone_effigy'] listed in rooms.py elite_keys (_overgrowth_rooms)",
       "verdict": "faithful",
-      "rationale": "BygoneEffigyElite.RoomType => RoomType.Elite (BygoneEffigyElite.cs:10). Sim carries no room_type field on the Encounter dataclass; 'bygone_effigy' is placed in rooms.py:106's elite_keys for _overgrowth_rooms(), which is the run layer's equivalent partition (seam/rooms_and_map owns the picker itself). GOLD_REWARD_RANGES[RoomType.ELITE]=(35,45) (rewards.py:172) matches EncounterModel.cs:71/90's Elite=>35/45 defaults, which BygoneEffigyElite does not override."
+      "rationale": "BygoneEffigyElite.RoomType => RoomType.Elite (BygoneEffigyElite.cs:10). Sim carries no room_type field on the Encounter dataclass; 'bygone_effigy' is placed in rooms.py:154's elite_keys for _overgrowth_rooms(), which is the run layer's equivalent partition (seam/rooms_and_map owns the picker itself). GOLD_REWARD_RANGES[RoomType.ELITE]=(35,45) (rewards.py:172) matches EncounterModel.cs:71/90's Elite=>35/45 defaults, which BygoneEffigyElite does not override."
     },
     "AllPossibleMonsters": {
       "maps_to": "(none)",
@@ -80,7 +80,7 @@
     },
     {
       "path": "sts2_rl/rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     },
     {

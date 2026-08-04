@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     }
   ],
@@ -49,7 +49,7 @@
     "ShouldPlay": {
       "maps_to": "EnthralledCard.should_play_card (enthralled.py:40-46)",
       "verdict": "faithful",
-      "rationale": "All four clauses map exactly, in the same short-circuit order. `card.Owner != Owner -> true` (Enthralled.cs:23) is the multiplayer ownership gate, folded into the sim's single-player model. `Pile == null || Pile.Type != PileType.Hand -> true` (27-31) == `self not in self.combat.player.hand` (plus the no-combat guard). `card is Enthralled -> true` (32-35) == `isinstance(card, EnthralledCard)`. `autoPlayType != AutoPlayType.None -> true` (36-39) == the final `return auto_play`, and the sim's `auto_play` flag is exactly C#'s `autoPlayType != None` because `CombatState.auto_play_card` passes `auto_play=True` (combat.py:536) while the manual path passes the default False. This is the RIGHT hook, unlike card/clash, which routes an `IsPlayable` override through the same sim method -- C# `ShouldPlay` really is consulted on both the manual and the auto-play paths (CardModel.cs:1755, CardCmd.cs:64)."
+      "rationale": "All four clauses map exactly, in the same short-circuit order. `card.Owner != Owner -> true` (Enthralled.cs:23) is the multiplayer ownership gate, folded into the sim's single-player model. `Pile == null || Pile.Type != PileType.Hand -> true` (27-31) == `self not in self.combat.player.hand` (plus the no-combat guard). `card is Enthralled -> true` (32-35) == `isinstance(card, EnthralledCard)`. `autoPlayType != AutoPlayType.None -> true` (36-39) == the final `return auto_play`, and the sim's `auto_play` flag is exactly C#'s `autoPlayType != None` because `CombatState.auto_play_card` passes `auto_play=True` (combat.py:1422; re-verified 2026-08-04, re-pinned from :536) while the manual path passes the default False. This is the RIGHT hook, unlike card/clash, which routes an `IsPlayable` override through the same sim method -- C# `ShouldPlay` really is consulted on both the manual and the auto-play paths (CardModel.cs:1755, CardCmd.cs:64)."
     },
     "ctor": {
       "maps_to": "class attrs (enthralled.py:25-32) + _init_vars (34-35)",

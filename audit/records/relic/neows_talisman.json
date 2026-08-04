@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -53,7 +53,7 @@
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (neows_talisman.py:27)",
       "verdict": "faithful",
-      "rationale": "Matches NeowsTalisman.cs:14. It feeds Relic.is_tradable (relics/base.py:126-136), which Ancient rarity already excludes, so the flag is belt-and-braces here -- recorded because relic/byrdpip drops the identical declaration. Rule 7: relics/base.py is unhashed here."
+      "rationale": "Matches NeowsTalisman.cs:14. It feeds Relic.is_tradable (sts2_rl/relics/base.py), which Ancient rarity already excludes, so the flag is belt-and-braces here -- recorded because relic/byrdpip drops the identical declaration. sts2_rl/relics/base.py is hashed in this record's extra_sources."
     },
     "AfterObtained": {
       "maps_to": "after_obtained (neows_talisman.py:29-36), dispatched by RunState.add_relic",
@@ -65,7 +65,7 @@
     {
       "what": "G1 (LIVE): unguarded Card.upgrade() -- an already-upgraded last Basic Strike or Defend is pushed to upgrade_level 2, past its max_upgrade_level of 1",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-29 (round 7): `CardCmd.upgrade(hooks, card)` exists (cmds.py) and is CardCmd.cs:265-290's per-card body: the verb sits inside `if (!IsEnding)` and skips any card whose `IsUpgradable` is false, i.e. `CurrentUpgradeLevel < MaxUpgradeLevel` (CardModel.cs:785-789). 35 of the 203 ported cards are at MaxUpgradeLevel 0 (18 Curse, 14 Status, 3 Quest), and C# THROWS if CurrentUpgradeLevel is ever set above MaxUpgradeLevel (CardModel.cs:773-776) -- so the bare `card.upgrade()` was producing a state the source treats as impossible, and one conformance compares against the save as an (id, upgrade_level) pair. neows_talisman.py routes both Basic picks through it. EXECUTED: with the deck's last Basic Strike and Defend already smithed, both stay at 1 where they used to reach 2 and then read `is_upgradable` False.  Pinned by test/test_procure_and_upgrade_verbs.py.  NOT CLOSED: nothing at this site.  The text it replaced read: MECHANISM: CardCmd.Upgrade(IEnumerable) opens with `if (!card.IsUpgradable) continue;` (CardCmd.cs:271-276), and IsUpgradable is `CurrentUpgradeLevel < MaxUpgradeLevel` (CardModel.cs:785-795) -- C# additionally THROWS if CurrentUpgradeLevel is ever set above MaxUpgradeLevel (CardModel.cs:773-776), so the state the sim produces is one the source treats as impossible. neows_talisman.py:32 calls `card.upgrade()`, which is a bare `self.upgrade_level += 1` (cards/base.py:146-148) with no filter. This is PROMPT.md bug class 14 and is the third of Sweep D's three unaudited unguarded sites (.superpowers/sdd/content-relic-sweeps.md, `neows_talisman.py:29 after_obtained`) -- confirmed here, not re-derived. EXECUTED (py audit/tools/relic_probes_b10.py neows-talisman): with the deck's last Basic Strike and last Basic Defend already at level 1, the relic takes both to level 2 and `is_upgradable` then reads False on both; C# leaves both at 1. REACHABILITY (LIVE, and it took work, because Neow's Talisman is only granted at floor 0 where the deck is pristine): relic/neows_bones grants TWO relics from the same Neow option pool IN SEQUENCE (neows_bones.py:28-29), and relic/pomander -- 'upgrade a chosen card' (pomander.py:14-16) -- is in that pool. Executed: `pomander` and `neows_talisman` are both in neow_relic_pool, string seed B10BONES0136 makes Neow's Bones grant pomander FIRST and neows_talisman second, and running that exact pair through add_relic with a selector that picks the last Basic Strike produces ('strike', 2) where C# produces ('strike', 1). The observable is not cosmetic: conformance/runner.py compares the deck as (id, upgrade_level) pairs, and an over-upgraded Strike also prints wrong damage. Rule 7: CardCmd.cs, CardModel.cs, cards/base.py, relics/neows_bones.py, relics/pomander.py, events/neow.py, conformance/runner.py and the sweeps document are NOT hashed by this record."
+      "issue": "Closed 2026-07-29 (round 7): `CardCmd.upgrade(hooks, card)` exists (cmds.py) and is CardCmd.cs:265-290's per-card body: the verb sits inside `if (!IsEnding)` and skips any card whose `IsUpgradable` is false, i.e. `CurrentUpgradeLevel < MaxUpgradeLevel` (CardModel.cs:785-789). 35 of the 203 ported cards are at MaxUpgradeLevel 0 (18 Curse, 14 Status, 3 Quest), and C# THROWS if CurrentUpgradeLevel is ever set above MaxUpgradeLevel (CardModel.cs:773-776) -- so the bare `card.upgrade()` was producing a state the source treats as impossible, and one conformance compares against the save as an (id, upgrade_level) pair. neows_talisman.py routes both Basic picks through it. EXECUTED: with the deck's last Basic Strike and Defend already smithed, both stay at 1 where they used to reach 2 and then read `is_upgradable` False.  Pinned by test/test_procure_and_upgrade_verbs.py.  NOT CLOSED: nothing at this site.  The text it replaced read: MECHANISM: CardCmd.Upgrade(IEnumerable) opens with `if (!card.IsUpgradable) continue;` (CardCmd.cs:271-276), and IsUpgradable is `CurrentUpgradeLevel < MaxUpgradeLevel` (CardModel.cs:785-795) -- C# additionally THROWS if CurrentUpgradeLevel is ever set above MaxUpgradeLevel (CardModel.cs:773-776), so the state the sim produces is one the source treats as impossible. neows_talisman.py:32 calls `card.upgrade()`, which is a bare `self.upgrade_level += 1` (cards/base.py) with no filter. This is PROMPT.md bug class 14 and is the third of Sweep D's three unaudited unguarded sites (.superpowers/sdd/content-relic-sweeps.md, `neows_talisman.py:29 after_obtained`) -- confirmed here, not re-derived. EXECUTED (py audit/tools/relic_probes_b10.py neows-talisman): with the deck's last Basic Strike and last Basic Defend already at level 1, the relic takes both to level 2 and `is_upgradable` then reads False on both; C# leaves both at 1. REACHABILITY (LIVE, and it took work, because Neow's Talisman is only granted at floor 0 where the deck is pristine): relic/neows_bones grants TWO relics from the same Neow option pool IN SEQUENCE (neows_bones.py:28-29), and relic/pomander -- 'upgrade a chosen card' (pomander.py:14-16) -- is in that pool. Executed: `pomander` and `neows_talisman` are both in neow_relic_pool, string seed B10BONES0136 makes Neow's Bones grant pomander FIRST and neows_talisman second, and running that exact pair through add_relic with a selector that picks the last Basic Strike produces ('strike', 2) where C# produces ('strike', 1). The observable is not cosmetic: conformance/runner.py compares the deck as (id, upgrade_level) pairs, and an over-upgraded Strike also prints wrong damage. Rule 7: CardCmd.cs, CardModel.cs, cards/base.py, relics/neows_bones.py, relics/pomander.py, events/neow.py, conformance/runner.py and the sweeps document are NOT hashed by this record."
     },
     {
       "what": "N1: `source.LastOrDefault(c => c.Tags.Contains(CardTag.Strike))` over Basic-rarity DECK cards (NeowsTalisman.cs:18-23)",

@@ -11,17 +11,17 @@
   "extra_sources": [
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -33,12 +33,12 @@
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (looming_fruit.py:14)",
       "verdict": "faithful",
-      "rationale": "Matches LoomingFruit.cs:26. Shadowed today rather than load-bearing: Relic.is_tradable (relics/base.py:126-136) already returns False for Ancient rarity, so the flag changes nothing for this relic -- the same 'already excluded by rarity' situation audit/records/relic/byrdpip.json records for its two DROPPED declarations. Correct to declare it anyway, since rarity and the flag are independent in the source. Rule 7: relics/base.py are not hashed by this record."
+      "rationale": "Matches LoomingFruit.cs:26. Shadowed today rather than load-bearing: Relic.is_tradable (relics/base.py:188-199, renumbered since prior pass, content unchanged) already returns False for Ancient rarity, so the flag changes nothing for this relic -- the same 'already excluded by rarity' situation audit/records/relic/byrdpip.json records for its two DROPPED declarations. Correct to declare it anyway, since rarity and the flag are independent in the source. Rule 7: relics/base.py are not hashed by this record."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (looming_fruit.py:18-19), dispatched by RunState.add_relic (run.py:552)",
+      "maps_to": "after_obtained (looming_fruit.py:18-19), dispatched by RunState.add_relic (run.py:957-963, renumbered since prior pass, content unchanged)",
       "verdict": "faithful",
-      "rationale": "LoomingFruit.cs:45-48 is a single `CreatureCmd.GainMaxHp(Owner.Creature, MaxHpVar(31).BaseValue)`; looming_fruit.py:19 is `run.gain_max_hp(self.MAX_HP)`. RunState.gain_max_hp (run.py:311-314) raises max HP and then heals the same amount, mirroring GainMaxHp's SetMaxHp-then-Heal(delta). EXECUTED (py audit/tools/relic_probes_b08.py b08-maxhp): from 80/80 the relic gives 111/111, and from 40/80 it gives 71/111 -- i.e. +31 max HP and +31 current HP, C#'s numbers in both cases. Note this relic does NOT heal to full (contrast relic/lees_waffle, whose C# adds a second Heal call), and the port correctly stops at one statement. Rule 7: run.py are not hashed by this record."
+      "rationale": "LoomingFruit.cs:45-48 is a single `CreatureCmd.GainMaxHp(Owner.Creature, MaxHpVar(31).BaseValue)`; looming_fruit.py:19 is `run.gain_max_hp(self.MAX_HP)`. RunState.gain_max_hp (run.py:477-480, renumbered since prior pass, content unchanged) raises max HP and then heals the same amount, mirroring GainMaxHp's SetMaxHp-then-Heal(delta). EXECUTED (py audit/tools/relic_probes_b08.py b08-maxhp): from 80/80 the relic gives 111/111, and from 40/80 it gives 71/111 -- i.e. +31 max HP and +31 current HP, C#'s numbers in both cases. Note this relic does NOT heal to full (contrast relic/lees_waffle, whose C# adds a second Heal call), and the port correctly stops at one statement. Rule 7: run.py are not hashed by this record."
     }
   },
   "guards": [

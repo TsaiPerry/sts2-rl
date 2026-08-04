@@ -101,7 +101,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -131,7 +131,7 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     },
     {
@@ -204,8 +204,8 @@
       "issue": "The relic docstring (relics/distinguished_cape.py:8-11) states the placement as fact -- 'The -9 Max HP comes from the Vakuu event OPTION ..., not the relic itself' -- and it is FALSE, the fourth instance in this stream of a load-bearing sim comment asserting something the source contradicts. EXECUTED (`py audit/tools/event_probes_b.py cape`): at 80/80, run.add_relic('distinguished_cape') on its own leaves the player at 80/80 with 3 Apparitions where the game leaves them at 71/71 with 3 Apparitions; the Vakuu CAPE option reaches 71/71, so the Vakuu path itself COINCIDES and this is a placement defect, not an arithmetic one. DORMANT, with the concrete trigger named and executed: the same probe shows distinguished_cape is Ancient rarity and is NOT in the relic grab bag, and `git grep distinguished_cape sts2_rl` returns only events/vakuu.py, its own relic module and vocab.json -- so the Vakuu option is the only grant path in the sim today. ANY second path (a relic reward, a shop, the grab bag, another Ancient's pool, a recording-driven resync that reconstructs the relic list) silently drops 9 Max HP. Exactly the shape already recorded for event/hungry_for_mushrooms, where Big Mushroom's +20 Max HP lives on the event instead of the relic's after_obtained -- and the sibling relic there, Fragrant Mushroom, does it correctly, as does every other ported pickup effect. Secondary, and unobservable only because EV-2 already applies: the C# order is RelicCmd.Obtain (relic joins the player) THEN AfterObtained's LoseMaxHp, so the Cape is owned while the overflow damage resolves; the sim loses the max HP BEFORE add_relic. FLAGGED FOR THE RELIC STREAM, which owns relics/distinguished_cape.py -- this record hashes only Vakuu.cs and events/vakuu.py (rule 7)."
     },
     {
-      "what": "EV-2: the CAPE option's max-HP cost (events/vakuu.py:59 run.lose_max_hp(DistinguishedCape.MAX_HP_LOSS = 9)), whichever side of the relic/event boundary it is implemented on calls RunState.lose_max_hp (run.py:316-321), which floors max HP and CLAMPS current HP. C#'s CreatureCmd.LoseMaxHp (CreatureCmd.cs) damages the overflow through the damage pipeline (Unblockable|Unpowered) FIRST, against the UNFLOORED new max, and only then calls SetMaxHp(Math.Max(1m, newMaxHp))",
-      "maps_to": "Closed 2026-07-28: RunState.lose_max_hp (run.py:366-380) now has the shape of CreatureCmd.LoseMaxHp (CreatureCmd.cs:811-828) -- `new_max = max_hp - amount` UNFLOORED, then `if new_max < hp: lose_hp(hp - new_max)` so the overflow is real HP loss that runs the relic ModifyHpLost pass and the death pass, and only then `max_hp = max(1, new_max)` followed by SetMaxHpInternal's clamp `hp = min(hp, max_hp)` (Creature.cs:493-501). Leg (2) now MATCHes: 80/80 losing 100 max HP kills the player on both sides (`py audit/tools/event_probes.py maxhp`). Leg (1)'s witness does not survive re-reading the source: the probe's hardcoded `C#=71` ignores SetMaxHpInternal's `CurrentHp = Math.Min(CurrentHp, MaxHp)`, which pulls the GAME back to 70 as well, so Tungsten Rod's -1 is unobservable through HP at any max-HP-loss amount (the overflow can never leave current HP above the new max). Both sides read on 2026-07-28; the sim's 70/70 is correct.",
+      "what": "EV-2: the CAPE option's max-HP cost (events/vakuu.py:59 run.lose_max_hp(DistinguishedCape.MAX_HP_LOSS = 9)), whichever side of the relic/event boundary it is implemented on calls RunState.lose_max_hp (run.py:482-496, was 316-321), which floors max HP and CLAMPS current HP. C#'s CreatureCmd.LoseMaxHp (CreatureCmd.cs) damages the overflow through the damage pipeline (Unblockable|Unpowered) FIRST, against the UNFLOORED new max, and only then calls SetMaxHp(Math.Max(1m, newMaxHp))",
+      "maps_to": "Closed 2026-07-28: RunState.lose_max_hp (run.py:482-496, was 366-380) now has the shape of CreatureCmd.LoseMaxHp (CreatureCmd.cs:811-828) -- `new_max = max_hp - amount` UNFLOORED, then `if new_max < hp: lose_hp(hp - new_max)` so the overflow is real HP loss that runs the relic ModifyHpLost pass and the death pass, and only then `max_hp = max(1, new_max)` followed by SetMaxHpInternal's clamp `hp = min(hp, max_hp)` (Creature.cs:493-501). Leg (2) now MATCHes: 80/80 losing 100 max HP kills the player on both sides (`py audit/tools/event_probes.py maxhp`). Leg (1)'s witness does not survive re-reading the source: the probe's hardcoded `C#=71` ignores SetMaxHpInternal's `CurrentHp = Math.Min(CurrentHp, MaxHp)`, which pulls the GAME back to 70 as well, so Tungsten Rod's -1 is unobservable through HP at any max-HP-loss amount (the overflow can never leave current HP above the new max). Both sides read on 2026-07-28; the sim's 70/70 is correct. Re-verified 2026-08-04: `lose_max_hp` body unchanged, only line numbers moved.",
       "verdict": "faithful"
     },
     {
@@ -220,7 +220,7 @@
     },
     {
       "what": "AncientEventModel.RelicOption<T>() (AncientEventModel.cs:268-288) -- an option whose choice runs RelicCmd.Obtain and then Done()",
-      "maps_to": "events/ancient.py:34-44 _relic_option: key = relic id, on_chosen calls run.add_relic(make_relic(rid)) -- which runs the relic's AfterObtained (run.py:546-553) -- then _finish('DONE'), matching Done()'s SetEventFinished on the '<ID>.pages.DONE.description' page (AncientEventModel.cs:247-258). customDonePage is null for every Vakuu option. UpdateRunHistory (:222-233) is telemetry. Same entry as event/nonupeipe's.",
+      "maps_to": "events/ancient.py:34-44 _relic_option: key = relic id, on_chosen calls run.add_relic(make_relic(rid)) -- which runs the relic's AfterObtained (run.py:957-963, was 546-553) -- then _finish('DONE'), matching Done()'s SetEventFinished on the '<ID>.pages.DONE.description' page (AncientEventModel.cs:247-258). customDonePage is null for every Vakuu option. UpdateRunHistory (:222-233) is telemetry. Same entry as event/nonupeipe's.",
       "verdict": "faithful"
     },
     {

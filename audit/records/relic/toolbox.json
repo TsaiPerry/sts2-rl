@@ -31,22 +31,22 @@
     },
     {
       "path": "sts2_rl/cards/mad_science.py",
-      "sha256": "2ede1a12f1aa80dfde0f095c34997387210e6856011a40c954199fe33aa37c73",
+      "sha256": "51a3413baaa2dcc8b9bbc49b04e5ca2475d4e1f511bf46230bedd9f1e9c8ca33",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "0e7260041e0b6693c08bf4aa4ddbb8743311d7fd72d6212fdc7c7d358a7c5030",
+      "sha256": "0b6b63592c62386b478927b39f5f758720079c9377ecda32ca94df150369e7e4",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -56,7 +56,7 @@
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "63c0df752ca09e9de59285b0c9bc9be809da18e69b61b65424d75f37ee1ffc6b",
+      "sha256": "416789386ad4af19cb52a3c275a2c39c1708bb90ebc4dc5c8fb4e88a7055d557",
       "side": "sim"
     },
     {
@@ -66,7 +66,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -86,12 +86,12 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
+      "sha256": "a1aecf30215574f9bc62dd01cb7c73346bbc1b9b84dd5dcc8dabd67101f8c345",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -131,7 +131,7 @@
     {
       "what": "N4 (NEW GAP, found by the 2026-07-26 fix pass): `CardSelectCmd.FromChooseACardScreen(choiceContext, cards, base.Owner)` (Toolbox.cs:28) is NOT skippable, but the sim's \"obtain\" purpose IS -- the reverse of the auto-keep mechanism",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the screen is no longer skippable. sts2_rl/relics/toolbox.py:44 now asks with purpose 'choose_a_card', which is NOT in sts2_rl/driver.py:87-89 SKIPPABLE_PURPOSES, so the driver publishes no skip action and the player must take one of the three -- matching Toolbox.cs:28's `FromChooseACardScreen(context, cards, player)` overload, whose `canSkip` defaults to false (CardSelectCmd.cs:216). The comment at toolbox.py:39-43 records it. WAS: the port passed 'obtain', which IS skippable."
+      "issue": "Closed 2026-07-27: the screen is no longer skippable. sts2_rl/relics/toolbox.py:44 now asks with purpose 'choose_a_card', which is NOT in sts2_rl/driver.py:140-144 SKIPPABLE_PURPOSES, so the driver publishes no skip action and the player must take one of the three -- matching Toolbox.cs:28's `FromChooseACardScreen(context, cards, player)` overload, whose `canSkip` defaults to false (CardSelectCmd.cs:216). The comment at toolbox.py:39-43 records it. WAS: the port passed 'obtain', which IS skippable."
     },
     {
       "what": "N5: CardsVar(3) (Toolbox.cs:20) vs CARDS = 3 (toolbox.py:16)",
@@ -146,7 +146,7 @@
     {
       "what": "N7: `CardPileCmd.AddGeneratedCardToCombat(cardModel, PileType.Hand, player)` (Toolbox.cs:31) vs `CardPileCmd.add_to_hand(combat.hooks, player, card)` (toolbox.py:30)",
       "verdict": "faithful",
-      "rationale": "add_to_hand is the sim's port of the same command and routes through CardPileCmd._enter_combat (cmds.py:455-461), so the generated card is registered as a hook listener and on_card_entered_combat fires -- i.e. an active card-afflicting power can afflict it, as in the game. Recorded deliberately because relic/tea_of_discourtesy in this same batch hand-rolls the equivalent insert and MISSES that step (its G2). Rule 7: cmds.py is not hashed here."
+      "rationale": "add_to_hand is the sim's port of the same command and routes through CardPileCmd._enter_combat (cmds.py:1593-1610+), so the generated card is registered as a hook listener and on_card_entered_combat fires -- i.e. an active card-afflicting power can afflict it, as in the game. Recorded deliberately because relic/tea_of_discourtesy in this same batch hand-rolls the equivalent insert and MISSES that step (its G2). Rule 7: cmds.py is not hashed here."
     },
     {
       "what": "N8: Flash() (Toolbox.cs:26) and CanonicalVars (:20)",

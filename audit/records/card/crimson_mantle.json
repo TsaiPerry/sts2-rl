@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\crimson_mantle.py",
-    "sha256": "209269c1712c411d8c19543bac182c79f01f8fd14a742790e074b9b3b9ed9871"
+    "sha256": "819d1ffcc65128eeaa16bd12746d149f509e3328a0cd8217fa177a9ce2679ae8"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     }
   ],
@@ -44,11 +44,11 @@
   },
   "guards": [
     {
-      "what": "C# skips IncrementSelfDamage when Apply returns NULL; the sim increments whenever the power is present (CrimsonMantle.cs:28 vs crimson_mantle.py:40-42)",
-      "verdict": "gap",
-      "issue": "`PowerCmd.Apply<T>` returns null in three documented cases (PowerCmd.cs:29-34, 68-87): combat is ending, `!target.CanReceivePowers`, or the stacking `ModifyAmount` resolved to 0. The null-conditional `?.` then skips the increment. The sim's re-fetch by id (`ctx.player.powers.get('crimson_mantle')`) cannot distinguish those cases from a successful apply -- if a SECOND Crimson Mantle is played and something modifies its amount to 0, C# leaves the self-damage counter alone and the sim still bumps it, so the player takes one extra HP per turn for the rest of the combat. DORMANT: no ported effect modifies a positive self-applied BUFF's amount down to exactly 0 (Artifact only intercepts debuffs, `PowerType.DEBUFF`, cmds.py:299-306), and the combat-ending and CanReceivePowers cases both imply the combat is over. Live the moment a power-amount modifier that can zero a self-buff is ported."
+      "what": "C# skips IncrementSelfDamage when Apply returns NULL; check whether the sim still increments whenever the power is present (CrimsonMantle.cs:28 vs crimson_mantle.py:40-42)",
+      "verdict": "faithful",
+      "rationale": "REVISED 2026-08-04 (stale-sweep re-audit; `sts2_rl/cmds.py` changed since the 2026-07-26 audit). At that time `PowerCmd.apply` returned nothing and every card re-fetched the power by id, so `on_play` could not tell a null Apply from a successful one and always incremented -- that was a real gap. `PowerCmd.apply` now RETURNS the applied/stacked instance or `None` (`sts2_rl/cmds.py:851-859`, docstring 866-881), explicitly mirroring `Apply<T>`'s return contract (PowerCmd.cs:60-88): `None` on `is_ending` (cmds.py:890-891, <-> IsEnding, PowerCmd.cs:69-72), on `not can_receive_powers` (cmds.py:901-902, <-> !CanReceivePowers, PowerCmd.cs:73-76), and on the stacking `ModifyAmount` chain resolving to 0 (cmds.py's `existing is not None` branch below :937, <-> PowerCmd.cs:84-87). `crimson_mantle.py:37-42` now does `power = PowerCmd.apply(...)` then `if power is not None: power.increment_self_damage()`, which is exactly the C# null-conditional `?.IncrementSelfDamage()` (CrimsonMantle.cs:28). The one documented narrowing left in `PowerCmd.apply` -- C# additionally returns a non-null but UNATTACHED PowerModel when a brand-new instance's raw amount is 0 (Apply<T> line 79-83 sets `power` before the inner `Apply`'s own `amount==0` early-return at PowerCmd.cs:103, so it is never nulled back out), while the sim returns `None` for that same `existing is None and amount == 0` case (cmds.py:937-938) -- does not apply here: Crimson Mantle's own play never calls `PowerCmd.apply` with a raw amount of 0 (its `_power_amount` is a fixed 8/10, never itself modified before the call), so that branch is unreached by this card. That narrowing is the pre-existing, separately-filed dormant gap `card/the_bomb/g1`; per binding rule 3 (one mechanism, one verdict) it is not re-filed here."
     }
   ],
-  "verdict": "gap",
-  "audited": "2026-07-26"
+  "verdict": "faithful",
+  "audited": "2026-08-04"
 }

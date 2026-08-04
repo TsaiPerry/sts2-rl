@@ -31,22 +31,27 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/creatures.py",
-      "sha256": "1c73063f3ca726775f0a121fe826933fe8a4dfdcbda18bb0e0d4dfacff69de7f",
+      "sha256": "9152cb64c277b8c7e5162bcae7d59af41f160a1a347ac586423c41af5be9c530",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -79,7 +84,7 @@
     "BeforeSideTurnEnd": {
       "maps_to": "on_player_turn_end (stone_calendar.py:23-32), dispatched by HookSystem.on_player_turn_end from CombatState.end_turn",
       "verdict": "gap",
-      "issue": "REASONING REPLACED at the hooks-level rollup, same shape as gremlin_horn's. G1 was already closed faithful 2026-07-27 at the guard level (the on_player_turn_end phase walk); the hooks-level issue text quoted in the brief was never refreshed and is stale. Re-confirmed directly: HookSystem.on_player_turn_end's source dispatches through self._each(\"on_player_turn_end\") today. G2 re-confirmed dormant via the identical DamageCmd.deal is_dead-guard mechanism as charons_ashes and festive_popper -- executed end to end (turn-7 trigger deals the full 52 to two living enemies). Propose narrowing the hooks-level issue text to name G2 alone.",
+      "issue": "NARROWED 2026-08-04 (stale-sweep, applying the prior round's own proposal): G1 is faithful (closed 2026-07-27 at the guard level, the on_player_turn_end phase walk -- RECONFIRMED: HookSystem.on_player_turn_end still dispatches through `self._each(\"on_player_turn_end\")`, hooks.py:605-624). The ONLY thing this rollup carries is guard G2 (DORMANT): RECONFIRMED via the identical DamageCmd.deal is_dead-guard mechanism as charons_ashes and festive_popper -- re-read cmds.py's should_allow_hitting backstop and relics/base.py:486-493's living_enemies(), both unchanged in substance.",
       "live": false
     },
     "AfterCombatEnd": {
@@ -97,12 +102,12 @@
     {
       "what": "G1 (DORMANT): BeforeSideTurnEnd is a THREE-pass dispatcher (VeryEarly -> Early -> plain) and the sim's on_player_turn_end is one flat walk that also absorbs AfterSideTurnEnd",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the phase passes are real. `HookSystem._each` walks the four phases very_early -> early -> plain -> late as COMPLETE separate listener passes whenever any current listener declares a phase variant of that hook (sts2_rl/hooks.py:36-38, 153-180), which is what Hook.cs's 24 multi-pass dispatchers do. Stone Calendar implements the PLAIN pass (StoneCalendar.cs:86) and sts2_rl/relics/stone_calendar.py stays on `on_player_turn_end`, so its damage is now guaranteed to land after every VeryEarly and Early listener -- relic/orichalcum's snapshot and relic/paels_eye's hand exhaust are both in earlier passes today."
+      "issue": "Closed 2026-07-27: the phase passes are real. `HookSystem._each` walks the four phases very_early -> early -> plain -> late as COMPLETE separate listener passes whenever any current listener declares a phase variant of that hook (sts2_rl/hooks.py:48, 605-624, RECONFIRMED 2026-08-04 -- content unchanged, only line numbers moved), which is what Hook.cs's 24 multi-pass dispatchers do. Stone Calendar implements the PLAIN pass (StoneCalendar.cs:86) and sts2_rl/relics/stone_calendar.py stays on `on_player_turn_end`, so its damage is now guaranteed to land after every VeryEarly and Early listener -- relic/orichalcum's snapshot and relic/paels_eye's hand exhaust are both in earlier passes today."
     },
     {
       "what": "G2 (DORMANT): `combatState.HittableEnemies` (StoneCalendar.cs:96) vs the sim's living_enemies() (stone_calendar.py:27)",
       "verdict": "gap",
-      "issue": "Same mechanism and therefore the same verdict as relic/bag_of_marbles guard G2 (binding rule 3): C# targets `Enemies.Where(e => e.IsHittable)` (CombatState.cs:142), and IsHittable is `!IsDead && Hook.ShouldAllowHitting(...)`, while Relic.living_enemies() (relics/base.py:294-297) filters on `not e.is_gone` only -- and is_gone is `is_dead or escaped` (creatures.py:44-46), so the dead half is covered but the ShouldAllowHitting half is not. DORMANT AT THIS SITE FOR A REASON THAT DOES NOT APPLY AT BAG OF MARBLES': this is a DAMAGE call site, and DamageCmd.deal applies the missing predicate itself -- `if not hooks.should_allow_hitting(target): return 0` (cmds.py:48-49) -- before any hook fires, so an alive-but-unhittable enemy takes 0 and receives no events, which is what C#'s exclusion produces. Bag of Marbles is a POWER call site and PowerCmd.apply has no such backstop (audit/records/seam/power_cmd.json G6), which is why it is live-shaped there and closed here. What makes it live: any future relic-damage path that bypasses DamageCmd, or a should_allow_hitting implementer whose falsity must also suppress the DamageCmd-level side effects. Rule 7: cmds.py, relics/base.py, creatures.py and CombatState.cs are not hashed here."
+      "issue": "Same mechanism and therefore the same verdict as relic/bag_of_marbles guard G2 (binding rule 3): C# targets `Enemies.Where(e => e.IsHittable)` (CombatState.cs:142), and IsHittable is `!IsDead && Hook.ShouldAllowHitting(...)`, while Relic.living_enemies() (relics/base.py:486-493) filters on `not e.is_gone` only -- and is_gone is `is_dead or escaped` (creatures.py:176-179, RECONFIRMED 2026-08-04 -- content unchanged, only line numbers moved), so the dead half is covered but the ShouldAllowHitting half is not. DORMANT AT THIS SITE FOR A REASON THAT DOES NOT APPLY AT BAG OF MARBLES': this is a DAMAGE call site, and DamageCmd.deal applies the missing predicate itself -- `if not hooks.should_allow_hitting(target): return 0` (cmds.py:48-49) -- before any hook fires, so an alive-but-unhittable enemy takes 0 and receives no events, which is what C#'s exclusion produces. Bag of Marbles is a POWER call site and PowerCmd.apply has no such backstop (audit/records/seam/power_cmd.json G6), which is why it is live-shaped there and closed here. What makes it live: any future relic-damage path that bypasses DamageCmd, or a should_allow_hitting implementer whose falsity must also suppress the DamageCmd-level side effects. Rule 7: cmds.py, relics/base.py, creatures.py and CombatState.cs are not hashed here."
     },
     {
       "what": "N1: DamageVar(52m, ValueProp.Unpowered) and DynamicVar('DamageTurn', 7m) (StoneCalendar.cs:66-70) vs DAMAGE = 52 / DAMAGE_TURN = 7 (stone_calendar.py:20-21), and the props mapping",
@@ -112,7 +117,7 @@
     {
       "what": "N2: `base.Owner.PlayerCombatState.TurnNumber == DamageTurn` (StoneCalendar.cs:91-93) vs `self.turn != self.DAMAGE_TURN: return` (stone_calendar.py:24), read at turn END",
       "verdict": "faithful",
-      "rationale": "Exactly-equal on both sides, so the relic fires once and only on turn 7 -- not from turn 7 onward. Verified by execution rather than by reading: the b15-misc probe drives seven turns and the enemy loses exactly 52, i.e. one trigger. The sim's combat.turn is 1-based (combat.py:108 sets turn = 1) like PlayerCombatState.TurnNumber, and the executed turn-order reference (py audit/tools/relic_probes.py turn-order) shows on_player_turn_end firing with the same turn value as that turn's start hooks, so there is no off-by-one at the end boundary."
+      "rationale": "Exactly-equal on both sides, so the relic fires once and only on turn 7 -- not from turn 7 onward. Verified by execution rather than by reading: the b15-misc probe drives seven turns and the enemy loses exactly 52, i.e. one trigger. The sim's combat.turn is 1-based (combat.py:177 sets turn = 1, RECONFIRMED 2026-08-04 -- only the line number moved) like PlayerCombatState.TurnNumber, and the executed turn-order reference (py audit/tools/relic_probes.py turn-order) shows on_player_turn_end firing with the same turn value as that turn's start hooks, so there is no off-by-one at the end boundary."
     },
     {
       "what": "N3: one `CreatureCmd.Damage(ctx, HittableEnemies, ...)` call over a collection (StoneCalendar.cs:96) vs a per-enemy `DamageCmd.deal` loop over a snapshot (stone_calendar.py:27-31)",

@@ -51,7 +51,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -91,7 +91,7 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     }
   ],
@@ -160,7 +160,7 @@
     },
     {
       "what": "AncientEventModel.RelicOption<T>() -- an option whose choice obtains the relic and finishes the event",
-      "maps_to": "events/ancient.py:34-44 _relic_option: the key is the relic id, on_chosen calls run.add_relic(make_relic(rid)) -- which runs the relic's AfterObtained (run.py:546-553), RelicCmd.Obtain's job -- then _finish. Shared by all four ancients audited here.",
+      "maps_to": "events/ancient.py:34-44 _relic_option: the key is the relic id, on_chosen calls run.add_relic(make_relic(rid)) -- which runs the relic's AfterObtained (run.py:957-964), RelicCmd.Obtain's job -- then _finish. Shared by all four ancients audited here.",
       "verdict": "faithful"
     }
   ],

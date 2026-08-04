@@ -31,22 +31,22 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -56,7 +56,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -72,14 +72,14 @@
       "rationale": "STALE (round 11 re-settle): this rollup summarised guard G1, which was closed 2026-07-29 round 7 -- the guard entry itself already reads `faithful` and this hooks-level entry was simply never revisited. EXECUTED (source read, sts2_rl/relics/venerable_tea_set.py): `after_room_entered` now sets `self._pending = True` on `room_type == RoomType.REST_SITE`, giving the [SavedProperty]'s persistence (which was always fine -- the relic instance lives on RunState.relics for the whole run) a real writer. EXECUTED (`py -m pytest test/test_false_premise_stubs.py -k venerable -q`): 4 passed. Nothing gap-classified remains under this hook."
     },
     "AfterRoomEntered": {
-      "maps_to": "after_room_entered (venerable_tea_set.py:29-38), dispatched by Relic.after_room_entered's base declaration (relics/base.py:304) from RunState's room-entry loop (run.py:1275)",
+      "maps_to": "after_room_entered (venerable_tea_set.py:29-38), dispatched by Relic.after_room_entered's base declaration (relics/base.py:350) from RunState's room-entry loop (run.py:1502)",
       "verdict": "faithful",
-      "rationale": "STALE (round 11 re-settle), and the whole of this record's finding. This rollup summarised guard G1, closed 2026-07-29 round 7 -- the guard entry itself already reads `faithful` and this hooks-level entry was simply never revisited. EXECUTED (source read): `after_room_entered(self, run, point, room_type)` now checks `room_type == RoomType.REST_SITE` at the room-ENTRY dispatch itself (relics/base.py:304 -> run.py:1275, called for every relic on entering every room), matching VenerableTeaSet.cs:41-49's `AfterRoomEntered`/`room is RestSiteRoom` latch -- keyed on room entry, not on whether the player actually rested, so merely walking into (and leaving) a campfire arms the relic on both sides now. The SECOND, smaller divergence this entry named (the constructor parameter's docstring conflating 'rested' with 'entered a rest site') is also resolved by construction: the constructor argument is now dead weight kept only so a test can pre-arm the relic, and the real trigger is the room-type check, not the argument. Same mechanism and same closure as this record's own `GainEnergyInNextCombat` hook entry -- one fix closed both halves at once, because the writer IS the room-entry latch. EXECUTED (`py -m pytest test/test_false_premise_stubs.py -k venerable -q`): 4 passed. Rule 7: RestSiteRoom.cs is NOT hashed by this record."
+      "rationale": "STALE (round 11 re-settle), and the whole of this record's finding. This rollup summarised guard G1, closed 2026-07-29 round 7 -- the guard entry itself already reads `faithful` and this hooks-level entry was simply never revisited. EXECUTED (source read): `after_room_entered(self, run, point, room_type)` now checks `room_type == RoomType.REST_SITE` at the room-ENTRY dispatch itself (relics/base.py:350 -> run.py:1502, called for every relic on entering every room), matching VenerableTeaSet.cs:41-49's `AfterRoomEntered`/`room is RestSiteRoom` latch -- keyed on room entry, not on whether the player actually rested, so merely walking into (and leaving) a campfire arms the relic on both sides now. The SECOND, smaller divergence this entry named (the constructor parameter's docstring conflating 'rested' with 'entered a rest site') is also resolved by construction: the constructor argument is now dead weight kept only so a test can pre-arm the relic, and the real trigger is the room-type check, not the argument. Same mechanism and same closure as this record's own `GainEnergyInNextCombat` hook entry -- one fix closed both halves at once, because the writer IS the room-entry latch. EXECUTED (`py -m pytest test/test_false_premise_stubs.py -k venerable -q`): 4 passed. Rule 7: RestSiteRoom.cs is NOT hashed by this record."
     },
     "AfterEnergyReset": {
       "maps_to": "on_energy_reset (venerable_tea_set.py:27-32)",
       "verdict": "faithful",
-      "rationale": "VenerableTeaSet.cs:51-59 gains Energy.BaseValue and then clears the flag; venerable_tea_set.py:29-32 does the same two steps in the same order with ENERGY = 2. The hook slot matches: turn_structure step 18 is `await Hook.AfterEnergyReset(state, player)` immediately after the energy assignment (CombatManager.cs:650), and the sim's on_energy_reset sits in exactly that slot (player.py:163-168; executed order from `py audit/tools/relic_probes.py turn-order` is on_block_cleared -> on_energy_reset -> on_player_turn_start). Because the flag is cleared on first use, both sides fire on turn 1 only even though the hook runs every turn. EXECUTED with the flag forced true (py audit/tools/relic_probes_b17.py teaset): turn-1 energy 5 instead of 3, i.e. the 2 lands correctly. The `base.Owner == player` clause is structurally satisfied (one player). Same verdict and same basis as relic/fake_venerable_tea_set's AfterEnergyReset entry, per binding rule 3. Rule 7: CombatManager.cs, player.py and audit/records/relic/fake_venerable_tea_set.json are NOT hashed by this record."
+      "rationale": "VenerableTeaSet.cs:51-59 gains Energy.BaseValue and then clears the flag; venerable_tea_set.py:29-32 does the same two steps in the same order with ENERGY = 2. The hook slot matches: turn_structure step 18 is `await Hook.AfterEnergyReset(state, player)` immediately after the energy assignment (CombatManager.cs:650), and the sim's on_energy_reset sits in exactly that slot (player.py:369-372 (_setup_player_turn) / on_energy_reset fires right after; executed order from `py audit/tools/relic_probes.py turn-order` is on_block_cleared -> on_energy_reset -> on_player_turn_start). Because the flag is cleared on first use, both sides fire on turn 1 only even though the hook runs every turn. EXECUTED with the flag forced true (py audit/tools/relic_probes_b17.py teaset): turn-1 energy 5 instead of 3, i.e. the 2 lands correctly. The `base.Owner == player` clause is structurally satisfied (one player). Same verdict and same basis as relic/fake_venerable_tea_set's AfterEnergyReset entry, per binding rule 3. Rule 7: CombatManager.cs, player.py and audit/records/relic/fake_venerable_tea_set.json are NOT hashed by this record."
     }
   },
   "guards": [
@@ -94,9 +94,9 @@
       "rationale": "No AscensionHelper.GetValueIfAscension anywhere in the file, so 2 is the pinned non-ascension value. Checked against the knock-off sibling deliberately: FakeVenerableTeaSet is EnergyVar(1) and its port pins 1, so the pair is not a copy-paste of one number (PROMPT.md bug class 29 -- siblings may differ on purpose)."
     },
     {
-      "what": "N2: PlayerCmd.GainEnergy's four guards (PlayerCmd.cs:29-43) -- `amount <= 0`, `!CombatManager.IsEnding`, Hook.AfterModifyingEnergyGain, and `finalAmount > 0` -- against the sim's EnergyCmd.gain (cmds.py:545-554), which has none of them",
+      "what": "N2: PlayerCmd.GainEnergy's four guards (PlayerCmd.cs:29-43) -- `amount <= 0`, `!CombatManager.IsEnding`, Hook.AfterModifyingEnergyGain, and `finalAmount > 0` -- against the sim's EnergyCmd.gain (cmds.py:1848-1879)",
       "verdict": "faithful",
-      "rationale": "Traced rather than assumed. (a) `amount <= 0`: the argument is the pinned constant 2, so the guard cannot fire. (b) `finalAmount > 0`: the sim instead does `player.energy += amount` unconditionally, which is a no-op at 0 -- and the only ported modify_energy_gain listener is NoEnergyGainPower (powers.py:554-558), which returns exactly 0, so both sides leave the energy unchanged. (c) Hook.AfterModifyingEnergyGain has exactly ONE override in the whole game source (NoEnergyGainPower.cs:28) and its body is presentation; the sim has no such hook, which is a seam-level omission not observable here. (d) `!IsEnding` belongs to the combat-over-window guard family that audit/records/seam/creature_card_cmds.json guard G14 already verdicts as a DORMANT family for one structural reason -- the sim never runs content with the phase already flipped -- and this site is an energy reset during turn setup, which cannot occur inside that window. Rule 7: PlayerCmd.cs, cmds.py, powers.py, NoEnergyGainPower.cs and audit/records/seam/creature_card_cmds.json are NOT hashed by this record."
+      "rationale": "Traced rather than assumed, RE-VERIFIED 2026-08-04: EnergyCmd.gain now DOES carry the `!IsEnding` guard (`if is_ending(hooks): return`, cmds.py:1875, per card/_is_dead_early_return / relic/lantern G1 -- was absent at the original audit, is present now, closing what used to be a dormant-only equivalence with a real one). (a) `amount <= 0`: the argument is the pinned constant 2, so the guard cannot fire regardless. (b) `finalAmount > 0`: the sim instead does `player.energy += amount` unconditionally after the modify_energy_gain fold (cmds.py:1877-1878), which is a no-op at 0 -- and the only ported modify_energy_gain listener is NoEnergyGainPower (powers.py:861-871), which returns exactly 0, so both sides leave the energy unchanged (also already clamped to >=0 by hooks.modify_energy_gain per cmds.py's own comment, hooks.py:215). (c) Hook.AfterModifyingEnergyGain has exactly ONE override in the whole game source (NoEnergyGainPower.cs:28) and its body is presentation; the sim has no such hook, which is a seam-level omission not observable here. (d) `!IsEnding` is now directly ported (see above), so this clause no longer rests on creature_card_cmds/G14's dormant-family argument at all -- it is simply faithful. Rule 7: PlayerCmd.cs, powers.py, NoEnergyGainPower.cs and audit/records/seam/creature_card_cmds.json are NOT hashed by this record; cmds.py IS hashed by this record."
     },
     {
       "what": "N3: [SavedProperty], the `if (_gainEnergyInNextCombat != value)` change guard, base.Status Active/Normal, Flash(), CanonicalVars and ExtraHoverTips (VenerableTeaSet.cs:19-21, 23-39, 55)",
@@ -106,7 +106,7 @@
     {
       "what": "N4: `undo_after_obtained` is absent from this port",
       "verdict": "faithful",
-      "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart (nothing in the game un-picks a relic), so a port lacking it is not diverging from the source, which is the only question this audit asks. No operational consequence here either -- this relic's pickup mutates nothing outside run.relics, so a conformance-runner swap needs no unwind. Rule 7: sts2_rl/relics/base.py:143-150 is not hashed here."
+      "rationale": "PROMPT.md v6 binding item 3: the helper has no C# counterpart (nothing in the game un-picks a relic), so a port lacking it is not diverging from the source, which is the only question this audit asks. No operational consequence here either -- this relic's pickup mutates nothing outside run.relics, so a conformance-runner swap needs no unwind. Rule 7: sts2_rl/relics/base.py:206-... is not hashed here."
     }
   ],
   "verdict": "waiver",

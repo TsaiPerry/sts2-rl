@@ -10,7 +10,7 @@
   },
   "hooks": {
     "RoomType": {
-      "maps_to": "rooms.py:191 `normal_keys=(..., \"frog_knight\", ...)` (glory ActRooms)",
+      "maps_to": "rooms.py:264-268 `normal_keys=(..., \"frog_knight\", ...)` (glory ActRooms)",
       "verdict": "deliberate-divergence",
       "rationale": "FrogKnightNormal.cs:9 `RoomType => RoomType.Monster`. Modeled structurally by pool membership. One shared mechanism across this batch; see `encounter/_room_type_and_weak` in the report."
     },
@@ -21,9 +21,9 @@
       "issue": "FrogKnightNormal.cs:11 returns a single-element list with `FrogKnight`. Shared finding, filed once under `encounter/_all_possible_monsters` (see `encounter/aeonglass` for the full enumeration; dormant)."
     },
     "GenerateMonsters": {
-      "maps_to": "monsters/base.py:408-416 Encounter.create_monsters + FROG_KNIGHT_NORMAL (frog_knight.py:97-100)",
+      "maps_to": "monsters/base.py:476-479 Encounter.create_monsters + FROG_KNIGHT_NORMAL (frog_knight.py:97-100)",
       "verdict": "faithful",
-      "rationale": "ROSTER: FrogKnightNormal.cs:13-16 returns exactly one `(FrogKnight, null)` pair; `FROG_KNIGHT_NORMAL = Encounter(id=\"frog_knight_normal\", monster_classes=[FrogKnight])` (frog_knight.py:97-100) -- one monster, same class. ORDER: trivially matches. SLOT: C# passes `null`; the sim's `monster_slots` default `()` leaves `slot_name=None` too -- matches. DRAW COUNT: zero on both sides -- `FrogKnightNormal.GenerateMonsters` never touches `base.Rng`, and the sim's fixed-composition path draws nothing (monsters/base.py:408-411)."
+      "rationale": "ROSTER: FrogKnightNormal.cs:13-16 returns exactly one `(FrogKnight, null)` pair; `FROG_KNIGHT_NORMAL = Encounter(id=\"frog_knight_normal\", monster_classes=[FrogKnight])` (frog_knight.py:97-100) -- one monster, same class. ORDER: trivially matches. SLOT: C# passes `null`; the sim's `monster_slots` default `()` leaves `slot_name=None` too -- matches. DRAW COUNT: zero on both sides -- `FrogKnightNormal.GenerateMonsters` never touches `base.Rng`, and the sim's fixed-composition path draws nothing (monsters/base.py:477-479, `create_monsters`'s own comment)."
     },
     "ShouldReceiveCombatHooks": {
       "maps_to": "no sim counterpart (by absence)",
@@ -40,7 +40,7 @@
     {
       "what": "The Niche HP-roll (FrogKnight has min_hp==max_hp==191, degenerate range, single enemy)",
       "verdict": "faithful",
-      "rationale": "Same shape as `encounter/aeonglass`'s check: one draw on both sides (`hashSet={191}` -> `NextItem`; sim `candidates=[191]` -> `next_int_range(0,1)`, combat.py:402-422)."
+      "rationale": "Same shape as `encounter/aeonglass`'s check: one draw on both sides (`hashSet={191}` -> `NextItem`; sim `candidates=[191]` -> `next_int_range(0,1)`, combat.py:423-442)."
     },
     {
       "what": "Gold-ladder and ShouldGiveRewards inheritance",
@@ -50,7 +50,7 @@
     {
       "what": "Reachability",
       "verdict": "faithful",
-      "rationale": "rooms.py:191 lists `frog_knight` in Glory's `normal_keys`, and `FROG_KNIGHT_NORMAL` is registered in `sts2_rl/monsters/glory/__init__.py`'s `ENCOUNTERS` dict (line 65)."
+      "rationale": "rooms.py:264-268 lists `frog_knight` in Glory's `normal_keys`, and `FROG_KNIGHT_NORMAL` is registered in `sts2_rl/monsters/glory/__init__.py`'s `ENCOUNTERS` dict (line 65)."
     }
   ],
   "verdict": "gap",
@@ -68,17 +68,17 @@
     },
     {
       "path": "sts2_rl\\monsters\\base.py",
-      "sha256": "424336cf4fb7be8026278b7a34af428082d8487fb57f25c3565311fe5c993388",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\combat.py",
-      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     },
     {

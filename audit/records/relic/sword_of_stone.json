@@ -25,13 +25,23 @@
       "side": "game"
     },
     {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
+      "side": "sim"
+    },
+    {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -39,7 +49,7 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.EVENT (sword_of_stone.py:22)",
       "verdict": "faithful",
-      "rationale": "SwordOfStone.cs:17 is RelicRarity.Event. EXECUTED (b15-pool): absent from the grab bag, granted by the ported Sunken Statue event (events/sunken_statue.py). Event rarity makes it untradable on both sides (relics/base.py:132-136), which is deliberate in the source -- a traded-away Sword of Stone could never become Jade."
+      "rationale": "SwordOfStone.cs:17 is RelicRarity.Event. EXECUTED (b15-pool): absent from the grab bag, granted by the ported Sunken Statue event (events/sunken_statue.py). Event rarity makes it untradable on both sides (relics/base.py:188-199), which is deliberate in the source -- a traded-away Sword of Stone could never become Jade."
     },
     "ShowCounter": {
       "maps_to": "no counterpart",
@@ -52,9 +62,9 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. SwordOfStone.cs:21 returns ElitesDefeated, and the ElitesDefeated setter's InvokeDisplayAmountChanged (SwordOfStone.cs:36) is the only thing the sim's plain `self.elites_defeated += 1` drops. Neither is read by any non-display path."
     },
     "AfterCombatVictory": {
-      "maps_to": "after_combat_end (sts2_rl/relics/sword_of_stone.py), the run-level PLAIN pass dispatched at sts2_rl/run.py:1380-1381 after the after_combat_end_early pass",
+      "maps_to": "after_combat_end (sts2_rl/relics/sword_of_stone.py), the run-level PLAIN pass dispatched at sts2_rl/run.py:1812-1813 after the after_combat_end_early pass (run.py:1810-1811)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the AfterCombatVictoryEarly / AfterCombatVictory two-pass dispatch is real. On the combat side, HookSystem._each walks the phases very_early -> early -> plain -> late as COMPLETE separate passes whenever any listener declares a phase variant (sts2_rl/hooks.py:36, 153-180); on the run side RunState.finish_combat runs `after_combat_end_early` over every relic and only then `after_combat_end` (sts2_rl/run.py:1371-1381). Both mirror Hook.AfterCombatVictory (Hook.cs:340-352). The elite gate, the counter, the threshold and the in-place replacement were already faithful; the two-pass distinction was the rollup's only gap."
+      "issue": "Closed 2026-07-27: the AfterCombatVictoryEarly / AfterCombatVictory two-pass dispatch is real. On the combat side, HookSystem._each walks the phases very_early -> early -> plain -> late as COMPLETE separate passes whenever any listener declares a phase variant (sts2_rl/hooks.py:48, 605-624); on the run side RunState.finish_combat runs `after_combat_end_early` over every relic and only then `after_combat_end` (sts2_rl/run.py:1803-1813, RECONFIRMED 2026-08-04 -- content unchanged, only line numbers moved). Both mirror Hook.AfterCombatVictory (Hook.cs:340-352). The elite gate, the counter, the threshold and the in-place replacement were already faithful; the two-pass distinction was the rollup's only gap."
     }
   },
   "guards": [
@@ -66,7 +76,7 @@
     {
       "what": "G1 (DORMANT): AfterCombatVictory is TWO separate C# passes (AfterCombatVictoryEarly then AfterCombatVictory) and the sim has one after_combat_end walk which also stands in for Hook.AfterCombatEnd",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the AfterCombatVictoryEarly / AfterCombatVictory two-pass dispatch is real. On the combat side, HookSystem._each walks the phases very_early -> early -> plain -> late as COMPLETE separate passes whenever any listener declares a phase variant (sts2_rl/hooks.py:36, 153-180); on the run side RunState.finish_combat runs `after_combat_end_early` over every relic and only then `after_combat_end` (sts2_rl/run.py:1371-1381). Both mirror Hook.AfterCombatVictory (Hook.cs:340-352). Sword of Stone implements the PLAIN pass (SwordOfStone.cs:40) and is now guaranteed to run after every Early listener. WAS: one flat after_combat_end walk in relic-list order. NOTE, unchanged and still open elsewhere: C# also distinguishes Hook.AfterCombatEnd from Hook.AfterCombatVictory and the sim folds both onto after_combat_end; that collapse is audit/records/seam/turn_structure.json G10's, and it is harmless at this site because run.py:1371's `not self.is_dead` gate makes the sim's dispatch victory-only."
+      "issue": "Closed 2026-07-27: the AfterCombatVictoryEarly / AfterCombatVictory two-pass dispatch is real. On the combat side, HookSystem._each walks the phases very_early -> early -> plain -> late as COMPLETE separate passes whenever any listener declares a phase variant (sts2_rl/hooks.py:48, 605-624); on the run side RunState.finish_combat runs `after_combat_end_early` over every relic and only then `after_combat_end` (sts2_rl/run.py:1803-1813, RECONFIRMED 2026-08-04 -- content unchanged, only line numbers moved). Both mirror Hook.AfterCombatVictory (Hook.cs:340-352). Sword of Stone implements the PLAIN pass (SwordOfStone.cs:40) and is now guaranteed to run after every Early listener. WAS: one flat after_combat_end walk in relic-list order. NOTE, unchanged and still open elsewhere: C# also distinguishes Hook.AfterCombatEnd from Hook.AfterCombatVictory and the sim folds both onto after_combat_end; that collapse is audit/records/seam/turn_structure.json G10's, and it is harmless at this site because run.py:1803's `not self.is_dead` gate makes the sim's dispatch victory-only."
     },
     {
       "what": "N2: `RelicCmd.Replace(this, SwordOfJade)` (SwordOfStone.cs:48) vs the port's hand-rolled in-place swap (sword_of_stone.py:38-42)",
@@ -81,12 +91,12 @@
     {
       "what": "N4: C# replaces the relic while the combat is still ENDING; the sim replaces it after finish_combat",
       "verdict": "faithful",
-      "rationale": "Checked because a mid-teardown relic swap is where a hook-lifetime bug would hide. C# fires Hook.AfterCombatVictory from EndCombatInternal (audit/records/seam/turn_structure.json G10 cites CombatManager.cs:970-1033), so RelicCmd.Obtain runs while the CombatState still exists and the new relic is NOT registered as a combat listener (the listener list is rebuilt per combat from player.Relics). The sim's after_combat_end is dispatched from RunState.finish_combat (run.py:1205-1207), strictly after the combat object is done being read, and the new relic is attached to the NEXT CombatState by relic.attach (relics/base.py:152-155). Both therefore give Sword of Jade its first hook in the following combat, which is also where its own AfterRoomEntered/on_combat_start effect belongs. The one C# subtlety with no consequence here: mutating player.Relics during a listener pass is safe because Hook re-enumerates, and the sim's dispatch iterates `list(self.relics)` (run.py:1206), a copy -- so neither side skips or double-visits a relic because of the swap."
+      "rationale": "Checked because a mid-teardown relic swap is where a hook-lifetime bug would hide. C# fires Hook.AfterCombatVictory from EndCombatInternal (audit/records/seam/turn_structure.json G10 cites CombatManager.cs:970-1033), so RelicCmd.Obtain runs while the CombatState still exists and the new relic is NOT registered as a combat listener (the listener list is rebuilt per combat from player.Relics). The sim's after_combat_end is dispatched from RunState.finish_combat (run.py:1803-1813), strictly after the combat object is done being read, and the new relic is attached to the NEXT CombatState by relic.attach (relics/base.py:247-250). Both therefore give Sword of Jade its first hook in the following combat, which is also where its own AfterRoomEntered/on_combat_start effect belongs. The one C# subtlety with no consequence here: mutating player.Relics during a listener pass is safe because Hook re-enumerates, and the sim's dispatch iterates `list(self.relics)` (run.py:1810,1812), a copy -- so neither side skips or double-visits a relic because of the swap."
     },
     {
       "what": "N5: no undo_after_obtained, and no IsAllowed override",
       "verdict": "faithful",
-      "rationale": "The ABSENCE of undo_after_obtained is faithful per PROMPT.md v6 item 3 -- the helper has no C# counterpart. It is also genuinely unnecessary here: the pickup mutates nothing outside run.relics (there is no AfterObtained at all), so a conformance relic swap needs no unwinding. SwordOfStone.cs declares no IsAllowed / IsAllowedAtNeow override, so the relic is not in sweep B's 17-relic IsBeforeAct3TreasureChest cluster and the base True for is_allowed_at_neow (relics/base.py:159) is consistent with RelicModel.IsAllowedAtNeow delegating to IsAllowed (RelicModel.cs:443-446; PROMPT.md v6 item 2). Event rarity keeps it out of Neow's pools in practice anyway."
+      "rationale": "The ABSENCE of undo_after_obtained is faithful per PROMPT.md v6 item 3 -- the helper has no C# counterpart. It is also genuinely unnecessary here: the pickup mutates nothing outside run.relics (there is no AfterObtained at all), so a conformance relic swap needs no unwinding. SwordOfStone.cs declares no IsAllowed / IsAllowedAtNeow override, so the relic is not in sweep B's 17-relic IsBeforeAct3TreasureChest cluster and the base True for is_allowed_at_neow (relics/base.py:265-277) is consistent with RelicModel.IsAllowedAtNeow delegating to IsAllowed (RelicModel.cs:443-446; PROMPT.md v6 item 2). Event rarity keeps it out of Neow's pools in practice anyway."
     },
     {
       "what": "N6: ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / Flash / AssertMutable (SwordOfStone.cs:19-21, 34-36, 45)",

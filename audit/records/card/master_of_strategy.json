@@ -6,36 +6,36 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_skills.py",
-    "sha256": "1cdf31a3bd59e95b239df163b0724e4f99ef299bd67256cc94fcc683e1ed1840"
+    "sha256": "73d875726c8cb8ca6a213dea6f43267d57717f5a1d6b65d34ca2ecea7f4ab66f"
   },
   "hooks": {
     "CanonicalKeywords": {
-      "maps_to": "MasterOfStrategyCard.exhausts = True (colorless_skills.py:400)",
+      "maps_to": "MasterOfStrategyCard.exhausts = True (colorless_skills.py:466)",
       "verdict": "faithful",
       "rationale": "`{ CardKeyword.Exhaust }` (MasterOfStrategy.cs:14) == `exhausts = True`."
     },
     "ctor": {
-      "maps_to": "class attrs (colorless_skills.py:395-400) + _init_vars (402-404)",
+      "maps_to": "class attrs (colorless_skills.py:461-466) + _init_vars (468-470)",
       "verdict": "faithful",
       "rationale": "`base(0, CardType.Skill, CardRarity.Rare, TargetType.Self)` (MasterOfStrategy.cs:16-19) == cost 0 / SKILL / RARE / SELF."
     },
     "CanonicalVars": {
-      "maps_to": "MasterOfStrategyCard._cards = 3 (colorless_skills.py:404)",
+      "maps_to": "MasterOfStrategyCard._cards = 3 (colorless_skills.py:470)",
       "verdict": "faithful",
       "rationale": "`new CardsVar(3)` (MasterOfStrategy.cs:12) == `_cards = 3`."
     },
     "OnPlay": {
-      "maps_to": "MasterOfStrategyCard.on_play (colorless_skills.py:409-411)",
+      "maps_to": "MasterOfStrategyCard.on_play (colorless_skills.py:475-477)",
       "verdict": "faithful",
       "rationale": "`CardPileCmd.Draw(choiceContext, DynamicVars.Cards.BaseValue, Owner)` (MasterOfStrategy.cs:28) == `DrawCmd.draw(ctx.player, self._cards)`. A single-effect card with no guards and no animation on either side."
     },
     "OnUpgrade": {
-      "maps_to": "MasterOfStrategyCard._on_upgrade (colorless_skills.py:406-407)",
+      "maps_to": "MasterOfStrategyCard._on_upgrade (colorless_skills.py:472-473)",
       "verdict": "faithful",
       "rationale": "`DynamicVars.Cards.UpgradeValueBy(1m)` (MasterOfStrategy.cs:23) == `self._cards += 1` (3 -> 4). Note C# declares OnUpgrade before OnPlay; no behavioural consequence."
     }
   },
   "guards": [],
   "verdict": "faithful",
-  "audited": "2026-07-26"
+  "audited": "2026-08-04"
 }

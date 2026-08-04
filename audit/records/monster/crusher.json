@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\hive\\kaiser_crab.py",
-    "sha256": "450a8fdc792bfab4bbcdb7bf007f28ce3cadb00001d5b4889795d73e4f67eff3"
+    "sha256": "16dd4fdee244797d139e7ab82f5a0c47e76916d8e5332425d56fdb65f39fef9a"
   },
   "hooks": {
     "DeathSfx": {
@@ -47,12 +47,12 @@
     "AfterAddedToRoom": {
       "maps_to": "Crusher.__init__ -> PowerCmd.apply(BackAttackLeftPower, 1) then PowerCmd.apply(CrabRagePower, 1) (kaiser_crab.py:44-47)",
       "verdict": "deliberate-divergence",
-      "rationale": "The sim has no add-to-room phase - creature creation *is* construction - so AfterAddedToRoom's effect is applied from __init__ (kaiser_crab.py:44-47). SHARED-FINDINGS section 2's shared verdict, copied: the game runs these from MonsterModel.AfterAddedToRoom via CombatManager.AfterCreatureAdded (CombatManager.cs:860-867) inside StartCombatInternal (CombatManager.cs:394-398), i.e. after every creature is on the board and before Hook.BeforeCombatStart (CombatManager.cs:403); the sim runs them at create_monsters (combat.py:134), before relics attach (combat.py:157-159), before belt potions register (combat.py:164-166), before the parity Niche HP roll (combat.py:152-153) and before hooks.on_combat_start (combat.py:208). Same observable today on all three of section 2's clauses (listener set / HP-roll inversion / roll ordering); executed for this unit by `py audit/tools/monster_probes_b05.py rocket-ctor`, which prints the listener set at monster-construction time for a two-monster hive encounter: ['CombatHistory','StrikeCard','DefendCard', the previously-created monster's own powers] - no relic, no potion. Rule 7: the rationale leans on sts2_rl/combat.py, sts2_rl/relics/ruined_helmet.py, sts2_rl/relics/unsettling_lamp.py and src/Core/Combat/CombatManager.cs, which this record does NOT hash. Amounts and order match Crusher.cs:117-118 (BackAttackLeftPower 1m, then CrabRagePower 1m, both self-applied). The trailing Background.SetVisible(true) at :119 is presentation. Unlike its sibling Rocket, Crusher applies NOTHING to the player, so section 2's shared clauses apply unmodified here."
+      "rationale": "The sim has no add-to-room phase - creature creation *is* construction - so AfterAddedToRoom's effect is applied from __init__ (kaiser_crab.py:44-47). SHARED-FINDINGS section 2's shared verdict, copied: the game runs these from MonsterModel.AfterAddedToRoom via CombatManager.AfterCreatureAdded (CombatManager.cs:860-867) inside StartCombatInternal (CombatManager.cs:394-398), i.e. after every creature is on the board and before Hook.BeforeCombatStart (CombatManager.cs:403); the sim runs them at create_monsters (combat.py:241), before relics attach (combat.py:273-274), before belt potions register (combat.py:279-281), before the parity Niche HP roll (combat.py:267-268) and before hooks.on_combat_start (combat.py:356). Same observable today on all three of section 2's clauses (listener set / HP-roll inversion / roll ordering); executed for this unit by `py audit/tools/monster_probes_b05.py rocket-ctor`, which prints the listener set at monster-construction time for a two-monster hive encounter: ['CombatHistory','StrikeCard','DefendCard', the previously-created monster's own powers] - no relic, no potion. Rule 7: the rationale leans on sts2_rl/combat.py, sts2_rl/relics/ruined_helmet.py, sts2_rl/relics/unsettling_lamp.py and src/Core/Combat/CombatManager.cs, which this record does NOT hash. Amounts and order match Crusher.cs:117-118 (BackAttackLeftPower 1m, then CrabRagePower 1m, both self-applied). The trailing Background.SetVisible(true) at :119 is presentation. Unlike its sibling Rocket, Crusher applies NOTHING to the player, so section 2's shared clauses apply unmodified here."
     },
     "AfterCurrentHpChanged": {
       "maps_to": "(no sim counterpart - and none needed)",
       "verdict": "waiver",
-      "rationale": "One of monster_state_machine boundary hole 5's eleven unclaimed C# hook overrides. Read to the end (the KinPriest N6 lesson): after the guard `creature != base.Creature || delta >= 0m` the ENTIRE body is `Background.PlayHurtAnim(NKaiserCrabBossBackground.ArmSide.Left)` and a return (Crusher.cs:122-130) - a wince animation on the boss backdrop. It moves no HP, block, power or move state. Presentation, per SHARED-FINDINGS section 4. The sim has no MonsterModel listener category at all (hook_dispatch G5, dormant, monsters/base.py:78-81) and this record does not re-verdict that; the point here is that there is no mechanical behaviour for it to have lost."
+      "rationale": "One of monster_state_machine boundary hole 5's eleven unclaimed C# hook overrides. Read to the end (the KinPriest N6 lesson): after the guard `creature != base.Creature || delta >= 0m` the ENTIRE body is `Background.PlayHurtAnim(NKaiserCrabBossBackground.ArmSide.Left)` and a return (Crusher.cs:122-130) - a wince animation on the boss backdrop. It moves no HP, block, power or move state. Presentation, per SHARED-FINDINGS section 4. The sim has no MonsterModel listener category at all (hook_dispatch G5, dormant, monsters/base.py:235-244) and this record does not re-verdict that; the point here is that there is no mechanical behaviour for it to have lost."
     },
     "BeforeDeath": {
       "maps_to": "(no sim counterpart - and none needed)",
@@ -83,5 +83,52 @@
     }
   ],
   "verdict": "deliberate-divergence",
-  "audited": "2026-07-27"
+  "audited": "2026-07-27",
+  "extra_sources": [
+    {
+      "path": "src\\Core\\Models\\Powers\\DoomPower.cs",
+      "sha256": "5daf80a135d0c8001bb20c9827e7430f87c10908c24879730d7623bdc189e312",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\MonsterModel.cs",
+      "sha256": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Monsters\\TorchHeadAmalgam.cs",
+      "sha256": "7f16688b97116b98b38ab3cb8a5bb7ff4a5a7f2b48e7ccc7c9aa01d6fc89883a",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Nodes\\Combat\\NCreature.cs",
+      "sha256": "905d28a4ca154006d145cf33e967d34c945770eb5c29462ff28160419e52de11",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Nodes\\Combat\\NCombatUi.cs",
+      "sha256": "94685bc5e87a0d1988e89e0d1ae24b3034c83b0b480fdc93dd6327c29beac7a6",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Monsters\\Rocket.cs",
+      "sha256": "64ce4ca6aa17ca7c94c9d184dedcf9c4c2adf8f493298a90036b79f8fd9f1ca7",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Combat\\CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl\\combat.py",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\monsters\\base.py",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
+      "side": "sim"
+    }
+  ]
 }

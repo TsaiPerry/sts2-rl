@@ -6,23 +6,23 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\overgrowth\\fuzzy_wurm_crawler.py",
-    "sha256": "709fd5010a01839534bb6ec922456ceaddec9b655bd492c90be4ae8d04d027a9"
+    "sha256": "59b21a1f6c5020a8aae3ca09fb75867b17ac6df50aebe697091b6ddc8094e91f"
   },
   "hooks": {
     "Tags": {
       "maps_to": "rooms.py tags['fuzzy_wurm_weak'] = ('crawler',)",
       "verdict": "faithful",
-      "rationale": "FuzzyWurmCrawlerWeak.Tags => [EncounterTag.Crawler] (FuzzyWurmCrawlerWeak.cs:10). Not modeled on the sim's Encounter dataclass itself; rooms.py:110 (_overgrowth_rooms's tags dict) carries tags['fuzzy_wurm_weak']=('crawler',) -- same single tag, feeding the same tag-safe grab-bag picker (rooms.py:237-256) that mirrors ActModel.AddWithoutRepeatingTags. Run-layer picker mechanism (seam/rooms_and_map, out of scope for this record beyond confirming the transcription)."
+      "rationale": "FuzzyWurmCrawlerWeak.Tags => [EncounterTag.Crawler] (FuzzyWurmCrawlerWeak.cs:10). Not modeled on the sim's Encounter dataclass itself; rooms.py:176 (_overgrowth_rooms's tags dict) carries tags['fuzzy_wurm_weak']=('crawler',) -- same single tag, feeding the same tag-safe grab-bag picker (rooms.py:330-344, :458-475) that mirrors ActModel.AddWithoutRepeatingTags. Run-layer picker mechanism (seam/rooms_and_map, out of scope for this record beyond confirming the transcription)."
     },
     "RoomType": {
       "maps_to": "ENCOUNTERS['fuzzy_wurm_weak'] listed in rooms.py weak_keys (_overgrowth_rooms)",
       "verdict": "faithful",
-      "rationale": "FuzzyWurmCrawlerWeak.RoomType => RoomType.Monster (FuzzyWurmCrawlerWeak.cs:12) -- IsWeak is orthogonal to RoomType; both are Monster-room encounters. Sim carries no room_type field on the Encounter dataclass; 'fuzzy_wurm_weak' is placed in rooms.py:96-99's weak_keys for _overgrowth_rooms() (seam/rooms_and_map owns the picker itself). GOLD_REWARD_RANGES[RoomType.MONSTER]=(10,20) (rewards.py:171) matches EncounterModel.cs:70/89's Monster=>10/20 defaults, which FuzzyWurmCrawlerWeak does not override."
+      "rationale": "FuzzyWurmCrawlerWeak.RoomType => RoomType.Monster (FuzzyWurmCrawlerWeak.cs:12) -- IsWeak is orthogonal to RoomType; both are Monster-room encounters. Sim carries no room_type field on the Encounter dataclass; 'fuzzy_wurm_weak' is placed in rooms.py:144-147's weak_keys for _overgrowth_rooms() (seam/rooms_and_map owns the picker itself). GOLD_REWARD_RANGES[RoomType.MONSTER]=(10,20) (rewards.py:171) matches EncounterModel.cs:70/89's Monster=>10/20 defaults, which FuzzyWurmCrawlerWeak does not override."
     },
     "IsWeak": {
       "maps_to": "ENCOUNTERS['fuzzy_wurm_weak'] listed in rooms.py weak_keys (pool membership, not a field on the Encounter dataclass)",
       "verdict": "faithful",
-      "rationale": "FuzzyWurmCrawlerWeak.IsWeak => true (FuzzyWurmCrawlerWeak.cs:14). Its only reader in the whole decompiled tree is ActModel.AllWeakEncounters/AllRegularEncounters (ActModel.cs:149/154), a pure Monster-room pool-membership filter with no other consequence -- confirmed by `grep -rn '\\.IsWeak\\b' src` returning only that one call site plus the declarations themselves. The sim reproduces the ONLY observable effect structurally instead of via a field: 'fuzzy_wurm_weak' is placed directly in rooms.py:96-99's weak_keys tuple rather than the normal_keys tuple, so it is drawn from (and only from) the weak pool exactly as AllWeakEncounters filters it. Deliberately-different representation, identical result."
+      "rationale": "FuzzyWurmCrawlerWeak.IsWeak => true (FuzzyWurmCrawlerWeak.cs:14). Its only reader in the whole decompiled tree is ActModel.AllWeakEncounters/AllRegularEncounters (ActModel.cs:149/154), a pure Monster-room pool-membership filter with no other consequence -- confirmed by `grep -rn '\\.IsWeak\\b' src` returning only that one call site plus the declarations themselves. The sim reproduces the ONLY observable effect structurally instead of via a field: 'fuzzy_wurm_weak' is placed directly in rooms.py:144-147's weak_keys tuple rather than the normal_keys tuple, so it is drawn from (and only from) the weak pool exactly as AllWeakEncounters filters it. Deliberately-different representation, identical result."
     },
     "AllPossibleMonsters": {
       "maps_to": "(none)",
@@ -80,7 +80,7 @@
     },
     {
       "path": "sts2_rl/rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     },
     {

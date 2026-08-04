@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -73,7 +73,7 @@
       "verdict": "faithful"
     },
     {
-      "what": "Where the combat-start draw sits relative to the other creatures' construction: the sim rolls inside __init__ at create_monsters (combat.py:134), the game rolls in the AfterCreatureAdded pass after every creature is on the board",
+      "what": "Where the combat-start draw sits relative to the other creatures' construction: the sim rolls inside __init__ at create_monsters (combat.py:241, re-verified 2026-08-04, was :134, same call site moved), the game rolls in the AfterCreatureAdded pass after every creature is on the board",
       "verdict": "faithful",
       "note": "Checked rather than assumed. The MonsterAi stream's draw ORDER is unchanged because both orders are enemy-creation order and no other consumer exists at that moment; and the branch weights are two literal 1f constants, so nothing the intervening phases change (relics, belt potions, the Niche HP roll) can be read by the roll. Executed: the seq probe builds each unit in a single-monster encounter and the draw counts match, and test/test_monster_branch_audit.py exercises LeafSlimeS inside the four-monster SLIMES_NORMAL."
     },

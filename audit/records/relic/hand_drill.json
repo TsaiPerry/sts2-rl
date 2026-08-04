@@ -21,22 +21,22 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -55,12 +55,12 @@
     {
       "what": "G1 (DORMANT): C# orders AfterBlockBroken listeners BEFORE AfterDamageGiven listeners for the same damage result; the sim puts Hand Drill on the same event as the AfterBlockBroken listener and lets registration order decide",
       "verdict": "gap",
-      "issue": "MECHANISM: CreatureCmd.cs:376-391 runs `Hook.AfterBlockBroken` and then `Hook.AfterDamageGiven` as separate statements in the per-result loop, so every AfterBlockBroken implementer is guaranteed to run before Hand Drill. In the sim both are on_block_broken (hooks.py:490-498), a single listener walk, and relics are registered at CombatState construction while powers register when applied -- so Hand Drill runs FIRST. DORMANT, with the population enumerated by execution: `grep -rn 'AfterBlockBroken' src/Core/Models/` returns exactly ONE override in the whole game, BurrowedPower.cs:24, whose effect is to stun its own owner and drop its block (mirrored at powers.py:2293-2300); it reads no power on the target and applies none, so neither order changes an outcome. Concrete triggers: a second AfterBlockBroken implementer whose effect the Vulnerable would interact with, or an ENEMY carrying Artifact (which would consume the first debuff applied and so make the order decide WHICH power is negated) -- note PROMPT.md bug class 6's warning that a player holding Artifact does not exist in the game, but the enemy side is a separate question this batch did not settle. Rule 7: CreatureCmd.cs, BurrowedPower.cs, sts2_rl/hooks.py, sts2_rl/powers.py and sts2_rl/combat.py are not hashed by this record."
+      "issue": "MECHANISM: CreatureCmd.cs:376-391 runs `Hook.AfterBlockBroken` and then `Hook.AfterDamageGiven` as separate statements in the per-result loop, so every AfterBlockBroken implementer is guaranteed to run before Hand Drill. In the sim both are on_block_broken (hooks.py:1740-1745), a single listener walk, and relics are registered at CombatState construction while powers register when applied -- so Hand Drill runs FIRST. DORMANT, with the population enumerated by execution: `grep -rn 'AfterBlockBroken' src/Core/Models/` returns exactly ONE override in the whole game, BurrowedPower.cs:24, whose effect is to stun its own owner and drop its block (mirrored at powers.py:2889-2900); it reads no power on the target and applies none, so neither order changes an outcome. Concrete triggers: a second AfterBlockBroken implementer whose effect the Vulnerable would interact with, or an ENEMY carrying Artifact (which would consume the first debuff applied and so make the order decide WHICH power is negated) -- note PROMPT.md bug class 6's warning that a player holding Artifact does not exist in the game, but the enemy side is a separate question this batch did not settle. Rule 7: CreatureCmd.cs, BurrowedPower.cs, sts2_rl/hooks.py, sts2_rl/powers.py and sts2_rl/combat.py are not hashed by this record."
     },
     {
       "what": "G2 (DORMANT): the C# guard is `dealer == base.Owner.Creature || dealer?.PetOwner == base.Owner` -- the port drops the PET arm entirely (hand_drill.py:22 is `dealer is not self.player`)",
       "verdict": "gap",
-      "issue": "MECHANISM: HandDrill.cs:24 credits the owner's PET's damage to the owner, so an Osty (or any relic-granted pet) that breaks an enemy's block also triggers Hand Drill. The sim has no pet concept at all -- executed: `grep -rn 'pet_owner\\|PetOwner' sts2_rl/ --include=*.py` returns ZERO hits -- so the arm has nothing to test. DORMANT, and the concrete unported thing is named: Osty is the Necrobinder's pet and pet-granting relics are declared but not implemented (relics/base.py:91-92 carries an `adds_pet` FLAG for Pael's Legion with no creature behind it, and damage_pipeline spec step 10 waives the Osty damage-redirection hook for the same reason). Porting a pet makes it live. Filed as a gap rather than waived because 'the sim has no pets' is today's content and not the divergence's shape (binding rule 1); note it is NOT an other-character waiver, since Pael's Legion is an Ironclad-reachable relic. Rule 7: relics/base.py, relics/paels_legion.py and the damage_pipeline record are not hashed by this record."
+      "issue": "MECHANISM: HandDrill.cs:24 credits the owner's PET's damage to the owner, so an Osty (or any relic-granted pet) that breaks an enemy's block also triggers Hand Drill. The sim has no pet concept at all -- executed: `grep -rn 'pet_owner\\|PetOwner' sts2_rl/ --include=*.py` returns ZERO hits -- so the arm has nothing to test. DORMANT, and the concrete unported thing is named: Osty is the Necrobinder's pet and pet-granting relics are declared but not implemented (relics/base.py:156 carries an `adds_pet` FLAG for Pael's Legion with no creature behind it, and damage_pipeline spec step 10 waives the Osty damage-redirection hook for the same reason). Porting a pet makes it live. Filed as a gap rather than waived because 'the sim has no pets' is today's content and not the divergence's shape (binding rule 1); note it is NOT an other-character waiver, since Pael's Legion is an Ironclad-reachable relic. Rule 7: relics/base.py, relics/paels_legion.py and the damage_pipeline record are not hashed by this record."
     },
     {
       "what": "N1: `!target.IsPlayer` (HandDrill.cs:24) vs `target is self.player` (hand_drill.py:22) -- identity, not the IsPlayer predicate",
@@ -80,7 +80,7 @@
     {
       "what": "N4: the port passes `self.combat.hooks` where its siblings pass `self.hooks` (hand_drill.py:27)",
       "verdict": "faithful",
-      "rationale": "Relic.hooks is defined as `self.combat.hooks` (relics/base.py:287-288), so the two spellings are the same object. Recorded only because the inconsistency looks like it might indicate a different dispatcher and does not. Rule 7: relics/base.py is not hashed by this record."
+      "rationale": "Relic.hooks is defined as `self.combat.hooks` (relics/base.py:479-480), so the two spellings are the same object. Recorded only because the inconsistency looks like it might indicate a different dispatcher and does not. Rule 7: relics/base.py is not hashed by this record."
     },
     {
       "what": "N5: Flash(), the Vulnerable hover tip and the unused `props` / `result` / `choiceContext` parameters (HandDrill.cs:20, 22, 26)",

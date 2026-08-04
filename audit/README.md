@@ -50,6 +50,15 @@ second site, and turned up a **framework root with no seam** — see
 each of which is fixed and pinned by a test; do not assume the next kind will
 not.
 
+> **2026-08-04 (stale sweep): every record is current again.** The
+> 2026-08-04 sweep re-audited all 843 stale records (25 fast-rehash class-a
+> whose cited spans were byte-identical, 818 full agent re-audits) — see
+> [`stale-sweep/SWEEP-REPORT.md`](stale-sweep/SWEEP-REPORT.md) and the
+> receipts beside it. 16 mechanisms closed (fixes had landed, records
+> lagged), one LIVE gap surfaced and queued (`card/mad_science`
+> `GainsBlock`). Stale 0, invalid 0 at sweep end — but the very next edit to
+> `sts2_rl/` stales records again; that is the detector working.
+
 Do not trust a status number written in prose, including in this file. Run it:
 
 ```

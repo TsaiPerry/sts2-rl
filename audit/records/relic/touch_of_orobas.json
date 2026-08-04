@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -37,7 +37,7 @@
       "rationale": "TouchOfOrobas.cs:27. Granted by the ported Orobas shrine (events/orobas.py:72). Executed: `py audit/tools/relic_probes_b16.py pool` -- Ancient rarity is not in the grab bag, the shrine is the only path."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (touch_of_orobas.py:20-32), invoked by RunState.add_relic (run.py:552)",
+      "maps_to": "after_obtained (touch_of_orobas.py:20-32), invoked by RunState.add_relic (run.py:963)",
       "verdict": "gap",
       "issue": "Rollup of guards G1 and N4 per binding rule 4. The core behaviour is right and executed: the starter relic is replaced IN PLACE by its refinement and the replacement's own after_obtained runs. What the port drops from RelicCmd.Replace -> Obtain is the grab-bag strip (G1, dormant) and, for a starter outside the refinement map, the Circlet fallback (N4, waiver -- other characters)."
     }
@@ -51,7 +51,7 @@
     {
       "what": "G1 (DORMANT): RelicCmd.Obtain strips the obtained relic from both grab bags (`player.RelicGrabBag.Remove(relic)` and `runState.SharedRelicGrabBag.Remove(relic)`, RelicCmd.cs:41-45) and stamps `FloorAddedToDeck`; the port's direct list assignment does neither",
       "verdict": "gap",
-      "issue": "MECHANISM: the port bypasses RunState.add_relic (run.py:546-553) entirely -- it writes into run.relics itself -- so nothing removes the replacement from the run's grab bag and a later pull could offer the same relic a second time. (RunState.add_relic does not strip the bag either, which is a separate shared question this record does not own.) REACHABILITY (DORMANT, executed -- same probe): the only refinement the Ironclad sim can reach is black_blood, and `black_blood` is NOT in the run's relic grab bag beforehand (the probe reports 'no'), so there is nothing to strip and no duplicate pull is possible. The refinement relics are not grab-bag relics in the transcribed pools (relic_pools.py). What would make it live: adding any refinement relic to a grab bag, or porting a second character's refinement pair. FloorAddedToDeck has no sim counterpart at all and no ported reader (`grep -rn floor_added sts2_rl/` finds nothing), which is the same shape and is folded in here rather than given its own entry. Rule 7: run.py and relic_pools.py are not hashed here."
+      "issue": "MECHANISM: the port bypasses RunState.add_relic (run.py:957-964) entirely -- it writes into run.relics itself -- so nothing removes the replacement from the run's grab bag and a later pull could offer the same relic a second time. (RunState.add_relic does not strip the bag either, which is a separate shared question this record does not own.) REACHABILITY (DORMANT, executed -- same probe): the only refinement the Ironclad sim can reach is black_blood, and `black_blood` is NOT in the run's relic grab bag beforehand (the probe reports 'no'), so there is nothing to strip and no duplicate pull is possible. The refinement relics are not grab-bag relics in the transcribed pools (relic_pools.py). What would make it live: adding any refinement relic to a grab bag, or porting a second character's refinement pair. FloorAddedToDeck has no sim counterpart at all and no ported reader (`grep -rn floor_added sts2_rl/` finds nothing), which is the same shape and is folded in here rather than given its own entry. Rule 7: run.py and relic_pools.py are not hashed here."
     },
     {
       "what": "N2: `RelicCmd.Remove(original)` awaits `original.AfterRemoved()` (RelicCmd.cs:61-66); the sim's Relic base declares no after_removed and the port calls nothing",
@@ -66,7 +66,7 @@
     {
       "what": "N4: `GetUpgradedStarterRelic` falls back to `ModelDb.Relic<Circlet>()` for a starter outside RefinementUpgrades (TouchOfOrobas.cs:120-127); the port returns without doing anything (touch_of_orobas.py:26-29), and the shrine will not even offer it",
       "verdict": "waiver",
-      "rationale": "OTHER CHARACTERS, named and verified. RefinementUpgrades (TouchOfOrobas.cs:29-51) has five entries: BurningBlood->BlackBlood (Ironclad), RingOfTheSnake->RingOfTheDrake (Silent), DivineRight->DivineDestiny (Regent), BoundPhylactery->PhylacteryUnbound (Necrobinder), CrackedCore->InfusedCore (Defect). The sim's REFINEMENTS keeps exactly the Ironclad row (touch_of_orobas.py:18), and the Ironclad's only starting relic is Burning Blood (granted unconditionally at run.py:659), so the fallback arm is unreachable in this sim's scope -- EXECUTED: `circlet` is not even a registered sim relic, so the arm could not be implemented today without porting it. Note the shape difference for the record: C#'s SetupForPlayer returns true for ANY starter and lets GetUpgradedStarterRelic degrade to Circlet, whereas events/orobas.py:67-71 refuses to offer the relic unless the starter is IN the map. Those differ only for a character whose starter is not in the five-entry map, which is not the Ironclad. Waived under the contract's 'characters other than Ironclad' exclusion with the concrete unported thing named (no `circlet` entry exists in the sim relic registry, relics/base.py _RELIC_CLASSES)."
+      "rationale": "OTHER CHARACTERS, named and verified. RefinementUpgrades (TouchOfOrobas.cs:29-51) has five entries: BurningBlood->BlackBlood (Ironclad), RingOfTheSnake->RingOfTheDrake (Silent), DivineRight->DivineDestiny (Regent), BoundPhylactery->PhylacteryUnbound (Necrobinder), CrackedCore->InfusedCore (Defect). The sim's REFINEMENTS keeps exactly the Ironclad row (touch_of_orobas.py:18), and the Ironclad's only starting relic is Burning Blood (granted unconditionally at run.py:1122-1127), so the fallback arm is unreachable in this sim's scope -- EXECUTED: `circlet` is not even a registered sim relic, so the arm could not be implemented today without porting it. Note the shape difference for the record: C#'s SetupForPlayer returns true for ANY starter and lets GetUpgradedStarterRelic degrade to Circlet, whereas events/orobas.py:67-71 refuses to offer the relic unless the starter is IN the map. Those differ only for a character whose starter is not in the five-entry map, which is not the Ironclad. Waived under the contract's 'characters other than Ironclad' exclusion with the concrete unported thing named (no `circlet` entry exists in the sim relic registry, relics/base.py _RELIC_CLASSES)."
     },
     {
       "what": "N5: `undo_after_obtained` is not implemented",

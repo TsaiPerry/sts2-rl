@@ -16,28 +16,28 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     }
   ],
   "hooks": {
     "ctor": {
-      "maps_to": "class attrs (vicious.py:101-105) + _init_vars (107-109)",
+      "maps_to": "class attrs (vicious.py:20-24) + _init_vars (26-28)",
       "verdict": "faithful",
       "rationale": "`base(1, CardType.Power, CardRarity.Uncommon, TargetType.Self)` (Vicious.cs:18-21) == cost 1 / POWER / UNCOMMON / SELF."
     },
     "CanonicalVars": {
-      "maps_to": "ViciousCard._cards = 1 (vicious.py:109)",
+      "maps_to": "ViciousCard._cards = 1 (vicious.py:28)",
       "verdict": "faithful",
       "rationale": "`new CardsVar(1)` (Vicious.cs:16) == `_cards = 1`, the number of cards DRAWN per Vulnerable application."
     },
     "OnPlay": {
-      "maps_to": "ViciousCard.on_play (vicious.py:114-119)",
+      "maps_to": "ViciousCard.on_play (vicious.py:33-38)",
       "verdict": "faithful",
-      "rationale": "`PowerCmd.Apply<ViciousPower>(choiceContext, Owner.Creature, DynamicVars.Cards.BaseValue, Owner.Creature, this)` (Vicious.cs:26) == `PowerCmd.apply(ctx.hooks, ctx.player, ViciousPower, self._cards, applier=ctx.player)`. Presentation, folded in: TriggerAnim (25) and the Vulnerable hover tip (14). THIS CARD IS THE WITNESS FOR THE POOL'S LARGEST GAP FAMILY: `ViciousPower.AfterPowerAmountChanged` fires on any Vulnerable its owner applies with NO liveness test on the target (ViciousPower.cs:19-26; sim port powers.py:1160-1179), which is what makes the `if not target.is_gone` guards on card/bash, card/break, card/fight_me, card/mangle, card/squash, card/taunt, card/tremble, card/uppercut and card/mad_science LIVE rather than dormant. Its own port is faithful."
+      "rationale": "`PowerCmd.Apply<ViciousPower>(choiceContext, Owner.Creature, DynamicVars.Cards.BaseValue, Owner.Creature, this)` (Vicious.cs:26) == `PowerCmd.apply(ctx.hooks, ctx.player, ViciousPower, self._cards, applier=ctx.player)`. Presentation, folded in: TriggerAnim (25) and the Vulnerable hover tip (14). THIS CARD IS THE WITNESS FOR THE POOL'S LARGEST GAP FAMILY: `ViciousPower.AfterPowerAmountChanged` fires on any Vulnerable its owner applies with NO liveness test on the target (ViciousPower.cs:19-26; sim port powers.py:1569-1589, moved from :1160-1179 -- content re-verified current, same no-liveness-test `on_power_applied`/`_maybe_draw` shape), which is what makes the `if not target.is_gone` guards on card/bash, card/break, card/fight_me, card/mangle, card/squash, card/taunt, card/tremble, card/uppercut and card/mad_science LIVE rather than dormant. Its own port is faithful."
     },
     "OnUpgrade": {
-      "maps_to": "ViciousCard._on_upgrade (vicious.py:111-112)",
+      "maps_to": "ViciousCard._on_upgrade (vicious.py:30-31)",
       "verdict": "faithful",
       "rationale": "`DynamicVars.Cards.UpgradeValueBy(1m)` (Vicious.cs:31) == `self._cards += 1` (1 -> 2)."
     }

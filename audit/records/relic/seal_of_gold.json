@@ -21,22 +21,22 @@
     },
     {
       "path": "sts2_rl/cards/colorless_attacks.py",
-      "sha256": "4e07aed5520201820404958c2a90b9edd93871415c2a137d0b179719a2f06cf1",
+      "sha256": "944820e3c2bdb7493dffebecb3e47da3a902b704f1f2c5737a798693f1e078c1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "0e7260041e0b6693c08bf4aa4ddbb8743311d7fd72d6212fdc7c7d358a7c5030",
+      "sha256": "0b6b63592c62386b478927b39f5f758720079c9377ecda32ca94df150369e7e4",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -46,12 +46,12 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -71,7 +71,7 @@
     {
       "what": "G1 (LIVE): the in-combat gold balance omits `combat.gold_gained`, so gold gained during the fight is invisible to the relic",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-29 (round 7): The balance includes `combat.gold_gained`. SealOfGold.cs:27 gates on `Owner.Gold`, and PlayerCmd.GainGold updates Player.Gold live (PlayerCmd.cs:141-170), so gold won mid-combat is immediately spendable; the port summed `player_gold - gold_stolen - gold_spent` and omitted the accumulator the sim uses for in-combat gains until `finish_combat` settles them. This was an inconsistency INSIDE the sim, not a missing concept: ThieveryPower already computed the balance with `gold_gained` in it. EXECUTED: with 20 gold won this combat and none banked, the relic now pays its energy and debits 5.  Pinned by test/test_relic_residue_gaps.py.  The AfterSideTurnStart SLOT was already correct (G2 closed in an earlier round) and is untouched. NOT CLOSED: nothing at this site.  The text it replaced read: MECHANISM: SealOfGold.cs:27 gates on `base.Owner.Gold >= base.DynamicVars.Gold.IntValue` and PlayerCmd.GainGold updates Player.Gold live (PlayerCmd.cs:141-170), so gold won mid-combat is immediately spendable. seal_of_gold.py:25 computes `balance = combat.player_gold - combat.gold_stolen - combat.gold_spent` and never adds combat.gold_gained -- the field the sim uses to accumulate in-combat gains until RunState.finish_combat settles them (combat.py:178, run.py:1187). The sim already has the correct expression at the OTHER site that needs it: ThieveryPower computes `available = combat.player_gold + combat.gold_gained - combat.gold_stolen` (powers.py:1660), so this is an inconsistency inside the sim, not a missing capability. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b14.py seal-gold): entering a combat with 4 gold, turn 1 correctly grants no energy on either side; after `combat.gold_gained += 20` (the exact mutation cards/colorless_attacks.py:208 performs) turn 2 still grants no energy and spends no gold in the sim, where C# grants 1 Energy and takes 5. Both sides ported: Seal of Gold comes from the ported Tezcatara shrine (events/tezcatara.py:19) and Hand of Greed -- the only in-combat gold source -- is a ported Colorless card (cards/colorless_attacks.py, 'hand_of_greed' in cards/pool.py:49's COLORLESS_POOL) reachable through Lead Paperweight, Neow's positive pool. The baseline behaviour is correct and was executed too: entering with 12 gold yields 1 Energy on turns 1 and 2 and none on turn 3. Rule 7: powers.py, combat.py, run.py, cards/colorless_attacks.py, cards/pool.py and PlayerCmd.cs are not hashed here."
+      "issue": "Closed 2026-07-29 (round 7): The balance includes `combat.gold_gained`. SealOfGold.cs:27 gates on `Owner.Gold`, and PlayerCmd.GainGold updates Player.Gold live (PlayerCmd.cs:141-170), so gold won mid-combat is immediately spendable; the port summed `player_gold - gold_stolen - gold_spent` and omitted the accumulator the sim uses for in-combat gains until `finish_combat` settles them. This was an inconsistency INSIDE the sim, not a missing concept: ThieveryPower already computed the balance with `gold_gained` in it. EXECUTED: with 20 gold won this combat and none banked, the relic now pays its energy and debits 5.  Pinned by test/test_relic_residue_gaps.py.  The AfterSideTurnStart SLOT was already correct (G2 closed in an earlier round) and is untouched. NOT CLOSED: nothing at this site.  The text it replaced read: MECHANISM: SealOfGold.cs:27 gates on `base.Owner.Gold >= base.DynamicVars.Gold.IntValue` and PlayerCmd.GainGold updates Player.Gold live (PlayerCmd.cs:141-170), so gold won mid-combat is immediately spendable. seal_of_gold.py:25 computes `balance = combat.player_gold - combat.gold_stolen - combat.gold_spent` and never adds combat.gold_gained -- the field the sim uses to accumulate in-combat gains until RunState.finish_combat settles them (combat.py:300, run.py:1750). The sim already has the correct expression at the OTHER site that needs it: ThieveryPower computes `available = combat.player_gold + combat.gold_gained - combat.gold_stolen` (powers.py:1660), so this is an inconsistency inside the sim, not a missing capability. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b14.py seal-gold): entering a combat with 4 gold, turn 1 correctly grants no energy on either side; after `combat.gold_gained += 20` (the exact mutation cards/colorless_attacks.py:208 performs) turn 2 still grants no energy and spends no gold in the sim, where C# grants 1 Energy and takes 5. Both sides ported: Seal of Gold comes from the ported Tezcatara shrine (events/tezcatara.py:19) and Hand of Greed -- the only in-combat gold source -- is a ported Colorless card (cards/colorless_attacks.py, 'hand_of_greed' in cards/pool.py:49's COLORLESS_POOL) reachable through Lead Paperweight, Neow's positive pool. The baseline behaviour is correct and was executed too: entering with 12 gold yields 1 Energy on turns 1 and 2 and none on turn 3. Rule 7: powers.py, combat.py, run.py, cards/colorless_attacks.py, cards/pool.py and PlayerCmd.cs are not hashed here."
     },
     {
       "what": "G2 (DORMANT at this site, LIVE as a mechanism): AfterSideTurnStart is C#'s second turn-start pass and the sim runs one flat walk (seam guard G12, PROMPT.md class 25)",
@@ -86,12 +86,12 @@
     {
       "what": "N2: `PlayerCmd.GainEnergy` then `PlayerCmd.LoseGold` (SealOfGold.cs:30-31) vs the sim debiting gold_spent BEFORE gaining energy (seal_of_gold.py:30-31)",
       "verdict": "faithful",
-      "rationale": "Order inverted, no observable difference: EnergyCmd.gain runs modify_energy_gain and adds to player.energy (cmds.py:546-554), and nothing in the sim's energy pipeline reads the gold ledger, so neither operation can see the other's effect. Checked deliberately because C#'s GainEnergy has two guards the sim's does not -- `amount <= 0` and `!CombatManager.Instance.IsEnding` (PlayerCmd.cs:31) -- both structurally satisfied here: the amount is the constant 1, and on_player_turn_started cannot fire on an ending combat (CombatState.start_turn runs only for a live combat). Rule 7: cmds.py, combat.py and PlayerCmd.cs are not hashed here."
+      "rationale": "Order inverted, no observable difference: EnergyCmd.gain runs modify_energy_gain and adds to player.energy (cmds.py:1850-1854 (EnergyCmd.gain)), and nothing in the sim's energy pipeline reads the gold ledger, so neither operation can see the other's effect. Checked deliberately because C#'s GainEnergy has two guards the sim's does not -- `amount <= 0` and `!CombatManager.Instance.IsEnding` (PlayerCmd.cs:31) -- both structurally satisfied here: the amount is the constant 1, and on_player_turn_started cannot fire on an ending combat (CombatState.start_turn runs only for a live combat). Rule 7: cmds.py, combat.py and PlayerCmd.cs are not hashed here."
     },
     {
       "what": "N3: how the spend reaches the run's gold ledger -- combat.gold_spent, settled by RunState.finish_combat",
       "verdict": "faithful",
-      "rationale": "C# debits Player.Gold directly, so the loss is visible immediately and permanent; the sim accumulates combat.gold_spent (combat.py:190) and RunState.finish_combat calls `self.lose_gold(combat.gold_spent)` (run.py:1189). Same end state, and the deliberate separation from gold_stolen keeps Gremlin Merc's Thievery semantics intact (the sim's own comment, combat.py:186-190). One real consequence, checked and benign: PlayerCmd.LoseGold clamps at 0 while the sim's gold_spent accumulates unclamped -- but every increment is gated on `balance >= 5` recomputed from the same three fields, so the accumulated spend can never exceed the entry balance. Rule 7: combat.py, run.py and PlayerCmd.cs are not hashed here."
+      "rationale": "C# debits Player.Gold directly, so the loss is visible immediately and permanent; the sim accumulates combat.gold_spent (combat.py:312) and RunState.finish_combat calls `self.lose_gold(combat.gold_spent)` (run.py:1752). Same end state, and the deliberate separation from gold_stolen keeps Gremlin Merc's Thievery semantics intact (the sim's own comment, combat.py:307-312). One real consequence, checked and benign: PlayerCmd.LoseGold clamps at 0 while the sim's gold_spent accumulates unclamped -- but every increment is gated on `balance >= 5` recomputed from the same three fields, so the accumulated spend can never exceed the entry balance. Rule 7: combat.py, run.py and PlayerCmd.cs are not hashed here."
     },
     {
       "what": "N4: `participants.Contains(base.Owner.Creature)` (SealOfGold.cs:27) and the relic holding no state",

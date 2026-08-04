@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
@@ -52,23 +52,23 @@
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:1145 power_type = PowerType.BUFF",
+      "maps_to": "powers.py:1538 power_type = PowerType.BUFF",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-140 Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:137-140) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "TryModifyEnergyCostInCombatLate": {
-      "maps_to": "powers.py FreeAttackPower.modify_card_energy_cost_late (hooks.py Late phase)",
+      "maps_to": "powers.py:1549-1561 FreeAttackPower.modify_card_energy_cost_late (hooks.py:48-50, 605-618 Late phase)",
       "verdict": "faithful",
-      "issue": "CLOSED 2026-07-29 (round 10, the Tier 1 residue). THE PILE GUARD IS PORTED: `_in_a_live_pile` consults `PlayerCombatState.pile_type_of` (the port of `CardModel.Pile?.Type`) and zeroes the cost only for Hand or Play, matching FreeAttackPower.cs:26-39's switch. The phase half was already closed. EXECUTED: with the power up, a draw-pile Strike costs 1 and a hand Strike costs 0; the old port returned 0 for both, so a buried Attack read as free to previews.py, the RL observation and every `CardModel.CostsEnergyOrStars`-shaped filter. Pinned by test/test_tier1_residue.py::test_free_attack_pile_guard_keeps_a_draw_pile_attack_costed. WAS: NARROWED 2026-07-27. THE PHASE HALF IS CLOSED: the sim has the Late pass (hooks.py:36 `_PHASES`, resolved by `_each`) and this power uses it -- `modify_card_energy_cost_late`, powers.py:1221-1227 -- so it is guaranteed to run after Tangled's plain-pass `modify_card_energy_cost`, which is what FreeAttackPower.cs:14's TryModifyEnergyCostInCombatLate means. WHAT REMAINS is this record's own finding: THE PILE GUARD. FreeAttackPower.cs:26-39 zeroes the cost only when `card.Pile?.Type` is Hand or Play; powers.py:1221-1227 zeroes every Attack of the owner's wherever it sits, so a draw- or discard-pile Attack still displays as free to previews.py and the RL observation."
+      "issue": "CLOSED 2026-07-29 (round 10, the Tier 1 residue). THE PILE GUARD IS PORTED: `_in_a_live_pile` consults `PlayerCombatState.pile_type_of` (the port of `CardModel.Pile?.Type`) and zeroes the cost only for Hand or Play, matching FreeAttackPower.cs:26-39's switch. The phase half was already closed. EXECUTED: with the power up, a draw-pile Strike costs 1 and a hand Strike costs 0; the old port returned 0 for both, so a buried Attack read as free to previews.py, the RL observation and every `CardModel.CostsEnergyOrStars`-shaped filter. Pinned by test/test_tier1_residue.py::test_free_attack_pile_guard_keeps_a_draw_pile_attack_costed. WAS: NARROWED 2026-07-27. THE PHASE HALF IS CLOSED: the sim has the Late pass (hooks.py's `_PHASES`, resolved by `_each`) and this power uses it -- `modify_card_energy_cost_late`, powers.py:1549-1561 -- so it is guaranteed to run after Tangled's plain-pass `modify_card_energy_cost`, which is what FreeAttackPower.cs:14's TryModifyEnergyCostInCombatLate means. WHAT REMAINS is this record's own finding: THE PILE GUARD. FreeAttackPower.cs:26-39 zeroes the cost only when `card.Pile?.Type` is Hand or Play; powers.py:1549-1561 zeroes every Attack of the owner's wherever it sits, so a draw- or discard-pile Attack still displays as free to previews.py and the RL observation."
     },
     "BeforeCardPlayed": {
-      "maps_to": "powers.py FreeAttackPower.before_card_played (hooks.py:845-855, dispatched inside the play-count loop at combat.py)",
+      "maps_to": "powers.py:1563-1566 FreeAttackPower.before_card_played (dispatched inside combat.py's `_play_count_loop`, combat.py:1147-1155)",
       "verdict": "faithful",
-      "issue": "CLOSED 2026-07-29 (round 10, the Tier 1 residue). The power now listens on `before_card_played` -- the hook FreeAttackPower.cs:43 actually declares -- instead of `on_energy_spent`. `before_card_played` is dispatched once per CardPlay from inside `_resolve_card_play`'s play-count loop (Hook.BeforeCardPlayed, CardModel.cs:1929), where `on_energy_spent` fires ONCE per logical play outside it. The pile guard (FreeAttackPower.cs:48-59, `card.Pile?.Type is Hand or Play`) is ported too, via the new `PlayerCombatState.pile_type_of` -- the sim had no way to ask which pile holds a card, and PileType.Play is not a fifth list but the `_playing_card` mark on a card parked in the discard. On this hook the guard cannot currently be false (a card being played is always in Play limbo), which is recorded rather than argued: it is load-bearing on the cost hook, not here. EXECUTED: a Hidden-Gem'd Strike (base_replay_count 1, playCount 2) against 3 stacks leaves 1 where the old port left 2. Pinned by test/test_tier1_residue.py::test_free_attack_consumes_one_stack_per_replay_iteration. WAS: NARROWED 2026-07-27, and the reason it stands has changed. `before_card_played` ITSELF now fires once per replay iteration (combat.py:576, inside the playCount loop) -- hook_dispatch G4 is fixed at the dispatch. But this power is hosted on `on_energy_spent`, which combat.py:497 fires ONCE per logical play, outside `_resolve_card_play` and therefore outside the loop (the auto-play site, combat.py:657, is likewise once). So a Throwing-Axe- or Duplication-doubled Attack still consumes TWO Free Attack stacks in the game (BeforeCardPlayed per iteration, CardModel.cs:1929) and ONE in the sim. The deliberate slot choice recorded here is now the SOLE cause of the count gap rather than a bystander to it, and the missing pile guard (FreeAttackPower.cs:48-59) is unchanged. VERIFIED by reading combat.py:470-506 and :574-600."
+      "issue": "CLOSED 2026-07-29 (round 10, the Tier 1 residue). The power now listens on `before_card_played` -- the hook FreeAttackPower.cs:43 actually declares -- instead of `on_energy_spent`. `before_card_played` is dispatched once per CardPlay from inside `_resolve_card_play`'s play-count loop (Hook.BeforeCardPlayed, CardModel.cs:1929), where `on_energy_spent` fires ONCE per logical play outside it. The pile guard (FreeAttackPower.cs:48-59, `card.Pile?.Type is Hand or Play`) is ported too, via the new `PlayerCombatState.pile_type_of` -- the sim had no way to ask which pile holds a card, and PileType.Play is not a fifth list but the `_playing_card` mark on a card parked in the discard. On this hook the guard cannot currently be false (a card being played is always in Play limbo), which is recorded rather than argued: it is load-bearing on the cost hook, not here. EXECUTED: a Hidden-Gem'd Strike (base_replay_count 1, playCount 2) against 3 stacks leaves 1 where the old port left 2. Pinned by test/test_tier1_residue.py::test_free_attack_consumes_one_stack_per_replay_iteration. RE-VERIFIED 2026-08-04 (line numbers only) by reading combat.py's `_play_count_loop` (combat.py:1147-1209) and powers.py:1521-1567. WAS: NARROWED 2026-07-27, and the reason it stands has changed. `before_card_played` ITSELF now fires once per replay iteration (inside the playCount loop) -- hook_dispatch G4 is fixed at the dispatch. But this power is hosted on `on_energy_spent`, which fires ONCE per logical play, outside `_resolve_card_play` and therefore outside the loop (the auto-play site is likewise once). So a Throwing-Axe- or Duplication-doubled Attack still consumed TWO Free Attack stacks in the game (BeforeCardPlayed per iteration, CardModel.cs:1929) and ONE in the sim. The deliberate slot choice recorded here is now the SOLE cause of the count gap rather than a bystander to it, and the missing pile guard (FreeAttackPower.cs:48-59) is unchanged."
     }
   },
   "guards": [
@@ -80,17 +80,17 @@
     {
       "what": "FreeAttackPower.cs:21-24 / :46 card.Type != CardType.Attack",
       "verdict": "faithful",
-      "rationale": "powers.py:1149 and :1155 both test CardType.ATTACK. Identical, and note BOTH sides gate the CONSUMPTION on the card being an Attack, so playing a Skill does not waste a stack."
+      "rationale": "powers.py:1559 and :1565 both test CardType.ATTACK. Identical, and note BOTH sides gate the CONSUMPTION on the card being an Attack, so playing a Skill does not waste a stack."
     },
     {
       "what": "FreeAttackPower.cs:40 modifiedCost = default(decimal), i.e. 0 not a reduction",
       "verdict": "faithful",
-      "rationale": "powers.py:1150 returns 0. So Free Attack composes with power/curious and Spiked Gauntlets by overwriting rather than subtracting, which is exactly why C# put it in the Late pass and why the collapse is observable."
+      "rationale": "powers.py:1560 returns 0. So Free Attack composes with power/curious and Spiked Gauntlets by overwriting rather than subtracting, which is exactly why C# put it in the Late pass and why the collapse is observable."
     },
     {
       "what": "The TryModify predicate protocol",
       "verdict": "gap",
-      "issue": "C#'s Try* hooks return bool and write to an out-param, which Hook.ModifyEnergyCostInCombat (Hook.cs:1574-1590) uses to build its notification list; the sim's modify_card_energy_cost (hooks.py:196-201) is a plain fold with neither. Identical entry to power/curious's, same verdict per binding rule 3, dormant with the same named trigger (any AfterModifyingEnergyCostInCombat implementer)."
+      "issue": "C#'s Try* hooks return bool and write to an out-param, which Hook.ModifyEnergyCostInCombat (Hook.cs:1574-1590) uses to build its notification list; the sim's modify_card_energy_cost (hooks.py:1051-) is a plain fold with neither. Identical entry to power/curious's, same verdict per binding rule 3, dormant with the same named trigger (any AfterModifyingEnergyCostInCombat implementer)."
     },
     {
       "what": "The applier",
@@ -99,5 +99,5 @@
     }
   ],
   "verdict": "gap",
-  "audited": "2026-07-26"
+  "audited": "2026-08-04"
 }

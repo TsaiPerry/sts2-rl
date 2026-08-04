@@ -21,18 +21,18 @@
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
   "hooks": {
     "IsAllowed": {
-      "maps_to": "SpiralingWhirlpool.is_allowed (events/spiraling_whirlpool.py:30-32) `any(SpiralEnchantment.can_enchant(c) for c in run.deck)`, matching SpiralingWhirlpool.cs:27-30's `p.Deck.Cards.Any(ModelDb.Enchantment<Spiral>().CanEnchant)`. Spiral's own restriction (Basic, tagged strike or defend) is ported at enchantments.py:157-165 and audited under enchantment/spiral. Quantifier collapses -- see the multiplayer guard.",
+      "maps_to": "SpiralingWhirlpool.is_allowed (events/spiraling_whirlpool.py:30-32) `any(SpiralEnchantment.can_enchant(c) for c in run.deck)`, matching SpiralingWhirlpool.cs:27-30's `p.Deck.Cards.Any(ModelDb.Enchantment<Spiral>().CanEnchant)`. Spiral's own restriction (Basic, tagged strike or defend) is ported at enchantments.py:270-289, was :157-165, and audited under enchantment/spiral. Quantifier collapses -- see the multiplayer guard.",
       "verdict": "faithful"
     },
     "CalculateVars": {
@@ -48,12 +48,12 @@
     },
     {
       "what": "ObserveTheSpiral (SpiralingWhirlpool.cs:41-54): FromDeckForEnchantment(Spiral, 1) with a redundant CanEnchant filter and the FirstOrDefault null guard, then CardCmd.Enchant<Spiral>(card, 1m)",
-      "maps_to": "events/spiraling_whirlpool.py:43-47 re-derives the same candidate list and loops the 0-or-1 result of select_cards, attaching `make_enchantment('spiral')` whose default amount is 1 (enchantments.py:42) -- the source's `1m`. The Enchant-vs-attach mapping and the dead stacking branch are recorded once on the sapphire_seed record (rule 3).",
+      "maps_to": "events/spiraling_whirlpool.py:43-47 re-derives the same candidate list and loops the 0-or-1 result of select_cards, attaching `make_enchantment('spiral')` whose default amount is 1 (enchantments.py:110-111, was :42) -- the source's `1m`. The Enchant-vs-attach mapping and the dead stacking branch are recorded once on the sapphire_seed record (rule 3).",
       "verdict": "faithful"
     },
     {
       "what": "Drink (SpiralingWhirlpool.cs:56-60): Heal(Heal.IntValue)",
-      "maps_to": "events/spiraling_whirlpool.py:49-51 `run.heal(self.heal)`. Plain CreatureCmd.Heal, which dispatches no hooks in C# either (CreatureCmd.cs:691-703), so turn_structure step 38a does NOT apply -- `py audit/tools/event_probes.py heal` lists this event under the plain-heal verb. run.heal clamps at max HP (run.py:287-291) exactly as Heal does.",
+      "maps_to": "events/spiraling_whirlpool.py:49-51 `run.heal(self.heal)`. Plain CreatureCmd.Heal, which dispatches no hooks in C# either (CreatureCmd.cs:691-703), so turn_structure step 38a does NOT apply -- `py audit/tools/event_probes.py heal` lists this event under the plain-heal verb. run.heal clamps at max HP (run.py:414-418, was :287-291) exactly as Heal does.",
       "verdict": "faithful"
     },
     {

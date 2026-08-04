@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -26,36 +26,36 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:361 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Third-file citations, not hashed here."
     },
     "ModifyHpLostAfterOsty": {
-      "maps_to": "powers.py:374-384 IntangiblePower.modify_hp_lost",
+      "maps_to": "powers.py IntangiblePower.modify_hp_lost",
       "verdict": "faithful"
     },
     "AfterModifyingHpLostAfterOsty": {
       "maps_to": "no sim counterpart",
       "verdict": "waiver",
-      "rationale": "IntangiblePower.cs:35-39 is Flash() only. Presentation. Note the sim DOES have the machinery this would need (hooks.py:149-154 after_modify_hp_lost, used by BufferPower), so this is a deliberate no-op rather than a missing hook."
+      "rationale": "IntangiblePower.cs:35-39 is Flash() only. Presentation. Note the sim DOES have the machinery this would need (hooks.py after_modify_hp_lost, used by BufferPower), so this is a deliberate no-op rather than a missing hook."
     },
     "ModifyDamageCap": {
-      "maps_to": "powers.py:363-372 IntangiblePower.modify_damage_cap",
+      "maps_to": "powers.py IntangiblePower.modify_damage_cap",
       "verdict": "faithful"
     },
     "AfterModifyingDamageAmount": {
@@ -64,7 +64,7 @@
       "rationale": "IntangiblePower.cs:59-63 is Flash() only. Presentation."
     },
     "AfterSideTurnEnd": {
-      "maps_to": "powers.py:386-387 on_enemy_side_end -> Power._tick",
+      "maps_to": "powers.py on_enemy_side_end -> Power._tick",
       "verdict": "faithful"
     }
   },
@@ -77,27 +77,27 @@
     {
       "what": "IntangiblePower.cs:24-27 / :48-51 `target != base.Owner`",
       "verdict": "faithful",
-      "rationale": "powers.py:375 and :370 both test `target is self.owner`. C# returns the unmodified amount / decimal.MaxValue for a non-owner; the sim returns `amount` / None, and hooks.py:80-93 folds None out of the cap min. Equivalent."
+      "rationale": "powers.py and :370 both test `target is self.owner`. C# returns the unmodified amount / decimal.MaxValue for a non-owner; the sim returns `amount` / None, and hooks.py folds None out of the cap min. Equivalent."
     },
     {
       "what": "IntangiblePower.cs:28-31 `amount < 1m` -> unmodified",
       "verdict": "faithful",
-      "rationale": "powers.py:383 `min(amount, 1)` gives the same answer for every amount: below 1 it returns the amount unchanged, at or above 1 it returns 1. Exact rather than merely equivalent."
+      "rationale": "powers.py `min(amount, 1)` gives the same answer for every amount: below 1 it returns the amount unchanged, at or above 1 it returns 1. Exact rather than merely equivalent."
     },
     {
       "what": "IntangiblePower.cs:69 PowerCmd.Decrement, NOT TickDownDuration",
       "verdict": "faithful",
-      "rationale": "powers.py:387 calls _tick (powers.py:70-75), not _tick_duration -- so Intangible does NOT honour SkipNextDurationTick, matching C#'s use of the plain Decrement. Getting this right is the whole point of the sim having two tick verbs, and Intangible is on the correct one; contrast Vulnerable/Weak/Frail, which use TickDownDuration on both sides."
+      "rationale": "powers.py calls _tick (powers.py), not _tick_duration -- so Intangible does NOT honour SkipNextDurationTick, matching C#'s use of the plain Decrement. Getting this right is the whole point of the sim having two tick verbs, and Intangible is on the correct one; contrast Vulnerable/Weak/Frail, which use TickDownDuration on both sides."
     },
     {
       "what": "IntangiblePower.cs:67 `side == CombatSide.Enemy`, no participants filter",
       "verdict": "faithful",
-      "rationale": "powers.py:386 on_enemy_side_end (combat.py:345) fires unconditionally once per enemy side end for every listener, which is exactly the C# shape -- an Intangible on the PLAYER also ticks at the enemy side's end. This is one of the rare AfterSideTurnEnd overrides where the sim is in the right slot for both owners."
+      "rationale": "powers.py on_enemy_side_end (combat.py) fires unconditionally once per enemy side end for every listener, which is exactly the C# shape -- an Intangible on the PLAYER also ticks at the enemy side's end. This is one of the rare AfterSideTurnEnd overrides where the sim is in the right slot for both owners."
     },
     {
       "what": "The double implementation (ModifyHpLost + ModifyDamageCap) is reproduced",
       "verdict": "faithful",
-      "rationale": "C#'s own comments (IntangiblePower.cs:41-45, :55-58) say the cap arm exists for block loss and damage previews while the HP arm does the real work; the sim ports both (powers.py:363-384) with the same split and the same comments."
+      "rationale": "C#'s own comments (IntangiblePower.cs:41-45, :55-58) say the cap arm exists for block loss and damage previews while the HP arm does the real work; the sim ports both (powers.py) with the same split and the same comments."
     }
   ],
   "verdict": "gap",

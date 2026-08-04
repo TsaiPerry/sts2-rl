@@ -31,17 +31,17 @@
     },
     {
       "path": "sts2_rl/actmap.py",
-      "sha256": "1d4cb7a59c716b79d7b13d8478d0d705b7ea092cb41380fcb241860bd722206a",
+      "sha256": "64c5a16873b1fbd176c515a29bd0f6e0d74182e1f179955b9226719247b3378e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -51,7 +51,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -63,24 +63,24 @@
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (fragrant_mushroom.py:19)",
       "verdict": "faithful",
-      "rationale": "Matches FragrantMushroom.cs:21. Load-bearing: Relic.is_tradable (relics/base.py:132-136) excludes upon-pickup relics from the trade events, as RelicModel.IsTradable does."
+      "rationale": "Matches FragrantMushroom.cs:21. Load-bearing: Relic.is_tradable (relics/base.py:189) excludes upon-pickup relics from the trade events, as RelicModel.IsTradable does."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (fragrant_mushroom.py:24-40), dispatched by RunState.add_relic (run.py:551-552)",
+      "maps_to": "after_obtained (fragrant_mushroom.py:24-40), dispatched by RunState.add_relic (run.py:961-963)",
       "verdict": "gap",
-      "issue": "NARROWED 2026-07-27. The sort-key half (G1) is CLOSED: sts2_rl/relics/fragrant_mushroom.py now passes `key=_compare_to_key` (sts2_rl/player.py:23-34, the UPPERCASE ordinal compare) to actmap.stable_shuffle over run.rng_set.niche. WHAT REMAINS is guard G2, DORMANT: FragrantMushroom.cs:31 routes the 15 through `CreatureCmd.Damage(..., Unblockable|Unpowered, ...)`, i.e. the full damage command with its run-level Hook pipeline and death check, while the port still calls `run.lose_hp(15)` (sts2_rl/run.py:304-316), which runs only the `modify_run_hp_loss` relic chain and fires no after-damage notification at all."
+      "issue": "NARROWED 2026-07-27. The sort-key half (G1) is CLOSED: sts2_rl/relics/fragrant_mushroom.py now passes `key=_compare_to_key` (sts2_rl/player.py:26-34, the UPPERCASE ordinal compare) to actmap.stable_shuffle over run.rng_set.niche. WHAT REMAINS is guard G2, DORMANT: FragrantMushroom.cs:31 routes the 15 through `CreatureCmd.Damage(..., Unblockable|Unpowered, ...)`, i.e. the full damage command with its run-level Hook pipeline and death check, while the port still calls `run.lose_hp(15)` (sts2_rl/run.py:420-432), which runs only the `modify_run_hp_loss` relic chain and fires no after-damage notification at all."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the StableShuffle key is `(c.id, c.upgrade_level)` -- the sim's lowercase slug -- where CardModel.CompareTo compares the game's UPPERCASE ModelId Entry with StringComparison.Ordinal, and `_` (0x5F) sorts AFTER uppercase letters but BEFORE lowercase ones",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the StableShuffle key is the game's. sts2_rl/relics/fragrant_mushroom.py now calls `stable_shuffle(list(upgradable), run.rng_set.niche, key=_compare_to_key)` and _compare_to_key is `(card.id.upper(), card.upgrade_level)` (sts2_rl/player.py:23-34) -- the ordinal compare of the game's UPPERCASE ModelId Entry then CurrentUpgradeLevel that CardModel.CompareTo performs (CardModel.cs:2242-2263). WAS: the key was `(c.id, c.upgrade_level)` over the sim's LOWERCASE slug, and because '_' is 0x5F any two ids that first differ at a '_'-versus-letter position sorted the opposite way, so a different pair of cards was upgraded."
+      "issue": "Closed 2026-07-27: the StableShuffle key is the game's. sts2_rl/relics/fragrant_mushroom.py now calls `stable_shuffle(list(upgradable), run.rng_set.niche, key=_compare_to_key)` and _compare_to_key is `(card.id.upper(), card.upgrade_level)` (sts2_rl/player.py:26-34) -- the ordinal compare of the game's UPPERCASE ModelId Entry then CurrentUpgradeLevel that CardModel.CompareTo performs (CardModel.cs:2242-2263). WAS: the key was `(c.id, c.upgrade_level)` over the sim's LOWERCASE slug, and because '_' is 0x5F any two ids that first differ at a '_'-versus-letter position sorted the opposite way, so a different pair of cards was upgraded."
     },
     {
       "what": "G2 (DORMANT): `CreatureCmd.Damage(ThrowingPlayerChoiceContext, Owner.Creature, HpLoss.BaseValue, Unblockable|Unpowered, null, null)` (FragrantMushroom.cs:31) vs `run.lose_hp(15)` (fragrant_mushroom.py:25)",
       "verdict": "gap",
-      "issue": "MECHANISM: the source routes the 15 through the full damage command even out of combat, so the run-level Hook pipeline runs -- ModifyHpLostBeforeOsty / AfterOsty, the damage-received notifications, and the death check. RunState.lose_hp (run.py:294-302) runs ONLY the relic chain `modify_run_hp_loss` and then subtracts, so an out-of-combat HP loss fires no after-damage notification at all. DORMANT: the one modifier family that changes the NUMBER is present -- Tungsten Rod's ModifyHpLostAfterOsty maps to modify_run_hp_loss, which lose_hp does dispatch -- and the sim has no run-level HookSystem for the notification half, which is audit/records/seam/hook_dispatch.json's own finding (step 46, 'no run-level HookSystem'); one verdict per mechanism, binding rule 3. The concrete thing that would make it live is porting a relic that reacts to HP LOSS rather than modifying it out of combat (Centennial Puzzle's on_damage_received is combat-only), or an out-of-combat block/thorns concept. Unblockable is a no-op out of combat on both sides, and lose_hp can take HP to 0 or below exactly as CreatureCmd.Damage can, so death behaviour agrees."
+      "issue": "MECHANISM: the source routes the 15 through the full damage command even out of combat, so the run-level Hook pipeline runs -- ModifyHpLostBeforeOsty / AfterOsty, the damage-received notifications, and the death check. RunState.lose_hp (run.py:420-432) runs ONLY the relic chain `modify_run_hp_loss` and then subtracts, so an out-of-combat HP loss fires no after-damage notification at all. DORMANT: the one modifier family that changes the NUMBER is present -- Tungsten Rod's ModifyHpLostAfterOsty maps to modify_run_hp_loss, which lose_hp does dispatch -- and the sim has no run-level HookSystem for the notification half (run.py:420-432 = RunState.lose_hp), which is audit/records/seam/hook_dispatch.json's own finding (step 46, 'no run-level HookSystem'); one verdict per mechanism, binding rule 3. The concrete thing that would make it live is porting a relic that reacts to HP LOSS rather than modifying it out of combat (Centennial Puzzle's on_damage_received is combat-only), or an out-of-combat block/thorns concept. Unblockable is a no-op out of combat on both sides, and lose_hp can take HP to 0 or below exactly as CreatureCmd.Damage can, so death behaviour agrees."
     },
     {
       "what": "N1: HpLossVar(15).**BaseValue** and CardsVar(2).**IntValue** (FragrantMushroom.cs:31, 33) vs the sim's HP_LOSS = 15 / CARDS = 2",
@@ -93,7 +93,7 @@
       "rationale": "LINQ Take clamps silently; min() is the same clamp made explicit. It also protects the legacy arm's rng.sample, which would raise on count > len."
     },
     {
-      "what": "N3: `PileType.Deck.GetPile(Owner).Cards.Where(c => c?.IsUpgradable ?? false)` vs `run.upgradable_cards()` (run.py:368-369)",
+      "what": "N3: `PileType.Deck.GetPile(Owner).Cards.Where(c => c?.IsUpgradable ?? false)` vs `run.upgradable_cards()` (run.py:582-583)",
       "verdict": "faithful",
       "rationale": "Same pile (the run deck) and same predicate; C#'s `c?` null-coalesce guards a null slot in the pile list, which the sim's deck list cannot hold. The filter also closes PROMPT.md bug class 14 at this site -- sweep D's published correction names fragrant_mushroom as one of five sites its first version over-reported for building the candidate list several lines earlier, and this confirms it. NOTE per binding rule 7: run.py is not hashed by this record."
     },

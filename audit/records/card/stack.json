@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\trash_heap_cards.py",
-    "sha256": "f93265bdcd41fa82dd09ab914501270537ae907e02f97679dd58dd2345183e20"
+    "sha256": "9367e6b7a5549cac19271d1173a73d90f9c9cfd86f83d67bdce7f827f1e24c9d"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     }
   ],
@@ -27,27 +27,27 @@
       "rationale": "`=> ModelDb.CardPool<DefectCardPool>()` (Stack.cs:16) selects the card's ART pool. Presentation."
     },
     "GainsBlock": {
-      "maps_to": "StackCard.gains_block = True (trash_heap_cards.py:302)",
+      "maps_to": "StackCard.gains_block = True (trash_heap_cards.py:323)",
       "verdict": "faithful",
       "rationale": "`public override bool GainsBlock => true` (Stack.cs:18) == the class attribute. Load-bearing because Stack has no printed block number -- the same case as card/entrench and card/fisticuffs."
     },
     "ctor": {
-      "maps_to": "class attrs (trash_heap_cards.py:301-306) + _init_vars (308-310)",
+      "maps_to": "class attrs (trash_heap_cards.py:322-327) + _init_vars (329-331)",
       "verdict": "faithful",
       "rationale": "`base(1, CardType.Skill, CardRarity.Event, TargetType.Self)` (Stack.cs:27-30) == cost 1 / SKILL / EVENT / SELF."
     },
     "CanonicalVars": {
-      "maps_to": "StackCard._block = 0 as the CalculationBase (trash_heap_cards.py:310)",
+      "maps_to": "StackCard._block = 0 as the CalculationBase (trash_heap_cards.py:331)",
       "verdict": "faithful",
       "rationale": "`CalculationBaseVar(0m)` + `CalculationExtraVar(1m)` + `CalculatedBlockVar(ValueProp.Move).WithMultiplier((card, _) => PileType.Discard.GetPile(card.Owner).Cards.Count())` (Stack.cs:20-25). `CalculatedVar.Calculate` is `base + extra * multiplier` (CalculatedVar.cs:62-71) = `0 + 1 * discardCount` == the sim's `self._block + discard_count`, with `_block` holding the CalculationBase so the upgrade can raise it. Move without Unpowered -> POWERED block, so NOT in gap G1's blast radius."
     },
     "OnPlay": {
-      "maps_to": "StackCard.on_play (trash_heap_cards.py:315-318)",
+      "maps_to": "StackCard.on_play (trash_heap_cards.py:336-344)",
       "verdict": "faithful",
-      "rationale": "`CreatureCmd.GainBlock(Owner.Creature, DynamicVars.CalculatedBlock.Calculate(cardPlay.Target), DynamicVars.CalculatedBlock.Props, cardPlay)` (Stack.cs:34) == `BlockCmd.apply(ctx.hooks, ctx.player, self._block + discard_count, card=self)`. The `c is not self` filter (trash_heap_cards.py:317) is a CORRECT compensation, not a divergence: C# holds Stack in the Play pile while it resolves, so the game's discard count excludes it, and the sim parks it in the discard-pile limbo (combat.py:452-454) and so must exclude it by hand. The sim's docstring says so."
+      "rationale": "`CreatureCmd.GainBlock(Owner.Creature, DynamicVars.CalculatedBlock.Calculate(cardPlay.Target), DynamicVars.CalculatedBlock.Props, cardPlay)` (Stack.cs:34) == `BlockCmd.apply(ctx.hooks, ctx.player, self._block + discard_count, card=self)`. Re-verified this stale-sweep pass: Round 13 (R5) made the sim's Play pile real, so the resolving Stack now sits in `PileType.Play`, never in `ctx.player.discard_pile`, matching `CardModel.cs:1875`'s exclusion directly. The sim's old `c is not self` identity-filter workaround (once needed because the sim parked the resolving card in the discard pile) is gone -- `discard_count = len(ctx.player.discard_pile)` (trash_heap_cards.py:343) is now a plain read that excludes the resolving card by pile membership, same outcome, cleaner mechanism."
     },
     "OnUpgrade": {
-      "maps_to": "StackCard._on_upgrade (trash_heap_cards.py:312-313)",
+      "maps_to": "StackCard._on_upgrade (trash_heap_cards.py:333-334)",
       "verdict": "faithful",
       "rationale": "`DynamicVars.CalculationBase.UpgradeValueBy(3m)` (Stack.cs:39) == `self._block += 3` (0 -> 3), i.e. upgraded Stack is 3 + discard count. The MULTIPLIER stays 1 per card on both sides -- the upgrade raises the flat base, which is the opposite of card/ashen_strike's and card/bully's per-item upgrades."
     }

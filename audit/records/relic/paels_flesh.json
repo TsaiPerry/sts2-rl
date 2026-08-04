@@ -31,17 +31,17 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     }
   ],
@@ -61,9 +61,9 @@
       "rationale": "PaelsFlesh.cs:21-31 decides whether the relic bar draws the counter. Presentation only."
     },
     "ModifyMaxEnergy": {
-      "maps_to": "modify_max_energy (paels_flesh.py:23-26), dispatched by HookSystem.modify_max_energy (hooks.py:203-207) from PlayerCombatState.start_turn (player.py:163)",
+      "maps_to": "modify_max_energy (paels_flesh.py:23-26), dispatched by HookSystem.modify_max_energy (hooks.py:1057-1060) from PlayerCombatState.start_turn (player.py:372)",
       "verdict": "faithful",
-      "rationale": "PaelsFlesh.cs:37-48: bail if not the owner (multiplayer, structurally satisfied by the single-player CombatState), bail if `player.PlayerCombatState.TurnNumber < 3`, else `amount + base.DynamicVars.Energy.BaseValue`. CanonicalVars is `new EnergyVar(1)` (line 33) with no AscensionHelper.GetValueIfAscension anywhere in the file, so ENERGY = 1 and FROM_TURN = 3 (paels_flesh.py:20-21) are the pinned non-ascension values. Turn numbering verified rather than assumed (see N1). Slot: the sim applies the hook inside the energy reset (player.py:163-168), which is audit/records/seam/turn_structure.json's energy step -- the same place C#'s ResetEnergy consults ModifyMaxEnergy."
+      "rationale": "PaelsFlesh.cs:37-48: bail if not the owner (multiplayer, structurally satisfied by the single-player CombatState), bail if `player.PlayerCombatState.TurnNumber < 3`, else `amount + base.DynamicVars.Energy.BaseValue`. CanonicalVars is `new EnergyVar(1)` (line 33) with no AscensionHelper.GetValueIfAscension anywhere in the file, so ENERGY = 1 and FROM_TURN = 3 (paels_flesh.py:20-21) are the pinned non-ascension values. Turn numbering verified rather than assumed (see N1). Slot: the sim applies the hook inside the energy reset (player.py:371-372), which is audit/records/seam/turn_structure.json's energy step -- the same place C#'s ResetEnergy consults ModifyMaxEnergy. (2026-08-04 re-audit: hooks.py/player.py had drifted to new line numbers; re-verified the same call shape.)"
     },
     "BeforeCombatStart": {
       "maps_to": "no counterpart",
@@ -90,12 +90,12 @@
     {
       "what": "N1: `player.PlayerCombatState.TurnNumber < 3` (PaelsFlesh.cs:43) vs the sim's `self.turn < self.FROM_TURN` (paels_flesh.py:24) -- are the two counters the same number, including across EXTRA turns?",
       "verdict": "faithful",
-      "rationale": "Verified at the source rather than assumed, because C# deliberately distinguishes PlayerCombatState.TurnNumber from ICombatState.RoundNumber (ICombatState.cs:56 'BE CAREFUL!') and this relic reads the former. TurnNumber initialises to 1 (PlayerCombatState.cs:37) and is bumped by IncrementTurnNumber (:157-159), called from CombatManager.SwitchSides (CombatManager.cs:1415-1418) on BOTH the enemy->player switch and the player->player extra-turn switch -- and RoundNumber (:1413) only on the former. The sim's combat.turn starts at 1 (combat.py:108) and is incremented in both of end_turn's paths, the extra turn at combat.py:650 and the normal one at :674, in each case BEFORE player.start_turn() -- so the energy reset for turn N reads N on both sides, and an extra turn advances the relic's gate on both sides. Executed cross-check: `py audit/tools/relic_probes.py turn-order` shows on_energy_reset(turn=2) after the first end_turn, i.e. the increment precedes the reset."
+      "rationale": "Verified at the source rather than assumed, because C# deliberately distinguishes PlayerCombatState.TurnNumber from ICombatState.RoundNumber (ICombatState.cs:56 'BE CAREFUL!') and this relic reads the former. TurnNumber initialises to 1 (PlayerCombatState.cs:37) and is bumped by IncrementTurnNumber (:157-159), called from CombatManager.SwitchSides (CombatManager.cs:1415-1418) on BOTH the enemy->player switch and the player->player extra-turn switch -- and RoundNumber (:1413) only on the former. The sim's combat.turn starts at 1 (combat.py:177) and is incremented in both of end_turn's paths, the extra turn at combat.py:1822 and the normal one at :1840, in each case BEFORE player.start_turn() -- so the energy reset for turn N reads N on both sides, and an extra turn advances the relic's gate on both sides. Executed cross-check: `py audit/tools/relic_probes.py turn-order` shows on_energy_reset(turn=2) after the first end_turn, i.e. the increment precedes the reset. (2026-08-04: combat.py had grown substantially and these three lines drifted; re-verified same logic.)"
     },
     {
       "what": "N2: `if (player != base.Owner) return amount;` (PaelsFlesh.cs:39-42)",
       "verdict": "faithful",
-      "rationale": "Structurally satisfied: hooks.py:207 passes the combat's single PlayerCombatState, and player.py:163 is the only caller of the dispatcher. Multiplayer-only parameter check, noted per the shared contract rather than verdicted as a divergence."
+      "rationale": "Structurally satisfied: hooks.py:1059-1060 passes the combat's single PlayerCombatState, and player.py:372 is the only caller of the dispatcher. Multiplayer-only parameter check, noted per the shared contract rather than verdicted as a divergence."
     },
     {
       "what": "N3 (PROMPT.md bug class 16): no RelicModel.IsAllowed override and no Rng draw in PaelsFlesh.cs",
@@ -103,7 +103,7 @@
       "rationale": "Executed: `grep -l IsAllowed` over the batch's fifteen C# relic files returns nothing, so sweep B's 17-relic pool-eligibility cluster does not include this unit, and the file names no Rng stream. Obtainability confirmed (`py audit/tools/relic_probes_b11.py pool`): Ancient, offered by the ported Pael shrine from OptionPool1 (Pael.cs:30-36, events/pael.py OPTION_POOL_1)."
     },
     {
-      "what": "N4: the sim's modify_max_energy runs inside the reset whether or not the reset is vetoed (player.py:163-168 computes `gained` first, then branches on should_reset_energy)",
+      "what": "N4: the sim's modify_max_energy runs inside the reset whether or not the reset is vetoed (player.py:371-372 computes `gained` first, then branches on should_reset_energy)",
       "verdict": "faithful",
       "rationale": "C#'s ModifyMaxEnergy feeds the same 'max energy for this turn' number that ResetEnergy and AddMaxEnergyToCurrent both consume, so the +1 lands in both branches on both sides. Checked because a relic that only modified the reset branch would silently lose its energy under any ShouldPlayerResetEnergy veto."
     }

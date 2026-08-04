@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -32,7 +32,7 @@
   ],
   "hooks": {
     "IsAllowed": {
-      "maps_to": "WoodCarvings.is_allowed (events/wood_carvings.py:30-34) `any(c.rarity == BASIC and not c.eternal for c in run.deck)`, matching WoodCarvings.cs:36-39 `Players.All(p => CardPile.Get(Deck, p).Cards.Any(c => c != null && c.Rarity == CardRarity.Basic && c.IsRemovable))`. IsRemovable is 'everything except Eternal' (run.py:360-362), so `not c.eternal` is the same clause. Multiplayer quantifier waived separately.",
+      "maps_to": "WoodCarvings.is_allowed (events/wood_carvings.py:30-34) `any(c.rarity == BASIC and not c.eternal for c in run.deck)`, matching WoodCarvings.cs:36-39 `Players.All(p => CardPile.Get(Deck, p).Cards.Any(c => c != null && c.Rarity == CardRarity.Basic && c.IsRemovable))`. IsRemovable is 'everything except Eternal' (run.py:564-566, was 360-362), so `not c.eternal` is the same clause. Multiplayer quantifier waived separately. Re-verified 2026-08-04.",
       "verdict": "faithful"
     }
   },
@@ -44,17 +44,17 @@
     },
     {
       "what": "Bird (WoodCarvings.cs:53-61) and Torus (:78-86): FromDeckGeneric with the filter `c.IsTransformable && c.Rarity == CardRarity.Basic`, FirstOrDefault, then CardCmd.TransformTo<Peck> / <ToricToughness> -- a FIXED replacement, so no RNG",
-      "maps_to": "events/wood_carvings.py:57-61 and :70-74 pass `into=make_card('peck')` / `into=make_card('toric_toughness')` to run.transform_card, whose `if into is None` branch (run.py:437) is therefore never entered, and both cards ARE ported. The `if chosen:` guards reproduce FirstOrDefault's null case. Torus's extra `c != null` clause is a C#-only defence.",
+      "maps_to": "events/wood_carvings.py:57-61 and :70-74 pass `into=make_card('peck')` / `into=make_card('toric_toughness')` to run.transform_card, whose `if into is None` branch (run.py:756, was 437) is therefore never entered, and both cards ARE ported. The `if chosen:` guards reproduce FirstOrDefault's null case. Torus's extra `c != null` clause is a C#-only defence. Re-verified 2026-08-04.",
       "verdict": "faithful"
     },
     {
       "what": "Snake (WoodCarvings.cs:63-76): FromDeckForEnchantment(Slither, amount 1, prefs count 1).FirstOrDefault() then CardCmd.Enchant<Slither>(card, 1m)",
-      "maps_to": "events/wood_carvings.py:63-68 re-derives the candidate list with the same CanEnchant predicate, selects 1, and attaches. SlitherEnchantment.can_enchant (enchantments.py:113-114) adds the `not card.energy_cost_x` clause on top of the base, matching Slither.cs:31-38's `base.CanEnchant(card) && !Keywords.Contains(Unplayable) && !EnergyCost.CostsX` -- the Unplayable clause is already inside the sim's base can_enchant (enchantments.py:52-60). Both the base port and Slither's body are audited by audit/records/enchantment/slither.json, which owns the finding that Slither's in-combat cost roll uses the wrong RNG stream (Slither.cs:61 Rng.CombatEnergyCosts vs enchantments.py:119 combat._rng) -- cited as blast radius, not re-verdicted (rule 3).",
+      "maps_to": "events/wood_carvings.py:63-68 re-derives the candidate list with the same CanEnchant predicate, selects 1, and attaches. SlitherEnchantment.can_enchant (enchantments.py:236-237, was 113-114) adds the `not card.energy_cost_x` clause on top of the base, matching Slither.cs:31-38's `base.CanEnchant(card) && !Keywords.Contains(Unplayable) && !EnergyCost.CostsX` -- the Unplayable clause is already inside the sim's base can_enchant (enchantments.py:118-127, was 52-60). Both the base port and Slither's body are audited by audit/records/enchantment/slither.json, which owns the finding that Slither's in-combat cost roll uses the wrong RNG stream (Slither.cs:61 Rng.CombatEnergyCosts vs enchantments.py:249, was :119, now `combat.combat_rng.energy`) -- cited as blast radius, not re-verdicted (rule 3). Re-verified 2026-08-04: this citation is now STALE in a second way -- the enchantment's own docstring/body shows the RNG-stream bug already FIXED (uses `combat.combat_rng.energy`, not `combat._rng`); the fix belongs to enchantment/slither.json, not this record, and is noted here only so a reader does not treat this record's stale cross-reference as still-open.",
       "verdict": "faithful"
     },
     {
-      "what": "BR-G3 (blast radius): Bird's and Torus's CardCmd.TransformTo<T> (WoodCarvings.cs:58, :83) calls RunState.transform_card (run.py:406-470), which swaps the deck entry without running the deck-entry hooks C#'s CardCmd.Transform fires",
-      "maps_to": "Closed 2026-07-28: RunState.transform_card (run.py:508-584) now runs BOTH deck-entry hooks around the swap -- `relic.modify_card_being_added_to_deck` before the insert and `relic.after_card_added_to_deck` after it -- which is what CardCmd.Transform does for a PileType.Deck transform (Hook.ModifyCardBeingAddedToDeck at CardCmd.cs:430, Hook.AfterCardChangedPiles at CardCmd.cs:447). Was: a bare deck-slot swap, so the egg relics never saw the replacement. This unit is out of seam guard G3's radius on this leg.",
+      "what": "BR-G3 (blast radius): Bird's and Torus's CardCmd.TransformTo<T> (WoodCarvings.cs:58, :83) calls RunState.transform_card (run.py:725-801, was 406-470), which swaps the deck entry without running the deck-entry hooks C#'s CardCmd.Transform fires",
+      "maps_to": "Closed 2026-07-28: RunState.transform_card (run.py:784-800, was 508-584) now runs BOTH deck-entry hooks around the swap -- `relic.modify_card_being_added_to_deck` before the insert and `relic.after_card_added_to_deck` after it -- which is what CardCmd.Transform does for a PileType.Deck transform (Hook.ModifyCardBeingAddedToDeck at CardCmd.cs:430, Hook.AfterCardChangedPiles at CardCmd.cs:447). Was: a bare deck-slot swap, so the egg relics never saw the replacement. This unit is out of seam guard G3's radius on this leg. Re-verified 2026-08-04.",
       "verdict": "faithful"
     },
     {

@@ -12,7 +12,7 @@
     "RoomType": {
       "maps_to": "ENCOUNTERS['ceremonial_beast'] listed in rooms.py boss_keys (_overgrowth_rooms)",
       "verdict": "faithful",
-      "rationale": "CeremonialBeastBoss.RoomType => RoomType.Boss (CeremonialBeastBoss.cs:11). Sim carries no room_type field on the Encounter dataclass; 'ceremonial_beast' is placed in rooms.py:107's boss_keys for _overgrowth_rooms() (seam/rooms_and_map owns the picker itself). GOLD_REWARD_RANGES[RoomType.BOSS]=(100,100) (rewards.py:173) matches EncounterModel.cs:72/91's Boss=>100/100 defaults, which CeremonialBeastBoss does not override."
+      "rationale": "CeremonialBeastBoss.RoomType => RoomType.Boss (CeremonialBeastBoss.cs:11). Sim carries no room_type field on the Encounter dataclass; 'ceremonial_beast' is placed in rooms.py:155's boss_keys for _overgrowth_rooms() (seam/rooms_and_map owns the picker itself). GOLD_REWARD_RANGES[RoomType.BOSS]=(100,100) (rewards.py:173) matches EncounterModel.cs:72/91's Boss=>100/100 defaults, which CeremonialBeastBoss does not override."
     },
     "CustomBgm": {
       "maps_to": "(none)",
@@ -95,7 +95,7 @@
     },
     {
       "path": "sts2_rl/rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     },
     {

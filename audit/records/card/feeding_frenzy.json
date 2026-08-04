@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\event_cards.py",
-    "sha256": "dfd78fff2c2a36323033d8c74d986f9211a6cff57920b7380b731bb6cf9d3a5a"
+    "sha256": "22675c0e8764e2eb8d0aa28341ccb256084aeb94bf28b17a444409586ca6fc54"
   },
   "hooks": {
     "ctor": {

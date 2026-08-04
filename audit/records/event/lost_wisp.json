@@ -11,12 +11,12 @@
   "extra_sources": [
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -34,7 +34,7 @@
     },
     {
       "what": "Claim (LostWisp.cs:47-52): AddCursesToDeck([Decay]) FIRST, then RelicCmd.Obtain<LostWisp>",
-      "maps_to": "events/lost_wisp.py:36-39: add_card(make_card('decay')) then add_relic('lost_wisp'). Order preserved, and it is observable -- run.add_card's AfterCardChangedPiles tail (run.py:352-353) fires for the Curse BEFORE the relic is in the collection, so a relic that reacts to gaining a Curse (Darkstone Periapt) does not see this one, in either engine.",
+      "maps_to": "events/lost_wisp.py:36-39: add_card(make_card('decay')) then add_relic('lost_wisp'). Order preserved, and it is observable -- run.add_card's AfterCardChangedPiles tail (run.py) fires for the Curse BEFORE the relic is in the collection, so a relic that reacts to gaining a Curse (Darkstone Periapt) does not see this one, in either engine.",
       "verdict": "faithful"
     },
     {
@@ -44,7 +44,7 @@
     },
     {
       "what": "EV-3: CalculateVars' `base.Rng.NextInt(-15, 16)` (LostWisp.cs:44) rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- CalculateVars' variance draw runs on `self.event_rng` (events/lost_wisp.py:29-31), matching `base.Rng` (LostWisp.cs:44). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- CalculateVars' variance draw runs on `self.event_rng` (events/lost_wisp.py:29-31), matching `base.Rng` (LostWisp.cs:44). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
       "verdict": "faithful"
     },
     {

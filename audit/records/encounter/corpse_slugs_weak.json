@@ -12,7 +12,7 @@
     "Tags": {
       "maps_to": "rooms.py `_underdocks_rooms().tags[\"corpse_slugs_weak\"]`",
       "verdict": "faithful",
-      "rationale": "EncounterTag.Slugs (EncounterModel.cs's `Tags` override on this unit). The sim represents tag membership as a `tags` dict keyed by encounter id (sts2_rl/rooms.py's `_underdocks_rooms`, entry `\"corpse_slugs_weak\": (\"slugs\",)`) rather than a per-encounter attribute -- a representational difference consumed by the act's grab-bag picker (`_add_without_repeating_tags` / `_shares_tags`, rooms.py:237-256), which is `seam/rooms_and_map`'s mechanism, cross-referenced here rather than re-verdicted. Content is correct: corpse_slugs_weak carries exactly the one tag the C# declares."
+      "rationale": "EncounterTag.Slugs (EncounterModel.cs's `Tags` override on this unit). The sim represents tag membership as a `tags` dict keyed by encounter id (sts2_rl/rooms.py's `_underdocks_rooms`, entry `\"corpse_slugs_weak\": (\"slugs\",)`) rather than a per-encounter attribute -- a representational difference consumed by the act's grab-bag picker (`_add_without_repeating_tags` / `_shares_tags`, rooms.py:330-349), which is `seam/rooms_and_map`'s mechanism, cross-referenced here rather than re-verdicted. Content is correct: corpse_slugs_weak carries exactly the one tag the C# declares."
     },
     "RoomType": {
       "maps_to": "rooms.py `_underdocks_rooms()`'s pool bucket",
@@ -37,7 +37,7 @@
     "IsWeak": {
       "maps_to": "rooms.py `_underdocks_rooms().weak_keys`",
       "verdict": "faithful",
-      "rationale": "CorpseSlugsWeak.cs:17: `IsWeak => true`. The sim represents \"weak\" by pool membership (`weak_keys` in `_underdocks_rooms()`, rooms.py:129-132) rather than a boolean attribute; `seam/rooms_and_map` owns the act-opening picker that consumes it. EXECUTED: `\"corpse_slugs_weak\" in act_rooms(\"underdocks\").weak_keys` -> True, and absent from `normal_keys`/`elite_keys`/`boss_keys`."
+      "rationale": "CorpseSlugsWeak.cs:17: `IsWeak => true`. The sim represents \"weak\" by pool membership (`weak_keys` in `_underdocks_rooms()`, rooms.py:195-198) rather than a boolean attribute; `seam/rooms_and_map` owns the act-opening picker that consumes it. EXECUTED: `\"corpse_slugs_weak\" in act_rooms(\"underdocks\").weak_keys` -> True, and absent from `normal_keys`/`elite_keys`/`boss_keys`."
     }
   },
   "guards": [
@@ -67,7 +67,7 @@
     },
     {
       "path": "sts2_rl/rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     },
     {
@@ -87,12 +87,12 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "3caf6a189d109feb62c5ab57f03028277542a8bf12311898e7445be27ce199b2",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     }
   ]

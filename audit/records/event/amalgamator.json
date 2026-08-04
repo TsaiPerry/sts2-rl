@@ -11,7 +11,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -24,12 +24,12 @@
   "guards": [
     {
       "what": "IsValid (Amalgamator.cs:69-80): Tags.Contains(tag) && Rarity == Basic && IsRemovable",
-      "maps_to": "events/amalgamator.py:12-14 `tag in card.tags and card.rarity == CardRarity.BASIC and not card.eternal`. IsRemovable is `not Eternal` (mirrored at run.py:360-362), so the three clauses match one for one.",
+      "maps_to": "events/amalgamator.py:12-14 `tag in card.tags and card.rarity == CardRarity.BASIC and not card.eternal`. IsRemovable is `not Eternal` (mirrored at run.py), so the three clauses match one for one.",
       "verdict": "faithful"
     },
     {
       "what": "CombineStrikes / CombineDefends (Amalgamator.cs:41-67): select exactly 2 through the same filter, RemoveFromDeck, then CreateCard + CardPileCmd.Add(card, PileType.Deck) -- remove BEFORE add",
-      "maps_to": "events/amalgamator.py:44-55 _combine: select_cards('remove', candidates, 2) -> remove_cards -> add_card(make_card(result_id)). Order preserved. run.add_card (run.py:341-354) runs Hook.ModifyCardBeingAddedToDeck and the AfterCardChangedPiles tail, so the egg relics can upgrade the Ultimate card in both engines.",
+      "maps_to": "events/amalgamator.py:44-55 _combine: select_cards('remove', candidates, 2) -> remove_cards -> add_card(make_card(result_id)). Order preserved. run.add_card (run.py) runs Hook.ModifyCardBeingAddedToDeck and the AfterCardChangedPiles tail, so the egg relics can upgrade the Ultimate card in both engines.",
       "verdict": "faithful"
     },
     {

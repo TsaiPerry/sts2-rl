@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -33,7 +33,7 @@
     "MerchantCost": {
       "maps_to": "merchant_cost_override = 50 (fake_snecko_eye.py:15)",
       "verdict": "faithful",
-      "rationale": "RelicModel.MerchantCost is virtual and the Fake Merchant's knock-offs all pin 50; relics/base.py:111-117 reads merchant_cost_override first and falls back to _MERCHANT_COST_BY_RARITY (relics/base.py:54-62), whose table is value-for-value the source's switch (RelicModel.cs:304-315, checked: Common 175 / Uncommon 225 / Rare 275 / Shop 200 / Ancient, Starter, Event 999999999). No AscensionHelper branch anywhere, so 50 is the pinned non-ascension price. Rule 7: RelicModel.cs and relics/base.py are not hashed by this record."
+      "rationale": "RelicModel.MerchantCost is virtual and the Fake Merchant's knock-offs all pin 50; relics/base.py:174-180, re-pinned 2026-08-04, was :111-117 reads merchant_cost_override first and falls back to _MERCHANT_COST_BY_RARITY (relics/base.py:71-79, re-pinned 2026-08-04, was :54-62), whose table is value-for-value the source's switch (RelicModel.cs:304-315, checked: Common 175 / Uncommon 225 / Rare 275 / Shop 200 / Ancient, Starter, Event 999999999). No AscensionHelper branch anywhere, so 50 is the pinned non-ascension price. Rule 7: RelicModel.cs and relics/base.py are not hashed by this record."
     },
     "BeforeCombatStart": {
       "maps_to": "on_combat_start (fake_snecko_eye.py:17-24)",
@@ -43,7 +43,7 @@
     "AfterObtained": {
       "maps_to": "no counterpart -- the sim's port defines only on_combat_start",
       "verdict": "gap",
-      "issue": "MECHANISM: FakeSneckoEye.cs:23-29 applies the Confused power immediately when the relic is picked up if `CombatManager.Instance.IsInProgress`, so a Fake Snecko Eye obtained mid-combat confuses you for the rest of that fight. The sim implements no after_obtained at all, so a mid-combat pickup does nothing until the next combat. EXECUTED (py audit/tools/relic_probes_b05.py snecko-confused): the port has no after_obtained override, and run.add_relic('fake_snecko_eye') applies no power. DORMANT, and the concrete unported thing is the same one relic/belt_buckle's AfterObtained entry names: the sim grants relics through RunState.add_relic between rooms (run.py:546-553), so a mid-combat pickup needs ported content that hands out a relic inside a fight, a shape the sim does not currently reach. Recorded as a gap rather than a waiver because 'the sim has no path here' is today's content and not the divergence's shape -- binding rule 1, and the same verdict relic/belt_buckle gives the identical mechanism (binding rule 3). Rule 7: run.py is unhashed here."
+      "issue": "MECHANISM: FakeSneckoEye.cs:23-29 applies the Confused power immediately when the relic is picked up if `CombatManager.Instance.IsInProgress`, so a Fake Snecko Eye obtained mid-combat confuses you for the rest of that fight. The sim implements no after_obtained at all, so a mid-combat pickup does nothing until the next combat. EXECUTED (py audit/tools/relic_probes_b05.py snecko-confused): the port has no after_obtained override, and run.add_relic('fake_snecko_eye') applies no power. DORMANT, and the concrete unported thing is the same one relic/belt_buckle's AfterObtained entry names: the sim grants relics through RunState.add_relic between rooms (run.py:957-964, re-pinned 2026-08-04, was :546-553), so a mid-combat pickup needs ported content that hands out a relic inside a fight, a shape the sim does not currently reach. Recorded as a gap rather than a waiver because 'the sim has no path here' is today's content and not the divergence's shape -- binding rule 1, and the same verdict relic/belt_buckle gives the identical mechanism (binding rule 3). Rule 7: run.py is unhashed here."
     }
   },
   "guards": [

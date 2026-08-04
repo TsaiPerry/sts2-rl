@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_skills.py",
-    "sha256": "1cdf31a3bd59e95b239df163b0724e4f99ef299bd67256cc94fcc683e1ed1840"
+    "sha256": "73d875726c8cb8ca6a213dea6f43267d57717f5a1d6b65d34ca2ecea7f4ab66f"
   },
   "extra_sources": [
     {
@@ -16,37 +16,37 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     }
   ],
   "hooks": {
     "ctor": {
-      "maps_to": "class attrs (colorless_skills.py:721-725) + _init_vars (727-730)",
+      "maps_to": "class attrs (colorless_skills.py:792-796) + _init_vars (798-801)",
       "verdict": "faithful",
       "rationale": "`base(2, CardType.Skill, CardRarity.Uncommon, TargetType.Self)` (TheBomb.cs:23-26) == cost 2 / SKILL / UNCOMMON / SELF. No keywords."
     },
     "CanonicalVars": {
-      "maps_to": "_turns = 3, _damage = 40 (colorless_skills.py:729-730)",
+      "maps_to": "_turns = 3, _damage = 40 (colorless_skills.py:800-801)",
       "verdict": "faithful",
       "rationale": "`new DynamicVar(\"Turns\", 3m)` + `new DynamicVar(\"BombDamage\", 40m)` (TheBomb.cs:17-21) == both numbers, both declared. 40 is the largest single damage number in the pool."
     },
     "OnPlay": {
-      "maps_to": "TheBombCard.on_play (colorless_skills.py:735-743)",
+      "maps_to": "TheBombCard.on_play (colorless_skills.py:806-816)",
       "verdict": "faithful",
-      "rationale": "`(await PowerCmd.Apply<TheBombPower>(choiceContext, Owner.Creature, DynamicVars[\"Turns\"].BaseValue, Owner.Creature, this)).SetDamage(DynamicVars[\"BombDamage\"].BaseValue)` (TheBomb.cs:30) == `PowerCmd.apply(..., TheBombPower, self._turns, ...)` then a re-fetch by id and `power.set_damage(self._damage)` (colorless_skills.py:741-743). The Turns value is the power's AMOUNT and the damage is set separately on both sides, which is the part that is easy to swap."
+      "rationale": "`(await PowerCmd.Apply<TheBombPower>(choiceContext, Owner.Creature, DynamicVars[\"Turns\"].BaseValue, Owner.Creature, this)).SetDamage(DynamicVars[\"BombDamage\"].BaseValue)` (TheBomb.cs:30) == `power = PowerCmd.apply(..., TheBombPower, self._turns, ...); if power is not None: power.set_damage(self._damage)` (colorless_skills.py:812-816). Re-verified this stale-sweep pass: the sim NO LONGER re-fetches by id (the mechanism this entry previously described) -- it now holds the direct return value of `PowerCmd.apply` and null-checks that, per an explicit fix documented in the card's own comment (colorless_skills.py:809-811) and in `PowerCmd.apply`'s docstring (cmds.py:867-873): a re-fetch-by-id would have been WRONG for an `Instanced` power like The Bomb, since `Creature.GetPower`/`target.powers.get` is a first-match lookup that would answer with the OLDEST fuse rather than the one just created. The Turns value is the power's AMOUNT and the damage is set separately on both sides, which is the part that is easy to swap."
     },
     "OnUpgrade": {
-      "maps_to": "TheBombCard._on_upgrade (colorless_skills.py:732-733)",
+      "maps_to": "TheBombCard._on_upgrade (colorless_skills.py:803-804)",
       "verdict": "faithful",
       "rationale": "`DynamicVars[\"BombDamage\"].UpgradeValueBy(10m)` (TheBomb.cs:35) == `self._damage += 10` (40 -> 50). The TURNS var stays 3 when upgraded on both sides -- the bomb does not land sooner, it lands harder."
     }
   },
   "guards": [
     {
-      "what": "C# dereferences the Apply result WITHOUT a null check; the sim re-fetches by id and skips on None (TheBomb.cs:30 vs colorless_skills.py:741-743)",
+      "what": "C# dereferences the Apply result WITHOUT a null check; the sim holds the direct return value and skips on None (TheBomb.cs:30 vs colorless_skills.py:812-816)",
       "verdict": "gap",
-      "issue": "This is the INVERSE of card/crimson_mantle's and card/inferno's `?.` finding: those two use the null-conditional operator and so skip their follow-up call when Apply returns null, while The Bomb uses a bare `.` and would throw a NullReferenceException. `PowerCmd.Apply<T>` documents three null cases (PowerCmd.cs:29-34): combat ending, `!target.CanReceivePowers`, and a stacking `ModifyAmount` that resolves to 0. So in the game, playing a second The Bomb whose amount was modified to 0 CRASHES, and in the sim it silently applies no extra damage. DORMANT, and deliberately not labelled live: reproducing a crash is not a fidelity target, no ported effect modifies a positive self-applied buff down to exactly 0 (Artifact intercepts only debuffs, cmds.py:299-306), and the other two null cases imply the combat is already over. Recorded because the sim's re-fetch pattern is SAFER than the source here, which is worth stating explicitly rather than leaving as an apparent match."
+      "issue": "This is the INVERSE of card/crimson_mantle's and card/inferno's `?.` finding: those two use the null-conditional operator and so skip their follow-up call when Apply returns null, while The Bomb uses a bare `.` and would throw a NullReferenceException. `PowerCmd.Apply<T>` documents three null cases (PowerCmd.cs:29-34): combat ending, `!target.CanReceivePowers`, and a stacking `ModifyAmount` that resolves to 0. So in the game, playing a second The Bomb whose amount was modified to 0 CRASHES, and in the sim it silently applies no extra damage. DORMANT, and deliberately not labelled live: reproducing a crash is not a fidelity target, no ported effect modifies a positive self-applied buff down to exactly 0 (Artifact intercepts debuffs -- the exact receiving-side line has drifted since this was written and is not re-resolved this pass; see `sts2_rl/cmds.py` generally, not a pinned line), and the other two null cases imply the combat is already over. Re-verified this stale-sweep pass: `cmds.py`'s own docstring (around cmds.py:867-873) now explicitly names this the already-filed dormant gap `card/the_bomb/g1`, confirming the gap is still open and still correctly labelled dormant. Recorded because the sim's null-check is SAFER than the source here, which is worth stating explicitly rather than leaving as an apparent match."
     }
   ],
   "verdict": "gap",

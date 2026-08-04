@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
@@ -62,18 +62,18 @@
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:337 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py:608 `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-139 Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:137-139) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Third-file citations, not hashed here."
     },
     "BeforeDamageReceived": {
       "maps_to": "powers.py ThornsPower.before_damage_received (hooks.py before_damage_received, fired at cmds.py after the modifier passes and before block absorption)",
       "verdict": "faithful",
-      "issue": "CLOSED 2026-07-29 (round 10, the Tier 1 residue). The last open leg was the DEALER: ThornsPower.cs:22 passes `base.Owner` as CreatureCmd.Damage's 5th argument and the port left it None. It now passes `dealer=self.owner`, matching FlameBarrierPower one power over, which removes both recorded consequences: Hook.AfterDamageGiven (CreatureCmd.cs:390) now fires for a reflect -- `on_damage_dealt` is gated on `dealer is not None` (cmds.py) -- so a Thorns-on-Thorns chain is possible, and the dead-dealer early return has something to test. That return is ported too: `DamageCmd.deal` now opens with CreatureCmd.cs:242-245's `if (dealer != null && dealer.IsDead) return`, which this fix is what makes reachable (a multi-hit attacker killed by the first hit's reflect must not land the rest of the attack). EXECUTED: a 4-damage enemy hit into Thorns 3 records on_damage_dealt(player -> enemy, 3) where the old port recorded nothing, and a dealer at 0 HP deals 0. Pinned by test/test_tier1_residue.py (3 tests). WAS: NARROWED 2026-07-27, RE-OPENED 2026-07-28. CLOSED (both recorded divergences): the sim has a real `before_damage_received` dispatch, fired at cmds.py:150 after the modifier passes and before block absorption (CreatureCmd.cs:263), and ThornsPower implements it (powers.py:369-392) with ThornsPower.cs:19's `dealer != null` and IsPoweredAttack guards, so the reflect is no longer subject to the killing-blow skip (CreatureCmd.cs:392) and no longer fires off Poison / Juggernaut / Flame Barrier damage. STILL OPEN: the reflect is dealt by NOBODY. ThornsPower.cs:22 is `CreatureCmd.Damage(choiceContext, dealer, base.Amount, ValueProp.Unpowered | ValueProp.SkipHurtAnim, base.Owner, null)` -- dealt BY base.Owner -- while powers.py:390-392 is `DamageCmd.deal(self.hooks, dealer, self.amount, props=DamageProps.NON_CARD_UNPOWERED)`, whose 2nd positional is the TARGET and whose own `dealer` parameter (cmds.py:92) is left None. Two consequences survive: hooks.on_damage_dealt is gated on `dealer is not None` (cmds.py:187-188), so Hook.AfterDamageGiven (CreatureCmd.cs:390) never fires for a Thorns reflect and no Thorns-on-Thorns chain is possible; and C#'s `if (dealer != null && dealer.IsDead) return` (CreatureCmd.cs:242-245) has no sim counterpart on this path. FlameBarrierPower, the same shape one power over, DOES pass dealer=self.owner (powers.py:739-742), so this is an inconsistency inside the sim as well. This is the SAME omission that keeps power/constrict's AfterSideTurnEnd entry at `gap`, so binding rule 3 requires the same verdict here. This record's guard on ThornsPower.cs:22 has carried the fact in its rationale since the original audit and is still verdicted `faithful`; read the two together -- the divergence is recorded here."
+      "issue": "CLOSED 2026-07-29 (round 10, the Tier 1 residue). The last open leg was the DEALER: ThornsPower.cs:22 passes `base.Owner` as CreatureCmd.Damage's 5th argument and the port left it None. It now passes `dealer=self.owner`, matching FlameBarrierPower one power over, which removes both recorded consequences: Hook.AfterDamageGiven (CreatureCmd.cs:390) now fires for a reflect -- `on_damage_dealt` is gated on `dealer is not None` (cmds.py) -- so a Thorns-on-Thorns chain is possible, and the dead-dealer early return has something to test. That return is ported too: `DamageCmd.deal` now opens with CreatureCmd.cs:242-245's `if (dealer != null && dealer.IsDead) return`, which this fix is what makes reachable (a multi-hit attacker killed by the first hit's reflect must not land the rest of the attack). EXECUTED: a 4-damage enemy hit into Thorns 3 records on_damage_dealt(player -> enemy, 3) where the old port recorded nothing, and a dealer at 0 HP deals 0. Pinned by test/test_tier1_residue.py (3 tests). WAS: NARROWED 2026-07-27, RE-OPENED 2026-07-28. CLOSED (both recorded divergences): the sim has a real `before_damage_received` dispatch, fired at cmds.py:150 after the modifier passes and before block absorption (CreatureCmd.cs:263), and ThornsPower implements it (powers.py:610-644) with ThornsPower.cs:19's `dealer != null` and IsPoweredAttack guards, so the reflect is no longer subject to the killing-blow skip (CreatureCmd.cs:392) and no longer fires off Poison / Juggernaut / Flame Barrier damage. HISTORICAL (pre-fix) NOTE, kept for record: the reflect used to be dealt by NOBODY -- ThornsPower.cs:22 is `CreatureCmd.Damage(choiceContext, dealer, base.Amount, ValueProp.Unpowered | ValueProp.SkipHurtAnim, base.Owner, null)` -- dealt BY base.Owner -- while the sim's call omitted a dealer. RE-VERIFIED 2026-08-04: the sim now passes `dealer=self.owner` at the same call (powers.py:641-644), matching FlameBarrierPower's own reflect call (powers.py:1021-1023) -- the two are consistent with each other, and the inconsistency this paragraph originally flagged is CLOSED. This is the SAME omission that keeps power/constrict's AfterSideTurnEnd entry at `gap`, so binding rule 3 requires the same verdict here. This record's guard on ThornsPower.cs:22 has carried the fact in its rationale since the original audit and is still verdicted `faithful`; read the two together -- the divergence is recorded here."
     }
   },
   "guards": [
@@ -85,12 +85,12 @@
     {
       "what": "ThornsPower.cs:19 `dealer != null`",
       "verdict": "faithful",
-      "rationale": "powers.py:347 `dealer is None -> return`. Identical, and load-bearing: it is why the sim's Thorns does not fire on the dealer-less Constrict/Demise/Disintegration damage (powers.py:1437-1439, :4055-4057, 2635-2637), which is what keeps consequence 2 from being far wider."
+      "rationale": "powers.py:625 `dealer is None -> return`. Identical, and load-bearing: it is why the sim's Thorns does not fire on dealer-less self-damage. RE-VERIFIED 2026-08-04: DemisePower._fire (powers.py:5004-5008) and DisintegrationPower.after_player_turn_end_late (powers.py:3288-3295) remain dealer-less, so this guard still keeps Thorns from reflecting off either. NOTE, corrected from the stale text: ConstrictPower._squeeze (powers.py:1868-1879) now passes `dealer=self.owner` (fixed together with Thorns' own dealer fix, per its own in-code comment 'closed together under binding rule 3') and so is NO LONGER an example of dealer-less damage -- it was removed from this list rather than left to mislead a reader. Whether a creature holding both Constrict and Thorns simultaneously would now reflect Thorns off its own Constrict tick (dealer == target == the Thorns owner) was not traced further this pass -- flagged for a follow-up rather than asserted as live or dormant, since no ported Ironclad-side content was checked for holding both powers at once."
     },
     {
       "what": "ThornsPower.cs:22 ValueProp.Unpowered | ValueProp.SkipHurtAnim, dealer = base.Owner",
       "verdict": "faithful",
-      "rationale": "powers.py:351-353 passes DamageProps.NON_CARD_UNPOWERED (valueprops.py:42, UNPOWERED alone -- blockable, which matches C# omitting Unblockable) and no dealer. SkipHurtAnim has no sim analogue and is presentation. NOTE the sim omits `dealer=self.owner`, so the reflected damage is dealer-less where C#'s is dealt BY the Thorns owner -- that suppresses the reflect's own on_damage_dealt (cmds.py:123-124) and any Thorns-on-Thorns chain. FlameBarrierPower, the same shape one power over, DOES pass dealer=self.owner (powers.py:684-687), so this is an inconsistency inside the sim as well; it is folded into this guard rather than raised separately because both halves of the pair are already covered by the unit's `gap` rollup."
+      "rationale": "powers.py:641-644 passes DamageProps.NON_CARD_UNPOWERED (valueprops.py:42, UNPOWERED alone -- blockable, which matches C# omitting Unblockable) and, as of the 2026-07-29 fix, `dealer=self.owner` -- matching FlameBarrierPower's own reflect call (powers.py:1021-1023). SkipHurtAnim has no sim analogue and is presentation. RE-VERIFIED 2026-08-04: the sim's `dealer=self.owner` is present at the cited call, so the reflect's own on_damage_dealt (cmds.py) fires and a Thorns-on-Thorns chain is possible, exactly as the BeforeDamageReceived entry above states; this guard no longer describes a divergence, it is folded in with the `faithful` rollup unchanged."
     },
     {
       "what": "Applying Thorns with a NEGATIVE amount",

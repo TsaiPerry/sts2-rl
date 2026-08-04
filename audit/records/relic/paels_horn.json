@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -46,9 +46,9 @@
       "verdict": "faithful"
     },
     "AfterObtained": {
-      "maps_to": "after_obtained(run) (paels_horn.py:16-20), dispatched by RunState.add_relic (run.py:552)",
+      "maps_to": "after_obtained(run) (paels_horn.py:16-20), dispatched by RunState.add_relic (run.py:957)",
       "verdict": "faithful",
-      "rationale": "PaelsHorn.cs:17-26 loops `for (int i = 0; i < 2; i++)`, building `base.Owner.RunState.CreateCard<Relax>(base.Owner)` and awaiting `CardPileCmd.Add(card, PileType.Deck)` each time. paels_horn.py:19-20 loops CARDS = 2 (:14) over `run.add_card(make_card(\"relax\"))`. The count is a bare literal 2 -- the relic declares no CanonicalVars and no AscensionHelper.GetValueIfAscension -- so 2 is the pinned value. The two C# calls collapse correctly onto one sim call: RunState.CreateCard (RunState.cs:383-389) is ToMutable + AddCard + AfterCreated, i.e. it registers the card with the run, and CardPileCmd.Add then places it in the Deck pile; run.add_card does both, and it dispatches the same two deck hooks C#'s Add fires -- Hook.ModifyCardBeingAddedToDeck (so the egg relics can upgrade the Relax) and RelicModel.AfterCardChangedPiles for the deck pile (so Darkstone Periapt sees it), at run.py:345-353. Position matches: CardPilePosition.Bottom is Add's default (CardPileCmd.cs:259) and run.add_card appends. CardCmd.PreviewCardPileAdd (line 25) is presentation."
+      "rationale": "PaelsHorn.cs:17-26 loops `for (int i = 0; i < 2; i++)`, building `base.Owner.RunState.CreateCard<Relax>(base.Owner)` and awaiting `CardPileCmd.Add(card, PileType.Deck)` each time. paels_horn.py:19-20 loops CARDS = 2 (:14) over `run.add_card(make_card(\"relax\"))`. The count is a bare literal 2 -- the relic declares no CanonicalVars and no AscensionHelper.GetValueIfAscension -- so 2 is the pinned value. The two C# calls collapse correctly onto one sim call: RunState.CreateCard (RunState.cs:383-389) is ToMutable + AddCard + AfterCreated, i.e. it registers the card with the run, and CardPileCmd.Add then places it in the Deck pile; run.add_card does both, and it dispatches the same two deck hooks C#'s Add fires -- Hook.ModifyCardBeingAddedToDeck (so the egg relics can upgrade the Relax) and RelicModel.AfterCardChangedPiles for the deck pile (so Darkstone Periapt sees it), at run.py:524-536. Position matches: CardPilePosition.Bottom is Add's default (CardPileCmd.cs:259) and run.add_card appends. CardCmd.PreviewCardPileAdd (line 25) is presentation. (2026-08-04 re-audit: run.py had drifted; re-verified add_card's two-hook shape is unchanged.)"
     }
   },
   "guards": [
@@ -60,7 +60,7 @@
     {
       "what": "N2: PaelsHorn does NOT override HasUponPickupEffect, and the sim does not set has_upon_pickup_effect",
       "verdict": "faithful",
-      "rationale": "Checked deliberately because three other units in this batch (paels_tooth, pandoras_box, pear) DO override it and the flag feeds RelicModel.IsTradable (relics/base.py:126-136). The flags agree, and Ancient rarity excludes the relic from trading on both sides regardless."
+      "rationale": "Checked deliberately because three other units in this batch (paels_tooth, pandoras_box, pear) DO override it and the flag feeds RelicModel.IsTradable (relics/base.py:188-199). The flags agree, and Ancient rarity excludes the relic from trading on both sides regardless."
     },
     {
       "what": "N3 (PROMPT.md bug class 16): no RelicModel.IsAllowed override; no Rng stream named or consumed",

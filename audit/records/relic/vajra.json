@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/monsters/glory/aeonglass.py",
-      "sha256": "4106f8d25cd8c5d3aa6f86faf884907896a10605fc1250c8dc5d8f66cbb0d39e",
+      "sha256": "70df914ec1c2592fb60a4e79fb594f507d5a0d104a68931902c9a1bde3006a65",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -56,17 +56,17 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/fuzzy_wurm_crawler.py",
-      "sha256": "4c745d79b378f4526fe11550b79bf4e3ecfdc5aa397161bfe2187ee7dc3d80b4",
+      "sha256": "3cba4e61f30ec2e6b0cd43c1d458175583c7b012a297c95831ca78efbb439def",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/overgrowth/fuzzy_wurm_crawler.py",
-      "sha256": "709fd5010a01839534bb6ec922456ceaddec9b655bd492c90be4ae8d04d027a9",
+      "sha256": "59b21a1f6c5020a8aae3ca09fb75867b17ac6df50aebe697091b6ddc8094e91f",
       "side": "sim"
     }
   ],
@@ -86,7 +86,7 @@
     {
       "what": "G1 (DORMANT): nothing observes the player's Strength in the window between C#'s AfterRoomEntered and the sim's on_combat_start, so the phase difference has no observable today",
       "verdict": "gap",
-      "issue": "MECHANISM: as above -- one full combat-setup phase separates the two positions, and it contains AfterCreatureAdded plus every enemy's opening RollMove. TWO readers could expose it and neither exists in ported content. (a) A monster whose move selection reads the PLAYER's Strength: executed census (py audit/tools/relic_probes_b17.py vajra) finds only three ported monster modules that mention strength at all -- sts2_rl/monsters/fuzzy_wurm_crawler.py, sts2_rl/monsters/overgrowth/fuzzy_wurm_crawler.py and sts2_rl/monsters/glory/aeonglass.py -- and all three read or grant their OWN Strength (sts2_rl/monsters/fuzzy_wurm_crawler.py:36-40 and sts2_rl/monsters/overgrowth/fuzzy_wurm_crawler.py:37-41 each build a self-buff intent, aeonglass.py:37, 85-87 tracks its own escalation). (b) A ported on_combat_start listener that reads player Strength: the six other relics that touch Strength at combat start all WRITE it and none reads it (ember_tea.py:28-33, philosophers_stone.py:28-32, red_skull.py:42-43 reads HP not Strength, sling_of_courage.py:20-28, sword_of_jade.py:22-29). The sim's registration-order dependence is real and executed: with a spy relic registered before Vajra the spy reads Strength 0 from on_combat_start, registered after it reads 1, where C# reads 1 either way because Vajra's hook belongs to an earlier phase. DORMANT; what would make it live is either porting a monster whose intent selection reads the player's Strength, or porting any BeforeCombatStart listener that does (Red Skull's C# sibling shape -- a combat-start reader -- is the obvious candidate). Filed as a gap and not a waiver because 'no ported content triggers this' is today's content, not the divergence's shape (binding rule 1). Rule 7: the six sts2_rl/relics/*.py and three sts2_rl/monsters/*.py files named here are NOT hashed by this record. [CITATION CORRECTED 2026-07-26 by the relic fix pass: the path was written as a bare basename plus line range (`fuzzy_wurm_crawler` `.py:36-40`), which audit/tools/backfill_sources.py cannot resolve -- the repo has two files of that name, and the record's own census names both -- so the citation was discarded and neither file pinned. Both are now spelled out, with the overgrowth copy's line range corrected to 37-41 (its `current_intent` body sits one line lower because of the extra package level in `from ...powers import StrengthPower`).]"
+      "issue": "MECHANISM: as above -- one full combat-setup phase separates the two positions, and it contains AfterCreatureAdded plus every enemy's opening RollMove. TWO readers could expose it and neither exists in ported content. (a) A monster whose move selection reads the PLAYER's Strength: executed census (py audit/tools/relic_probes_b17.py vajra) finds only three ported monster modules that mention strength at all -- sts2_rl/monsters/fuzzy_wurm_crawler.py, sts2_rl/monsters/overgrowth/fuzzy_wurm_crawler.py and sts2_rl/monsters/glory/aeonglass.py -- and all three read or grant their OWN Strength (sts2_rl/monsters/fuzzy_wurm_crawler.py:36-40 and sts2_rl/monsters/overgrowth/fuzzy_wurm_crawler.py:37-41 each build a self-buff intent, aeonglass.py:38, 114-116 tracks its own escalation). (b) A ported on_combat_start listener that reads player Strength: the six other relics that touch Strength at combat start all WRITE it and none reads it (ember_tea.py:28-33, philosophers_stone.py:28-32, red_skull.py:42-43 reads HP not Strength, sling_of_courage.py:20-28, sword_of_jade.py:22-29). The sim's registration-order dependence is real and executed: with a spy relic registered before Vajra the spy reads Strength 0 from on_combat_start, registered after it reads 1, where C# reads 1 either way because Vajra's hook belongs to an earlier phase. DORMANT; what would make it live is either porting a monster whose intent selection reads the player's Strength, or porting any BeforeCombatStart listener that does (Red Skull's C# sibling shape -- a combat-start reader -- is the obvious candidate). Filed as a gap and not a waiver because 'no ported content triggers this' is today's content, not the divergence's shape (binding rule 1). Rule 7: the six sts2_rl/relics/*.py and three sts2_rl/monsters/*.py files named here are NOT hashed by this record. [CITATION CORRECTED 2026-07-26 by the relic fix pass: the path was written as a bare basename plus line range (`fuzzy_wurm_crawler` `.py:36-40`), which audit/tools/backfill_sources.py cannot resolve -- the repo has two files of that name, and the record's own census names both -- so the citation was discarded and neither file pinned. Both are now spelled out, with the overgrowth copy's line range corrected to 37-41 (its `current_intent` body sits one line lower because of the extra package level in `from ...powers import StrengthPower`).]"
     },
     {
       "what": "N1: PowerVar<StrengthPower>(1m) (Vajra.cs:17) read as `Strength.BaseValue` at the call site (:26) vs the sim's literal 1 (vajra.py:17)",
@@ -101,7 +101,7 @@
     {
       "what": "N3: `room is CombatRoom` is the only guard, and it decides HOW OFTEN the relic fires",
       "verdict": "faithful",
-      "rationale": "C# fires once per CombatRoom entry; the sim fires once per CombatState construction, and the sim builds exactly one CombatState per combat room (run.py:1123 create_combat is called per resolved encounter). A map point with more than one room enters CombatRoom again in the game and gets a second application, which the sim reproduces by building a second CombatState. Recorded because the sim ALSO has a real after_room_entered hook (sts2_rl/relics/base.py:194-195, dispatched at run.py:983) that this port could have used -- and deliberately should not, because at that moment no CombatState exists to hold the power. That is what makes the AfterRoomEntered entry a divergence rather than a missing hook. Rule 7: sts2_rl/relics/base.py and run.py are NOT hashed here."
+      "rationale": "C# fires once per CombatRoom entry; the sim fires once per CombatState construction, and the sim builds exactly one CombatState per combat room (run.py:1680 create_combat is called per resolved encounter). A map point with more than one room enters CombatRoom again in the game and gets a second application, which the sim reproduces by building a second CombatState. Recorded because the sim ALSO has a real after_room_entered hook (sts2_rl/relics/base.py:350, dispatched at run.py:1502) that this port could have used -- and deliberately should not, because at that moment no CombatState exists to hold the power. That is what makes the AfterRoomEntered entry a divergence rather than a missing hook. Rule 7: sts2_rl/relics/base.py and run.py are NOT hashed here."
     },
     {
       "what": "N4: Flash(), CanonicalVars and ExtraHoverTips (Vajra.cs:17, 19, 25)",

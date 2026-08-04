@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\glory\\fabricator.py",
-    "sha256": "789a1a3297f11e8b4097b8c315c4d63c2509d5e1d68a164d4d56ce40a4326284"
+    "sha256": "b3df21ebed6055dabca3cef5e5a0d1efc96279b98aae518d80ad669b6fbfeb3e"
   },
   "hooks": {
     "MinInitialHp": {
@@ -54,7 +54,7 @@
     {
       "what": "Reachability of the whole unit",
       "verdict": "faithful",
-      "rationale": "Guardbot has no encounter of its own: it exists only as a Fabricator spawn (Fabricator.cs:31-35 defenseSpawns, fabricator.py:115), and 'fabricator' is in Glory's normal_keys (rooms.py:189). Spawn mechanics (exactly-one roll, the zero-roll rows) are monster_state_machine steps 47-48 and are NOT re-verdicted here; only the spawn's CONTENT is, and that is monster/fabricator's guard."
+      "rationale": "Guardbot has no encounter of its own: it exists only as a Fabricator spawn (Fabricator.cs:31-35 defenseSpawns, fabricator.py:137 `_DEFENSE_SPAWNS = [Guardbot, Noisebot]`, re-verified 2026-08-04, was :115, content unchanged/renamed-and-moved), and 'fabricator' is in Glory's normal_keys (rooms.py:265, re-verified 2026-08-04, was :189, unchanged). Spawn mechanics (exactly-one roll, the zero-roll rows) are monster_state_machine steps 47-48 and are NOT re-verdicted here; only the spawn's CONTENT is, and that is monster/fabricator's guard."
     }
   ],
   "verdict": "waiver",
@@ -77,17 +77,17 @@
     },
     {
       "path": "sts2_rl\\creatures.py",
-      "sha256": "1c73063f3ca726775f0a121fe826933fe8a4dfdcbda18bb0e0d4dfacff69de7f",
+      "sha256": "9152cb64c277b8c7e5162bcae7d59af41f160a1a347ac586423c41af5be9c530",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     }
   ]

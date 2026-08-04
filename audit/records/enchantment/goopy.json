@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\enchantments.py",
-    "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369"
+    "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0"
   },
   "extra_sources": [
     {
@@ -61,22 +61,22 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/trash_heap_cards.py",
-      "sha256": "f93265bdcd41fa82dd09ab914501270537ae907e02f97679dd58dd2345183e20",
+      "sha256": "9367e6b7a5549cac19271d1173a73d90f9c9cfd86f83d67bdce7f827f1e24c9d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -91,7 +91,7 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
@@ -121,7 +121,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -140,21 +140,21 @@
       "verdict": "faithful"
     },
     "AfterCardPlayed": {
-      "maps_to": "GoopyEnchantment.on_card_played (enchantments.py:349-352) -- `amount += 1` for its own card, matching Goopy.cs:30-42's `base.Amount++`, and now dispatched once per replay iteration from inside combat._resolve_card_play's loop (combat.py:600). The C# line the sim has no counterpart for, `base.Card.DeckVersion.Enchantment.Amount++` (Goopy.cs:37-40), is a no-op for the sim: the sim has ONE Enchantment object shared by the run and the combat, so the growth already persists (executed: `py audit/tools/enchantment_probes.py goopy` -- Amount is 2 after one play and survives reset())",
+      "maps_to": "GoopyEnchantment.on_card_played (enchantments.py:349-352) -- `amount += 1` for its own card, matching Goopy.cs:30-42's `base.Amount++`, and now dispatched once per replay iteration from inside combat._resolve_card_play's loop (combat.py:1209). The C# line the sim has no counterpart for, `base.Card.DeckVersion.Enchantment.Amount++` (Goopy.cs:37-40), is a no-op for the sim: the sim has ONE Enchantment object shared by the run and the combat, so the growth already persists (executed: `py audit/tools/enchantment_probes.py goopy` -- Amount is 2 after one play and survives reset())",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-28: Hook.AfterCardPlayed now fires once per replay iteration -- `self.hooks.on_card_played(card, is_auto_play)` sits INSIDE combat._resolve_card_play's `for play_index in range(play_count)` loop (combat.py:574, 600), matching CardModel.cs:1957-1959. WAS: on_card_played fired once per card play, outside the loop. EXECUTED 2026-07-28 (`py audit/tools/enchantment_probes.py replay`): Goopy(1) on a Defend played twice by Throwing Axe leaves Amount at sim=3 C#=3 and gains sim=11 C#=11 block (was 2 and 10)."
+      "issue": "Closed 2026-07-28: Hook.AfterCardPlayed now fires once per replay iteration -- `self.hooks.on_card_played(card, is_auto_play)` sits INSIDE combat._resolve_card_play's `for play_index in range(play_count)` loop (combat.py:1153, 1209), matching CardModel.cs:1957-1959. WAS: on_card_played fired once per card play, outside the loop. EXECUTED 2026-07-28 (`py audit/tools/enchantment_probes.py replay`): Goopy(1) on a Defend played twice by Throwing Axe leaves Amount at sim=3 C#=3 and gains sim=11 C#=11 block (was 2 and 10)."
     }
   },
   "guards": [
     {
-      "what": "EG1: EnchantmentModel.OnPlay is a DIRECT call inside the per-Replay loop, placed after the card's own OnPlay and before Hook.AfterCardPlayed (CardModel.cs:1904 `for (i < playCount)`, 1931 `await OnPlay(...)`, 1937-1945 `await Enchantment.OnPlay(...)`, 1959 `Hook.AfterCardPlayed`). The sim has no such slot: the three OnPlay ports hang off before_card_played / on_card_played, both of which fire ONCE per card play, outside the replay loop (combat.py:466 and combat.py:514)",
+      "what": "EG1: EnchantmentModel.OnPlay is a DIRECT call inside the per-Replay loop, placed after the card's own OnPlay and before Hook.AfterCardPlayed (CardModel.cs:1904 `for (i < playCount)`, 1931 `await OnPlay(...)`, 1937-1945 `await Enchantment.OnPlay(...)`, 1959 `Hook.AfterCardPlayed`). The sim has no such slot: the three OnPlay ports hang off before_card_played / on_card_played, both of which fired ONCE per card play, outside the replay loop, in the sim's PRE-FIX shape (no current line numbers apply -- that shape no longer exists; see the `issue` field for the current per-replay dispatch and its line numbers)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-28: combat._resolve_card_play now has the per-replay slot. `for play_index in range(play_count)` (combat.py:574) runs the card's own on_play (:584/:589), then calls `card.enchantment.on_play(card, played_target)` DIRECTLY (:595-596), then Hook.AfterCardPlayed via `self.hooks.on_card_played` (:600) -- the same order and the same nesting as CardModel.cs:1904 / :1931 / :1937-1945 / :1959. WAS: the OnPlay ports hung off before_card_played / on_card_played, which fired once per card play, outside the replay loop. EXECUTED 2026-07-28 on this unit (`py audit/tools/enchantment_probes.py replay`): Goopy(1) + Throwing Axe leaves Amount at sim=3 C#=3 and gains sim=11 C#=11 block (was 2 and 10)."
+      "issue": "Closed 2026-07-28: combat._resolve_card_play now has the per-replay slot. `for play_index in range(play_count)` (combat.py:1153) runs the card's own on_play (:1169/:1174), then calls `card.enchantment.on_play(card, played_target)` DIRECTLY (:1185-1186), then Hook.AfterCardPlayed via `self.hooks.on_card_played` (:1209) -- the same order and the same nesting as CardModel.cs:1904 / :1931 / :1937-1945 / :1959. WAS: the OnPlay ports hung off before_card_played / on_card_played, which fired once per card play, outside the replay loop. EXECUTED 2026-07-28 on this unit (`py audit/tools/enchantment_probes.py replay`): Goopy(1) + Throwing Axe leaves Amount at sim=3 C#=3 and gains sim=11 C#=11 block (was 2 and 10)."
     },
     {
       "what": "BR-2 (blast radius): audit/records/seam/hook_dispatch.json gap G4 -- the game builds a fresh CardPlay and fires Hook.BeforeCardPlayed / Hook.AfterCardPlayed once per Replay iteration (CardModel.cs:1919-1964), the sim fires before_card_played / on_card_played once per card play (combat.py:466, 514)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-28: combat._resolve_card_play fires Hook.BeforeCardPlayed (combat.py:576) AND Hook.AfterCardPlayed (combat.py:600) INSIDE the `for play_index in range(play_count)` loop (combat.py:574), one pair per replay iteration, and stamps `card.current_play_index` (:575) -- matching the fresh CardPlay per iteration at CardModel.cs:1919-1964. EXECUTED 2026-07-28 (`py audit/tools/enchantment_probes.py replay`): Corrupted+Throwing Axe self-damage sim=4 C#=4; Vigorous(8)+Throwing Axe total damage sim=20 C#=20; Goopy(1)+Throwing Axe Amount sim=3 C#=3 and block sim=11 C#=11 -- all MATCH (they read 2 / 28 / 2 / 10 before). Cross-record: seam/hook_dispatch G4 itself should be re-verdicted by its owner.",
+      "issue": "Closed 2026-07-28: combat._resolve_card_play fires Hook.BeforeCardPlayed (combat.py:1155) AND Hook.AfterCardPlayed (combat.py:1209) INSIDE the `for play_index in range(play_count)` loop (combat.py:1153), one pair per replay iteration, and stamps `card.current_play_index` (:1154) -- matching the fresh CardPlay per iteration at CardModel.cs:1919-1964. EXECUTED 2026-07-28 (`py audit/tools/enchantment_probes.py replay`): Corrupted+Throwing Axe self-damage sim=4 C#=4; Vigorous(8)+Throwing Axe total damage sim=20 C#=20; Goopy(1)+Throwing Axe Amount sim=3 C#=3 and block sim=11 C#=11 -- all MATCH (they read 2 / 28 / 2 / 10 before). Cross-record: seam/hook_dispatch G4 itself should be re-verdicted by its owner.",
       "extra": "Goopy's Amount++ is one of the three per-replay witnesses."
     },
     {
@@ -169,7 +169,7 @@
     },
     {
       "what": "FOUR-VERB COVERAGE (enchant / upgrade+downgrade / transform / copy) -- stated explicitly so the hole cannot reopen silently. Verb 3, TRANSFORM: CardCmd.Transform (CardCmd.cs:369-451) removes the original from its pile and adds a freshly-built replacement; it never touches Enchantment, and the destroyed original takes its enchantment with it",
-      "maps_to": "TRANSFORM verdict: FAITHFUL, both engines drop the enchantment. C#: CardCmd.Transform's loop takes `item.GetReplacement(rng)`, calls `item.Original.RemoveFromCurrentPile()` (CardCmd.cs:400) and adds the replacement (CardCmd.cs:437/440); the word Enchantment does not appear anywhere in the method, and neither AfterTransformedFrom nor AfterTransformedTo (CardModel.cs:1625-1631, both empty virtuals -- SovereignBlade is the only override in the source) moves it. So the enchantment dies with the original. SIM: run.transform_card (run.py:406-470) and CardCmd.transform_to_random (cmds.py:415-449) both build the replacement with `make_card(...)`, which carries no enchantment. EXECUTED, this unit: `py -c \"import sys,random;sys.path.insert(0,'.');from sts2_rl.run import RunState;from sts2_rl.cards import make_card;from sts2_rl.enchantments import make_enchantment;r=RunState(rng=random.Random(0));c=make_card('defend');r.deck=[c];e=make_enchantment('goopy');e.amount=2;e.attach(c);n=r.transform_card(c,into=make_card('bash'));print(n.id, n.enchantment)\"` -> `bash None`, matching C#. The in-combat twin (CardCmd.transform_to_random on a Sharp'd Strike) also prints a replacement with `enchantment=None`. Same result for all 17 ids. COVERAGE TABLE for this unit -- (1) ENCHANT: the CanEnchantCardType hook entry plus the reachability guard above. (2) UPGRADE / DOWNGRADE: settled in this record's own creature_card_cmds step-52 entry (this enchantment's attach() mutates a STATIC card property, so a card rebuild can drop it). (3) TRANSFORM: this entry, faithful. (4) COPY: guard EG2, gap. All four verbs are now on the record; before this pass transform and copy were 0/17.",
+      "maps_to": "TRANSFORM verdict: FAITHFUL, both engines drop the enchantment. C#: CardCmd.Transform's loop takes `item.GetReplacement(rng)`, calls `item.Original.RemoveFromCurrentPile()` (CardCmd.cs:400) and adds the replacement (CardCmd.cs:437/440); the word Enchantment does not appear anywhere in the method, and neither AfterTransformedFrom nor AfterTransformedTo (CardModel.cs:1625-1631, both empty virtuals -- SovereignBlade is the only override in the source) moves it. So the enchantment dies with the original. SIM: run.transform_card (run.py:725-801) and CardCmd.transform_to_random (cmds.py:1467-1538) both build the replacement with `make_card(...)`, which carries no enchantment. EXECUTED, this unit: `py -c \"import sys,random;sys.path.insert(0,'.');from sts2_rl.run import RunState;from sts2_rl.cards import make_card;from sts2_rl.enchantments import make_enchantment;r=RunState(rng=random.Random(0));c=make_card('defend');r.deck=[c];e=make_enchantment('goopy');e.amount=2;e.attach(c);n=r.transform_card(c,into=make_card('bash'));print(n.id, n.enchantment)\"` -> `bash None`, matching C#. The in-combat twin (CardCmd.transform_to_random on a Sharp'd Strike) also prints a replacement with `enchantment=None`. Same result for all 17 ids. COVERAGE TABLE for this unit -- (1) ENCHANT: the CanEnchantCardType hook entry plus the reachability guard above. (2) UPGRADE / DOWNGRADE: settled in this record's own creature_card_cmds step-52 entry (this enchantment's attach() mutates a STATIC card property, so a card rebuild can drop it). (3) TRANSFORM: this entry, faithful. (4) COPY: guard EG2, gap. All four verbs are now on the record; before this pass transform and copy were 0/17.",
       "verdict": "faithful"
     },
     {

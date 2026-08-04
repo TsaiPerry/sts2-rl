@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     },
     {
@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -53,17 +53,17 @@
     "IsAllowedInShops": {
       "maps_to": "is_allowed_in_shops = False (lucky_fysh.py:14)",
       "verdict": "faithful",
-      "rationale": "Matches LuckyFysh.cs:15. The flag is consumed by the sim's shop stock filter (run.py:626 filters on `cls.rarity == RelicRarity.SHOP and cls.is_allowed_in_shops`) and by pull_relic_from_front's shop_legal overload (run.py:559-574), so unlike most declarative flags this one is live."
+      "rationale": "Matches LuckyFysh.cs:15. The flag is consumed by the sim's shop stock filter (run.py:1094, renumbered since prior pass, content unchanged, filters on `cls.rarity == RelicRarity.SHOP and cls.is_allowed_in_shops`) and by pull_relic_from_front's shop_legal overload (run.py:1010-1017, renumbered since prior pass, content unchanged), so unlike most declarative flags this one is live."
     },
     "IsAllowed": {
-      "maps_to": "is_allowed (sts2_rl/relics/lucky_fysh.py:22) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:82-84), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) before every pool pull",
+      "maps_to": "is_allowed (sts2_rl/relics/lucky_fysh.py:22) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:89, renumbered since prior pass, content unchanged), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:1080-1087, renumbered since prior pass, content unchanged) before every pool pull",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/lucky_fysh.py:22), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:252-263, renumbered since prior pass, content re-verified this pass, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/lucky_fysh.py:22), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:1080-1087, renumbered since prior pass, content unchanged) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:970), pull_relic_from_back (run.py:1023) and the Shop-rarity bag (run.py:1089-1098) are the only three pull paths, all renumbered since prior pass, content unchanged -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:265-277, renumbered since prior pass, content re-verified this pass = RelicModel.cs:443-456) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     "AfterCardChangedPiles": {
-      "maps_to": "after_card_added_to_deck (sts2_rl/relics/lucky_fysh.py), dispatched by RunState.add_card (sts2_rl/run.py:411-412) and RunState.transform_card (sts2_rl/run.py:582-583)",
+      "maps_to": "after_card_added_to_deck (sts2_rl/relics/lucky_fysh.py), dispatched by RunState.add_card (sts2_rl/run.py:524-537, renumbered since prior pass, content unchanged) and RunState.transform_card (sts2_rl/run.py:799-800, renumbered since prior pass, content unchanged)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/lucky_fysh.py's `after_card_added_to_deck` calls `run.gain_gold(15)` (LuckyFysh.cs:24-32's GoldVar(15) on a card entering PileType.Deck). WAS: a behaviourless stub whose docstring claimed there is no gold system. The transform route (G3) is covered too: RunState.transform_card fires both deck-add hooks (sts2_rl/run.py:567-570, :582-583)."
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/lucky_fysh.py's `after_card_added_to_deck` calls `run.gain_gold(15)` (LuckyFysh.cs:24-32's GoldVar(15) on a card entering PileType.Deck). WAS: a behaviourless stub whose docstring claimed there is no gold system. The transform route (G3) is covered too: RunState.transform_card fires both deck-add hooks (sts2_rl/run.py:784-787, :799-800, renumbered since prior pass, content unchanged)."
     }
   },
   "guards": [
@@ -75,12 +75,12 @@
     {
       "what": "G2 (LIVE): the IsBeforeAct3TreasureChest pool gate has no sim counterpart",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/lucky_fysh.py:22), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:252-263, renumbered since prior pass, content re-verified this pass, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/lucky_fysh.py:22), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:1080-1087, renumbered since prior pass, content unchanged) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:970), pull_relic_from_back (run.py:1023) and the Shop-rarity bag (run.py:1089-1098) are the only three pull paths, all renumbered since prior pass, content unchanged -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:265-277, renumbered since prior pass, content re-verified this pass = RelicModel.cs:443-456) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     {
       "what": "G3 (LIVE): even a correct after_card_added_to_deck port would miss the DECK-TRANSFORM route into the deck",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the deck-TRANSFORM route fires both deck-add hooks. RunState.transform_card now runs `modify_card_being_added_to_deck` over every relic before the insert and `after_card_added_to_deck` after it (sts2_rl/run.py:567-570 and :582-583), with the C# citation in the comment -- CardCmd.Transform on a Deck pile fires Hook.ModifyCardBeingAddedToDeck (CardCmd.cs:427-434) and Hook.AfterCardChangedPiles (CardCmd.cs:447). WAS: transform_card deleted the original and appended the replacement straight onto self.deck, bypassing run.add_card, so Lucky Fysh granted no gold and the egg relics did not upgrade a transformed-in card."
+      "issue": "Closed 2026-07-27: the deck-TRANSFORM route fires both deck-add hooks. RunState.transform_card now runs `modify_card_being_added_to_deck` over every relic before the insert and `after_card_added_to_deck` after it (sts2_rl/run.py:784-787 and :799-800, renumbered since prior pass, content unchanged), with the C# citation in the comment -- CardCmd.Transform on a Deck pile fires Hook.ModifyCardBeingAddedToDeck (CardCmd.cs:427-434) and Hook.AfterCardChangedPiles (CardCmd.cs:447). WAS: transform_card deleted the original and appended the replacement straight onto self.deck, bypassing run.add_card, so Lucky Fysh granted no gold and the egg relics did not upgrade a transformed-in card."
     },
     {
       "what": "N1: `card.Pile != null && pile.Type == PileType.Deck && card.Owner == base.Owner` (LuckyFysh.cs:26-27) vs the sim's hook, which is already narrowed to 'a card was appended to the run deck'",

@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
@@ -57,9 +57,9 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / Cmd.CustomScaledWait / CardCmd.Preview are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     },
     "AfterCardPlayed": {
-      "maps_to": "on_card_played (tuning_fork.py:29-37), dispatched INSIDE the per-Replay play-count loop by CombatState._resolve_card_play (combat.py:828-830 computes play_count, :858 loops it, :903-904 dispatches gated on `not self.is_over`, :912-913 breaks only on `self.player.is_dead`)",
+      "maps_to": "on_card_played (tuning_fork.py:29-37), dispatched INSIDE the per-Replay play-count loop by CombatState._resolve_card_play (combat.py:1099-1101 computes play_count, :1153 loops it, :1208-1209 dispatches gated on `not self.is_over`, :1212-1213 breaks only on `self.player.is_dead`)",
       "verdict": "faithful",
-      "rationale": "STALE 2026-07-30: this rollup described guard G1 as an open per-Replay-dispatch gap, but G1 (this record's only guard) was itself closed 'faithful' 2026-07-29 (round 6) and the hooks-level summary was never regenerated to match -- the exact stale-rollup shape this triage round exists to catch. RE-VERIFIED against today's code (line numbers re-read fresh, since the guard's own superseded citations -- combat.py:589-591/610/638-639 -- no longer resolve to this function at all, the file having grown since): every clause the old rollup called faithful still is (the Skill test, the >= threshold, the `-= threshold`, the 10 and the 7, and the per-run counter), AND the dispatch bracket itself is correct -- `_resolve_card_play` fires `on_card_played` inside the play-count loop, gated on `not self.is_over` (combat.py:903-904, matching CardModel.cs:1957-1959's `IsInProgress`, not `IsOverOrEnding`), and the loop breaks only on `self.player.is_dead` (combat.py:912-913, matching CardModel.cs:1950-1963's player-death-only early return) -- so a Throwing-Axe-doubled Skill that kills an enemy on iteration 0 still runs iteration 1. No open guard remains at this hook."
+      "rationale": "STALE 2026-07-30: this rollup described guard G1 as an open per-Replay-dispatch gap, but G1 (this record's only guard) was itself closed 'faithful' 2026-07-29 (round 6) and the hooks-level summary was never regenerated to match -- the exact stale-rollup shape this triage round exists to catch. RE-VERIFIED against today's code (line numbers re-read fresh, since the guard's own superseded citations -- combat.py:1099-1101/1153/1208-1213 -- no longer resolve to this function at all, the file having grown since): every clause the old rollup called faithful still is (the Skill test, the >= threshold, the `-= threshold`, the 10 and the 7, and the per-run counter), AND the dispatch bracket itself is correct -- `_resolve_card_play` fires `on_card_played` inside the play-count loop, gated on `not self.is_over` (combat.py:1208-1209, matching CardModel.cs:1957-1959's `IsInProgress`, not `IsOverOrEnding`), and the loop breaks only on `self.player.is_dead` (combat.py:1212-1213, matching CardModel.cs:1950-1963's player-death-only early return) -- so a Throwing-Axe-doubled Skill that kills an enemy on iteration 0 still runs iteration 1. No open guard remains at this hook."
     }
   },
   "guards": [

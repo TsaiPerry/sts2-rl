@@ -26,22 +26,22 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
@@ -73,12 +73,12 @@
     "BeforeSideTurnStart": {
       "maps_to": "on_player_turn_start (kunai.py:26-27)",
       "verdict": "faithful",
-      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. The sim now has the slot. `before_side_turn_start` is Hook.BeforeSideTurnStart (CombatManager.cs:458), fired at the top of PlayerCombatState.start_turn BEFORE the block clear and the energy reset, and Kunai (with Shuriken, Orichalcum, Red Mask, Velvet Choker, Bag of Marbles, Music Box, Ornamental Fan, Ripple Basin, Pocketwatch and the Plating/HardenedShell/Aggression/Sloth powers) is on it. `participants.Contains(Owner.Creature)` is still structurally satisfied -- only the player side is dispatched. The enemy-side half remains turn_structure's G5, which is where this entry always put it. EXECUTED: test/test_turn_start_split.py::test_before_side_turn_start_runs_ahead_of_the_block_clear.  The gap it replaced read: C#'s Hook.BeforeSideTurnStart is audit/records/seam/turn_structure.json step 9 -- it fires for BOTH sides BEFORE any block is cleared. The sim has no such slot; `py audit/tools/relic_probes.py turn-order` shows on_player_turn_start executes AFTER on_block_cleared and on_energy_reset, i.e. step ~18. That record's step 9 verdicts the mechanism a gap, lists **Kunai by name** among the 26 ported implementers, and labels the player-side half DORMANT because every ported one is a per-turn counter reset that reads neither block nor energy. One verdict per mechanism (binding rule 3), so this entry reproduces it rather than re-deriving it. Kunai's body here is exactly that shape: `AttacksPlayedThisTurn = 0` plus a Status write. DORMANT: porting a relic or power whose BeforeSideTurnStart reads block or energy, or an ENEMY-side listener (turn_structure guard G5), makes it live. The `participants.Contains(base.Owner.Creature)` filter is structurally satisfied -- on_player_turn_start is only fired for the player side (hooks.py:279-283). Rule 7: hooks.py and audit/records/seam/turn_structure.json are not hashed by this record."
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. The sim now has the slot. `before_side_turn_start` is Hook.BeforeSideTurnStart (CombatManager.cs:458), fired at the top of PlayerCombatState.start_turn BEFORE the block clear and the energy reset, and Kunai (with Shuriken, Orichalcum, Red Mask, Velvet Choker, Bag of Marbles, Music Box, Ornamental Fan, Ripple Basin, Pocketwatch and the Plating/HardenedShell/Aggression/Sloth powers) is on it. `participants.Contains(Owner.Creature)` is still structurally satisfied -- only the player side is dispatched. The enemy-side half remains turn_structure's G5, which is where this entry always put it. EXECUTED: test/test_turn_start_split.py::test_before_side_turn_start_runs_ahead_of_the_block_clear.  The gap it replaced read: C#'s Hook.BeforeSideTurnStart is audit/records/seam/turn_structure.json step 9 -- it fires for BOTH sides BEFORE any block is cleared. The sim has no such slot; `py audit/tools/relic_probes.py turn-order` shows on_player_turn_start executes AFTER on_block_cleared and on_energy_reset, i.e. step ~18. That record's step 9 verdicts the mechanism a gap, lists **Kunai by name** among the 26 ported implementers, and labels the player-side half DORMANT because every ported one is a per-turn counter reset that reads neither block nor energy. One verdict per mechanism (binding rule 3), so this entry reproduces it rather than re-deriving it. Kunai's body here is exactly that shape: `AttacksPlayedThisTurn = 0` plus a Status write. DORMANT: porting a relic or power whose BeforeSideTurnStart reads block or energy, or an ENEMY-side listener (turn_structure guard G5), makes it live. The `participants.Contains(base.Owner.Creature)` filter is structurally satisfied -- on_player_turn_start is only fired for the player side (hooks.py:1204-..., renumbered since prior pass, content re-verified this pass). Rule 7: hooks.py and audit/records/seam/turn_structure.json are not hashed by this record."
     },
     "AfterCardPlayed": {
-      "maps_to": "on_card_played (sts2_rl/relics/kunai.py), fired once per Replay iteration by CombatState._resolve_card_play (sts2_rl/combat.py:597-600)",
+      "maps_to": "on_card_played (sts2_rl/relics/kunai.py), fired once per Replay iteration by CombatState._resolve_card_play (sts2_rl/combat.py:1209 (renumbered since prior pass, content unchanged))",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. The arithmetic (Attack filter, increment, `% 3 == 0`, Dexterity 1 on the owner) already matched."
+      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:1155 (renumbered since prior pass, content unchanged)) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:1209 (renumbered since prior pass, content unchanged)) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. The arithmetic (Attack filter, increment, `% 3 == 0`, Dexterity 1 on the owner) already matched."
     },
     "AfterCombatEnd": {
       "maps_to": "no counterpart; on_player_turn_start (kunai.py:26-27) is the only reset",
@@ -90,17 +90,17 @@
     {
       "what": "G1 (LIVE): AfterCardPlayed fires once per Replay iteration in C# but once per play in the sim, so a replayed Attack advances Kunai's counter by 1 instead of 2",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. "
+      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:1155 (renumbered since prior pass, content unchanged)) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:1209 (renumbered since prior pass, content unchanged)) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. "
     },
     {
       "what": "N1: C#'s AfterCardPlayed has NO `cardPlay.IsAutoPlay` exclusion (Kunai.cs:101-113), unlike BrilliantScarf.cs:84-87",
       "verdict": "faithful",
-      "rationale": "Checked deliberately, because the same-shaped relic/brilliant_scarf carries a LIVE gap (its G1) for exactly this clause and it would be easy to copy the finding across. Kunai's C# counts every play including auto-plays, and kunai.py:29-31 also counts every on_card_played, so the sim agrees here. The sim routes auto-plays through the same _resolve_card_play bracket (combat.py:516), so both sides count them. Rule 7: combat.py and src/Core/Models/Relics/BrilliantScarf.cs are not hashed by this record."
+      "rationale": "Checked deliberately, because the same-shaped relic/brilliant_scarf carries a LIVE gap (its G1) for exactly this clause and it would be easy to copy the finding across. Kunai's C# counts every play including auto-plays, and kunai.py:29-31 also counts every on_card_played, so the sim agrees here. The sim routes auto-plays through the same _resolve_card_play bracket (combat.py:1403, renumbered since prior pass, content unchanged), so both sides count them. Rule 7: combat.py and src/Core/Models/Relics/BrilliantScarf.cs are not hashed by this record."
     },
     {
       "what": "N2: `cardPlay.Card.Owner == base.Owner` and `CombatManager.Instance.IsInProgress` (Kunai.cs:103)",
       "verdict": "waiver",
-      "rationale": "The Owner comparison is the multiplayer card-ownership filter (single-player: every played card is the player's), noted in maps_to per the contract rather than treated as a divergence. IsInProgress is structurally satisfied: on_card_played is a combat hook and combat.py:493-494 breaks the play loop once the combat is decided. Rule 7: combat.py are not hashed by this record."
+      "rationale": "The Owner comparison is the multiplayer card-ownership filter (single-player: every played card is the player's), noted in maps_to per the contract rather than treated as a divergence. IsInProgress is structurally satisfied: on_card_played is a combat hook and combat.py's `_resolve_card_play` gates the on_card_played dispatch on the combat still being in progress before firing it (combat.py:1209, renumbered since prior pass, content unchanged). Rule 7: combat.py are not hashed by this record."
     },
     {
       "what": "N3: PowerVar<DexterityPower>(1m) read as `DynamicVars.Dexterity.BaseValue` (Kunai.cs:43, 110) vs the sim's literal 1 (kunai.py:37), and CardsVar(3) vs ATTACKS = 3 (kunai.py:20)",

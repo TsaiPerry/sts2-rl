@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -21,27 +21,27 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:249 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py:390 `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-140 Power.on_stack",
       "verdict": "faithful",
       "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
     },
     "AfterCardExhausted": {
-      "maps_to": "powers.py:251-255 DarkEmbracePower.on_card_exhausted",
+      "maps_to": "powers.py:402-411 DarkEmbracePower.on_card_exhausted",
       "verdict": "faithful",
       "issue": "Closed 2026-08-01 (tier-2 round 13): FIXED. on_card_exhausted now draws self.amount instead of a hard-coded 1, matching DarkEmbracePower.cs:47. The reasoning replaced: the record described the hard-coded draw count as the whole divergence; it was, and it is now gone. Pinned by test/test_r13_power1.py.  The text it replaced read: Two divergences. (a) THE DRAW COUNT IS HARD-CODED TO 1. DarkEmbracePower.cs:47 draws `base.Amount`; powers.py:255 is `DrawCmd.draw(self.owner, 1)`. Dormant only because the one ported applier always passes 1 (cards/dark_embrace_card.py:34, including its upgrade, which raises no amount) -- the moment any effect stacks Dark Embrace the sim draws one card where the game draws Amount. Named trigger: a second Dark Embrace play, or any card/relic that stacks it. (b) THE ETHEREAL DEFERRAL IS MISSING -- see the AfterSideTurnEnd entry and the causedByEthereal guard. Third-file citations, not hashed here."
     },
@@ -60,14 +60,14 @@
     {
       "what": "DarkEmbracePower.cs:41 `causedByEthereal`",
       "verdict": "faithful",
-      "rationale": "STALE, CLOSED as of today's tree (2026-07-30): the premise this guard was carried for -- 'the parameter does not exist on the sim's hook, so the branch cannot be taken' -- is now false. `caused_by_ethereal` is a real parameter on `Power.on_card_exhausted` (powers.py:314-315) and `HookSystem.on_card_exhausted` (hooks.py:914-928), dispatched `True` from both of the sim's ethereal-exhaust call sites (combat.py:709, :730) and already consumed by a different ported listener (relics/joss_paper.py:47, `if caused_by_ethereal:`). The branch CAN be taken inside a power today; DarkEmbracePower simply does not take it. That residual behaviour gap -- Dark Embrace ignores the flag and draws immediately instead of deferring -- is recorded once, on the AfterSideTurnEnd hook entry above, and not duplicated here to avoid two mechanism ids for one finding. WAS: 'The parameter does not exist on the sim's hook, so the branch cannot be taken. Carried as its own guard because it is the root of the AfterSideTurnEnd gap and a fix has to start here.'"
+      "rationale": "STALE, CLOSED as of today's tree (2026-07-30): the premise this guard was carried for -- 'the parameter does not exist on the sim's hook, so the branch cannot be taken' -- is now false. `caused_by_ethereal` is a real parameter on a ported listener's `on_card_exhausted` (powers.py:363-364, FeelNoPainPower) and `HookSystem.on_card_exhausted` (hooks.py:1542-1556), dispatched `True` from both of the sim's ethereal-exhaust call sites (combat.py:894, :926) and already consumed by a different ported listener (relics/joss_paper.py:47, `if caused_by_ethereal:`). The branch CAN be taken inside a power today; DarkEmbracePower simply does not take it. That residual behaviour gap -- Dark Embrace ignores the flag and draws immediately instead of deferring -- is recorded once, on the AfterSideTurnEnd hook entry above, and not duplicated here to avoid two mechanism ids for one finding. WAS: 'The parameter does not exist on the sim's hook, so the branch cannot be taken. Carried as its own guard because it is the root of the AfterSideTurnEnd gap and a fix has to start here.'"
     },
     {
       "what": "The sim's extra PlayerCombatState isinstance test",
       "verdict": "faithful",
-      "rationale": "powers.py:252-253 refuses to draw unless the owner is a PlayerCombatState. C# reaches `base.Owner.Player` at :47 and would NullReference on a monster owner, so the sim is defensively equivalent; no ported effect puts Dark Embrace on an enemy."
+      "rationale": "powers.py:404-406 refuses to draw unless the owner is a PlayerCombatState. C# reaches `base.Owner.Player` at :47 and would NullReference on a monster owner, so the sim is defensively equivalent; no ported effect puts Dark Embrace on an enemy."
     }
   ],
   "verdict": "faithful",
-  "audited": "2026-07-26"
+  "audited": "2026-08-04"
 }

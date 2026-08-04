@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -36,17 +36,17 @@
     },
     {
       "path": "sts2_rl/cards/mad_science.py",
-      "sha256": "2ede1a12f1aa80dfde0f095c34997387210e6856011a40c954199fe33aa37c73",
+      "sha256": "51a3413baaa2dcc8b9bbc49b04e5ca2475d4e1f511bf46230bedd9f1e9c8ca33",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -68,7 +68,7 @@
     "InstanceType": {
       "maps_to": "cmds.py:308 `if power_cls.id in target.powers`",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-30 (tier-2 campaign): StranglePower.instance_type = PowerInstanceType.INSTANCED_PER_APPLIER (sts2_rl/powers.py), mirroring StranglePower.cs:29. PowerCmd.apply's dispatch (sts2_rl/cmds.py) now finds an existing instance only when its applier matches this application's applier (mirroring FindExistingInstanceForStacking's InstancedPerApplier branch, PowerCmd.cs:170: `target.GetPowerInstances(id).FirstOrDefault(p => p.Applier == applier)`) -- a same-applier re-application still stacks via on_stack (unchanged), a different-applier one starts its own instance instead of merging. Verified by test/test_powers.py::TestPowerInstanceType::test_instanced_per_applier_same_applier_stacks_different_applier_splits. DORMANT stands: the only ported applier is the player (cards/mad_science.py), so a second applier is unreachable in current content. NOT closed by this fix: StranglePower's own before_card_played / on_card_played hooks have no applier filter at all (they fire for ANY card play, not just the applier's) -- a separate, pre-existing shape outside this guard's scope (instance dispatch, not the damage trigger's own filtering).  The text it replaced read: PowerInstanceType.InstancedPerApplier (StranglePower.cs:29) -- and per power_cmd gap G5's corrected census this is the ONLY ported InstancedPerApplier power in the game (the other is OblivionPower, unported). The sim keys stacking on the power id alone (cmds.py:308), so two appliers' Strangles on one target merge into a single instance with a single `_amounts` dict and a single amount, where C# keeps one instance per applier -- each of which deals its own damage per card play. Mechanism owned by power_cmd G5; not re-verdicted (rule 3). DORMANT in Ironclad scope: the only ported applier is the player, via Mad Science's Choking rider (cards/mad_science.py:128-130, `applier=ctx.player`), and there is exactly one player, so a second applier needs multiplayer or a monster-applied Strangle -- neither of which exists. This is the cleanest available statement of G5's InstancedPerApplier half: it is dormant *by scope*, not by content, so it will not become live by porting more Ironclad content. Third-file citations, not hashed here."
+      "issue": "Closed 2026-07-30 (tier-2 campaign): StranglePower.instance_type = PowerInstanceType.INSTANCED_PER_APPLIER (sts2_rl/powers.py), mirroring StranglePower.cs:29. PowerCmd.apply's dispatch (sts2_rl/cmds.py) now finds an existing instance only when its applier matches this application's applier (mirroring FindExistingInstanceForStacking's InstancedPerApplier branch, PowerCmd.cs:170: `target.GetPowerInstances(id).FirstOrDefault(p => p.Applier == applier)`) -- a same-applier re-application still stacks via on_stack (unchanged), a different-applier one starts its own instance instead of merging. Verified by test/test_powers.py::TestPowerInstanceType::test_instanced_per_applier_same_applier_stacks_different_applier_splits. DORMANT stands: the only ported applier is the player (cards/mad_science.py), so a second applier is unreachable in current content. NOT closed by this fix: StranglePower's own before_card_played / on_card_played hooks have no applier filter at all (they fire for ANY card play, not just the applier's) -- a separate, pre-existing shape outside this guard's scope (instance dispatch, not the damage trigger's own filtering).  The text it replaced read: PowerInstanceType.InstancedPerApplier (StranglePower.cs:29) -- and per power_cmd gap G5's corrected census this is the ONLY ported InstancedPerApplier power in the game (the other is OblivionPower, unported). The sim keys stacking on the power id alone (cmds.py:308), so two appliers' Strangles on one target merge into a single instance with a single `_amounts` dict and a single amount, where C# keeps one instance per applier -- each of which deals its own damage per card play. Mechanism owned by power_cmd G5; not re-verdicted (rule 3). DORMANT in Ironclad scope: the only ported applier is the player, via Mad Science's Choking rider (cards/mad_science.py:134-136, `applier=ctx.player`), and there is exactly one player, so a second applier needs multiplayer or a monster-applied Strangle -- neither of which exists. This is the cleanest available statement of G5's InstancedPerApplier half: it is dormant *by scope*, not by content, so it will not become live by porting more Ironclad content. Third-file citations, not hashed here."
     },
     "BeforeCardPlayed": {
       "maps_to": "powers.py:2855-2856 before_card_played (combat.py:466)",
@@ -83,7 +83,7 @@
     "AfterSideTurnEnd": {
       "maps_to": "powers.py:2868-2869 on_enemy_side_end",
       "verdict": "faithful",
-      "rationale": "Correct slot. The owner is an ENEMY -- Mad Science applies Strangle to its target (cards/mad_science.py:128-130) -- so C#'s `participants.Contains(base.Owner)` (StranglePower.cs:61) selects the enemy side, and Hook.AfterTurnEnd for the enemy side (Hook.cs:1267, CombatManager.cs:1256) is the sim's on_enemy_side_end (combat.py:345). Same correct-slot shape as tainted / high_voltage / territorial, and it means Strangle survives the whole enemy turn as C# intends. Third-file citations, not hashed here."
+      "rationale": "Correct slot. The owner is an ENEMY -- Mad Science applies Strangle to its target (cards/mad_science.py:134-136) -- so C#'s `participants.Contains(base.Owner)` (StranglePower.cs:61) selects the enemy side, and Hook.AfterTurnEnd for the enemy side (Hook.cs:1267, CombatManager.cs:1256) is the sim's on_enemy_side_end (combat.py:345). Same correct-slot shape as tainted / high_voltage / territorial, and it means Strangle survives the whole enemy turn as C# intends. Third-file citations, not hashed here."
     }
   },
   "guards": [

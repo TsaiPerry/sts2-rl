@@ -46,12 +46,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     },
     {
@@ -61,7 +61,7 @@
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "63c0df752ca09e9de59285b0c9bc9be809da18e69b61b65424d75f37ee1ffc6b",
+      "sha256": "416789386ad4af19cb52a3c275a2c39c1708bb90ebc4dc5c8fb4e88a7055d557",
       "side": "sim"
     },
     {
@@ -71,7 +71,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -96,7 +96,7 @@
       "verdict": "faithful"
     },
     "CalculateVars": {
-      "maps_to": "WhisperingHollow.cs:36-39 `DynamicVars.Gold.BaseValue += base.Rng.NextInt(-9, 10)`. events/whispering_hollow.py:38-47 is one of only six sim events with a parity branch, and it is the CORRECT one: `self.event_rng.next_int_range(-9, 10)` is the same half-open range on the same per-event stream (events/base.py:84-88 / rng.py:70-82), with a legacy fallback of `self.rng.randint(-9, 9)`, an identical inclusive range. EXECUTED (`py audit/tools/event_probes_c.py hollow`): CalculateVars takes exactly ONE event-rng draw on both the GOLD and the HUG entry, matching the source's one NextInt -- the draw-count check the `orobas` lesson asks for, and this branch passes it.",
+      "maps_to": "WhisperingHollow.cs:36-39 `DynamicVars.Gold.BaseValue += base.Rng.NextInt(-9, 10)`. events/whispering_hollow.py:38-47 is one of only six sim events with a parity branch, and it is the CORRECT one: `self.event_rng.next_int_range(-9, 10)` is the same half-open range on the same per-event stream (events/base.py:93-96, was 84-88 / rng.py:70-82), with a legacy fallback of `self.rng.randint(-9, 9)`, an identical inclusive range. EXECUTED (`py audit/tools/event_probes_c.py hollow`): CalculateVars takes exactly ONE event-rng draw on both the GOLD and the HUG entry, matching the source's one NextInt -- the draw-count check the `orobas` lesson asks for, and this branch passes it. Re-verified 2026-08-04.",
       "verdict": "faithful"
     }
   },
@@ -108,7 +108,7 @@
     },
     {
       "what": "GenerateInitialOptions (WhisperingHollow.cs:41-48): two always-available options, GOLD then HUG",
-      "maps_to": "events/whispering_hollow.py:49-53, same order, neither locked -- matching a source that offers GOLD even when the rolled cost exceeds the player's gold (PlayerCmd.LoseGold floors at 0, as does run.lose_gold, run.py:335-337).",
+      "maps_to": "events/whispering_hollow.py:49-53, same order, neither locked -- matching a source that offers GOLD even when the rolled cost exceeds the player's gold (PlayerCmd.LoseGold floors at 0, as does run.lose_gold, run.py:518-520, was 335-337).",
       "verdict": "faithful"
     },
     {
@@ -118,27 +118,27 @@
     },
     {
       "what": "Hug (WhisperingHollow.cs:61-70) transforms the chosen card and THEN damages the player, and the transform is a single draw on the per-event Rng",
-      "maps_to": "events/whispering_hollow.py:61-67 keeps that order, and it is the one transform site in the sim that passes `pick_rng=self.event_rng` (run.py:455-456 -> a game-faithful next_item), so EV-3 does NOT apply to it. CardCmd.TransformToRandom -> CardTransformation.GetReplacement -> CardFactory.CreateRandomCardForTransform (CardFactory.cs:177-181) is exactly ONE rng.NextItem over GetDefaultTransformationOptions. EXECUTED (`py audit/tools/event_probes_c.py hollow`): HUG takes exactly 1 event-rng draw in the sim, against the source's 1. Selection itself is a player choice: FromDeckForTransformation(prefs count 1) against run.select_cards('transform', run.transformable_cards(), 1), and IsTransformable == IsRemovable in the deck (run.py:364-366).",
+      "maps_to": "events/whispering_hollow.py:71-77 (was 61-67) keeps that order, and it is the one transform site in the sim that passes `pick_rng=self.event_rng` (run.py:774-775, was 455-456 -> a game-faithful next_item), so EV-3 does NOT apply to it. CardCmd.TransformToRandom -> CardTransformation.GetReplacement -> CardFactory.CreateRandomCardForTransform (CardFactory.cs:177-181) is exactly ONE rng.NextItem over GetDefaultTransformationOptions. EXECUTED (`py audit/tools/event_probes_c.py hollow`): HUG takes exactly 1 event-rng draw in the sim, against the source's 1. Selection itself is a player choice: FromDeckForTransformation(prefs count 1) against run.select_cards('transform', run.transformable_cards(), 1), and IsTransformable == IsRemovable in the deck (run.py:568-580, was 364-366). Re-verified 2026-08-04: unchanged, only line numbers moved.",
       "verdict": "faithful"
     },
     {
-      "what": "BR-G3 (blast radius): Hug's CardCmd.TransformToRandom (WhisperingHollow.cs:66) calls RunState.transform_card (run.py:406-470), which swaps the deck entry without running the deck-entry hooks C#'s CardCmd.Transform fires",
-      "maps_to": "Closed 2026-07-28: RunState.transform_card (run.py:508-584) now runs BOTH deck-entry hooks around the swap -- `relic.modify_card_being_added_to_deck` before the insert and `relic.after_card_added_to_deck` after it -- which is what CardCmd.Transform does for a PileType.Deck transform (Hook.ModifyCardBeingAddedToDeck at CardCmd.cs:430, Hook.AfterCardChangedPiles at CardCmd.cs:447). Was: a bare deck-slot swap, so the egg relics never saw the replacement. This unit is out of seam guard G3's radius on this leg.",
+      "what": "BR-G3 (blast radius): Hug's CardCmd.TransformToRandom (WhisperingHollow.cs:66) calls RunState.transform_card (run.py:725-801, was 406-470), which swaps the deck entry without running the deck-entry hooks C#'s CardCmd.Transform fires",
+      "maps_to": "Closed 2026-07-28: RunState.transform_card (run.py:784-800, was 508-584) now runs BOTH deck-entry hooks around the swap -- `relic.modify_card_being_added_to_deck` before the insert and `relic.after_card_added_to_deck` after it -- which is what CardCmd.Transform does for a PileType.Deck transform (Hook.ModifyCardBeingAddedToDeck at CardCmd.cs:430, Hook.AfterCardChangedPiles at CardCmd.cs:447). Was: a bare deck-slot swap, so the egg relics never saw the replacement. This unit is out of seam guard G3's radius on this leg. Re-verified 2026-08-04: unchanged, only line numbers moved.",
       "verdict": "faithful"
     },
     {
-      "what": "EV-1: Hug's 9 HP loss (WhisperingHollow.cs:68, ValueProp.Unblockable | Unpowered) can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:294-302) just subtracts",
+      "what": "EV-1: Hug's 9 HP loss (WhisperingHollow.cs:68, ValueProp.Unblockable | Unpowered) can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:420-432, was 294-302) just subtracts",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-29 (round 6): the run-level death pass is complete. `RunState.lose_hp` already clamped at 0 (Creature.LoseHpInternal, Creature.cs:450) and already ran `_resolve_death` -- CreatureCmd's Kill tail (CreatureCmd.cs:504-570) over the belt, which is the only limb of RunState.IterateHookListeners (RunState.cs:545-596) carrying a ported death listener. What was left was the LAST line of this entry's own fix note: Fairy in a Bottle's `after_preventing_death` opened with `if self.combat is None: return`, so the preventer was found and then did nothing. That early return is now the OUT-OF-COMBAT ARM of OnUseWrapper instead -- RemoveBeforeUse nulls the belt slot and the new `FairyInABottle.use_out_of_combat` heals -- which is what PotionModel.cs:294/:298/:334/:336/:340's null-combat guards reduce the wrapper to, and the same reading RunState.use_potion already recorded. EXECUTED: `py audit/tools/event_probes.py lethal` -- all three legs MATCH (alive, hp 24, Fairy consumed) where all three read DIVERGE. test/test_events.py::TestRunLevelDeathPrevention pins both outcomes, including the no-Fairy run ending dead at exactly 0.  The text it replaced read: NARROWED 2026-07-28 -- STILL A GAP. Two legs closed, the decisive one did not. CLOSED: RunState.lose_hp (run.py:304-316) now clamps at 0 (no more negative HP) and runs the run-level death-prevention pass -- `_resolve_death` (run.py:318-345) walks the potion belt asking `should_die` and calls `after_preventing_death` on the preventer, the port of CreatureCmd.KillWithoutCheckingWinCondition (CreatureCmd.cs:489-571). REMAINS: the belt Fairy's out-of-combat arm. FairyInABottle.should_die (potions.py:1310-1311) answers False so the Fairy IS selected as the preventer, but FairyInABottle.after_preventing_death (potions.py:1313-1316) still returns immediately when `self.combat is None`, so nothing heals, `_resolve_death` re-kills through its 10 recursions, and the player still ends DEAD with the Fairy still in the belt. EXECUTED 2026-07-28 (`py audit/tools/event_probes.py lethal`, plus ad-hoc at the repo root): 5 HP + belt Fairy, lose 15 -> sim hp=0, dead, belt still ['FairyInABottle']; the game ends alive at 24 HP with the Fairy consumed. LIVE exactly as before -- only the negative-HP secondary is fixed."
+      "issue": "Closed 2026-07-29 (round 6): the run-level death pass is complete. `RunState.lose_hp` already clamped at 0 (Creature.LoseHpInternal, Creature.cs:450) and already ran `_resolve_death` -- CreatureCmd's Kill tail (CreatureCmd.cs:504-570) over the belt, which is the only limb of RunState.IterateHookListeners (RunState.cs:545-596) carrying a ported death listener. What was left was the LAST line of this entry's own fix note: Fairy in a Bottle's `after_preventing_death` opened with `if self.combat is None: return`, so the preventer was found and then did nothing. That early return is now the OUT-OF-COMBAT ARM of OnUseWrapper instead -- RemoveBeforeUse nulls the belt slot and the new `FairyInABottle.use_out_of_combat` heals -- which is what PotionModel.cs:294/:298/:334/:336/:340's null-combat guards reduce the wrapper to, and the same reading RunState.use_potion already recorded. EXECUTED: `py audit/tools/event_probes.py lethal` -- all three legs MATCH (alive, hp 24, Fairy consumed) where all three read DIVERGE. test/test_events.py::TestRunLevelDeathPrevention pins both outcomes, including the no-Fairy run ending dead at exactly 0. Re-verified 2026-08-04: `RunState.lose_hp` (run.py:420-432) still clamps at 0 and calls `_resolve_death` (run.py:434-461); `FairyInABottle.should_die`/`after_preventing_death` now live at potions.py:1394/1397 (were :1310-1311/:1313-1316), out-of-combat arm at potions.py:1398-1413, logic unchanged. The text it replaced read: NARROWED 2026-07-28 -- STILL A GAP. Two legs closed, the decisive one did not. CLOSED: RunState.lose_hp (run.py:304-316) now clamps at 0 (no more negative HP) and runs the run-level death-prevention pass -- `_resolve_death` (run.py:318-345) walks the potion belt asking `should_die` and calls `after_preventing_death` on the preventer, the port of CreatureCmd.KillWithoutCheckingWinCondition (CreatureCmd.cs:489-571). REMAINS: the belt Fairy's out-of-combat arm. FairyInABottle.should_die (potions.py:1310-1311) answers False so the Fairy IS selected as the preventer, but FairyInABottle.after_preventing_death (potions.py:1313-1316) still returns immediately when `self.combat is None`, so nothing heals, `_resolve_death` re-kills through its 10 recursions, and the player still ends DEAD with the Fairy still in the belt. EXECUTED 2026-07-28 (`py audit/tools/event_probes.py lethal`, plus ad-hoc at the repo root): 5 HP + belt Fairy, lose 15 -> sim hp=0, dead, belt still ['FairyInABottle']; the game ends alive at 24 HP with the Fairy consumed. LIVE exactly as before -- only the negative-HP secondary is fixed."
     },
     {
-      "what": "EV-9: Gold's two PotionRewards (WhisperingHollow.cs:53-57) -- events/whispering_hollow.py:57-58 rolls run.random_potion() twice calls run.random_potion() (run.py:513-520), a single `self.rng.choice` on the SHARED run rng over every potion class flagged in_reward_pool. This site takes the FULL EV-9 shape, unlike wellspring's: `new PotionReward(base.Owner)` is the ONE-argument ctor (PotionReward.cs:41-44), so Reward.Populate (PotionReward.cs:53-59) rolls PotionFactory.CreateRandomPotionOutOfCombat(player, player.PlayerRng.Rewards) -- and PotionFactory.CreateRandomPotion (PotionFactory.cs:67-80) is `NextFloat()` for the rarity tier THEN `NextItem(where Rarity == tier)`, i.e. TWO Rewards draws per potion and a 10/25/65 rare/uncommon/common split. EXECUTED (`py audit/tools/event_probes_c.py hollow`): the sim's GOLD branch takes 0 event-rng draws (correct -- the game takes none either) but 2 SHARED-rng draws where the game takes 4 Rewards draws.",
+      "what": "EV-9: Gold's two PotionRewards (WhisperingHollow.cs:53-57) -- events/whispering_hollow.py:57-58 (now :61-67, legacy leg at :67) rolls run.random_potion() twice calls run.random_potion() (run.py:931-935, was 513-520), a single `self.rng.choice` on the SHARED run rng over every potion class flagged in_reward_pool. This site takes the FULL EV-9 shape, unlike wellspring's: `new PotionReward(base.Owner)` is the ONE-argument ctor (PotionReward.cs:41-44), so Reward.Populate (PotionReward.cs:53-59) rolls PotionFactory.CreateRandomPotionOutOfCombat(player, player.PlayerRng.Rewards) -- and PotionFactory.CreateRandomPotion (PotionFactory.cs:67-80) is `NextFloat()` for the rarity tier THEN `NextItem(where Rarity == tier)`, i.e. TWO Rewards draws per potion and a 10/25/65 rare/uncommon/common split. EXECUTED (`py audit/tools/event_probes_c.py hollow`): the sim's GOLD branch takes 0 event-rng draws (correct -- the game takes none either) but 2 SHARED-rng draws where the game takes 4 Rewards draws.",
       "maps_to": "Closed 2026-07-28: this site takes the FULL EV-9 shape and now gets it. events/whispering_hollow.py:62-67 calls potion_pools.generate_random_potion(run.rewards_rng) twice, and generate_random_potion (potion_pools.py:150-156) IS PotionFactory.CreateRandomPotionOutOfCombat -- a rarity roll (10/25/65) then a NextItem inside that bucket, i.e. TWO Rewards draws per potion over POTION_POOL (Character.PotionPool + SharedPotionPool). That is 4 Rewards draws for the GOLD branch, matching WhisperingHollow.cs:53-57's two one-argument `new PotionReward(base.Owner)`. Was: two uniform `self.rng.choice` picks on the shared rng over the sim's flat 48-class reward pool (P(rare) 0.333 where the game's tier gives 0.10).",
       "verdict": "faithful"
     },
     {
       "what": "EV-4: Gold's two PotionRewards (WhisperingHollow.cs:53-57) is wrapped in RewardsCmd.OfferCustom in the source, a TAKE-OR-SKIP screen; the sim grants it unconditionally",
-      "maps_to": "Closed 2026-07-28: the payout is a take-or-skip screen now. events/whispering_hollow.py:67 (both PotionRewards) routes through `Event.offer_potion` / `Event.offer_card_reward` (events/base.py:214-230), whose `_accept_offer` (events/base.py:194-212) consults the run's `reward_offer_selector` -- the headless stand-in for RewardsCmd.OfferCustom (RewardsCmd.cs:47-50), the same convention `run.card_selector` is for CardSelectCmd -- and only grants the reward when the screen is taken. Was: an unconditional grant with no decline path at all. Declining is exercised by test/test_event_offer_screens.py.",
+      "maps_to": "Closed 2026-07-28: the payout is a take-or-skip screen now. events/whispering_hollow.py:68 (both PotionRewards, was :67) routes through `Event.offer_potion` (events/base.py:263-268, was 214-230 -- `offer_card_reward` was itself removed 2026-08-01, R2 round 13), whose `_accept_offer` (events/base.py:203-261, was 194-212, expanded by R6 2026-08-01) consults the run's `reward_offer_selector` / `reward_selector` fallback -- the headless stand-in for RewardsCmd.OfferCustom (RewardsCmd.cs:47-50), the same convention `run.card_selector` is for CardSelectCmd -- and only grants the reward when the screen is taken. Was: an unconditional grant with no decline path at all. Declining is exercised by test/test_event_offer_screens.py. Re-verified 2026-08-04: same as event/wellspring's identical citation, potion leg outcome unchanged.",
       "verdict": "faithful"
     },
     {

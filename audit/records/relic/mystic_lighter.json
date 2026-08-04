@@ -16,22 +16,22 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -43,19 +43,19 @@
     "ModifyDamageAdditive": {
       "maps_to": "modify_damage_additive (sts2_rl/relics/mystic_lighter.py), self-gating on is_powered_attack(props); dispatched by DamageCmd.deal (sts2_rl/cmds.py:128-131)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/mystic_lighter.py's `modify_damage_additive` returns EXTRA_DAMAGE = 9 when `is_powered_attack(props)`, the source card carries an enchantment and the dealer is the owner -- MysticLighter.cs:15-30 clause for clause, over DamageVar(9m). The hook now carries the `props` argument (sts2_rl/hooks.py:185-208) and DamageCmd.deal runs the chain unconditionally (sts2_rl/cmds.py:128-131), so the relic's own gate is the only one. WAS: a behaviourless stub whose docstring claimed the sim has no enchantments."
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/mystic_lighter.py's `modify_damage_additive` returns EXTRA_DAMAGE = 9 when `is_powered_attack(props)`, the source card carries an enchantment and the dealer is the owner -- MysticLighter.cs:15-30 clause for clause, over DamageVar(9m). The hook now carries the `props` argument (sts2_rl/hooks.py) and DamageCmd.deal runs the chain unconditionally (sts2_rl/cmds.py:128-131), so the relic's own gate is the only one. WAS: a behaviourless stub whose docstring claimed the sim has no enchantments."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the whole relic is a no-op stub, justified by a docstring claim -- 'the sim has no enchantments' -- that is FALSE",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/mystic_lighter.py's `modify_damage_additive` returns EXTRA_DAMAGE = 9 when `is_powered_attack(props)`, the source card carries an enchantment and the dealer is the owner -- MysticLighter.cs:15-30 clause for clause, over DamageVar(9m). The hook now carries the `props` argument (sts2_rl/hooks.py:185-208) and DamageCmd.deal runs the chain unconditionally (sts2_rl/cmds.py:128-131), so the relic's own gate is the only one. WAS: a behaviourless stub whose docstring claimed the sim has no enchantments."
+      "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/mystic_lighter.py's `modify_damage_additive` returns EXTRA_DAMAGE = 9 when `is_powered_attack(props)`, the source card carries an enchantment and the dealer is the owner -- MysticLighter.cs:15-30 clause for clause, over DamageVar(9m). The hook now carries the `props` argument (sts2_rl/hooks.py) and DamageCmd.deal runs the chain unconditionally (sts2_rl/cmds.py:128-131), so the relic's own gate is the only one. WAS: a behaviourless stub whose docstring claimed the sim has no enchantments."
     },
     {
       "what": "N1: .superpowers/sdd/content-relic-sweeps.md Sweep C EXCLUDES this hook from its 33 'live pipeline' hits on the grounds that ModifyDamageAdditive is 'not a HookSystem hook' and 'needs a new base hook'",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27 together with G1, and the sizing claim this entry disputed is settled by the code: the fix WAS a one-method change on the relic. sts2_rl/relics/mystic_lighter.py's `modify_damage_additive` needed no new base member -- HookSystem.modify_damage_additive (sts2_rl/hooks.py:185-208) duck-types over the listener list -- only the `props` argument the hook now carries. Sweep C's exclusion of this hook from its 33 'live pipeline' hits (on the grounds that ModifyDamageAdditive 'is not a HookSystem hook' and 'needs a new base hook') is therefore refuted by a working implementation, which is what this entry predicted."
+      "issue": "Closed 2026-07-27 together with G1, and the sizing claim this entry disputed is settled by the code: the fix WAS a one-method change on the relic. sts2_rl/relics/mystic_lighter.py's `modify_damage_additive` needed no new base member -- HookSystem.modify_damage_additive (sts2_rl/hooks.py) duck-types over the listener list -- only the `props` argument the hook now carries. Sweep C's exclusion of this hook from its 33 'live pipeline' hits (on the grounds that ModifyDamageAdditive 'is not a HookSystem hook' and 'needs a new base hook') is therefore refuted by a working implementation, which is what this entry predicted."
     },
     {
       "what": "N2: `cardSource.Owner != base.Owner` (MysticLighter.cs:25) and the `cardSource?.Enchantment == null` null-conditional (:21)",

@@ -21,17 +21,27 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Runs/RelicGrabBag.cs",
+      "sha256": "9bb001cbc618f21cebaf7ceb324812010972d92b7a6ed043f268e56fce5a541c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/neow.py",
+      "sha256": "df11695f9bff2d43c3408f0fb60403bdd3957015edcc052b424c4e1d242bde6c",
       "side": "sim"
     }
   ],
@@ -41,9 +51,9 @@
       "verdict": "faithful"
     },
     "IsAllowed": {
-      "maps_to": "is_allowed (sts2_rl/relics/meal_ticket.py:24) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:82-84), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) before every pool pull",
+      "maps_to": "is_allowed (sts2_rl/relics/meal_ticket.py:24) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py) before every pool pull",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/meal_ticket.py:24), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/meal_ticket.py:24), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py), pull_relic_from_back (run.py) and the Shop-rarity bag (run.py) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     "AfterRoomEntered": {
       "maps_to": "after_room_entered (sts2_rl/relics/meal_ticket.py) -- RoomType.SHOP is RoomType.cs's MerchantRoom; dispatched over run.relics on every room entry",
@@ -60,7 +70,7 @@
     {
       "what": "G2 (LIVE): the IsBeforeAct3TreasureChest pool gate has no sim counterpart",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/meal_ticket.py:24), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/meal_ticket.py:24), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py), pull_relic_from_back (run.py) and the Shop-rarity bag (run.py) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     {
       "what": "N1: `!base.Owner.Creature.IsDead` (MealTicket.cs:24)",
@@ -70,7 +80,7 @@
     {
       "what": "N2: the dispatch ORDER a fix would inherit -- after_room_entered fires BEFORE the room's contents resolve",
       "verdict": "faithful",
-      "rationale": "run.py:980-983 fires the hook immediately after the total_floor increment and before the RoomType switch stocks the shop (run.py:1020-1023), matching C#, where AfterRoomEntered fires as the room is entered. This is the right slot for the heal: it lands before any shop purchase, so the healed HP is available to a price/HP tradeoff the player makes in the same room. Recorded as an implementation note for the fix rather than as a divergence."
+      "rationale": "run.py fires the hook immediately after the total_floor increment and before the RoomType switch stocks the shop (run.py), matching C#, where AfterRoomEntered fires as the room is entered. This is the right slot for the heal: it lands before any shop purchase, so the healed HP is available to a price/HP tradeoff the player makes in the same room. Recorded as an implementation note for the fix rather than as a divergence."
     },
     {
       "what": "N3: `HealVar(15m)` (MealTicket.cs:15) and Flash() (line 26)",

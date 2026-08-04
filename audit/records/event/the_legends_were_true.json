@@ -46,12 +46,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     },
     {
@@ -61,7 +61,7 @@
     },
     {
       "path": "sts2_rl/events/endless_conveyor.py",
-      "sha256": "f1f3376a63944caa95f66a03937f6f4fff6535a0be0911e15d8bd96868be0bd9",
+      "sha256": "94c8467ffdc814be297161ff03db48d7c9424ec8be69b286b619a5606b1ccc5b",
       "side": "sim"
     },
     {
@@ -86,12 +86,12 @@
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "63c0df752ca09e9de59285b0c9bc9be809da18e69b61b65424d75f37ee1ffc6b",
+      "sha256": "416789386ad4af19cb52a3c275a2c39c1708bb90ebc4dc5c8fb4e88a7055d557",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -102,6 +102,16 @@
     {
       "path": "src/Core/Commands/RewardsCmd.cs",
       "sha256": "027e0e3b3738b355fe0e10bf33a59386c564141de52eb65ba0ea04bbe97b8a72",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PotionModel.cs",
+      "sha256": "78b161c2e578894935b57bc17a99349aeefd7509a094cc3534b406c40258b8a9",
       "side": "game"
     }
   ],
@@ -114,32 +124,32 @@
   "guards": [
     {
       "what": "CanonicalVars DamageVar(8m, Unblockable | Unpowered) (TheLegendsWereTrue.cs:21)",
-      "maps_to": "events/the_legends_were_true.py:12 `_HP_LOSS = 8`, and RunState.lose_hp (run.py:294-302) is documented as exactly the Unblockable | Unpowered event-damage verb.",
+      "maps_to": "events/the_legends_were_true.py:12 `_HP_LOSS = 8`, and RunState.lose_hp (run.py:420-432, was :294-302) is documented as exactly the Unblockable | Unpowered event-damage verb.",
       "verdict": "faithful"
     },
     {
       "what": "NabTheMap (TheLegendsWereTrue.cs:41-47): CreateCard<SpoilsMap> then CardPileCmd.Add(card, PileType.Deck)",
-      "maps_to": "events/the_legends_were_true.py:41 run.add_card(make_card('spoils_map')). run.add_card (run.py:341-354) runs the Hook.ModifyCardBeingAddedToDeck pass CardPileCmd.Add runs, so this is NOT in creature_card_cmds G3's radius. Spoils Map is a Quest card, so no egg relic matches it in either build. The PreviewCardPileAdd and the CustomScaledWait(0.5, 1.2) are animation.",
+      "maps_to": "events/the_legends_were_true.py:41 run.add_card(make_card('spoils_map')). run.add_card (run.py:524-537, was :341-354) runs the Hook.ModifyCardBeingAddedToDeck pass CardPileCmd.Add runs, so this is NOT in creature_card_cmds G3's radius. Spoils Map is a Quest card, so no egg relic matches it in either build. The PreviewCardPileAdd and the CustomScaledWait(0.5, 1.2) are animation.",
       "verdict": "faithful"
     },
     {
-      "what": "EV-1: SlowlyFindAnExit (TheLegendsWereTrue.cs:51) deals DynamicVars.Damage = 8 through CreatureCmd.Damage, and the gate only guarantees 10 HP, so a 10-HP entrant lands on 2 -- but a Tungsten Rod-style modifier or a lower HP reached mid-event is not what makes this a site: every CreatureCmd.Damage call is one can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:294-302) just subtracts",
+      "what": "EV-1: SlowlyFindAnExit (TheLegendsWereTrue.cs:51) deals DynamicVars.Damage = 8 through CreatureCmd.Damage, and the gate only guarantees 10 HP, so a 10-HP entrant lands on 2 -- but a Tungsten Rod-style modifier or a lower HP reached mid-event is not what makes this a site: every CreatureCmd.Damage call is one can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:420-432, was :294-302) just subtracts",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-29 (round 6): the run-level death pass is complete. `RunState.lose_hp` already clamped at 0 (Creature.LoseHpInternal, Creature.cs:450) and already ran `_resolve_death` -- CreatureCmd's Kill tail (CreatureCmd.cs:504-570) over the belt, which is the only limb of RunState.IterateHookListeners (RunState.cs:545-596) carrying a ported death listener. What was left was the LAST line of this entry's own fix note: Fairy in a Bottle's `after_preventing_death` opened with `if self.combat is None: return`, so the preventer was found and then did nothing. That early return is now the OUT-OF-COMBAT ARM of OnUseWrapper instead -- RemoveBeforeUse nulls the belt slot and the new `FairyInABottle.use_out_of_combat` heals -- which is what PotionModel.cs:294/:298/:334/:336/:340's null-combat guards reduce the wrapper to, and the same reading RunState.use_potion already recorded. EXECUTED: `py audit/tools/event_probes.py lethal` -- all three legs MATCH (alive, hp 24, Fairy consumed) where all three read DIVERGE. test/test_events.py::TestRunLevelDeathPrevention pins both outcomes, including the no-Fairy run ending dead at exactly 0.  The text it replaced read: NARROWED 2026-07-28 -- STILL A GAP. Two legs closed, the decisive one did not. CLOSED: RunState.lose_hp (run.py:304-316) now clamps at 0 (no more negative HP) and runs the run-level death-prevention pass -- `_resolve_death` (run.py:318-345) walks the potion belt asking `should_die` and calls `after_preventing_death` on the preventer, the port of CreatureCmd.KillWithoutCheckingWinCondition (CreatureCmd.cs:489-571). REMAINS: the belt Fairy's out-of-combat arm. FairyInABottle.should_die (potions.py:1310-1311) answers False so the Fairy IS selected as the preventer, but FairyInABottle.after_preventing_death (potions.py:1313-1316) still returns immediately when `self.combat is None`, so nothing heals, `_resolve_death` re-kills through its 10 recursions, and the player still ends DEAD with the Fairy still in the belt. EXECUTED 2026-07-28 (`py audit/tools/event_probes.py lethal`, plus ad-hoc at the repo root): 5 HP + belt Fairy, lose 15 -> sim hp=0, dead, belt still ['FairyInABottle']; the game ends alive at 24 HP with the Fairy consumed. LIVE exactly as before -- only the negative-HP secondary is fixed."
+      "issue": "Closed 2026-07-29 (round 6): the run-level death pass is complete. `RunState.lose_hp` already clamped at 0 (Creature.LoseHpInternal, Creature.cs:450) and already ran `_resolve_death` -- CreatureCmd's Kill tail (CreatureCmd.cs:504-570) over the belt, which is the only limb of RunState.IterateHookListeners (RunState.cs:545-596) carrying a ported death listener. What was left was the LAST line of this entry's own fix note: Fairy in a Bottle's `after_preventing_death` opened with `if self.combat is None: return`, so the preventer was found and then did nothing. That early return is now the OUT-OF-COMBAT ARM of OnUseWrapper instead -- RemoveBeforeUse nulls the belt slot and the new `FairyInABottle.use_out_of_combat` heals -- which is what PotionModel.cs:294/:298/:334/:336/:340's null-combat guards reduce the wrapper to, and the same reading RunState.use_potion already recorded. EXECUTED: `py audit/tools/event_probes.py lethal` -- all three legs MATCH (alive, hp 24, Fairy consumed) where all three read DIVERGE. test/test_events.py::TestRunLevelDeathPrevention pins both outcomes, including the no-Fairy run ending dead at exactly 0.  The text it replaced read: NARROWED 2026-07-28 -- STILL A GAP. Two legs closed, the decisive one did not. CLOSED: RunState.lose_hp (run.py:304-316) now clamps at 0 (no more negative HP) and runs the run-level death-prevention pass -- `_resolve_death` (run.py:318-345) walks the potion belt asking `should_die` and calls `after_preventing_death` on the preventer, the port of CreatureCmd.KillWithoutCheckingWinCondition (CreatureCmd.cs:489-571). REMAINS: the belt Fairy's out-of-combat arm. FairyInABottle.should_die (potions.py:1394, was :1310-1311) answers False so the Fairy IS selected as the preventer, but FairyInABottle.after_preventing_death (potions.py:1397, was :1313-1316) still returns immediately when `self.combat is None`, so nothing heals, `_resolve_death` re-kills through its 10 recursions, and the player still ends DEAD with the Fairy still in the belt. EXECUTED 2026-07-28 (`py audit/tools/event_probes.py lethal`, plus ad-hoc at the repo root): 5 HP + belt Fairy, lose 15 -> sim hp=0, dead, belt still ['FairyInABottle']; the game ends alive at 24 HP with the Fairy consumed. LIVE exactly as before -- only the negative-HP secondary is fixed."
     },
     {
       "what": "EV-9: events/the_legends_were_true.py:47 `random_potion(self.rng)` (TheLegendsWereTrue.cs:53) draws on the sim's shared run RNG where the source draws on the PER-PLAYER REWARDS stream, `Owner.PlayerRng.Rewards.NextItem(items)`",
-      "maps_to": "Closed 2026-07-28: SLOWLY_FIND_AN_EXIT is now events/the_legends_were_true.py:49. `Event.offer_pool_potion` (events/base.py:132-146) is the verbatim source idiom -- ONE `run.rewards_rng.next_item(POTION_POOL)` over the Character.PotionPool + SharedPotionPool transcription, with no rarity tier -- and `run.rewards_rng` (run.py:273-277) is `player_rng.rewards`. Verified 2026-07-28: potion_pools.POTION_POOL and the `in_reward_pool` set are the same 48 ids, so the legacy fallback draws the same population. Was: `run.random_potion()`'s uniform `self.rng.choice` on the shared run rng over a different population.",
+      "maps_to": "Closed 2026-07-28: SLOWLY_FIND_AN_EXIT is now events/the_legends_were_true.py:49. `Event.offer_pool_potion` (events/base.py:140-155, was :132-146) is the verbatim source idiom -- ONE `run.rewards_rng.next_item(POTION_POOL)` over the Character.PotionPool + SharedPotionPool transcription, with no rarity tier -- and `run.rewards_rng` (run.py:368, was :273-277) is `player_rng.rewards`. Verified 2026-07-28: potion_pools.POTION_POOL and the `in_reward_pool` set are the same 48 ids, so the legacy fallback draws the same population. Was: `run.random_potion()`'s uniform `self.rng.choice` on the shared run rng over a different population.",
       "verdict": "faithful"
     },
     {
       "what": "UNIT GAP: the_legends_were_true draws its potion from the sim's IN-COMBAT potion generator. The source's pool is `Character.PotionPool.GetUnlockedPotions(UnlockState).Concat(SharedPotionPool.GetUnlockedPotions(UnlockState))` (TheLegendsWereTrue.cs:52); events/the_legends_were_true.py:47 calls `potions.random_potion` (potions.py:1262-1277), whose own docstring says it 'mirrors PotionFactory.CreateRandomPotionInCombat' and which therefore also filters PotionModel.CanBeGeneratedInCombat",
-      "maps_to": "Closed 2026-07-28: events/the_legends_were_true.py:49 no longer reaches past the run-level helpers into potions.random_potion (the CreateRandomPotionInCombat mirror). It calls Event.offer_pool_potion (events/base.py:132-146), whose parity arm draws over potion_pools.POTION_POOL -- the transcription of Character.PotionPool + SharedPotionPool (TheLegendsWereTrue.cs:52) -- and whose legacy arm falls back to run.random_potion(). EXECUTED 2026-07-28: POTION_POOL and the `in_reward_pool` set are the SAME 48 ids, and fairy_in_a_bottle / fruit_juice / regen_potion -- the three CanBeGeneratedInCombat==false potions this event was unable to offer -- are in both.",
+      "maps_to": "Closed 2026-07-28: events/the_legends_were_true.py:49 no longer reaches past the run-level helpers into potions.random_potion (the CreateRandomPotionInCombat mirror). It calls Event.offer_pool_potion (events/base.py:140-155, was :132-146), whose parity arm draws over potion_pools.POTION_POOL -- the transcription of Character.PotionPool + SharedPotionPool (TheLegendsWereTrue.cs:52) -- and whose legacy arm falls back to run.random_potion(). EXECUTED 2026-07-28: POTION_POOL and the `in_reward_pool` set are the SAME 48 ids, and fairy_in_a_bottle / fruit_juice / regen_potion -- the three CanBeGeneratedInCombat==false potions this event was unable to offer -- are in both.",
       "verdict": "faithful"
     },
     {
       "what": "EV-4: the potion SlowlyFindAnExit picks (TheLegendsWereTrue.cs:56-59). events/the_legends_were_true.py:47 calls run.add_potion directly, with a comment ('Potion offers auto-keep when a slot is free (sim convention)') that names the divergence is wrapped in RewardsCmd.OfferCustom in the source, a TAKE-OR-SKIP screen; the sim grants it unconditionally",
-      "maps_to": "Closed 2026-07-28: the payout is a take-or-skip screen now. events/the_legends_were_true.py:49 (`self.offer_potion(self.offer_pool_potion())`) routes through `Event.offer_potion` / `Event.offer_card_reward` (events/base.py:214-230), whose `_accept_offer` (events/base.py:194-212) consults the run's `reward_offer_selector` -- the headless stand-in for RewardsCmd.OfferCustom (RewardsCmd.cs:47-50), the same convention `run.card_selector` is for CardSelectCmd -- and only grants the reward when the screen is taken. Was: an unconditional grant with no decline path at all. Declining is exercised by test/test_event_offer_screens.py.",
+      "maps_to": "Closed 2026-07-28: the payout is a take-or-skip screen now. events/the_legends_were_true.py:49 (`self.offer_potion(self.offer_pool_potion())`) routes through `Event.offer_potion` (events/base.py:263-268, was :214-230; `Event.offer_card_reward` was removed 2026-08-01 as dead code, not called by this event either way), whose `_accept_offer` (events/base.py:203-261, was :194-212) consults the run's `reward_offer_selector` -- the headless stand-in for RewardsCmd.OfferCustom (RewardsCmd.cs:47-50), the same convention `run.card_selector` is for CardSelectCmd -- and only grants the reward when the screen is taken. Was: an unconditional grant with no decline path at all. Declining is exercised by test/test_event_offer_screens.py.",
       "verdict": "faithful"
     },
     {

@@ -56,37 +56,37 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/cascade.py",
-      "sha256": "c2a0a15fcdac19951809d4855bc9ecf488bf12f7c042df070119ca6b8b49133d",
+      "sha256": "335d3ff564aed6f1890e9516c31476687d957f477237a145a4100a8735db5784",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/colorless_skills.py",
-      "sha256": "1cdf31a3bd59e95b239df163b0724e4f99ef299bd67256cc94fcc683e1ed1840",
+      "sha256": "73d875726c8cb8ca6a213dea6f43267d57717f5a1d6b65d34ca2ecea7f4ab66f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
@@ -97,6 +97,36 @@
     {
       "path": "sts2_rl/relics/throwing_axe.py",
       "sha256": "3ca1723abe8e39501df9c51b8a1f096dca7ee94990538b7947eb8cf9aae1ebc3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/howl_from_beyond.py",
+      "sha256": "e67d62791f714719eab2ca0c388936841b5417d47546dd900040c92e001b024f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/havoc.py",
+      "sha256": "1c7de315a1188b28e8a9efdf36088ba5c03b07298701d6d2475a0404e3355e08",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/potions.py",
+      "sha256": "416789386ad4af19cb52a3c275a2c39c1708bb90ebc4dc5c8fb4e88a7055d557",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/mad_science.py",
+      "sha256": "51a3413baaa2dcc8b9bbc49b04e5ca2475d4e1f511bf46230bedd9f1e9c8ca33",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/history_course.py",
+      "sha256": "33037867688fdeac2b7d7bbe3617fed57a5acf0fa285494b788eee98106510c7",
       "side": "sim"
     }
   ],
@@ -111,20 +141,21 @@
       "rationale": "UnsettlingLamp.cs:62-69 clears TriggeringCard, DoubledPowers and IsFinishedTriggering; on_combat_start clears the sim's three equivalents (_in_flight, _triggering, _finished). The sim has no DoubledPowers list at all because it has no ITemporaryPower double-dip guard -- that absence is verdicted on its own guard entry (N1) rather than double-counted here. base.Status = RelicStatus.Active is presentation."
     },
     "BeforePowerAmountChanged": {
-      "maps_to": "modify_power_amount (unsettling_lamp.py:44-53) -- the sim COLLAPSES C#'s two-phase latch-then-double into one method: the `self._triggering = self._in_flight` assignment at line 52 is the latch, and `return amount * 2` on the same line is the multiplicative. C#'s cardSource parameter is modelled as the before_card_played/on_card_played bracket (lines 36-42).",
+      "maps_to": "modify_power_amount_given_multiplicative (unsettling_lamp.py:44-70) -- the sim COLLAPSES C#'s latch (BeforePowerAmountChanged) and its multiplicative doubling into one method: the `self._triggering = self._in_flight` assignment is the latch, and the factor return is the multiplicative (now dispatched through the real two-pass additive/multiplicative fold, hooks.py:918-968). C#'s cardSource parameter is modelled as the before_card_played/on_card_played bracket.",
       "verdict": "gap",
-      "issue": "Re-confirmed against the current tree 2026-08-01 (round 14, R6): the round-13 text correction (method renamed to `modify_power_amount_given_multiplicative`) is accurate and the record is internally consistent — no id/label corruption found in this record's guards despite the brief's warning to check. This rollup stays open only through G3+G4, both DORMANT with round-13 enumerations that still hold (re-verified: `MadScienceCard`'s draw/debuff arms are still mutually exclusive `on_play` branches, cards/mad_science.py). No action taken.",
+      "issue": "Re-confirmed against the current tree 2026-08-01 (round 14, R6): the round-13 text correction (method renamed to `modify_power_amount_given_multiplicative`) is accurate and the record is internally consistent \u2014 no id/label corruption found in this record's guards despite the brief's warning to check. This rollup stays open only through G3+G4, both DORMANT with round-13 enumerations that still hold (re-verified: `MadScienceCard`'s draw/debuff arms are still mutually exclusive `on_play` branches, cards/mad_science.py). No action taken.",
       "live": false
     },
     "ModifyPowerAmountGivenMultiplicative": {
-      "maps_to": "modify_power_amount's `return amount * 2` (unsettling_lamp.py:53), dispatched by HookSystem.modify_power_amount (hooks.py:170-183) from PowerCmd.apply (cmds.py:294)",
+      "maps_to": "modify_power_amount_given_multiplicative returning a FACTOR (unsettling_lamp.py:44-70), dispatched by HookSystem.modify_power_amount_given_multiplicative (hooks.py:948-968), the SECOND of the two passes HookSystem now runs for the given-side chain (additive at hooks.py:918-946, multiplicative at :948-968), from PowerCmd.apply (cmds.py:962-965)",
       "verdict": "gap",
-      "issue": "C# returns a MULTIPLICATIVE factor into Hook.ModifyPowerAmountGiven's two-pass fold (Hook.cs:1887-1908: every listener's additive contribution is summed FIRST, then every listener's multiplicative factor is applied to that sum). The sim's modify_power_amount is a single flat chain over hook-registration order (hooks.py:180-182), so the Lamp's x2 covers only whatever ran BEFORE it, not the post-additive total the way C# guarantees by construction. This is audit/records/seam/power_cmd.json gap G3 observed at the Lamp's own site -- one verdict per mechanism, binding rule 3 -- and it is DORMANT for the same reason G3 records: the sim has exactly two modify_power_amount listeners (grep 'def modify_power_amount' over sts2_rl/ returns relics/unsettling_lamp.py:44 and relics/ruined_helmet.py:23) and their domains are disjoint (debuffs vs a positive-amount StrengthPower). Porting any second given-side power-amount modifier whose domain overlaps debuffs makes it live."
+      "issue": "STALE CLAIM RETRACTED 2026-08-04: this entry previously said 'the sim's modify_power_amount is a single flat chain over hook-registration order' and filed that as audit/records/seam/power_cmd.json G3. That is no longer true -- power_cmd/G3 and G4 are CLOSED in today's code: HookSystem now runs `modify_power_amount_given_additive` (the sum-first pass) and THEN `modify_power_amount_given_multiplicative` (the product-second pass, hooks.py:904-968's own comment names both C# hooks by name), exactly mirroring Hook.ModifyPowerAmountGiven's two-pass fold (Hook.cs:1887-1908), and unsettling_lamp.py's method is correctly named/shaped for the multiplicative pass, returning a factor (1/2) rather than a multiplied amount. This hook's rollup stays `gap` only through the two guards that survive independently of the fold shape: G3 (the Lamp's OWN applier/target re-guard on the multiplicative call, which C# does not have) and G4 (the ambient cardSource substitution). Neither is about the fold structure any more. See BeforePowerAmountChanged's sibling entry, already re-confirmed 2026-08-01, for the same conclusion reached earlier and not yet folded into this entry until now.",
+      "live": false
     },
     "AfterCardPlayed": {
-      "maps_to": "on_card_played (sts2_rl/relics/unsettling_lamp.py), fired once per Replay iteration by CombatState._resolve_card_play (sts2_rl/combat.py:597-600)",
+      "maps_to": "on_card_played (sts2_rl/relics/unsettling_lamp.py), fired once per Replay iteration by CombatState._resolve_card_play (sts2_rl/combat.py:1208-1209)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. The `cardPlay.Card != TriggeringCard` / IsFinishedTriggering guards were already mirrored, so `_finished` is now set at the end of iteration 0 and iteration 1 bails, as in C#."
+      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:1155) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:1208-1209) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. The `cardPlay.Card != TriggeringCard` / IsFinishedTriggering guards were already mirrored, so `_finished` is now set at the end of iteration 0 and iteration 1 bails, as in C#."
     },
     "AfterCombatEnd": {
       "maps_to": "no counterpart; the sim resets the same three fields at on_combat_start (unsettling_lamp.py:29-32) instead",
@@ -136,7 +167,7 @@
     {
       "what": "G1 (LIVE): AfterCardPlayed fires once per Replay iteration in C# but once per play in the sim, so a replayed triggering card has EVERY iteration's debuffs doubled instead of only the first",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. "
+      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:1155) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:1208-1209) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. "
     },
     {
       "what": "N1 (MANDATED by the design's worked example): `if (!power.IsVisible) return;` -- the Lamp's latch visibility gate (UnsettlingLamp.cs:93-96), entirely absent from the sim",
@@ -161,7 +192,7 @@
     {
       "what": "G4 (DORMANT): C#'s cardSource is a per-APPLICATION argument; the sim substitutes an ambient `_in_flight` card set by before_card_played and cleared by on_card_played, so a nested card play inside the triggering card's resolution clears it",
       "verdict": "gap",
-      "issue": "STAYS OPEN, DORMANT -- ENUMERATION REPLACED 2026-08-01 (round 13, R4 fix pass, required by review). The previous 3-/4-site auto_play_card census did not meet the dormancy rule 'ask what else reads this, not does the recorded consumer still hold'. grep -rn \"auto_play_card(\" sts2_rl/ finds TEN call sites: cards/cascade.py:58, colorless_skills.py:134 and :187, howl_from_beyond.py:51, cmds.py:1552 (inside CardPileCmd.auto_play_from_draw_pile, itself called from cards/havoc.py:53 -- a fifth card-level nested auto-play the old figure never counted), enchantments.py:401 (Imbued), potions.py:1050, powers.py:999 (HellraiserPower), powers.py:1355 (StampedePower), relics/whispering_earring.py:86. HellraiserPower auto-plays from on_card_drawn_early on ANY Strike-tagged draw, widening the reachable class from 'cards that call auto_play_card' to 'any card that draws mid-resolution'. THE VERDICT SURVIVES: an AST census over sts2_rl/cards/ for classes that both draw and apply a power to a non-player target yields exactly one, MadScienceCard (cards/mad_science.py:80-141), whose on_play dispatches to _play_attack (the enemy-debuffing branch) and _play_skill (the drawing branch) as MUTUALLY EXCLUSIVE arms of one if/elif keyed on a per-instance tinker_type fixed by configure() -- so no instance can both draw mid-resolution and debuff an enemy of its own. The other nine sites apply no debuff at all.  The text it replaced read: MECHANISM: PowerCmd.Apply carries cardSource explicitly, so C# knows the exact card responsible for each individual power application; the Lamp compares `cardSource != TriggeringCard` (UnsettlingLamp.cs:112). The sim reconstructs it from the card-play bracket (unsettling_lamp.py:36-42). Two consequences follow. (a) A power applied during a card play but NOT sourced by that card (cardSource == null in C#) still sees _in_flight set in the sim, so the sim can latch and double where C# would not. (b) combat.py's auto_play_card routes through the SAME _resolve_card_play bracket (combat.py:516+), so a card that auto-plays another card mid-resolution fires on_card_played(inner) and leaves _in_flight = None (unsettling_lamp.py:42) for the rest of the OUTER card's resolution -- the sim then stops doubling where C# keeps going, because C#'s TriggeringCard is still latched. REACHABILITY (DORMANT): three ported cards do auto-play another card from inside their own on_play -- cards/cascade.py:58 and cards/colorless_skills.py:117 and :164 -- so the SHAPE exists, but none of the three applies a debuff to an enemy both before and after its nested play, which is what a demonstration needs. Porting (or editing) any card that debuffs, then plays a card, then debuffs again makes (b) live; a relic or power that applies an enemy debuff with no card source during a card play makes (a) live."
+      "issue": "STAYS OPEN, DORMANT -- ENUMERATION REPLACED 2026-08-01 (round 13, R4 fix pass, required by review). The previous 3-/4-site auto_play_card census did not meet the dormancy rule 'ask what else reads this, not does the recorded consumer still hold'. grep -rn \"auto_play_card(\" sts2_rl/ finds ELEVEN call sites as of 2026-08-04 (re-counted; was ten as of round 13): cards/colorless_skills.py:157, :160 and :213, cards/howl_from_beyond.py:51, cmds.py:1334 (Sly discard-replay) and :1776 (CardPileCmd.auto_play_from_draw_pile, called from cards/havoc.py), enchantments.py:416 (Imbued), powers.py:1050 (HellraiserPower), powers.py:1406 (StampedePower), relics/whispering_earring.py:86, and a NEW eleventh site, relics/history_course.py:69 -- a dupe of the PREVIOUS turn's last card, auto-played from `after_auto_pre_play_phase_entered`, a turn-phase hook, not from inside any card's own `on_play`. That shape does not add to the nested-play census this guard tracks (a card auto-playing another card DURING its own resolution): History Course's auto-play happens before any card that turn has started resolving, so it cannot be the OUTER or the INNER play of the pattern G4 describes, only (at most) a plain card play that could itself become a new outer/inner leg in a future turn -- already covered by the general census below. HellraiserPower auto-plays from on_card_drawn_early on ANY Strike-tagged draw, widening the reachable class from 'cards that call auto_play_card' to 'any card that draws mid-resolution'. THE VERDICT SURVIVES: an AST census over sts2_rl/cards/ for classes that both draw and apply a power to a non-player target yields exactly one, MadScienceCard (cards/mad_science.py:80-147), whose on_play dispatches to _play_attack (the enemy-debuffing branch) and _play_skill (the drawing branch) as MUTUALLY EXCLUSIVE arms of one if/elif keyed on a per-instance tinker_type fixed by configure() -- so no instance can both draw mid-resolution and debuff an enemy of its own. The other nine sites apply no debuff at all.  The text it replaced read: MECHANISM: PowerCmd.Apply carries cardSource explicitly, so C# knows the exact card responsible for each individual power application; the Lamp compares `cardSource != TriggeringCard` (UnsettlingLamp.cs:112). The sim reconstructs it from the card-play bracket (unsettling_lamp.py:36-42). Two consequences follow. (a) A power applied during a card play but NOT sourced by that card (cardSource == null in C#) still sees _in_flight set in the sim, so the sim can latch and double where C# would not. (b) combat.py's auto_play_card routes through the SAME _resolve_card_play bracket (combat.py:1403 (auto_play_card)), so a card that auto-plays another card mid-resolution fires on_card_played(inner) and leaves _in_flight = None (unsettling_lamp.py:42) for the rest of the OUTER card's resolution -- the sim then stops doubling where C# keeps going, because C#'s TriggeringCard is still latched. REACHABILITY (DORMANT): three ported cards do auto-play another card from inside their own on_play -- cards/cascade.py:51 and cards/colorless_skills.py:157/:160 and :213 -- so the SHAPE exists, but none of the three applies a debuff to an enemy both before and after its nested play, which is what a demonstration needs. Porting (or editing) any card that debuffs, then plays a card, then debuffs again makes (b) live; a relic or power that applies an enemy debuff with no card source during a card play makes (a) live."
     },
     {
       "what": "N3: `if (TriggeringCard != null) return;` -- C# latches exactly once per combat (UnsettlingLamp.cs:73-76) while the sim re-assigns `self._triggering = self._in_flight` on every doubling call (unsettling_lamp.py:52)",

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\kusarigama.py",
-    "sha256": "738d85aa0e646ea1164895ed70994b8abdcc73c59a5318c096cdaaec80baef6c"
+    "sha256": "771c9e94de56866eddc7ef09762682b4490028de669a3f7049f9cb8d045293dc"
   },
   "extra_sources": [
     {
@@ -41,12 +41,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -56,22 +56,22 @@
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -118,12 +118,12 @@
     "AfterSideTurnEnd": {
       "maps_to": "on_player_turn_end (kusarigama.py:32-33)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-29 (round 7): The reset moved to the right slot. Kusarigama.cs's player-side AfterSideTurnEnd is turn_structure step 64, which runs AFTER the hand flush; the port used `on_player_turn_end`, which is Hook.BeforeTurnEnd (step 48) -- about sixteen steps too early. `relics/kusarigama.py` now implements `after_player_turn_end`, the slot whose own docstring names Hook.AfterTurnEnd and distinguishes it from BeforeTurnEnd. The reachability the entry established is what made it matter: the ported StampedePower auto-plays N Attacks from the LATER slot, so the counter was being cleared before those plays could count toward it.  Pinned by test/test_relic_residue_gaps.py.  NOT CLOSED: nothing at this site.  The text it replaced read: WRONG TURN-END SLOT. C#'s player-side AfterSideTurnEnd is audit/records/seam/turn_structure.json step 64 -- it runs AFTER the hand flush -- and the sim HAS that slot: hooks.after_player_turn_end (hooks.py:303-310), whose own docstring says it is Hook.AfterTurnEnd and is 'Distinct from on_player_turn_end, which is Hook.BeforeTurnEnd' (step 48). kusarigama.py:32-33 uses on_player_turn_end, so the reset happens ~16 steps too early. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b08.py b08-kusarigama): the ported StampedePower auto-plays N Attacks from `on_player_turn_end` (powers.py:1023-1039) -- the SAME sim hook -- and its C# home is StampedePower.cs:18 AfterAutoPostPlayPhaseEntered, which turn_structure step 47 places BEFORE step 64. So C# always resets after those Attacks and the sim may not: with Stampede(2) on the player and the executed listener order ['Kusarigama', 'StampedePower'], end_turn leaves _attacks_this_turn=2 where C# leaves 0, and those 2 carry into the next turn -- shifting every 'every 3rd Attack' trigger for the rest of the combat. Both sides ported: Stampede is the Ironclad card cards/stampede.py:36. Bounded, not run-wide: the on_combat_start reset above stops it leaking past the combat. The `participants.Contains(base.Owner.Creature)` filter is structurally satisfied (the sim fires this hook for the player side only). Fix: move the reset to after_player_turn_end, the slot relics/parrying_shield.py:24 already uses. Rule 7: hooks.py, powers.py, cards/stampede.py, relics/parrying_shield.py, src/Core/Models/Powers/StampedePower.cs and audit/records/seam/turn_structure.json are not hashed by this record."
+      "issue": "Closed 2026-07-29 (round 7): The reset moved to the right slot. Kusarigama.cs's player-side AfterSideTurnEnd is turn_structure step 64, which runs AFTER the hand flush; the port used `on_player_turn_end`, which is Hook.BeforeTurnEnd (step 48) -- about sixteen steps too early. `relics/kusarigama.py` now implements `after_player_turn_end`, the slot whose own docstring names Hook.AfterTurnEnd and distinguishes it from BeforeTurnEnd. The reachability the entry established is what made it matter: the ported StampedePower auto-plays N Attacks from the LATER slot, so the counter was being cleared before those plays could count toward it.  Pinned by test/test_relic_residue_gaps.py.  NOT CLOSED: nothing at this site.  The text it replaced read: WRONG TURN-END SLOT. C#'s player-side AfterSideTurnEnd is audit/records/seam/turn_structure.json step 64 -- it runs AFTER the hand flush -- and the sim HAS that slot: hooks.after_player_turn_end (hooks.py:1267, renumbered since prior pass, content unchanged), whose own docstring says it is Hook.AfterTurnEnd and is 'Distinct from on_player_turn_end, which is Hook.BeforeTurnEnd' (step 48). kusarigama.py:32-33 uses on_player_turn_end, so the reset happens ~16 steps too early. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b08.py b08-kusarigama): the ported StampedePower auto-plays N Attacks from `on_player_turn_end` (powers.py:1023-1039) -- the SAME sim hook -- and its C# home is StampedePower.cs:18 AfterAutoPostPlayPhaseEntered, which turn_structure step 47 places BEFORE step 64. So C# always resets after those Attacks and the sim may not: with Stampede(2) on the player and the executed listener order ['Kusarigama', 'StampedePower'], end_turn leaves _attacks_this_turn=2 where C# leaves 0, and those 2 carry into the next turn -- shifting every 'every 3rd Attack' trigger for the rest of the combat. Both sides ported: Stampede is the Ironclad card cards/stampede.py:36. Bounded, not run-wide: the on_combat_start reset above stops it leaking past the combat. The `participants.Contains(base.Owner.Creature)` filter is structurally satisfied (the sim fires this hook for the player side only). Fix: move the reset to after_player_turn_end, the slot relics/parrying_shield.py:24 already uses. Rule 7: hooks.py, powers.py, cards/stampede.py, relics/parrying_shield.py, src/Core/Models/Powers/StampedePower.cs and audit/records/seam/turn_structure.json are not hashed by this record."
     },
     "AfterCardPlayed": {
       "maps_to": "on_card_played (kusarigama.py:35-50)",
       "verdict": "gap",
-      "issue": "FIXED the candidate-set divergence (`living_enemies()` → `hittable_enemies()`, matching `Kusarigama.cs:115`'s `HittableEnemies` read exactly). Re-derived (not trusted) that the fix is currently unobservable: every ported `should_allow_hitting` implementer only fires post-death, so `hittable_enemies() == living_enemies()` for every reachable state today (pinned by `test_reviving_enemy_is_still_is_gone_today`). Stays `gap`/DORMANT — now for set-coincidence reasons alone, not because the sim reads the wrong helper. Code-path fix verified via synthetic `should_allow_hitting` refusal (`test_kusarigama_never_targets_an_unhittable_enemy`).",
+      "issue": "FIXED the candidate-set divergence (`living_enemies()` \u2192 `hittable_enemies()`, matching `Kusarigama.cs:115`'s `HittableEnemies` read exactly). Re-derived (not trusted) that the fix is currently unobservable: every ported `should_allow_hitting` implementer only fires post-death, so `hittable_enemies() == living_enemies()` for every reachable state today (pinned by `test_reviving_enemy_is_still_is_gone_today`). Stays `gap`/DORMANT \u2014 now for set-coincidence reasons alone, not because the sim reads the wrong helper. Code-path fix verified via synthetic `should_allow_hitting` refusal (`test_kusarigama_never_targets_an_unhittable_enemy`).",
       "live": false
     },
     "AfterCombatEnd": {
@@ -136,12 +136,12 @@
     {
       "what": "G1 (LIVE): AfterCardPlayed fires once per Replay iteration in C# but once per play in the sim, so a replayed Attack advances Kusarigama's counter by 1 instead of 2",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. "
+      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:1155 (renumbered since prior pass, content unchanged)) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:1209 (renumbered since prior pass, content unchanged)) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. "
     },
     {
-      "what": "G2 (DORMANT): `Owner.Creature.CombatState.HittableEnemies` (Kusarigama.cs:115) vs the sim's living_enemies() (kusarigama.py:40)",
+      "what": "G2 (DORMANT): `Owner.Creature.CombatState.HittableEnemies` (Kusarigama.cs:115) vs the candidate-set helper the port calls",
       "verdict": "gap",
-      "issue": "C# picks the random target from `Enemies.Where(e => e.IsHittable)` (CombatState.cs:142), and IsHittable is `!IsDead && Hook.ShouldAllowHitting(CombatState, this)` (Creature.cs:285-299). Relic.living_enemies() (relics/base.py:294-297) filters on `not e.is_gone` only. This is the SAME divergence audit/records/relic/bag_of_marbles.json guard G2 records at its own call site, and it carries the same verdict per binding rule 3 -- but it bites harder here, because the set is not just the damage target list, it is the population of an RNG DRAW: `combat_rng.targets.choice(living)` is Rng.NextItem, whose index is scaled by len(seq) (rng.py:248-252), so an unhittable-but-alive enemy changes WHICH enemy is picked even when the pick itself would have been legal, and can also waste the trigger on a target DamageCmd.deal then no-ops on (`should_allow_hitting` returns 0 -- cmds.py:50-51). DORMANT for the same reason bag_of_marbles G2 is: the only ported should_allow_hitting implementers gate on a mid-revival state (IllusionPower powers.py:1572-1575, AdaptablePower powers.py:3372-3375), which cannot coexist with the enemy being alive and un-gone here. Porting any effect that makes a LIVING enemy untargetable makes it live, and in an RNG-visible way (the CombatTargets stream position stays equal but the chosen index diverges). Rule 7: src/Core/Combat/CombatState.cs, src/Core/Entities/Creatures/Creature.cs, relics/base.py, rng.py, cmds.py and powers.py are not hashed by this record."
+      "issue": "REVISED 2026-08-04: STALE against current code -- this guard's own premise ('the sim's living_enemies()') was already superseded by the fix the sibling `AfterCardPlayed` hook entry on this same record documents. `kusarigama.py:49` now calls `self.hittable_enemies()`, not `living_enemies()`, and `Relic.hittable_enemies()` (relics/base.py:495-497) now exists and delegates to `CombatState.hittable_enemies` (which itself mirrors `CombatState.HittableEnemies`, CombatState.cs:142, filtering on `!IsDead && Hook.ShouldAllowHitting`). So the candidate-set divergence this guard describes is FIXED, matching the `AfterCardPlayed` hook entry's own account exactly (`living_enemies()` -> `hittable_enemies()`). What remains, and why the verdict stays `gap`/DORMANT rather than moving to `faithful`, is the same residual the hook entry already names: the fix is currently unobservable because every ported `should_allow_hitting` implementer (IllusionPower powers.py:1572-1575, AdaptablePower powers.py:3372-3375) only ever refuses a mid-revival creature, which cannot coexist with 'alive and un-gone' -- so `hittable_enemies() == living_enemies()` for every reachable state today. Porting any effect that makes a LIVING enemy untargetable makes it live, and in an RNG-visible way (the CombatTargets stream position stays equal but the chosen index diverges, since `combat_rng.targets.choice(...)` is Rng.NextItem scaled by len(seq), rng.py:248-252). This guard duplicated the `AfterCardPlayed` hook entry's own finding under a separate name; kept here per binding rule 3 rather than deleted, now reconciled to match it. Rule 7: src/Core/Combat/CombatState.cs, src/Core/Entities/Creatures/Creature.cs, relics/base.py, rng.py, cmds.py and powers.py are not hashed by this record."
     },
     {
       "what": "N1: `IsActivating` / `DoActivateVisuals` / `UpdateDisplay` / `InvokeDisplayAmountChanged` / `Flash` / `Cmd.Wait(1f)` / `TaskHelper.RunSafely` and the Status writes in BeforeCombatStart, AfterSideTurnEnd and AfterCombatEnd",
@@ -161,12 +161,12 @@
     {
       "what": "N4: C#'s `if (creature != null)` around the visuals and the damage (Kusarigama.cs:116) vs the sim's `if not living: return` (kusarigama.py:41-42), and the extra `self._check_win()` (kusarigama.py:50)",
       "verdict": "faithful",
-      "rationale": "NextItem over an empty list returns null in C# (and None in the sim, rng.py:250-251), so both sides skip the damage when no target exists -- and in both, AttacksPlayedThisTurn has ALREADY been incremented before the target check, so an empty board still advances the counter. _check_win has no C# counterpart because CheckWinCondition follows every game command automatically; relics/base.py:299-304 documents it as standing in for that, and it can only fire when the relic's own damage killed the last enemy. Rule 7: rng.py and relics/base.py are not hashed by this record."
+      "rationale": "NextItem over an empty list returns null in C# (and None in the sim, rng.py:250-251), so both sides skip the damage when no target exists -- and in both, AttacksPlayedThisTurn has ALREADY been incremented before the target check, so an empty board still advances the counter. _check_win has no C# counterpart because CheckWinCondition follows every game command automatically; relics/base.py:499-504, renumbered since prior pass, content unchanged, documents it as standing in for that, and it can only fire when the relic's own damage killed the last enemy. Rule 7: rng.py and relics/base.py are not hashed by this record."
     },
     {
       "what": "N5: C#'s AfterCardPlayed has no `cardPlay.IsAutoPlay` exclusion (Kusarigama.cs:105-122)",
       "verdict": "faithful",
-      "rationale": "Same check as relic/kunai N1 and the same conclusion: unlike BrilliantScarf.cs:84-87 this relic counts auto-plays, and kusarigama.py:35-38 counts every on_card_played including the ones combat.py:516's auto_play_card produces. Recorded so the brilliant_scarf G1 finding is not copied across by pattern-matching. Rule 7: combat.py and src/Core/Models/Relics/BrilliantScarf.cs are not hashed by this record."
+      "rationale": "Same check as relic/kunai N1 and the same conclusion: unlike BrilliantScarf.cs:84-87 this relic counts auto-plays, and kusarigama.py:35-38 counts every on_card_played including the ones combat.py:1403's auto_play_card produces (renumbered since prior pass, content unchanged). Recorded so the brilliant_scarf G1 finding is not copied across by pattern-matching. Rule 7: combat.py and src/Core/Models/Relics/BrilliantScarf.cs are not hashed by this record."
     }
   ],
   "verdict": "gap",

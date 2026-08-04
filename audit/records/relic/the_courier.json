@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -44,7 +44,7 @@
     "IsAllowedInShops": {
       "maps_to": "is_allowed_in_shops = False (the_courier.py:14)",
       "verdict": "faithful",
-      "rationale": "TheCourier.cs:15. The flag exists on the sim's Relic base (relics/base.py:90) and shop.py's relic stocking filters on it, so this declaration is honoured rather than merely recorded. Rule 7: relics/base.py and shop.py are not hashed here."
+      "rationale": "TheCourier.cs:15. The flag exists on the sim's Relic base (relics/base.py:145) and shop.py's relic stocking filters on it, so this declaration is honoured rather than merely recorded. Rule 7: relics/base.py and shop.py are not hashed here."
     },
     "ModifyMerchantPrice": {
       "maps_to": "modify_merchant_price (sts2_rl/relics/the_courier.py:18-22), folded per read by the MerchantEntry.cost property (sts2_rl/shop.py:178-183)",

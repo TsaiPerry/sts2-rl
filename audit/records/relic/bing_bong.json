@@ -11,12 +11,12 @@
   "extra_sources": [
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -36,12 +36,12 @@
     {
       "what": "G1 (DORMANT): C# refuses to clone a card that some other model put in the deck (`clonedBy == null`, BingBong.cs:25); the sim's after_card_added_to_deck receives no such argument and clones everything",
       "verdict": "gap",
-      "issue": "MECHANISM: CardPileCmd.Add takes a `clonedBy` AbstractModel and BingBong passes `this` when adding its own clone (BingBong.cs:30), so C# has TWO independent anti-recursion defences -- the CardsToSkip set AND the clonedBy argument. The clonedBy clause is broader than recursion, though: it suppresses cloning for ANY model-added card, not just Bing Bong's own. The sim's hook signature is `after_card_added_to_deck(self, run, card)` (relics/base.py:208) with no adder argument, so the port can only reproduce the CardsToSkip half (bing_bong.py:34-36) and will clone a card another relic added where C# would not. REACHABILITY (DORMANT): it needs a second ported model that adds a deck card WITH a clonedBy argument. The sim's only other deck-add interceptor is the egg family's modify_card_being_added_to_deck (relics/_eggs.py), which SUBSTITUTES a card rather than adding one, so no ported path sets clonedBy today. Porting Dolly's Mirror (currently a behaviourless stub -- see the sweep findings) or any other card-duplicating relic makes it live, and in the runaway direction: two cloners would feed each other."
+      "issue": "MECHANISM: CardPileCmd.Add takes a `clonedBy` AbstractModel and BingBong passes `this` when adding its own clone (BingBong.cs:30), so C# has TWO independent anti-recursion defences -- the CardsToSkip set AND the clonedBy argument. The clonedBy clause is broader than recursion, though: it suppresses cloning for ANY model-added card, not just Bing Bong's own. The sim's hook signature is `after_card_added_to_deck(self, run, card)` (relics/base.py:364) with no adder argument, so the port can only reproduce the CardsToSkip half (bing_bong.py:34-36) and will clone a card another relic added where C# would not. REACHABILITY (DORMANT): it needs a second ported model that adds a deck card WITH a clonedBy argument. The sim's only other deck-add interceptor is the egg family's modify_card_being_added_to_deck (relics/_eggs.py), which SUBSTITUTES a card rather than adding one, so no ported path sets clonedBy today. Porting Dolly's Mirror (currently a behaviourless stub -- see the sweep findings) or any other card-duplicating relic makes it live, and in the runaway direction: two cloners would feed each other."
     },
     {
-      "what": "N1: CardPilePosition.Bottom (BingBong.cs:30) vs the sim's run.add_card append (run.py:544)",
+      "what": "N1: CardPilePosition.Bottom (BingBong.cs:30) vs the sim's run.add_card append (run.py:532)",
       "verdict": "faithful",
-      "rationale": "The game's CardPile indexes 0 = top, so Bottom is the end of the list, and RunState.add_card appends. Same placement. This matters for the same reason run.transform_card's docstring (run.py:419-427) gives for its own end-placement: the combat-start UnstableShuffle is order-dependent, so a top-vs-bottom slip would desync every subsequent draw."
+      "rationale": "The game's CardPile indexes 0 = top, so Bottom is the end of the list, and RunState.add_card appends. Same placement. This matters for the same reason run.transform_card's docstring (run.py:725-738) gives for its own end-placement: the combat-start UnstableShuffle is order-dependent, so a top-vs-bottom slip would desync every subsequent draw."
     },
     {
       "what": "N2: the sim keys its skip set on `id(card)` (bing_bong.py:34-38) where C# uses a HashSet<CardModel> of references",

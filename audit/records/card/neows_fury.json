@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\neows_fury.py",
-    "sha256": "bbd33fee525f35f6d1aa19cefa9b7d528a3d212268f5985f21d7eba2a49e27e3"
+    "sha256": "18e0dd045cf7762c0c74468416eedc9bf3c45dc2ecc79f0be7fc7d78926fb04b"
   },
   "extra_sources": [
     {
@@ -26,52 +26,72 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Commands/CardSelectCmd.cs",
+      "sha256": "951f39b352d758559ae5de718183c2dfc05d31fb9e5ea24d99ad85d19b3f79b4",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/CardSelection/CardSelectorPrefs.cs",
+      "sha256": "be907ced510772bbac02fd30e7553a360e426c4868c4436224d454d0f8177086",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Factories/CardFactory.cs",
+      "sha256": "69bba37c3d0ea3efc423264dd796fc4d22a49dcff3290c56ba9813365e8030dd",
+      "side": "game"
     }
   ],
   "hooks": {
     "CanBeGeneratedInCombat": {
-      "maps_to": "NOT PORTED -- the sim relies on rarity instead (neows_fury.py:378-379)",
+      "maps_to": "NeowsFuryCard.can_be_generated_in_combat = False (neows_fury.py:37-44)",
       "verdict": "faithful",
       "issue": "Closed 2026-07-31 (tier-2 campaign): Flag pair corrected against the C#, read line-by-line for all six cards: none overrides CanBeGeneratedByModifiers or CanonicalKeywords, so the sim's is_playable=False AND can_be_generated_by_modifiers=False were BOTH wrong and can_be_generated_in_combat=False was missing. These Statuses are playable no-effect cards in the game (the shape the sim already models for card/beckon). LIVENESS CORRECTION: the recorded dormancy checked only pool_card_ids and curse_pool_ids, but a THIRD consumer exists -- transform_options_in_combat's STATUS branch, reached by ported Entropy. Pre-fix this genuinely leaked all four bad cards as transform options for every reachable Status card, including frantic_escape, which The Insatiable really does put in piles (test_hive.py::TestTheInsatiable). Reproduced by execution by both the implementer and the task reviewer, and closed by the same fix -- the STATUS branch's filter is the correct mirror of GetFilteredTransformationOptions (CardFactory.cs:189-203). So this mechanism was recorded DORMANT but was reachable; it is fixed, not merely re-argued. Pinned in test/test_card_generation_pool.py.  The text it replaced read: `public override bool CanBeGeneratedInCombat => false` (NeowsFury.cs:15) has no `can_be_generated_in_combat = False` counterpart; the sim's comment says the ANCIENT rarity already keeps it out of `pool_card_ids`. That is true today, so the OUTCOME matches -- but it is a different mechanism, and the flag is the one C# actually exposes: `CardModel.CanBeGeneratedInCombat` (CardModel.cs:642) is read by FilterForCombat regardless of rarity, so any future in-combat generator pointed at a pool that includes Ancients would pick up Neow's Fury in the sim and not in the game. DORMANT with the trigger named. Contrast card/feed, card/hand_of_greed and card/hidden_gem, which set the flag explicitly, and card/disintegration / card/frantic_escape / card/mind_rot, which set the WRONG flag -- three different treatments of one override across six cards."
     },
     "CanonicalKeywords": {
-      "maps_to": "NeowsFuryCard.exhausts = True (neows_fury.py:380)",
+      "maps_to": "NeowsFuryCard.exhausts = True (neows_fury.py:45)",
       "verdict": "faithful",
       "rationale": "`{ CardKeyword.Exhaust }` (NeowsFury.cs:17) == `exhausts = True`."
     },
     "ctor": {
-      "maps_to": "class attrs (neows_fury.py:373-380) + _init_vars (382-385)",
+      "maps_to": "class attrs (neows_fury.py:32-45) + _init_vars (47-50)",
       "verdict": "faithful",
       "rationale": "`base(1, CardType.Attack, CardRarity.Ancient, TargetType.AnyEnemy)` (NeowsFury.cs:25-28) == cost 1 / ATTACK / ANCIENT / ANY_ENEMY."
     },
     "CanonicalVars": {
-      "maps_to": "_damage = 10, _cards = 2 (neows_fury.py:384-385)",
+      "maps_to": "_damage = 10, _cards = 2 (neows_fury.py:49-50)",
       "verdict": "faithful",
       "rationale": "`new DamageVar(10m, ValueProp.Move)` + `new CardsVar(2)` (NeowsFury.cs:19-23) == both numbers, both declared."
     },
     "OnPlay": {
-      "maps_to": "NeowsFuryCard.on_play (neows_fury.py:391-407)",
-      "verdict": "gap",
-      "issue": "Attack first, then the hand-size-capped selection: `Math.Min(Cards.IntValue, CardPile.MaxCardsInHand - Hand.Cards.Count)` (NeowsFury.cs:36) == `min(self._cards, PlayerCombatState.MAX_HAND_SIZE - len(ctx.player.hand))`, with both skipping everything when the result is <= 0 (37 == 399-400), and MaxCardsInHand is 10 on both sides (CardPile.cs:21, player.py:56). The `predicate=lambda c: c is not self` is a CORRECT compensation for the sim's discard-pile limbo, matching card/headbutt. THE SELECTION RANGE IS WRONG. C# passes `new CardSelectorPrefs(prompt, 0, num)` (NeowsFury.cs:39) -- MinSelect **0**, MaxSelect num -- so the player may take FEWER than the cap, or none at all. The sim's `CardSelectCmd.from_pile(..., count=count)` resolves through `CombatState.select_cards`, which clamps `count = min(count, len(candidates))` and then takes exactly that many (combat.py:575-581), with no way to express a range. So the sim cannot decline part of the return. DORMANT: taking fewer cards back is strictly worse play, no replay command encodes a partial selection, and the auto-select shortcut C# would take at `candidateCount <= MinSelect` never fires with MinSelect 0 unless the discard pile is empty (where both sides do nothing). It becomes live for any conformance replay of a run where the player declined. This is the min/max-range half of creature_card_cmds guard N10, recorded at a card site because Neow's Fury is the first unit in the pool whose C# prefs actually use a RANGE rather than a fixed count."
+      "maps_to": "NeowsFuryCard.on_play (neows_fury.py:56-78)",
+      "verdict": "faithful",
+      "issue": "Closed (re-audited 2026-08-04, stale-sweep task-8 batch-04): the file was substantially rewritten since the 2026-07-26 audit. TWO things changed and both close the previously-recorded gap. (1) The card no longer needs its own self-exclusion predicate: round 13 (R5) made the sim's Play pile real, so a resolving card is no longer parked in the discard pile (neows_fury.py:23-29) -- same de-hack as headbutt.py. (2) `CombatState.select_cards` (combat.py:1475 on) now models `min_select` / `CardSelectorPrefs.MinSelect` as a genuine parameter: `require_manual_confirmation = min_select is not None and min_select != count` and the auto-select shortcut floor becomes `min_select` instead of `count` (combat.py:1551-1559), matching `RequireManualConfirmation`'s derivation (CardSelectorPrefs.cs:77) and the C# shortcut condition `!RequireManualConfirmation && candidateCount <= MinSelect` (CardSelectCmd.cs:287-290/396-399/708-711). The card's own `on_play` now calls `CardSelectCmd.from_pile(..., count=count, min_select=0)` (neows_fury.py:72-75), which is the exact `new CardSelectorPrefs(prompt, 0, num)` MinSelect-0/MaxSelect-num range C# builds (NeowsFury.cs:39) -- so the player may now decline part or all of the return on both sides, and the previously-missing MIN half of the range is modeled. `MAX_HAND_SIZE` is still 10 on both sides (CardPile.cs:21, player.py:68 -- was cited :56, decompiler/line-shift drift only). Attack-then-select order unchanged and still faithful."
     },
     "OnUpgrade": {
-      "maps_to": "NeowsFuryCard._on_upgrade (neows_fury.py:387-389)",
+      "maps_to": "NeowsFuryCard._on_upgrade (neows_fury.py:52-54)",
       "verdict": "faithful",
       "rationale": "`DynamicVars.Damage.UpgradeValueBy(4m)` + `DynamicVars.Cards.UpgradeValueBy(1m)` (NeowsFury.cs:45-46) == `_damage += 4` (10 -> 14) and `_cards += 1` (2 -> 3). Both upgraded numbers checked."
     }
   },
   "guards": [
     {
-      "what": "the chosen cards are moved with `CardPileCmd.Add(list, PileType.Hand)` in C# (NeowsFury.cs:39) and by direct list mutation in the sim (neows_fury.py:405-407)",
+      "what": "the chosen cards are moved with `CardPileCmd.Add(list, PileType.Hand)` in C# (NeowsFury.cs:39) and by direct list mutation in the sim (neows_fury.py:76-78)",
       "verdict": "gap",
-      "issue": "The sim pops the chosen cards out of `player.discard_pile` and appends them to `player.hand` in place (neows_fury.py:405-407) instead of routing through a pile-add verb, so nothing fires for the pile transition. C# `CardPileCmd.Add` runs `Hook.AfterCardChangedPiles` (CardPileCmd.cs:635) and enforces `MaxCardsInHand` inside `AddInternal` (the cap is separately enforced here by the `count` computation in OnPlay, so only the hook is dropped). SAME MECHANISM AND SAME VERDICT AS card/anointed's `CardPileCmd.Add` guard (rule 3) -- this is the card-level instance of creature_card_cmds's 'no unified AfterCardChangedPiles' structural finding (docs/audit/seams/creature_card_cmds.md:643-666), recorded here because it is Neow's Fury's own code doing the bypass. DORMANT: the sim has no `after_card_changed_piles` listener at all, so nothing observable is dropped yet. TRIGGER: the first ported model overriding `AfterCardChangedPiles`. Was recorded faithful while its own rationale said \"Same structural point as card/anointed's guard\" and card/anointed carries `gap`; the report also files it under the DORMANT-GAP family \"Direct pile mutation instead of a pile verb\" (§5)."
+      "issue": "Re-audited 2026-08-04 (stale-sweep task-8 batch-04): still open, citation refreshed only. The sim still pops the chosen cards out of `player.discard_pile` and appends them to `player.hand` in place (neows_fury.py:76-78) instead of routing through a pile-add verb, so nothing fires for the pile transition. C# `CardPileCmd.Add` runs `Hook.AfterCardChangedPiles` (CardPileCmd.cs:635) and enforces `MaxCardsInHand` inside `AddInternal` (the cap is separately enforced here by the `count` computation in OnPlay, so only the hook is dropped). SAME MECHANISM AND SAME VERDICT AS card/anointed's `CardPileCmd.Add` guard (rule 3) -- this is the card-level instance of creature_card_cmds's 'no unified AfterCardChangedPiles' structural finding, recorded here because it is Neow's Fury's own code doing the bypass. DORMANT (RL-training and conformance-replay both): `after_card_changed_piles` is now a real dispatched hook (hooks.py:1436), not merely absent, but it still has ZERO registered implementers (`hooks.py:585` -- \"a hook with zero implementors today (after_card_changed_piles, ...)\"), confirmed by reading `hooks.py` in full for any `after_card_changed_piles` listener registration; none exists. TRIGGER: the first ported model overriding `AfterCardChangedPiles`."
     }
   ],
   "verdict": "gap",

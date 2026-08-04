@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -51,7 +51,7 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
@@ -71,7 +71,7 @@
     },
     {
       "path": "sts2_rl/relics/vambrace.py",
-      "sha256": "ab4842b0b0e85a4a7dfc36e3862d9fd4c2472643bac06541425555cda0662c13",
+      "sha256": "3f4d5d4857301e75e94419023238c8c8b76caa390e23a33e56b540eb5443132e",
       "side": "sim"
     },
     {
@@ -81,7 +81,12 @@
     },
     {
       "path": "sts2_rl/rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -109,7 +114,7 @@
     "AfterAddedToRoom": {
       "maps_to": "corpse_slug.py:40-42 (PowerCmd.apply(hooks, self, RavenousPower, 4) inside __init__)",
       "verdict": "deliberate-divergence",
-      "rationale": "SHARED-FINDINGS section 2, copied not re-derived. The sim has no add-to-room phase - creature creation IS construction - so AfterAddedToRoom's effect is applied from __init__ (corpse_slug.py:40-42). Same observable today on all three clauses: (a) listener set - the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:26-40 / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on `target is self.player` / `applier is self.player` / `card is not None`, and a monster's starting power is self-applied with no card, so none can fire, and sts2_rl/potions.py implements none of the four hooks; (b) HP-roll inversion - the sim applies the power before the parity Niche roll (combat.py:152-153) and the game after it, but of the constructor-applied power classes only IllusionPower reads max_hp and only inside revive() (powers.py:1581), never at apply time, and RavenousPower 4 (CorpseSlug.cs:51,88 - GetValueIfAscension(DeadlyEnemies, 5, 4), non-ascension value LAST) is a flat constant; (c) roll ordering - CorpseSlug is the batch's one MachineMonster, so MachineMonster.__init__ DOES roll (state_machine.py:301) before the subclass applies the power - but every one of its three possible initial states is a MoveState, so monster_state_machine step 30's sticky early return fires and the roll evaluates no branch and reads no power. Executed rather than assumed: `py audit/tools/monster_probes_b02.py seq` drives all three starter indices for 40 turns and reports 0 MonsterAi draws on both the reference machine and the port. All cited files are carried in this record's extra_sources. NOTE (tooling defect this batch found): `py audit/tools/monster_probes.py ctor-order` does NOT list this unit. Its `_CTOR` regex (the `_CTOR` regex in audit/tools/monster_probes.py, which this pipeline deliberately never hashes) is `def __init__\\(self`, which cannot match a port whose signature wraps as `def __init__(<newline> self,`. Reproduce with `py audit/tools/monster_probes_b02.py ctor-regex`: the real population is 46, not the 35 SHARED-FINDINGS section 2 reports, and 11 units are missing from that list."
+      "rationale": "SHARED-FINDINGS section 2, copied not re-derived. The sim has no add-to-room phase - creature creation IS construction - so AfterAddedToRoom's effect is applied from __init__ (corpse_slug.py:40-42). Same observable today on all three clauses: (a) listener set - the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:55-73 / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on `target is self.player` / `applier is self.player` / `card is not None`, and a monster's starting power is self-applied with no card, so none can fire, and sts2_rl/potions.py implements none of the four hooks; (b) HP-roll inversion - the sim applies the power before the parity Niche roll (combat.py:267-268) and the game after it, but of the constructor-applied power classes only IllusionPower reads max_hp and only inside revive() (powers.py:2063-2067), never at apply time, and RavenousPower 4 (CorpseSlug.cs:51,88 - GetValueIfAscension(DeadlyEnemies, 5, 4), non-ascension value LAST) is a flat constant; (c) roll ordering - CorpseSlug is the batch's one MachineMonster, so MachineMonster.__init__ DOES roll (state_machine.py:301) before the subclass applies the power - but every one of its three possible initial states is a MoveState, so monster_state_machine step 30's sticky early return fires and the roll evaluates no branch and reads no power. Executed rather than assumed: `py audit/tools/monster_probes_b02.py seq` drives all three starter indices for 40 turns and reports 0 MonsterAi draws on both the reference machine and the port. All cited files are carried in this record's extra_sources. NOTE (tooling defect this batch found): `py audit/tools/monster_probes.py ctor-order` does NOT list this unit. Its `_CTOR` regex (the `_CTOR` regex in audit/tools/monster_probes.py, which this pipeline deliberately never hashes) is `def __init__\\(self`, which cannot match a port whose signature wraps as `def __init__(<newline> self,`. Reproduce with `py audit/tools/monster_probes_b02.py ctor-regex`: the real population is 46, not the 35 SHARED-FINDINGS section 2 reports, and 11 units are missing from that list."
     },
     "GenerateAnimator": {
       "maps_to": "no counterpart (the sim models no presentation)",
@@ -131,7 +136,7 @@
     {
       "what": "Where StarterMoveIdx comes from. The game calls `CorpseSlug.EnsureCorpseSlugsStartWithDifferentMoves(models, base.Rng)` (CorpseSlugsNormal.cs:32, CorpseSlugsWeak.cs:32), and the helper draws `rng.NextInt(3)` off the PER-ENCOUNTER selection Rng (CorpseSlug.cs:135-144; EncounterModel.cs:49,268 is the stream, reproduced by rng.py:52-67's make_encounter_rng). The sim's CorpseSlugsEncounter.create_monsters (corpse_slug.py:79-84) ignores its `selection_rng` parameter entirely and draws `rng.randrange(3)` off the combat rng.",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-28: CorpseSlugsEncounter.create_monsters (corpse_slug.py:79-91) now CONSUMES its `selection_rng` -- `start = selection_rng.next_int(3)` -- reproducing CorpseSlugs{Normal,Weak}.cs:32 -> CorpseSlug.EnsureCorpseSlugsStartWithDifferentMoves (CorpseSlug.cs:135-144) drawing NextInt(3) off the per-encounter Rng, and run.py:1299-1309 builds that stream with rng.make_encounter_rng(seed, total_floor, encounter.entry) exactly as EncounterModel.cs:258-263 seeds it. Executed: `py audit/tools/monster_probes_b02.py enc-rng` now reports corpse_slugs_normal and corpse_slugs_weak consuming 1 selection draw against the game's 1 (they consumed 0 before), and the +1-per-slug stagger was already faithful. WAS: the parameter was ignored and the index came off the shared, unseeded combat random.Random, so every slug opened on the wrong move and a replay was not even run-to-run stable. Legacy (no rng_set) runs still fall back to the shared rng at corpse_slug.py:87 -- by construction, since a legacy run has no run seed to derive a per-encounter Rng from."
+      "issue": "Closed 2026-07-28: CorpseSlugsEncounter.create_monsters (corpse_slug.py:79-91) now CONSUMES its `selection_rng` -- `start = selection_rng.next_int(3)` -- reproducing CorpseSlugs{Normal,Weak}.cs:32 -> CorpseSlug.EnsureCorpseSlugsStartWithDifferentMoves (CorpseSlug.cs:135-144) drawing NextInt(3) off the per-encounter Rng, and run.py:1702-1706 builds that stream with rng.make_encounter_rng(seed, total_floor, encounter.entry) exactly as EncounterModel.cs:258-263 seeds it. Executed: `py audit/tools/monster_probes_b02.py enc-rng` now reports corpse_slugs_normal and corpse_slugs_weak consuming 1 selection draw against the game's 1 (they consumed 0 before), and the +1-per-slug stagger was already faithful. WAS: the parameter was ignored and the index came off the shared, unseeded combat random.Random, so every slug opened on the wrong move and a replay was not even run-to-run stable. Legacy (no rng_set) runs still fall back to the shared rng at corpse_slug.py:87 -- by construction, since a legacy run has no run seed to derive a per-encounter Rng from."
     },
     {
       "what": "EnsureCorpseSlugsStartWithDifferentMoves' stagger itself: `num = rng.NextInt(3); foreach slug { StarterMoveIdx = num % 3; num++; }` (CorpseSlug.cs:138-143) vs the sim's `(start + i) % 3` (corpse_slug.py:82)",

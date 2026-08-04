@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\hive\\thieving_hopper.py",
-    "sha256": "276bca6f2ac105b94c8b37e3db919ce92039ac43407e88bc9411a9b5766ffd76"
+    "sha256": "f53942cb48feefaaec62ea27439cf446f99ae47ad864aa322180c2bd704bf2ce"
   },
   "extra_sources": [
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     },
     {
@@ -36,17 +36,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     }
   ],
@@ -126,7 +126,7 @@
     {
       "what": "PowerCmd.Apply's `applier` argument",
       "verdict": "deliberate-divergence",
-      "rationale": "ONE MECHANISM ACROSS THIS BATCH (rule 3), recorded at every site: the sim's monster ports drop PowerCmd.Apply's `applier` argument. C# is `Apply<T>(choiceContext, target, amount, applier, cardSource)` (PowerCmd.cs:67) and passes `base.Creature` at ThievingHopper.cs:155 (EscapeArtist), :243 (Swipe) and :273 (Flutter), all applier=base.Creature; the sim's `PowerCmd.apply(hooks, target, power_cls, amount, applier=None)` (cmds.py:271-277) is called without it at thieving_hopper.py:43, :106 and :114. In C# a null applier additionally SKIPS the whole Hook.ModifyPowerAmountGiven pass (PowerCmd.cs:123-126) and changes the key FindExistingInstanceForStacking uses (PowerCmd.cs:78, :112). Same observable today, EXECUTED (`py audit/tools/monster_probes_b06.py applier`): the sim has exactly six listener definitions that can see the argument -- powers.py:1172/1181 (ViciousPower, gated `name != \"vulnerable\" or applier is not self.owner`, powers.py:1167), powers.py:3101/3106 (_PossessPower, gated `applier is self.owner and name == self._stat_id and target.side == \"player\" and delta < 0`, powers.py:3092-3099), relics/ruined_helmet.py:23-38 (gated on `target is self.player`, never on applier) and relics/unsettling_lamp.py:44-53 (gated `applier is not self.player`, unsettling_lamp.py:47). None can distinguish `None` from the applying monster for a power this unit applies. Named trigger: porting any listener that reads `applier` positively (a monster-applier-sensitive relic), or porting PowerInstanceType so stacking is keyed by applier. Third-file citations (relics/*.py) not hashed here."
+      "rationale": "ONE MECHANISM ACROSS THIS BATCH (rule 3), recorded at every site: the sim's monster ports drop PowerCmd.Apply's `applier` argument. C# is `Apply<T>(choiceContext, target, amount, applier, cardSource)` (PowerCmd.cs:67) and passes `base.Creature` at ThievingHopper.cs:155 (EscapeArtist), :243 (Swipe) and :273 (Flutter), all applier=base.Creature; the sim's `PowerCmd.apply(hooks, target, power_cls, amount, applier=None)` (cmds.py) is called without it at thieving_hopper.py:43, :106 and :114. In C# a null applier additionally SKIPS the whole Hook.ModifyPowerAmountGiven pass (PowerCmd.cs:123-126) and changes the key FindExistingInstanceForStacking uses (PowerCmd.cs:78, :112). Same observable today, EXECUTED (`py audit/tools/monster_probes_b06.py applier`): the sim has exactly six listener definitions that can see the argument -- powers.py:1172/1181 (ViciousPower, gated `name != \"vulnerable\" or applier is not self.owner`, powers.py:1167), powers.py:3101/3106 (_PossessPower, gated `applier is self.owner and name == self._stat_id and target.side == \"player\" and delta < 0`, powers.py:3092-3099), relics/ruined_helmet.py:23-38 (gated on `target is self.player`, never on applier) and relics/unsettling_lamp.py:44-53 (gated `applier is not self.player`, unsettling_lamp.py:47). None can distinguish `None` from the applying monster for a power this unit applies. Named trigger: porting any listener that reads `applier` positively (a monster-applier-sensitive relic), or porting PowerInstanceType so stacking is keyed by applier. Third-file citations (relics/*.py) not hashed here."
     }
   ],
   "verdict": "deliberate-divergence",

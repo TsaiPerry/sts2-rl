@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\bag_of_marbles.py",
-    "sha256": "64e91e0aba9e3dacb2a1b367f930ff8ae2abe15576ace49889824efd6a4d6ed6"
+    "sha256": "4052d144fa73200d3436a6375070f7a326d6ea695b82c806df271485d18e777e"
   },
   "extra_sources": [
     {
@@ -21,17 +21,17 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -41,10 +41,9 @@
       "verdict": "faithful"
     },
     "BeforeSideTurnStart": {
-      "maps_to": "on_player_turn_started (bag_of_marbles.py:18-23) -- the POST-draw slot, not the pre-block-clear one the C# hook names",
-      "verdict": "gap",
-      "issue": "Same fix. `PowerCmd.apply`'s own `can_receive_powers` backstop (round 5, already documented in R6-report.md) was the reason this was unobservable via power state even before this fix; the candidate-set swap is now also C#-literal at the loop-membership level, verified via `test_bag_of_marbles_candidate_set_excludes_an_unhittable_enemy`.",
-      "live": false
+      "maps_to": "before_side_turn_start (bag_of_marbles.py:18-26), the real pre-block-clear slot",
+      "verdict": "faithful",
+      "issue": "STALE at this pass: the maps_to text still described the old `on_player_turn_started` (POST-draw) binding, which is gone from the file. `bag_of_marbles.py:18` now defines `before_side_turn_start` directly, matching G1's already-recorded fix (CombatManager.cs:458's slot); this rollup entry had not been updated when G1 closed. `PowerCmd.apply`'s own `can_receive_powers` backstop (round 5, already documented in R6-report.md) was the reason the stale slot was unobservable via power state even before this fix; the candidate-set swap (G2, now also closed) is C#-literal at the loop-membership level, verified via `test_bag_of_marbles_candidate_set_excludes_an_unhittable_enemy`."
     }
   },
   "guards": [
@@ -54,14 +53,14 @@
       "issue": "Closed by the turn-start-split fix (power/_side_turn_slot family): the sim gained a real `before_side_turn_start` dispatcher (CombatManager.cs:458's slot) and bag_of_marbles.py:18 was moved onto it. EXECUTED 2026-07-30 (round 11): `py -m pytest test/test_turn_start_split.py -k bag_of_marbles` passes -- `test_each_relic_listens_on_the_hook_it_overrides[bag_of_marbles-before_side_turn_start]` confirms the relic implements `before_side_turn_start` and no other turn-start slot, and `test_before_side_turn_start_runs_ahead_of_the_block_clear` pins the ordering (a `before_side_turn_start` listener still sees last turn's block; `on_block_cleared` sees it gone) using this exact relic's own mechanism as its worked example. `grep -n 'def before_side_turn_start' sts2_rl/relics/bag_of_marbles.py` confirms the method name. The text it replaced described the OLD `on_player_turn_started` binding, which is gone from the file entirely today."
     },
     {
-      "what": "G2 (DORMANT): `combatState.HittableEnemies` (BagOfMarbles.cs:28) vs the sim's living_enemies() (bag_of_marbles.py:22)",
-      "verdict": "gap",
-      "issue": "C# targets `Enemies.Where(e => e.IsHittable)` (CombatState.cs:142), and IsHittable is `!IsDead && Hook.ShouldAllowHitting(CombatState, this)` (Creature.cs:285-299). The sim's Relic.living_enemies() (relics/base.py:294-297) filters on `not e.is_gone` ONLY -- its own docstring concedes the should_allow_hitting predicate is applied by DamageCmd rather than here, and PowerCmd.apply does not apply it either (that absence is audit/records/seam/power_cmd.json gap G6, the missing CanReceivePowers backstop). So an alive-but-unhittable enemy receives Vulnerable in the sim and is skipped by C#. REACHABILITY (DORMANT): the ported should_allow_hitting implementers gate on a mid-revival state -- IllusionPower.should_allow_hitting returns False while is_reviving (powers.py:1572-1575) -- which cannot be true during turn 1's setup, the only turn Bag of Marbles fires. Porting a turn-1 untargetable enemy, or any effect that makes a creature unhittable before the first player turn, makes it live. Distinct from power_cmd G6: that gap is the missing backstop INSIDE PowerCmd.apply, this one is the wrong enemy set at the CALL site, and fixing either alone would leave the other."
+      "what": "G2 (CLOSED): `combatState.HittableEnemies` (BagOfMarbles.cs:28) vs the sim's candidate set (bag_of_marbles.py:25)",
+      "verdict": "faithful",
+      "issue": "CLOSED: `Relic.hittable_enemies()` now exists (relics/base.py:495-497, `CombatState.hittable_enemies` -> combat.py:116-118/380) and mirrors `CombatState.HittableEnemies` (CombatState.cs:142, `!IsDead && Hook.ShouldAllowHitting`); `bag_of_marbles.py:25` calls it directly (`for enemy in self.hittable_enemies():`), replacing the old `living_enemies()` (relics/base.py:486-493, `not e.is_gone` only, still kept as the deliberately-broader helper for relics that should NOT respect ShouldAllowHitting). EXECUTED: test/test_r14_relic_candidates.py::test_bag_of_marbles_candidate_set_excludes_an_unhittable_enemy makes one enemy unhittable-but-alive and asserts it is excluded from Vulnerable while the spectator still receives it. The previous DORMANT gap (an alive-but-unhittable enemy wrongly receiving Vulnerable) no longer applies; power_cmd.json's G6 (the missing CanReceivePowers backstop inside PowerCmd.apply itself) is unaffected and remains a separate, still-open mechanism under rule 3."
     },
     {
       "what": "N1: `participants.Contains(Owner.Creature)` and `TurnNumber <= 1` (BagOfMarbles.cs:25)",
       "verdict": "faithful",
-      "rationale": "The participants check restricts a both-sides hook to the owner's own side turn; the sim's on_player_turn_started only fires for the player, so it is structurally satisfied. `self.turn <= 1` matches `TurnNumber <= 1` with the executed turn numbering above."
+      "rationale": "The participants check restricts a both-sides hook to the owner's own side turn; the sim's before_side_turn_start only fires for the player, so it is structurally satisfied. `self.turn <= 1` matches `TurnNumber <= 1` with the executed turn numbering above."
     },
     {
       "what": "N2: the multi-target PowerCmd.Apply overload (BagOfMarbles.cs:28) vs the sim's per-enemy loop",
@@ -74,6 +73,6 @@
       "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* are presentation only (the relic card's glow and its greyed/active state in the relic bar); the sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
-  "audited": "2026-07-26"
+  "verdict": "waiver",
+  "audited": "2026-08-04"
 }

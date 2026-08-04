@@ -11,7 +11,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -19,7 +19,7 @@
   "guards": [
     {
       "what": "Extermination / Squash (Bugslayer.cs:30-45): AddAndPreview<T> = CreateCard<T> then CardPileCmd.Add(card, PileType.Deck)",
-      "maps_to": "events/bugslayer.py:25-31 run.add_card(make_card('exterminate')) / make_card('squash'). run.add_card (run.py:341-354) runs Hook.ModifyCardBeingAddedToDeck and the AfterCardChangedPiles tail, which is what CardPileCmd.Add does for the deck pile, so the egg relics upgrade the offered card in both engines. No gate, no vars, no RNG: this event is a pure two-way card grant.",
+      "maps_to": "events/bugslayer.py:25-31 run.add_card(make_card('exterminate')) / make_card('squash'). run.add_card (run.py) runs Hook.ModifyCardBeingAddedToDeck and the AfterCardChangedPiles tail, which is what CardPileCmd.Add does for the deck pile, so the egg relics upgrade the offered card in both engines. No gate, no vars, no RNG: this event is a pure two-way card grant.",
       "verdict": "faithful"
     },
     {

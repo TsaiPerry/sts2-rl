@@ -21,22 +21,22 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     }
   ],
@@ -56,9 +56,9 @@
       "rationale": "RelicModel.Flash() / base.Status = RelicStatus.* / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / UpdateDisplay / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim. DisplayAmount (Nunchaku.cs:25-35) is `AttacksPlayed % 10`, i.e. the same counter the sim keeps, rendered."
     },
     "AfterCardPlayed": {
-      "maps_to": "on_card_played (nunchaku.py:27-34), dispatched at combat.py:904",
+      "maps_to": "on_card_played (nunchaku.py:27-34), dispatched at combat.py",
       "verdict": "faithful",
-      "rationale": "STALE at round 11: the only guard this rollup names, G1 (how many times the hook fires for a replayed attack), was already closed 2026-07-27 per this record's own guards[G1] entry. EXECUTED (this pass): combat.py:857-904 now brackets Hook.BeforeCardPlayed and Hook.AfterCardPlayed INSIDE the `for play_index in range(play_count)` loop (`self.hooks.on_card_played(card, is_auto_play)` at :904, gated on `not self.is_over` matching CardModel.cs:1957-1959's IsInProgress gate), so a Throwing-Axe-doubled Attack fires the hook once per iteration on both sides -- the trigger, the counter, the modulus and the per-RUN counter lifetime (guard N1, also already faithful) all match. Guard N4 (the missing AfterModifyingEnergyGain companion on the energy grant this hook triggers) remains its own separately-settled dormant gap and is unaffected by this rollup."
+      "rationale": "STALE at round 11: the only guard this rollup names, G1 (how many times the hook fires for a replayed attack), was already closed 2026-07-27 per this record's own guards[G1] entry. EXECUTED (this pass): combat.py now brackets Hook.BeforeCardPlayed and Hook.AfterCardPlayed INSIDE the `for play_index in range(play_count)` loop (`self.hooks.on_card_played(card, is_auto_play)` at :904, gated on `not self.is_over` matching CardModel.cs:1957-1959's IsInProgress gate), so a Throwing-Axe-doubled Attack fires the hook once per iteration on both sides -- the trigger, the counter, the modulus and the per-RUN counter lifetime (guard N1, also already faithful) all match. Guard N4 (the missing AfterModifyingEnergyGain companion on the energy grant this hook triggers) remains its own separately-settled dormant gap and is unaffected by this rollup."
     }
   },
   "guards": [
@@ -70,7 +70,7 @@
     {
       "what": "G1 (LIVE): a replayed Attack advances AttacksPlayed twice in C# and once in the sim, and because the counter is per-RUN the offset never washes out",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. "
+      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. "
     },
     {
       "what": "N2: CardsVar(10) and EnergyVar(1) (Nunchaku.cs:37-41) vs ATTACKS = 10 and the literal 1 (nunchaku.py:21, :33)",
@@ -80,12 +80,12 @@
     {
       "what": "N3: `CombatManager.Instance.IsInProgress` gates only the ENERGY GAIN (Nunchaku.cs:94), not the increment (:92)",
       "verdict": "faithful",
-      "rationale": "The asymmetry is deliberate in C# and is reproduced for free in the sim, but it needed checking because the sim fires on_card_played BEFORE play_card decides the combat is over (combat.py:514 vs :417-420), so a killing blow reaches this hook. It reaches C#'s too: Hook.AfterCardPlayed is itself gated on IsInProgress at CardModel.cs:1957, and audit/records/seam/turn_structure.json G13 enumerates all six CheckWinCondition call sites -- none of them is inside CardModel.Play -- so the combat is still 'in progress' for the whole card play and both codebases increment AND grant. Rule 7: combat.py, CardModel.cs and the turn_structure record are unhashed here."
+      "rationale": "The asymmetry is deliberate in C# and is reproduced for free in the sim, but it needed checking because the sim fires on_card_played BEFORE play_card decides the combat is over (combat.py vs :417-420), so a killing blow reaches this hook. It reaches C#'s too: Hook.AfterCardPlayed is itself gated on IsInProgress at CardModel.cs:1957, and audit/records/seam/turn_structure.json G13 enumerates all six CheckWinCondition call sites -- none of them is inside CardModel.Play -- so the combat is still 'in progress' for the whole card play and both codebases increment AND grant. Rule 7: combat.py, CardModel.cs and the turn_structure record are unhashed here."
     },
     {
-      "what": "N4: `PlayerCmd.GainEnergy` (Nunchaku.cs:97) runs Hook.ModifyEnergyGain, then Hook.AfterModifyingEnergyGain, then a `finalAmount > 0` check (PlayerCmd.cs:29-43); EnergyCmd.gain (cmds.py:545-554) runs the modify chain and adds unconditionally",
+      "what": "N4: `PlayerCmd.GainEnergy` (Nunchaku.cs:97) runs Hook.ModifyEnergyGain, then Hook.AfterModifyingEnergyGain, then a `finalAmount > 0` check (PlayerCmd.cs:29-43); EnergyCmd.gain (cmds.py) runs the modify chain and adds unconditionally",
       "verdict": "gap",
-      "issue": "This is the missing-AfterModifying-companion family that audit/records/seam/power_cmd.json gap G4 records (13 AfterModifying* variants in Hook.cs, one of them implemented in the sim) and that relic/bag_of_preparation N1 already verdicted `gap` at the hand-draw dispatcher; one verdict per mechanism, binding rule 3. Observed at the ENERGY dispatcher: the sim's modify_energy_gain (hooks.py:210) returns a bare int with no out-param modifiers list, so there is nothing for an AfterModifyingEnergyGain listener to hook into. DORMANT on both halves, and both were checked rather than assumed. (a) Companion event: `grep -rn 'def modify_energy_gain' sts2_rl/` returns exactly one listener outside the dispatcher, powers.py:554 NoEnergyGainPower, which overrides no companion, so nothing of any ported behaviour is lost. (b) The `> 0` guard: the only ported modifier clamps to 0 rather than going negative (powers.py:554-557 returns 0 for the owner), so `player.energy += amount` can never subtract today; porting a modifier that returns a negative amount makes the sim drain energy where C# does nothing. Recorded rather than waived because 'no ported content triggers this' is a dormant gap, not a waiver (binding rule 1). Rule 7: PlayerCmd.cs, cmds.py, hooks.py, powers.py, relics/bag_of_preparation.py and the power_cmd record are NOT hashed by this record."
+      "issue": "This is the missing-AfterModifying-companion family that audit/records/seam/power_cmd.json gap G4 records (13 AfterModifying* variants in Hook.cs, one of them implemented in the sim) and that relic/bag_of_preparation N1 already verdicted `gap` at the hand-draw dispatcher; one verdict per mechanism, binding rule 3. Observed at the ENERGY dispatcher: the sim's modify_energy_gain (hooks.py) returns a bare int with no out-param modifiers list, so there is nothing for an AfterModifyingEnergyGain listener to hook into. DORMANT on both halves, and both were checked rather than assumed. (a) Companion event: `grep -rn 'def modify_energy_gain' sts2_rl/` returns exactly one listener outside the dispatcher, powers.py NoEnergyGainPower, which overrides no companion, so nothing of any ported behaviour is lost. (b) The `> 0` guard: the only ported modifier clamps to 0 rather than going negative (powers.py returns 0 for the owner), so `player.energy += amount` can never subtract today; porting a modifier that returns a negative amount makes the sim drain energy where C# does nothing. Recorded rather than waived because 'no ported content triggers this' is a dormant gap, not a waiver (binding rule 1). Rule 7: PlayerCmd.cs, cmds.py, hooks.py, powers.py, relics/bag_of_preparation.py and the power_cmd record are NOT hashed by this record."
     },
     {
       "what": "N5: `cardPlay.Card.Owner == base.Owner` (Nunchaku.cs:90), IsActivating / DoActivateVisuals / UpdateDisplay / Flash / Cmd.Wait(1f) (Nunchaku.cs:45-57, :74-86, :96, :102-108) and ExtraHoverTips (:43)",

@@ -16,17 +16,17 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     }
   ],
@@ -36,9 +36,9 @@
       "verdict": "faithful"
     },
     "ShouldPlayerResetEnergy": {
-      "maps_to": "should_reset_energy (ice_cream.py:19-20), dispatched by PlayerCombatState.start_turn (player.py:164) through HookSystem.should_reset_energy (hooks.py:621-627)",
+      "maps_to": "should_reset_energy (ice_cream.py:19-20), dispatched by PlayerCombatState.start_turn (player.py:371) through HookSystem.should_reset_energy (hooks.py:1929-1935)",
       "verdict": "faithful",
-      "rationale": "IceCream.cs:10-21 returns true when `player != base.Owner`, true when `Owner.PlayerCombatState.TurnNumber == 1`, and false otherwise; ice_cream.py:20 is `return self.turn == 1`. The multiplayer clause is guard N1. The turn clause matches exactly, including the timing: the sim increments combat.turn (combat.py:673-674, and 650 for an extra turn) BEFORE calling start_turn, and C# increments TurnNumber in SwitchSides on the enemy->player switch, also before StartTurn (turn_structure spec step 66) -- so both read the NEW turn number at the energy reset. The sim's dispatcher is an any-listener-vetoes fold, which reproduces C#'s Hook.ShouldPlayerResetEnergy semantics. EXECUTED (py audit/tools/relic_probes_b07.py icecream-energy): energy at the start of turns 1-4 is [3, 3, 3, 3] with no relic and [3, 6, 9, 12] with Ice Cream -- the game's numbers. Rule 7: sts2_rl/player.py, sts2_rl/hooks.py, sts2_rl/combat.py and the turn_structure record are not hashed by this record."
+      "rationale": "IceCream.cs:10-21 returns true when `player != base.Owner`, true when `Owner.PlayerCombatState.TurnNumber == 1`, and false otherwise; ice_cream.py:20 is `return self.turn == 1`. The multiplayer clause is guard N1. The turn clause matches exactly, including the timing: the sim increments combat.turn (combat.py:1822, and 1840 for an extra turn) BEFORE calling start_turn, and C# increments TurnNumber in SwitchSides on the enemy->player switch, also before StartTurn (turn_structure spec step 66) -- so both read the NEW turn number at the energy reset. The sim's dispatcher is an any-listener-vetoes fold, which reproduces C#'s Hook.ShouldPlayerResetEnergy semantics. EXECUTED (py audit/tools/relic_probes_b07.py icecream-energy): energy at the start of turns 1-4 is [3, 3, 3, 3] with no relic and [3, 6, 9, 12] with Ice Cream -- the game's numbers. Rule 7: sts2_rl/player.py, sts2_rl/hooks.py, sts2_rl/combat.py and the turn_structure record are not hashed by this record."
     }
   },
   "guards": [
@@ -48,9 +48,9 @@
       "rationale": "One local player, so `player != base.Owner` / `cardPlay.Card.Owner == base.Owner` / PlayerChoiceContext / ThrowingPlayerChoiceContext / BlockingPlayerChoiceContext are all structurally satisfied or collapse to a no-op. Same waiver as audit/records/seam/hook_dispatch.json guard N1, matched per binding rule 3. Specifically: the sim dispatches should_reset_energy with the one PlayerCombatState there is, so the clause is always false and the relic's answer is always its own owner's answer. It matters in the game because ONE player's Ice Cream must not stop the OTHER players' energy resetting -- a multiplayer-only concern by construction."
     },
     {
-      "what": "N2 (DORMANT): the sim calls modify_max_energy BEFORE should_reset_energy; C# evaluates ShouldPlayerResetEnergy first and only then reads MaxEnergy inside the chosen branch",
-      "verdict": "gap",
-      "issue": "This is audit/records/seam/turn_structure.json gap at spec step 17, verdicted there and matched here per binding rule 3. MECHANISM: player.py:163-167 folds modify_max_energy, then asks should_reset_energy, then assigns or accumulates; CombatManager.cs:641-649 branches first and reads Hook.ModifyMaxEnergy inside the branch it took. DORMANT: Ice Cream's own implementation is a pure read of the turn number with no side effect, and the seam's evidence is that no ported should_reset_energy or modify_max_energy implementation mutates state, so the swap is unobservable. It goes live with the first side-effecting implementation of either -- and Ice Cream is the relic that would expose it, because it is the only ported reason the else-branch is ever taken (`grep -rn 'def should_reset_energy' sts2_rl/` outside hooks.py returns relics/ice_cream.py only). Rule 7: the turn_structure record, sts2_rl/player.py and CombatManager.cs are not hashed by this record."
+      "what": "N2 (CLOSED, REVISED on this re-audit pass): whether the sim calls modify_max_energy BEFORE should_reset_energy, where C# evaluates ShouldPlayerResetEnergy first and only then reads MaxEnergy inside the chosen branch",
+      "verdict": "faithful",
+      "issue": "The premise is stale -- `PlayerCombatState._setup_player_turn` (sts2_rl/player.py:360-378) now calls `should_reset = self._hooks.should_reset_energy(self)` BEFORE `gained = self._hooks.modify_max_energy(self, self.ENERGY_PER_TURN)` (player.py:371-372), matching `CombatManager.cs:641-649`'s order exactly -- and the sim's own comment at player.py:366-370 names the fix directly: 'CombatManager.cs:641-649 \u2014 ShouldPlayerResetEnergy is evaluated FIRST; MaxEnergy ... is read INSIDE the chosen branch, exactly once either way. The sim used to call modify_max_energy first (tier-2 Task 11, item E; turn_structure/step17, dormant).' This closes both the general seam-level ordering question (audit/records/seam/turn_structure.json's step 17, which this entry should re-confirm independently rather than assume) and this relic's own site, which was always dormant here because Ice Cream's own `should_reset_energy` (ice_cream.py:19-20) is a pure read with no side effect. Verified by reading player.py:360-378 directly on this pass. Rule 7: the turn_structure record and CombatManager.cs are not hashed by this record."
     },
     {
       "what": "N3: the file has NO CanonicalVars, no hover tips, no Flash and no counter -- the two overrides above are the whole relic",
@@ -60,9 +60,9 @@
     {
       "what": "N4: the relic conserves energy from turn 2 ON, which means the 'else' branch is `Energy += MaxEnergy` and NOT `Energy += 3`",
       "verdict": "faithful",
-      "rationale": "PlayerCombatState.AddMaxEnergyToCurrent adds MaxEnergy -- itself Hook.ModifyMaxEnergy(player.MaxEnergy) -- rather than a literal. player.py:163-167 accumulates the same `gained` value it would otherwise assign, so a modify_max_energy listener (the sim has ported ones) scales the conserved amount identically. Checked because the natural wrong port hard-codes 3 and then silently diverges for any deck holding an energy relic. Rule 7: sts2_rl/player.py is not hashed by this record."
+      "rationale": "PlayerCombatState.AddMaxEnergyToCurrent adds MaxEnergy -- itself Hook.ModifyMaxEnergy(player.MaxEnergy) -- rather than a literal. player.py:371-376 accumulates the same `gained` value it would otherwise assign, so a modify_max_energy listener (the sim has ported ones) scales the conserved amount identically. Checked because the natural wrong port hard-codes 3 and then silently diverges for any deck holding an energy relic. Rule 7: sts2_rl/player.py is not hashed by this record."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

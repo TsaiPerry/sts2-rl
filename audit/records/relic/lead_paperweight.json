@@ -21,17 +21,17 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -41,7 +41,7 @@
       "verdict": "faithful"
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (lead_paperweight.py:16-30), dispatched by RunState.add_relic (run.py:552)",
+      "maps_to": "after_obtained (lead_paperweight.py:16-30), dispatched by RunState.add_relic (run.py:957-963, renumbered since prior pass, content unchanged)",
       "verdict": "faithful",
       "rationale": "LeadPaperweight.cs:19-36 builds `CardCreationOptions([ColorlessCardPool], CardCreationSource.Other, CardRarityOddsType.RegularEncounter)`, generates 2 reward cards, offers a SKIPPABLE choose-a-card screen, and adds the pick to the deck with CardPileCmd.Add(PileType.Deck). lead_paperweight.py:24-30 calls create_reward_cards(run, RarityOddsType.REGULAR, count=2, mutate_pity=False, modify_hooks=True, pool=list(COLORLESS_POOL)) then run.select_cards('card_reward', cards, 1) and run.add_card. Every argument checks out against the source (guards N1-N4). EXECUTED (py audit/tools/relic_probes_b08.py b08-paperweight): three seeds offer two distinct all-Colorless cards each -- ['fisticuffs','thinking_ahead'], ['jack_of_all_trades','master_of_strategy'], ['ultimate_defend','fisticuffs'] -- one is added, and a declining selector adds 0, matching canSkip: true. The only non-faithful entry on this unit is N5, the run-history telemetry, which is a waiver. Rule 7: rewards.py, run.py and cards/pool.py are not hashed by this record."
     }
@@ -50,7 +50,7 @@
     {
       "what": "N1: `mutate_pity=False` -- does source Other really use the non-mutating rarity roll?",
       "verdict": "faithful",
-      "rationale": "VERIFIED IN THE SOURCE rather than trusted from the port's docstring. CardFactory.RollForRarity (CardFactory.cs:244-259) calls the pity-MUTATING `PlayerOdds.CardRarity.Roll(rollMethod)` only when ForceRarityOddsChange is set or `source == CardCreationSource.Encounter` with one of three odds types; otherwise it calls `RollWithBaseOdds(rollMethod)`. Lead Paperweight passes CardCreationSource.Other and no flags, so the base-odds branch is right and the run's rare-card pity counter must NOT move. create_reward_cards' mutate_pity=False selects `run.card_rarity_odds.roll_with_base_odds` (rewards.py:275-278). This is the one argument a reader would be most likely to get wrong, and it is correct. Rule 7: src/Core/Factories/CardFactory.cs and rewards.py are not hashed by this record."
+      "rationale": "VERIFIED IN THE SOURCE rather than trusted from the port's docstring. CardFactory.RollForRarity (CardFactory.cs:244-259) calls the pity-MUTATING `PlayerOdds.CardRarity.Roll(rollMethod)` only when ForceRarityOddsChange is set or `source == CardCreationSource.Encounter` with one of three odds types; otherwise it calls `RollWithBaseOdds(rollMethod)`. Lead Paperweight passes CardCreationSource.Other and no flags, so the base-odds branch is right and the run's rare-card pity counter must NOT move. create_reward_cards' mutate_pity=False selects `run.card_rarity_odds.roll_with_base_odds` (rewards.py:429-430, renumbered since prior pass, content unchanged). This is the one argument a reader would be most likely to get wrong, and it is correct. Rule 7: src/Core/Factories/CardFactory.cs and rewards.py are not hashed by this record."
     },
     {
       "what": "N2: `modify_hooks=True` -- no CardCreationFlags at all in C#, so Hook.TryModifyCardRewardOptions DOES run on these two options",
@@ -58,14 +58,14 @@
       "rationale": "CardFactory.CreateForReward (CardFactory.cs:89-106) runs the hook unless CardCreationFlags.NoModifyHooks is set, and the options object here carries no flags -- contrast LastingCandy.cs:127, which sets NoModifyHooks | NoCardPoolModifications on ITS internal call. So the sim passing modify_hooks=True is right, and the ported Late implementers (glitter, silken_tress, silver_crucible, the eggs) correctly get a crack at Lead Paperweight's two colorless options. CROSS-REFERENCE: this is also the reason audit/records/relic/lava_lamp.json guard N2 matters -- Lava Lamp's C# hook carries a `CurrentRoom is CombatRoom` guard, so a Lava Lamp fix must NOT upgrade these two cards. Rule 7: src/Core/Factories/CardFactory.cs, relics/glitter.py and relics/silver_crucible.py are not hashed by this record."
     },
     {
-      "what": "N3: the two options are DISTINCT -- C#'s `.Except(blacklist)` over the already-chosen list (CardFactory.cs:216-217) vs the sim's chosen_ids exclusion (rewards.py:271-272)",
+      "what": "N3: the two options are DISTINCT -- C#'s `.Except(blacklist)` over the already-chosen list (CardFactory.cs:216-217) vs the sim's chosen_ids exclusion (rewards.py:412, renumbered since prior pass, content unchanged)",
       "verdict": "faithful",
       "rationale": "CreateForReward(player, cardCount, options) accumulates each pick's CanonicalInstance into `list` and passes it as the blacklist for the next, so the two offers can never be the same card; create_reward_cards does the same with `options = [cid for cid in pool if cid not in chosen_ids]`. EXECUTED: all three probed seeds offer two different ids. Note the sim's exclusion is by ID and C#'s by canonical instance, which coincide because a pool holds one canonical instance per id. Rule 7: src/Core/Factories/CardFactory.cs and rewards.py are not hashed by this record."
     },
     {
       "what": "N4: `canSkip: true` (LeadPaperweight.cs:24) vs run.select_cards, which the caller loops over",
       "verdict": "faithful",
-      "rationale": "This is where relic/calling_bell's G3 and relic/lava_rock's N1 auto-keep divergence would normally appear, and it does NOT here: lead_paperweight.py:29-30 iterates whatever select_cards returns and adds nothing if it returns empty, so a policy that declines is representable. EXECUTED: a selector returning [] adds 0 cards. The default policy (rng.sample, run.py:390) always picks one, which is a policy choice rather than a modelling limit. Rule 7: run.py are not hashed by this record."
+      "rationale": "This is where relic/calling_bell's G3 and relic/lava_rock's N1 auto-keep divergence would normally appear, and it does NOT here: lead_paperweight.py:29-30 iterates whatever select_cards returns and adds nothing if it returns empty, so a policy that declines is representable. EXECUTED: a selector returning [] adds 0 cards. The default policy (rng.sample, run.py:643, renumbered since prior pass, content unchanged) always picks one, which is a policy choice rather than a modelling limit. Rule 7: run.py are not hashed by this record."
     },
     {
       "what": "N5: the un-picked card's CardChoiceHistoryEntry (LeadPaperweight.cs:29-35) and CardCmd.PreviewCardPileAdd (line 27)",
@@ -80,17 +80,17 @@
     {
       "what": "N7: the pool has no Basic/Ancient rarity filter in C#'s non-Uniform branch, and lead_paperweight.py:20-23's comment claims one",
       "verdict": "faithful",
-      "rationale": "CardFactory.CreateForReward (CardFactory.cs:220-233) applies the `Rarity != Basic && Rarity != Ancient` filter ONLY on the `RarityOddsType.Uniform` branch; the RegularEncounter branch instead rolls a rarity and filters to it, which excludes Basic/Ancient implicitly because the odds table never rolls them. The port's inline comment (lead_paperweight.py:20-23) describes it as 'filters only Basic/Ancient rarities (the whole Colorless pool is eligible)', which is loose but reaches the same set, and create_reward_cards implements the roll-then-filter form (rewards.py:280-288) not the exclusion form. Recorded because the comment reads like the Uniform branch and a future reader could 'fix' the code to match the comment. Rule 7: src/Core/Factories/CardFactory.cs and rewards.py are not hashed by this record."
+      "rationale": "CardFactory.CreateForReward (CardFactory.cs:220-233) applies the `Rarity != Basic && Rarity != Ancient` filter ONLY on the `RarityOddsType.Uniform` branch; the RegularEncounter branch instead rolls a rarity and filters to it, which excludes Basic/Ancient implicitly because the odds table never rolls them. The port's inline comment (lead_paperweight.py:20-23) describes it as 'filters only Basic/Ancient rarities (the whole Colorless pool is eligible)', which is loose but reaches the same set, and create_reward_cards implements the roll-then-filter form (rewards.py:426-436, renumbered since prior pass, content unchanged) not the exclusion form. Recorded because the comment reads like the Uniform branch and a future reader could 'fix' the code to match the comment. Rule 7: src/Core/Factories/CardFactory.cs and rewards.py are not hashed by this record."
     },
     {
       "what": "N8: the upgrade roll -- CreateForReward's `RollForUpgrade(player, card, 0m, rng)` runs on each of the two options",
       "verdict": "faithful",
-      "rationale": "No NoUpgradeRoll flag, so both options take an act-scaled upgrade draw off the Rewards stream (CardFactory.cs:99-103; base chance 0 plus CurrentActIndex * 0.125 non-ascension, and rares stay at 0). create_reward_cards draws `_uniform(rng)` for every card and applies `run.act_index * UPGRADED_CARD_ODD_SCALING` only to upgradable non-rares (rewards.py:289-298) -- including the unconditional draw even when the card is not upgradable, which is what keeps the stream aligned. The non-ascension scaling constant is the one the contract pins. Rule 7: src/Core/Factories/CardFactory.cs and rewards.py are not hashed by this record."
+      "rationale": "No NoUpgradeRoll flag, so both options take an act-scaled upgrade draw off the Rewards stream (CardFactory.cs:99-103; base chance 0 plus CurrentActIndex * 0.125 non-ascension, and rares stay at 0). create_reward_cards draws `_uniform(rng)` for every card and applies `run.act_index * UPGRADED_CARD_ODD_SCALING` only to upgradable non-rares (rewards.py:444-451, renumbered since prior pass, content unchanged) -- including the unconditional draw even when the card is not upgradable, which is what keeps the stream aligned. The non-ascension scaling constant is the one the contract pins. Rule 7: src/Core/Factories/CardFactory.cs and rewards.py are not hashed by this record."
     },
     {
       "what": "N9: no IsAllowed, no HasUponPickupEffect, no reset -- what the C# file does NOT declare",
       "verdict": "faithful",
-      "rationale": "LeadPaperweight.cs declares only Rarity and AfterObtained. It does NOT override HasUponPickupEffect, even though its whole effect happens on pickup -- so the sim leaving has_upon_pickup_effect at the base False is correct, and this relic stays is_tradable... except that Ancient rarity already excludes it (relics/base.py:126-136). Recorded because relic/kifuda and relic/lees_waffle in this same batch DO declare it and relic/byrdpip was found dropping it, so the flag is worth checking per unit rather than assuming. Also no state, so PROMPT.md bug class 13 does not apply (the shared sweep-reset puts it in the 'holds no state' bucket). Rule 7: relics/base.py are not hashed by this record."
+      "rationale": "LeadPaperweight.cs declares only Rarity and AfterObtained. It does NOT override HasUponPickupEffect, even though its whole effect happens on pickup -- so the sim leaving has_upon_pickup_effect at the base False is correct, and this relic stays is_tradable... except that Ancient rarity already excludes it (relics/base.py:188-199, renumbered since prior pass, content unchanged). Recorded because relic/kifuda and relic/lees_waffle in this same batch DO declare it and relic/byrdpip was found dropping it, so the flag is worth checking per unit rather than assuming. Also no state, so PROMPT.md bug class 13 does not apply (the shared sweep-reset puts it in the 'holds no state' bucket). Rule 7: relics/base.py are not hashed by this record."
     }
   ],
   "verdict": "waiver",

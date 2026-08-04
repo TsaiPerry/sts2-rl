@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     }
   ],
@@ -38,7 +38,7 @@
     "ModifyXValue": {
       "maps_to": "modify_x_value (chemical_x.py:19-20)",
       "verdict": "faithful",
-      "rationale": "ChemicalX.cs:31-38 returns `originalValue + DynamicVars['Increase'].IntValue` (2) for the owner's cards; chemical_x.py:20 returns `value + 2`. EXECUTED (`py audit/tools/relic_probes.py batch3`): with 3 energy, playing Cascade gives `energy 3 -> 0, captured_x=5`, i.e. X is raised to 5 while the energy actually spent stays 3 -- the relic's whole point. The sim consults the hook at both X capture sites, the normal play (combat.py:406) and the auto-play (combat.py:549), matching the game's single ResolveEnergyXValue capture."
+      "rationale": "ChemicalX.cs:31-38 returns `originalValue + DynamicVars['Increase'].IntValue` (2) for the owner's cards; chemical_x.py:20 returns `value + 2`. EXECUTED (`py audit/tools/relic_probes.py batch3`): with 3 energy, playing Cascade gives `energy 3 -> 0, captured_x=5`, i.e. X is raised to 5 while the energy actually spent stays 3 -- the relic's whole point. The sim consults the hook at both X capture sites, the normal play (combat.py:970, was :406) and the auto-play (combat.py:1443, was :549), matching the game's single ResolveEnergyXValue capture."
     }
   },
   "guards": [
@@ -58,9 +58,9 @@
       "rationale": "Star cost is the second, parallel cost currency and the sim models no star-cost concept anywhere. Same waiver, same reasoning and the same revisit condition as audit/records/relic/brilliant_scarf.json's TryModifyStarCost: the whole SYSTEM is out of the sim's scope, not merely this relic's use of it, and no ported card carries a star cost. If star costs are ever ported this must be revisited, because C#'s ModifyXValue is currency-agnostic and would raise both."
     },
     {
-      "what": "N4: the sim's aggregator clamps the result with `max(0, value)` (hooks.py:261); Hook.ModifyXValue does not (Hook.cs:2071-2079)",
+      "what": "N4: the sim's aggregator clamps the result with `max(0, value)` (hooks.py:1160, was :261); Hook.ModifyXValue does not (Hook.cs:2071-2079)",
       "verdict": "faithful",
-      "rationale": "Unobservable with today's content: the base value fed in is the player's current energy, which is never negative (combat.py:406, 549), and the only ported implementer of the hook is this relic, which only ADDS. A ported X-reducer would expose it. Checked rather than skipped because a silent clamp in a chain aggregator is exactly the kind of difference that never shows up in a single-listener test. Rule 7: hooks.py and Hook.cs are not hashed here."
+      "rationale": "Unobservable with today's content: the base value fed in is the player's current energy, which is never negative (combat.py:970, 1443, was :406, 549), and the only ported implementer of the hook is this relic, which only ADDS. A ported X-reducer would expose it. Checked rather than skipped because a silent clamp in a chain aggregator is exactly the kind of difference that never shows up in a single-listener test. Rule 7: hooks.py is hashed by this record (extra_sources); Hook.cs is not."
     },
     {
       "what": "N5: the sim has X-cost cards for the relic to modify",

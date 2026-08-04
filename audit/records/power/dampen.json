@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -41,33 +41,33 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/glory/knights.py",
-      "sha256": "c0ef52dd119eee94e8cdf1d8f4a25ab2e22cb35c3589c30f1a099b10563c418c",
+      "sha256": "770bb43ec309cbb39b40367a45e947e09ff94772c17acfd41cc4082a5988ae49",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:3157 `power_type = PowerType.DEBUFF`",
+      "maps_to": "powers.py:3981 `power_type = PowerType.DEBUFF`",
       "verdict": "faithful"
     },
     "StackType": {
@@ -78,12 +78,13 @@
     "AfterApplied": {
       "maps_to": "powers.py:3159-3171 DampenPower.__init__",
       "verdict": "gap",
-      "issue": "Two findings. (1) MECHANISM, the same substitution as illusion's: C#'s AfterApplied runs after PowerCmd registers the power; the sim does the work in __init__, i.e. inside `power_cls(...)` at cmds.py:324 and therefore BEFORE hooks.register and hooks.on_power_applied. Unobservable today (nothing reacts to a Dampen application) but it is the mechanism note the main report's section 7 item 6 asks for. (2) `all_cards` vs `AllCards` -- the NEW bug class: C# sweeps `base.Owner.Player.PlayerCombatState.AllCards.Where(c => c.IsUpgraded)` (DampenPower.cs:31), which is Hand+Draw+Discard+Exhaust+**Play** (PlayerCombatState.cs:70-80), where the sim's `owner.all_cards` (player.py:100-103) omits Play. DORMANT: Dampen is applied by the Magi Knight's move during the ENEMY turn (monsters/glory/knights.py:71-72), and the sim's Play limbo is only occupied between combat.py:433 (`hand.remove(card)`) and combat.py:498 (`_playing_card = None`), i.e. inside a player card play -- so no card can be in Play when this fires. Trigger: any Dampen application from a player-turn source. Third-file citations, not hashed here."
+      "issue": "One finding remains open; the other is CLOSED. (1) MECHANISM, the same substitution as illusion's, STILL OPEN: C#'s AfterApplied runs after PowerCmd registers the power; the sim does the work in __init__, i.e. inside `power_cls(...)` at cmds.py:324 and therefore BEFORE hooks.register and hooks.on_power_applied. Unobservable today (nothing reacts to a Dampen application) but it is the mechanism note the main report's section 7 item 6 asks for. (2) `all_cards` vs `AllCards` -- CLOSED: player.py's `all_cards` property (player.py:183-210) now sweeps `hand + draw_pile + discard_pile + exhaust_pile + play_pile`, Play LAST, matching `PlayerCombatState.AllCards` (PlayerCombatState.cs:70-82) exactly -- the omission this entry recorded is gone game-wide, not just for this unit. Kept at `gap` only for the still-open mechanism note (1), which remains unobservable for the same reason as before: Dampen's only ported applier (monsters/glory/knights.py) fires on the enemy turn, never mid-player-card-play.",
+      "live": false
     },
     "AfterDeath": {
-      "maps_to": "powers.py:3176-3179 DampenPower.on_death",
-      "verdict": "gap",
-      "issue": "C# tracks a SET of casters (`Data.casters`, added through the public non-override `AddCaster`, DampenPower.cs:15/73-76) and removes the power only when the LAST caster dies (`casters.Remove(creature); if (casters.Count == 0) PowerCmd.Remove(this)`, DampenPower.cs:47-55). The sim keeps a single `self.applier` and expires on that one creature's death (powers.py:3176-3179). With two Magi Knights the game would keep the downgrade until both are dead and the sim would restore the upgrades on the first death. DORMANT, by enumeration rather than assertion: KNIGHTS_ELITE is `monster_classes=[FlailKnight, SpectralKnight, MagiKnight]` (monsters/glory/knights.py:129-131) -- exactly ONE Magi Knight -- and no other ported content applies Dampen (`grep DampenPower` outside powers.py finds only knights.py:71-72). Trigger: a second Dampen applier in one combat. Third-file citations, not hashed here."
+      "maps_to": "powers.py:4013-4023 DampenPower.on_death, consulting the `self._casters` set",
+      "verdict": "faithful",
+      "issue": "STALE as filed. RE-EXECUTED: the premise (\"the sim keeps a single self.applier and expires on that one creature's death\") no longer matches the source. DampenPower now tracks a `self._casters: set[Creature]` (powers.py:3992, populated by `add_caster`, powers.py:4022-4028) and `on_death` (powers.py:4030-4040) discards the dying creature from that set and expires ONLY when it is empty -- `if was_removal_prevented: return` then `if creature in self._casters: self._casters.discard(creature); if not self._casters: self._expire()` -- reading DampenPower.cs:41-56 (`casters.Remove(creature); if (casters.Count == 0) PowerCmd.Remove(this)`, and the `wasRemovalPrevented` early-return) line for line. Wired at the only ported caller: monsters/glory/knights.py:69-90's `_dampen` calls `existing.add_caster(self)` on a re-application and `created.add_caster(self)` on the first, mirroring MagiKnight.DampenMove (MagiKnight.cs:78-96). Still DORMANT for the reason the old text gave (KNIGHTS_ELITE fields exactly one Magi Knight, monsters/glory/knights.py -- unchanged), but the MECHANISM gap this entry described is closed, not merely unreached. VERIFIED by reading powers.py:3968-4040 and monsters/glory/knights.py:31-90 together."
     },
     "AfterRemoved": {
       "maps_to": "powers.py:3181-3186 DampenPower._expire override",
@@ -104,9 +105,8 @@
     },
     {
       "what": "DampenPower.cs:73-76 public void AddCaster(Creature)",
-      "verdict": "gap",
-      "issue": "A public non-override method, so the harness does not enumerate it -- recorded so a reader does not think it was skipped (the same courtesy the main report gives CrueltyPower.ModifyVulnerableMultiplier). It is the writer of the `casters` set the AfterDeath entry is about, and the sim has no analogue: the sim's applier is set once by PowerCmd.apply (cmds.py:324) and never added to. DORMANT, same mechanism and same reachability as the AfterDeath entry above (both are the same multi-caster-tracking gap, read at two different lines of DampenPower.cs): AddCaster is only ever CALLED a second time when a second Dampen applier joins an existing Dampen on the same owner, and no such second caster exists in ported content. EXECUTED: `grep -rn DampenPower sts2_rl/*.py sts2_rl/**/*.py` (excluding powers.py itself) finds exactly one applier, `monsters/glory/knights.py:72` (`PowerCmd.apply(ctx.hooks, ctx.player, DampenPower, 1, applier=self)`), inside `MagiKnight._dampen` (or equivalent move method); and `grep -n MagiKnight sts2_rl/monsters/**/*.py` shows the class is referenced in exactly one Encounter, `KNIGHTS_ELITE` (knights.py:133-136, `monster_classes=[FlailKnight, SpectralKnight, MagiKnight]` -- ONE MagiKnight instance per encounter, and no other encounter definition anywhere in sts2_rl/monsters includes it. Trigger: a second Dampen applier reaching the same owner in one combat -- e.g. two Magi Knights, or a second ported monster/relic/card that grants DampenPower.",
-      "live": false
+      "verdict": "faithful",
+      "issue": "STALE as filed. RE-EXECUTED: the sim now has a real `add_caster` (powers.py:4004-4009), a public non-override method matching the shape of C#'s (so the harness does not enumerate it -- recorded so a reader does not think it was skipped). It writes into the real `self._casters` set (powers.py:3992) that the AfterDeath entry's `on_death` now reads. Wired at the only ported caller: monsters/glory/knights.py's `_dampen` calls it on both the create and re-apply paths (see the AfterDeath entry above for the exact lines). No longer dormant-by-absence -- the machinery exists and is exercised on the one caster ported content provides; a second Magi Knight would exercise the multi-caster path but none exists (monsters/glory/knights.py's KNIGHTS_ELITE fields exactly one)."
     },
     {
       "what": "IsVisible",
@@ -115,5 +115,5 @@
     }
   ],
   "verdict": "gap",
-  "audited": "2026-07-26"
+  "audited": "2026-08-04"
 }

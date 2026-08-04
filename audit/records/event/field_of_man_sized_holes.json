@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -39,17 +39,17 @@
     },
     {
       "what": "Resist (FieldOfManSizedHoles.cs:44-50): FromDeckForRemoval(2) -> RemoveFromDeck -> AddCursesToDeck([Normality]) -- remove BEFORE the curse is added",
-      "maps_to": "events/field_of_man_sized_holes.py:39-43 in the same order. AddCursesToDeck routes through the same deck-add path as CardPileCmd.Add, and run.add_card runs Hook.ModifyCardBeingAddedToDeck + the AfterCardChangedPiles tail (run.py:341-354) -- which matters here, because Darkstone Periapt's Max HP on a gained Curse is exactly that tail.",
+      "maps_to": "events/field_of_man_sized_holes.py:39-43 in the same order. AddCursesToDeck routes through the same deck-add path as CardPileCmd.Add, and run.add_card runs Hook.ModifyCardBeingAddedToDeck + the AfterCardChangedPiles tail (run.py) -- which matters here, because Darkstone Periapt's Max HP on a gained Curse is exactly that tail.",
       "verdict": "faithful"
     },
     {
       "what": "EnterYourHole (FieldOfManSizedHoles.cs:52-65): FromDeckForEnchantment(PerfectFit, 1) with the null guard, then CardCmd.Enchant<PerfectFit>(card, 1m)",
-      "maps_to": "events/field_of_man_sized_holes.py:45-49: the candidate list is re-derived with the same predicate, select_cards returns [] for an empty list (run.py:384-385, the null guard's analogue), and the loop attaches at amount 1 -- the source's `1m`.",
+      "maps_to": "events/field_of_man_sized_holes.py:45-49: the candidate list is re-derived with the same predicate, select_cards returns [] for an empty list (run.py, the null guard's analogue), and the loop attaches at amount 1 -- the source's `1m`.",
       "verdict": "faithful"
     },
     {
       "what": "CardCmd.Enchant's tail (CardCmd.cs:532-558) vs the sim's Enchantment.attach",
-      "maps_to": "CardCmd.Enchant runs CanEnchant, EnchantInternal, ModifyCard() and FinalizeUpgradeInternal; Enchantment.attach (enchantments.py:63-68) runs can_enchant and the back-references only. For PERFECT FIT that is observationally identical, because PerfectFit overrides neither OnEnchant nor RecalculateValues (PerfectFit.cs is ModifyShuffleOrder and HasExtraCardText only), so ModifyCard() has nothing to do. The same mapping at an enchantment WITH an OnEnchant is handled by the sim putting that work in the subclass's own attach() -- see the enchantment/{souls,steady,goopy,tezcataras_ember} records.",
+      "maps_to": "CardCmd.Enchant runs CanEnchant, EnchantInternal, ModifyCard() and FinalizeUpgradeInternal; Enchantment.attach (enchantments.py) runs can_enchant and the back-references only. For PERFECT FIT that is observationally identical, because PerfectFit overrides neither OnEnchant nor RecalculateValues (PerfectFit.cs is ModifyShuffleOrder and HasExtraCardText only), so ModifyCard() has nothing to do. The same mapping at an enchantment WITH an OnEnchant is handled by the sim putting that work in the subclass's own attach() -- see the enchantment/{souls,steady,goopy,tezcataras_ember} records.",
       "verdict": "faithful"
     },
     {

@@ -49,7 +49,7 @@
       "what": "BLOAT places the spawned Gas Bomb in the wrong enemy-list position",
       "verdict": "faithful",
       "issue": "Closed 2026-07-28: BLOAT now places the Gas Bomb in its encounter slot. living_fog.py gives GasBomb a `slot` field, picks the first free bombN slot (the port of Encounter.GetNextSlot, EncounterModel.cs:245-248, over LivingFogNormal.Slots = [bomb1..bomb5, livingFog], LivingFogNormal.cs:18) and calls `CreatureCmd.add(ctx.hooks, bomb, index=idx)` where idx is the first enemy holding a HIGHER slot index (_slot_index gives the Living Fog 5) -- reproducing CombatManager.AddCreature -> CombatState.SortEnemiesBySlotName (CombatState.cs:495-501). EXECUTED on a real LIVING_FOG_NORMAL combat driven through ADVANCED_GAS then BLOAT: enemies after BLOAT = ['GasBomb', 'LivingFog'], Gas Bomb at index 0, so the bomb's DEATH_BLOW resolves before the Fog's move. WAS: an index-less CreatureCmd.add that APPENDED, giving ['LivingFog','GasBomb'] -- wrong enemy turn order and a positional 'enemies' divergence in replay. The sort is not a random draw, so this holds on the legacy/RL path too.",
-      "rationale": "EXECUTED, `py audit/tools/monster_probes_b03.py slot-order`, a real CombatState driven through ADVANCED_GAS then BLOAT: 'SIM enemies after BLOAT : [LivingFog, GasBomb]' / 'GAME enemies after BLOAT : [GasBomb, LivingFog] (slot sort over [bomb1..bomb5, livingFog])'; 'sim next enemy turn acts in order: [LivingFog, GasBomb]' vs 'game next enemy turn acts in order: [GasBomb, LivingFog]'; 'sim index of the Gas Bomb: 1' vs 'game index of the Gas Bomb: 0'. LIVE under rule 6, both sides proved reachable on ported content: 'living_fog' is in the Underdocks normal-encounter pool (rooms.py:135), the encounter is LIVING_FOG_NORMAL (living_fog.py:101-104), and the code path is taken on the second Living Fog turn of every such fight - BLOAT_MOVE is a fixed link in a branchless chain, so it CANNOT be skipped, and the free-slot test passes on turn 2 because no bomb exists yet. Nothing unported is required."
+      "rationale": "EXECUTED, `py audit/tools/monster_probes_b03.py slot-order`, a real CombatState driven through ADVANCED_GAS then BLOAT: 'SIM enemies after BLOAT : [LivingFog, GasBomb]' / 'GAME enemies after BLOAT : [GasBomb, LivingFog] (slot sort over [bomb1..bomb5, livingFog])'; 'sim next enemy turn acts in order: [LivingFog, GasBomb]' vs 'game next enemy turn acts in order: [GasBomb, LivingFog]'; 'sim index of the Gas Bomb: 1' vs 'game index of the Gas Bomb: 0'. LIVE under rule 6, both sides proved reachable on ported content: 'living_fog' is in the Underdocks normal-encounter pool (rooms.py:201, re-verified 2026-08-04, was :135, unchanged), the encounter is LIVING_FOG_NORMAL (living_fog.py:101-104), and the code path is taken on the second Living Fog turn of every such fight - BLOAT_MOVE is a fixed link in a branchless chain, so it CANNOT be skipped, and the free-slot test passes on turn 2 because no bomb exists yet. Nothing unported is required."
     },
     {
       "what": "The free-slot test itself (how many bombs may be alive)",
@@ -138,22 +138,22 @@
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\conformance\\combat_driver.py",
-      "sha256": "85d79b1e7a4a23eed96bdbcce77acfa17284166f14f13eacaa91ff6d1675845e",
+      "sha256": "83678aea44785d20f84cfa7e87691a40e3b22bdac2a5bdb412a902573f065eea",
       "side": "sim"
     }
   ]

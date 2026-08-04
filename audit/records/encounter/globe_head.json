@@ -10,7 +10,7 @@
   },
   "hooks": {
     "RoomType": {
-      "maps_to": "rooms.py:192 `normal_keys=(..., \"globe_head\", ...)` (glory ActRooms)",
+      "maps_to": "rooms.py:264-268 `normal_keys=(..., \"globe_head\", ...)` (glory ActRooms)",
       "verdict": "deliberate-divergence",
       "rationale": "GlobeHeadNormal.cs:10 `RoomType => RoomType.Monster`. Modeled structurally by pool membership. One shared mechanism across this batch; see `encounter/_room_type_and_weak` in the report."
     },
@@ -26,9 +26,9 @@
       "rationale": "Presentation only -- GlobeHeadNormal.cs:14 declares the `Galvanized` affliction's overlay sprite path so it preloads with the encounter (Globe Head's Galvanic starting power afflicts the player's Power cards with Galvanized). No asset loading or sprite overlays in the headless sim; the AFFLICTION itself (`GalvanicPower`, applied via GenerateMonsters' monster construction) is a `monster`/`power`-tier concern, already ported (`powers.py` GalvanicPower, globe_head.py:33-37) and out of this record's scope."
     },
     "GenerateMonsters": {
-      "maps_to": "monsters/base.py:408-416 Encounter.create_monsters + GLOBE_HEAD_NORMAL (globe_head.py:73-76)",
+      "maps_to": "monsters/base.py:476-479 Encounter.create_monsters + GLOBE_HEAD_NORMAL (globe_head.py:73-76)",
       "verdict": "faithful",
-      "rationale": "ROSTER: GlobeHeadNormal.cs:16-19 returns exactly one `(GlobeHead, null)` pair; `GLOBE_HEAD_NORMAL = Encounter(id=\"globe_head_normal\", monster_classes=[GlobeHead])` (globe_head.py:73-76) -- one monster, same class. ORDER: trivially matches. SLOT: C# passes `null`; the sim's `monster_slots` default `()` leaves `slot_name=None` too -- matches. DRAW COUNT: zero on both sides -- `GlobeHeadNormal.GenerateMonsters` never touches `base.Rng`, and the sim's fixed-composition path draws nothing (monsters/base.py:408-411)."
+      "rationale": "ROSTER: GlobeHeadNormal.cs:16-19 returns exactly one `(GlobeHead, null)` pair; `GLOBE_HEAD_NORMAL = Encounter(id=\"globe_head_normal\", monster_classes=[GlobeHead])` (globe_head.py:73-76) -- one monster, same class. ORDER: trivially matches. SLOT: C# passes `null`; the sim's `monster_slots` default `()` leaves `slot_name=None` too -- matches. DRAW COUNT: zero on both sides -- `GlobeHeadNormal.GenerateMonsters` never touches `base.Rng`, and the sim's fixed-composition path draws nothing (monsters/base.py:477-479, `create_monsters`'s own comment)."
     },
     "ShouldReceiveCombatHooks": {
       "maps_to": "no sim counterpart (by absence)",
@@ -45,7 +45,7 @@
     {
       "what": "The Niche HP-roll (GlobeHead has min_hp==max_hp==148, degenerate range, single enemy)",
       "verdict": "faithful",
-      "rationale": "Same shape as `encounter/aeonglass`'s check: one draw on both sides (`hashSet={148}` -> `NextItem`; sim `candidates=[148]` -> `next_int_range(0,1)`, combat.py:402-422)."
+      "rationale": "Same shape as `encounter/aeonglass`'s check: one draw on both sides (`hashSet={148}` -> `NextItem`; sim `candidates=[148]` -> `next_int_range(0,1)`, combat.py:423-442)."
     },
     {
       "what": "Gold-ladder and ShouldGiveRewards inheritance",
@@ -55,7 +55,7 @@
     {
       "what": "Reachability",
       "verdict": "faithful",
-      "rationale": "rooms.py:192 lists `globe_head` in Glory's `normal_keys`, and `GLOBE_HEAD_NORMAL` is registered in `sts2_rl/monsters/glory/__init__.py`'s `ENCOUNTERS` dict (line 66)."
+      "rationale": "rooms.py:264-268 lists `globe_head` in Glory's `normal_keys`, and `GLOBE_HEAD_NORMAL` is registered in `sts2_rl/monsters/glory/__init__.py`'s `ENCOUNTERS` dict (line 66)."
     }
   ],
   "verdict": "gap",
@@ -73,17 +73,17 @@
     },
     {
       "path": "sts2_rl\\monsters\\base.py",
-      "sha256": "424336cf4fb7be8026278b7a34af428082d8487fb57f25c3565311fe5c993388",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\combat.py",
-      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     },
     {

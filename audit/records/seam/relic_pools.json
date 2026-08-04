@@ -165,7 +165,7 @@
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "0e7260041e0b6693c08bf4aa4ddbb8743311d7fd72d6212fdc7c7d358a7c5030"
+      "sha256": "0b6b63592c62386b478927b39f5f758720079c9377ecda32ca94df150369e7e4"
     }
   ],
   "extra_sources": [
@@ -256,7 +256,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "3caf6a189d109feb62c5ab57f03028277542a8bf12311898e7445be27ce199b2",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -296,7 +296,7 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "b5b14f28e5cff1acfb3d4528d4c34fd1c83ee217173edf0461caab0e4489931d",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     }
   ],
@@ -370,7 +370,7 @@
     {
       "what": "13. CardFactory's pool-composition legs: FilterForCombat (drops Basic/Ancient/Event rarity and CanBeGeneratedInCombat=false, CardFactory.cs:159-162) and GetDefaultTransformationOptions (Quest cards and Event/Ancient/Token rarities transform via ColorlessCardPool; every other card transforms via its OWN CardModel.Pool, CardFactory.cs:170-212).",
       "verdict": "faithful",
-      "rationale": "CLOSED 2026-08-03 (gap-fix pass). `cards/pool.py` now declares `STATUS_POOL` in StatusCardPool.cs:19-34's own order (Wither sixth, between Infection and Slimed) and `transform_options_in_combat`'s STATUS branch uses it instead of rebuilding the row from `sorted(_CARD_CLASSES)` — which both alphabetized it and swept in four sim statuses (mind_rot/sloth/disintegration/waste_away) that are not StatusCardPool members at all. Debris and Void remain unported, which shifts the indices after them on its own; that is a separate content gap, not this ordering one. Tests: test/test_card_generation_pool.py::TestStatusTransformKeepsTheDeclaredPoolOrder.\n\nWHAT THE GAP SAID: cards/pool.py's pool_card_ids/transform_options_in_combat. IroncladCardPool.cs (87 minus Tank/DemonicShield), ColorlessCardPool.cs (64 minus the 11 named multiplayer-only cards) and CurseCardPool.cs (18) all match IRONCLAD_POOL/COLORLESS_POOL/CURSE_POOL exactly in order and membership -- zero discrepancies, and both multiplayer-only exclusion lists are exact and complete against a game-wide census of all 21 MultiplayerConstraint.MultiplayerOnly cards. The ONE real divergence: for a STATUS-type card, CardModel.Pool resolves to StatusCardPool (confirmed: Dazed.cs and Slimed.cs are declared only inside StatusCardPool.GenerateAllCards), whose declared order (StatusCardPool.cs:22-33 -- Beckon, Burn, Dazed, Debris, FranticEscape, Infection, Wither, Slimed, Soot, Toxic, Void, Wound) is NOT alphabetical, but transform_options_in_combat's STATUS branch (cards/pool.py) builds its candidate list via `sorted(_CARD_CLASSES.items())` -- Wither moves from game-index 6 to alphabetized-index 10, and Slimed/Soot/Toxic/Void each shift down one slot, so a given rng.NextItem draw index can pick a different replacement card than the game would. LIVE: transform_options_in_combat's only in-combat caller is CardCmd.transform_to_random (cmds.py), reached only from the ported EntropyPower.on_player_turn_started (powers.py), which selects randomly over the ENTIRE HAND with no type filter (CardSelectCmd.from_hand, predicate=None) -- a Status card (Dazed/Wound/Slimed/Burn, all ported) can legitimately be in an Ironclad player's hand when the ported Entropy card/power fires."
+      "rationale": "CLOSED 2026-08-03 (gap-fix pass). `cards/pool.py` now declares `STATUS_POOL` in StatusCardPool.cs:19-34's own order (Wither sixth, between Infection and Slimed) and `transform_options_in_combat`'s STATUS branch uses it instead of rebuilding the row from `sorted(_CARD_CLASSES)` \u2014 which both alphabetized it and swept in four sim statuses (mind_rot/sloth/disintegration/waste_away) that are not StatusCardPool members at all. Debris and Void remain unported, which shifts the indices after them on its own; that is a separate content gap, not this ordering one. Tests: test/test_card_generation_pool.py::TestStatusTransformKeepsTheDeclaredPoolOrder.\n\nWHAT THE GAP SAID: cards/pool.py's pool_card_ids/transform_options_in_combat. IroncladCardPool.cs (87 minus Tank/DemonicShield), ColorlessCardPool.cs (64 minus the 11 named multiplayer-only cards) and CurseCardPool.cs (18) all match IRONCLAD_POOL/COLORLESS_POOL/CURSE_POOL exactly in order and membership -- zero discrepancies, and both multiplayer-only exclusion lists are exact and complete against a game-wide census of all 21 MultiplayerConstraint.MultiplayerOnly cards. The ONE real divergence: for a STATUS-type card, CardModel.Pool resolves to StatusCardPool (confirmed: Dazed.cs and Slimed.cs are declared only inside StatusCardPool.GenerateAllCards), whose declared order (StatusCardPool.cs:22-33 -- Beckon, Burn, Dazed, Debris, FranticEscape, Infection, Wither, Slimed, Soot, Toxic, Void, Wound) is NOT alphabetical, but transform_options_in_combat's STATUS branch (cards/pool.py) builds its candidate list via `sorted(_CARD_CLASSES.items())` -- Wither moves from game-index 6 to alphabetized-index 10, and Slimed/Soot/Toxic/Void each shift down one slot, so a given rng.NextItem draw index can pick a different replacement card than the game would. LIVE: transform_options_in_combat's only in-combat caller is CardCmd.transform_to_random (cmds.py), reached only from the ported EntropyPower.on_player_turn_started (powers.py), which selects randomly over the ENTIRE HAND with no type filter (CardSelectCmd.from_hand, predicate=None) -- a Status card (Dazed/Wound/Slimed/Burn, all ported) can legitimately be in an Ironclad player's hand when the ported Entropy card/power fires."
     },
     {
       "what": "14. The three egg relics' three call sites: TryModifyCardRewardOptionsLate (reward offer), ModifyMerchantCardCreationResults (shop stock), TryModifyCardBeingAddedToDeck (every other deck-add route) -- Toxic upgrades Skill, Frozen upgrades Power, Molten upgrades Attack (ToxicEgg.cs:21-61 and its two siblings, MoltenEgg.cs, FrozenEgg.cs).",

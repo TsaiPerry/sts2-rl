@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -41,7 +41,17 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Runs/RelicGrabBag.cs",
+      "sha256": "9bb001cbc618f21cebaf7ceb324812010972d92b7a6ed043f268e56fce5a541c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/neow.py",
+      "sha256": "df11695f9bff2d43c3408f0fb60403bdd3957015edcc052b424c4e1d242bde6c",
       "side": "sim"
     }
   ],
@@ -53,17 +63,17 @@
     "IsAllowedInShops": {
       "maps_to": "is_allowed_in_shops = False (old_coin.py:15)",
       "verdict": "faithful",
-      "rationale": "Matches OldCoin.cs:14. The flag is real in the sim, not decorative: RunState.pull_relic_from_front applies it as the `shop_legal` filter (run.py:592) and pull_relic_from_back is shop-legal by construction. EXECUTED (py audit/tools/relic_probes_b10.py old-coin): ALL_RELICS['old_coin'].is_allowed_in_shops is False. Rule 7: run.py is unhashed here."
+      "rationale": "Matches OldCoin.cs:14. The flag is real in the sim, not decorative: RunState.pull_relic_from_front applies it as the `shop_legal` filter (run.py) and pull_relic_from_back is shop-legal by construction. EXECUTED (py audit/tools/relic_probes_b10.py old-coin): ALL_RELICS['old_coin'].is_allowed_in_shops is False. Rule 7: run.py is unhashed here."
     },
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (old_coin.py:14)",
       "verdict": "faithful",
-      "rationale": "Matches OldCoin.cs:16, and it matters here rather than being belt-and-braces: Old Coin is RARE, not Ancient, so this flag is what keeps it out of the trade events via Relic.is_tradable (relics/base.py:126-136). EXECUTED: True. Rule 7: relics/base.py is unhashed here."
+      "rationale": "Matches OldCoin.cs:16, and it matters here rather than being belt-and-braces: Old Coin is RARE, not Ancient, so this flag is what keeps it out of the trade events via Relic.is_tradable (relics/base.py). EXECUTED: True. Rule 7: relics/base.py is unhashed here."
     },
     "IsAllowed": {
-      "maps_to": "is_allowed (sts2_rl/relics/old_coin.py:34) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:82-84), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) before every pool pull",
+      "maps_to": "is_allowed (sts2_rl/relics/old_coin.py:34) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py) before every pool pull",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/old_coin.py:34), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/old_coin.py:34), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py), pull_relic_from_back (run.py) and the Shop-rarity bag (run.py) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     "AfterObtained": {
       "maps_to": "after_obtained (sts2_rl/relics/old_coin.py) -- run.gain_gold(300); undo_after_obtained reverses it through the same modify_gold_gained chain",
@@ -80,17 +90,17 @@
     {
       "what": "G2 (LIVE): `IsAllowed(runState) => RelicModel.IsBeforeAct3TreasureChest(runState)` has no sim counterpart, so Old Coin stays pullable for the whole run",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/old_coin.py:34), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/old_coin.py:34), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py), pull_relic_from_back (run.py) and the Shop-rarity bag (run.py) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     {
       "what": "N1: `PlayerCmd.GainGold`'s companion event `Hook.AfterModifyingGoldGained` (PlayerCmd.cs:145) has no sim counterpart",
       "verdict": "gap",
-      "issue": "This is the missing-AfterModifying-companion family that audit/records/seam/power_cmd.json gap G4 records and that relic/bag_of_preparation N1 already verdicted `gap` at the hand-draw dispatcher; one verdict per mechanism, binding rule 3. Observed at the GOLD dispatcher: run.gain_gold (run.py:325-333) chains modify_gold_gained over the run's relics and returns a bare number, with no modifiers list and no companion event. DORMANT, checked rather than assumed: `grep -rn 'def modify_gold_gained' sts2_rl/ --include=*.py` returns exactly one listener outside the base class, relics/ectoplasm.py:26, which overrides no companion, so nothing of any ported behaviour is lost. Recorded here rather than at G1 because a correct Old Coin port lands squarely in this pipeline and should not be blamed for inheriting the gap. Also noted: C# additionally fires Hook.AfterGoldGained, which .superpowers/sdd/content-relic-sweeps.md Sweep C correctly lists as having no sim hook at all. Rule 7: PlayerCmd.cs, run.py, relics/ectoplasm.py, relics/bag_of_preparation.py, the power_cmd record and the sweeps document are NOT hashed by this record."
+      "issue": "This is the missing-AfterModifying-companion family that audit/records/seam/power_cmd.json gap G4 records and that relic/bag_of_preparation N1 already verdicted `gap` at the hand-draw dispatcher; one verdict per mechanism, binding rule 3. Observed at the GOLD dispatcher: run.gain_gold (run.py) chains modify_gold_gained over the run's relics and returns a bare number, with no modifiers list and no companion event. DORMANT, checked rather than assumed: `grep -rn 'def modify_gold_gained' sts2_rl/ --include=*.py` returns exactly one listener outside the base class, relics/ectoplasm.py:26, which overrides no companion, so nothing of any ported behaviour is lost. Recorded here rather than at G1 because a correct Old Coin port lands squarely in this pipeline and should not be blamed for inheriting the gap. Also noted: C# additionally fires Hook.AfterGoldGained, which .superpowers/sdd/content-relic-sweeps.md Sweep C correctly lists as having no sim hook at all. Rule 7: PlayerCmd.cs, run.py, relics/ectoplasm.py, relics/bag_of_preparation.py, the power_cmd record and the sweeps document are NOT hashed by this record."
     },
     {
       "what": "N2: `PlayerCmd.GainGold`'s truncation and non-positive bail (PlayerCmd.cs:141-149) vs run.gain_gold",
       "verdict": "faithful",
-      "rationale": "C# runs the modify chain, bails on `!(amount > 0)`, and banks `(int)amount`; run.gain_gold (run.py:325-333) runs the chain, computes `gained = int(amount)` and adds it only `if amount > 0`. Same order, same truncation toward zero, same guard. Recorded because it is the pipeline a fixed G1 lands in, and because the guard is load-bearing for relic/ectoplasm, which returns 0 from modify_gold_gained. Rule 7: PlayerCmd.cs, run.py and relics/ectoplasm.py are unhashed here."
+      "rationale": "C# runs the modify chain, bails on `!(amount > 0)`, and banks `(int)amount`; run.gain_gold (run.py) runs the chain, computes `gained = int(amount)` and adds it only `if amount > 0`. Same order, same truncation toward zero, same guard. Recorded because it is the pipeline a fixed G1 lands in, and because the guard is load-bearing for relic/ectoplasm, which returns 0 from modify_gold_gained. Rule 7: PlayerCmd.cs, run.py and relics/ectoplasm.py are unhashed here."
     },
     {
       "what": "N3: OldCoin.cs declares no combat hooks, no ShowCounter and no IsAllowedAtNeow",

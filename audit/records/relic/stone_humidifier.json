@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -37,10 +37,10 @@
       "rationale": "StoneHumidifier.cs:14 is RelicRarity.Ancient. EXECUTED (b15-pool): absent from the grab bag, granted by the ported Neow event (events/neow.py)."
     },
     "AfterRestSiteHeal": {
-      "maps_to": "after_rest_site_heal (stone_humidifier.py:15-16), dispatched by RunState.rest_heal (run.py:1390-1396)",
+      "maps_to": "after_rest_site_heal (stone_humidifier.py:15-16), dispatched by RunState.rest_heal (run.py:1639-1645)",
       "verdict": "gap",
       "live": false,
-      "issue": "DORMANT, settled by execution 2026-07-30 (round 11). Rollup of guard G1 per binding rule 4, which this record already labels dormant and unchanged. RE-VERIFIED: `grep -n mend sts2_rl/run.py sts2_rl/rest_site.py` finds no Mend rest-site option anywhere in the sim -- the only hit is an unrelated comment about Pillow at run.py:379 -- and RunState.rest_heal (run.py:1390-1396) remains the port of HealRestSiteOption.cs:109 only. MendRestSiteOption.cs:135 (the C#'s second AfterRestSiteHeal call site) is a multiplayer heal-a-TARGET-player action with no sim counterpart at all, so no ported room offers a Mend option to reach it. The effect and its amount (+5 Max HP) are exactly right on the one dispatch site the sim has."
+      "issue": "RECONFIRMED 2026-08-04 (stale-sweep, content unchanged -- only line numbers moved). DORMANT, settled by execution 2026-07-30 (round 11). Rollup of guard G1 per binding rule 4, which this record already labels dormant and unchanged. RE-VERIFIED: `grep -n mend sts2_rl/run.py` still finds no Mend rest-site option anywhere in the sim, and RunState.rest_heal (run.py:1639-1645) remains the port of HealRestSiteOption.cs:109 only. MendRestSiteOption.cs:135 (the C#'s second AfterRestSiteHeal call site) is a multiplayer heal-a-TARGET-player action with no sim counterpart at all, so no ported room offers a Mend option to reach it. The effect and its amount (+5 Max HP) are exactly right on the one dispatch site the sim has."
     },
     "ModifyExtraRestSiteHealText": {
       "maps_to": "no counterpart",
@@ -52,7 +52,7 @@
     {
       "what": "G1 (DORMANT): Hook.AfterRestSiteHeal has TWO dispatch sites in C# and the sim ports only one",
       "verdict": "gap",
-      "issue": "MECHANISM: an executed grep for AfterRestSiteHeal over the decompiled source finds two callers outside the relic models -- HealRestSiteOption.cs:109 (`isMimicked` forwarded from the option) and MendRestSiteOption.cs:135 (`isMimicked: false`). RunState.rest_heal (run.py:1089-1095) is the port of the first only; there is no Mend path in the sim at all. So a Mend that heals a player would grant +5 Max HP in the game and nothing in the sim. This is PROMPT.md bug class 20's shape -- the right hook, dispatched from too few SITES -- rather than a wrong slot. REACHABILITY (DORMANT): `MendRestSiteOption` is a multiplayer rest-site action (it heals a TARGET player, MendRestSiteOption.cs:135 passes `target.RunState`), and grep over sts2_rl/ for a mend rest-site option returns nothing -- rest_site.py's RestSiteOption set has no Mend. The concrete unported thing is MendRestSiteOption itself; because it is multiplayer-shaped its absence may well be a permanent scope exclusion, but it is filed as a dormant gap and not a waiver because the divergence is a missing dispatch site, not a multiplayer parameter (binding rule 1). Rule 7: leans on run.py and sts2_rl/rest_site.py, neither hashed here."
+      "issue": "MECHANISM: an executed grep for AfterRestSiteHeal over the decompiled source finds two callers outside the relic models -- HealRestSiteOption.cs:109 (`isMimicked` forwarded from the option) and MendRestSiteOption.cs:135 (`isMimicked: false`). RunState.rest_heal (run.py:1639-1645) is the port of the first only; there is no Mend path in the sim at all. So a Mend that heals a player would grant +5 Max HP in the game and nothing in the sim. This is PROMPT.md bug class 20's shape -- the right hook, dispatched from too few SITES -- rather than a wrong slot. REACHABILITY (DORMANT): `MendRestSiteOption` is a multiplayer rest-site action (it heals a TARGET player, MendRestSiteOption.cs:135 passes `target.RunState`), and grep over sts2_rl/ for a mend rest-site option returns nothing -- rest_site.py's RestSiteOption set has no Mend. The concrete unported thing is MendRestSiteOption itself; because it is multiplayer-shaped its absence may well be a permanent scope exclusion, but it is filed as a dormant gap and not a waiver because the divergence is a missing dispatch site, not a multiplayer parameter (binding rule 1). Rule 7: leans on run.py and sts2_rl/rest_site.py, neither hashed here."
     },
     {
       "what": "N1: `player == base.Owner` (StoneHumidifier.cs:20) and the isMimicked parameter (StoneHumidifier.cs:18), both absent from the port",
@@ -62,7 +62,7 @@
     {
       "what": "N2: MaxHpVar(5m) read as BaseValue (StoneHumidifier.cs:16, 23) and CreatureCmd.GainMaxHp's heal side effect",
       "verdict": "faithful",
-      "rationale": "No AscensionHelper.GetValueIfAscension in the file, so 5 is the pinned non-ascension value and stone_humidifier.py:13's MAX_HP = 5 is right. CreatureCmd.GainMaxHp (CreatureCmd.cs:786-799) raises max HP and then Heals by the SAME amount, which run.gain_max_hp mirrors exactly (run.py:311-314, citing the same source). EXECUTED (py audit/tools/relic_probes_b15.py b15-misc): a 40/80 player takes the rest heal for 24 (30% of 80, truncated) and finishes at 69/85 -- 64 after the heal, then +5 max and +5 current. ORDER checked deliberately: C# fires the hook AFTER the option's own heal (HealRestSiteOption.cs:109) and the sim does the same (run.py:1092 heals, then :1093-1094 dispatches), which matters because the +5 heal would be capped away if the +5 max HP arrived first."
+      "rationale": "No AscensionHelper.GetValueIfAscension in the file, so 5 is the pinned non-ascension value and stone_humidifier.py:13's MAX_HP = 5 is right. CreatureCmd.GainMaxHp (CreatureCmd.cs:786-799) raises max HP and then Heals by the SAME amount, which run.gain_max_hp mirrors exactly (run.py:477-480, RECONFIRMED 2026-08-04 -- only the line number moved). EXECUTED (py audit/tools/relic_probes_b15.py b15-misc): a 40/80 player takes the rest heal for 24 (30% of 80, truncated) and finishes at 69/85 -- 64 after the heal, then +5 max and +5 current. ORDER checked deliberately: C# fires the hook AFTER the option's own heal (HealRestSiteOption.cs:109) and the sim does the same (run.py:1642 heals, then :1643-1644 dispatches), which matters because the +5 heal would be capped away if the +5 max HP arrived first."
     },
     {
       "what": "N3: no undo_after_obtained, although the relic raises Max HP",

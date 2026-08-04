@@ -32,7 +32,7 @@
     "AfterAddedToRoom": {
       "maps_to": "MechaKnight.__init__ -> PowerCmd.apply(hooks, self, ArtifactPower, 3) (mecha_knight.py:32-36)",
       "verdict": "deliberate-divergence",
-      "rationale": "SHARED-FINDINGS section 2 (monster stream), copied verbatim per governing rule 3 and not re-derived. The sim has no add-to-room phase -- creature creation *is* construction -- so AfterAddedToRoom's effect is applied from __init__ (mecha_knight.py:32-36). Same observable today, established by execution rather than assumed, on all three clauses: (a) listener set -- the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:26-40 / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on `target is self.player` / `applier is self.player` / `card is not None`, and a monster's starting power is self-applied with no card, so none of them can fire. sts2_rl/potions.py implements none of the four hooks. (b) HP-roll inversion -- the sim applies the power before the Niche roll and the game after it; of the 35 constructor-applied power classes only IllusionPower mentions max_hp at all and only inside revive() (powers.py:1581), never at apply time. (c) roll ordering -- MachineMonster.__init__ rolls the first move (state_machine.py:301) *before* the subclass applies its powers, and `py audit/tools/monster_probes.py roll-order` shows all 29 machine sites are sticky-no-op: this unit's initial state is a MoveState, so monster_state_machine step 30's early return fires and the first roll evaluates no branch and reads no power. Concrete trigger that would make it a gap: any relic, potion or power that listens on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. RULE 7: the four relic files and powers.py cited above are NOT hashed by this record (powers.py IS hashed here for other entries); flagged explicitly as the shared finding instructs. ESCALATION CHECK: MechaKnight.cs:73-77 applies ArtifactPower 3m to itself and nothing else; _ARTIFACT = 3 (mecha_knight.py:18). Artifact is the one starting power in this batch that INTERCEPTS later applications (cmds.py:299-306 decrements it and returns before the debuff lands), so the apply-order inversion deserves the check rather than a blind copy -- but the inversion is only relative to the Niche HP roll and the relic/potion attach, all of which happen before the first player action, and no debuff can reach the Mecha Knight before combat starts. Clause (c) holds: the initial state is the MoveState CHARGE_MOVE, so the constructor roll is a sticky no-op."
+      "rationale": "SHARED-FINDINGS section 2 (monster stream), copied verbatim per governing rule 3 and not re-derived. The sim has no add-to-room phase -- creature creation *is* construction -- so AfterAddedToRoom's effect is applied from __init__ (mecha_knight.py:32-36). Same observable today, established by execution rather than assumed, on all three clauses: (a) listener set -- the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:26-40 / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on `target is self.player` / `applier is self.player` / `card is not None`, and a monster's starting power is self-applied with no card, so none of them can fire. sts2_rl/potions.py implements none of the four hooks. (b) HP-roll inversion -- the sim applies the power before the Niche roll and the game after it; of the 35 constructor-applied power classes only IllusionPower mentions max_hp at all and only inside revive() (powers.py:1581), never at apply time. (c) roll ordering -- MachineMonster.__init__ rolls the first move (state_machine.py:301) *before* the subclass applies its powers, and `py audit/tools/monster_probes.py roll-order` shows all 29 machine sites are sticky-no-op: this unit's initial state is a MoveState, so monster_state_machine step 30's early return fires and the first roll evaluates no branch and reads no power. Concrete trigger that would make it a gap: any relic, potion or power that listens on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. RULE 7: the four relic files and powers.py cited above are NOT hashed by this record (powers.py IS hashed here for other entries); flagged explicitly as the shared finding instructs. ESCALATION CHECK: MechaKnight.cs:73-77 applies ArtifactPower 3m to itself and nothing else; _ARTIFACT = 3 (mecha_knight.py:18). Artifact is the one starting power in this batch that INTERCEPTS later applications (cmds.py:858-880 area, re-verified 2026-08-04, was :299-306, same Artifact-intercepts-debuffs behavior, PowerCmd.apply docstring moved), so the apply-order inversion deserves the check rather than a blind copy -- but the inversion is only relative to the Niche HP roll and the relic/potion attach, all of which happen before the first player action, and no debuff can reach the Mecha Knight before combat starts. Clause (c) holds: the initial state is the MoveState CHARGE_MOVE, so the constructor roll is a sticky no-op."
     },
     "GenerateAnimator": {
       "maps_to": "(dropped)",
@@ -54,7 +54,7 @@
     {
       "what": "FlamethrowerMove adds 4 Burn to HAND (MechaKnight.cs:136 vs mecha_knight.py:64-68)",
       "verdict": "faithful",
-      "rationale": "C# is `CardPileCmd.AddToCombatAndPreview<Burn>(targets, PileType.Hand, 4, null)` with the default CardPilePosition.Bottom; the sim loops add_to_hand four times. Card count and pile match. Two guards C# carries that the sim expresses differently, both checked: (1) `if (player.Creature.IsDead) return` (CardPileCmd.cs:1008-1011) -- the sim has no such check, but a dead player ends the combat before any later reader can see the hand, so nothing observable differs; (2) hand overflow -- the sim routes the 4th..Nth card to the discard when the hand is at MAX_HAND_SIZE (cmds.py:508-511), which is the ported convention that creature_card_cmds already owns. The `_flamethrowerCardCount = 4` const (MechaKnight.cs:28) agrees with both the call and the intent."
+      "rationale": "C# is `CardPileCmd.AddToCombatAndPreview<Burn>(targets, PileType.Hand, 4, null)` with the default CardPilePosition.Bottom; the sim loops add_to_hand four times. Card count and pile match. Two guards C# carries that the sim expresses differently, both checked: (1) `if (player.Creature.IsDead) return` (CardPileCmd.cs:1008-1011) -- the sim has no such check, but a dead player ends the combat before any later reader can see the hand, so nothing observable differs; (2) hand overflow -- the sim routes the 4th..Nth card to the discard when the hand is at MAX_HAND_SIZE (cmds.py:1788-1792, re-verified 2026-08-04, was :508-511, same overflow-to-discard shape), which is the ported convention that creature_card_cmds already owns. The `_flamethrowerCardCount = 4` const (MechaKnight.cs:28) agrees with both the call and the intent."
     },
     {
       "what": "StatusIntent(4)'s CardCount is dropped by the sim's Intent (MechaKnight.cs:83 vs mecha_knight.py:42-44)",
@@ -82,22 +82,22 @@
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\monsters\\base.py",
-      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     }
   ]

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -21,35 +21,35 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/underdocks/gremlin_merc.py",
-      "sha256": "7f493af5ad113c5c6ab7bbb534dbf55e223a29adf297d2cd0ea3863bc6d5f30c",
+      "sha256": "09ba68dd4ae06549d0b236eed378a8ef70fda3bbda482641a92a91c0738d0621",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:1643 power_type = PowerType.BUFF",
+      "maps_to": "powers.py:2133 power_type = PowerType.BUFF",
       "verdict": "faithful",
       "rationale": "ThieveryPower.cs:13 PowerType.Buff; the sim agrees. Not a sign-aware case: Type is a constant, not GetTypeForAmount."
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-139 Power.on_stack",
       "verdict": "faithful",
       "rationale": "ThieveryPower.cs:15 PowerStackType.Counter, and the sim's inherited on_stack adds unconditionally, matching PowerCmd.ModifyAmount (PowerCmd.cs:236). Third-file citation, not hashed."
     },
     "InstanceType": {
       "maps_to": "no sim counterpart",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-30 (tier-2 campaign): ThieveryPower.instance_type = PowerInstanceType.INSTANCED (sts2_rl/powers.py), mirroring ThieveryPower.cs:17. Verified directly by test/test_powers.py::TestPowerInstanceType::test_thievery_two_applications_are_independent_gold_counters. DORMANT stands: the only applier (GremlinMerc.AfterAddedToRoom) applies it once per Merc.  The text it replaced read: ThieveryPower.cs:17 PowerInstanceType.Instanced, which the sim's single-slot target.powers dict (cmds.py:310-326, keyed on power_cls.id) cannot represent -- the mechanism owned by audit/records/seam/power_cmd.json G5, cross-referenced not re-verdicted. DORMANT for this unit: the only applier is GremlinMerc.AfterAddedToRoom applying it once to itself (monsters/underdocks/gremlin_merc.py:37-39, one Merc per encounter), so a second simultaneous instance is not reachable. NOTE FOR THE STREAM REPORT: this is a TENTH PowerInstanceType unit, absent from section 10 item 3's list of nine purely because it was absent from the roster."
+      "issue": "Closed 2026-07-30 (tier-2 campaign): ThieveryPower.instance_type = PowerInstanceType.INSTANCED (sts2_rl/powers.py), mirroring ThieveryPower.cs:17. Verified directly by test/test_powers.py::TestPowerInstanceType::test_thievery_two_applications_are_independent_gold_counters. DORMANT stands: the only applier (GremlinMerc.AfterAddedToRoom) applies it once per Merc.  The text it replaced read: ThieveryPower.cs:17 PowerInstanceType.Instanced, which the sim's single-slot target.powers dict (cmds.py:310-326, keyed on power_cls.id) cannot represent -- the mechanism owned by audit/records/seam/power_cmd.json G5, cross-referenced not re-verdicted. DORMANT for this unit: the only applier is GremlinMerc.AfterAddedToRoom applying it once to itself (monsters/underdocks/gremlin_merc.py:40, one Merc per encounter, re-verified 2026-08-04 -- line renumbered from :37-39), so a second simultaneous instance is not reachable. NOTE FOR THE STREAM REPORT: this is a TENTH PowerInstanceType unit, absent from section 10 item 3's list of nine purely because it was absent from the roster."
     },
     "Steal() -- public, NOT public override": {
-      "maps_to": "powers.py:1655-1665 ThieveryPower.steal",
+      "maps_to": "powers.py:2146-2156 ThieveryPower.steal",
       "verdict": "faithful",
-      "rationale": "Recorded so a reader does not think it was skipped: ThieveryPower.cs:21 is a plain public method, not a hook, so harness.list_overrides correctly does not enumerate it (the same shape as CrueltyPower.ModifyVulnerableMultiplier). Its caller is the Merc's move. The port is faithful in both arithmetic and guard: C# takes Math.Min(Amount, Target.Player.Gold) (:25) and the sim takes min(self.amount, available) (:1661) where available is player_gold + gold_gained - gold_stolen (:1660) -- equivalent because C# mutates player.Gold immediately (PlayerCmd.cs:198) so a second Steal reads the reduced figure, exactly as the sim's running gold_stolen debit does. C#'s Gold > 0 test (:23) and the sim's amount <= 0 early return (:1662) agree because Amount is a positive 20."
+      "rationale": "Recorded so a reader does not think it was skipped: ThieveryPower.cs:21 is a plain public method, not a hook, so harness.list_overrides correctly does not enumerate it (the same shape as CrueltyPower.ModifyVulnerableMultiplier). Its caller is the Merc's move. The port is faithful in both arithmetic and guard: C# takes Math.Min(Amount, Target.Player.Gold) (:25) and the sim takes min(self.amount, available) (powers.py:2152) where available is player_gold + gold_gained - gold_stolen (powers.py:2151) -- equivalent because C# mutates player.Gold immediately (PlayerCmd.cs:198) so a second Steal reads the reduced figure, exactly as the sim's running gold_stolen debit does. C#'s Gold > 0 test (:23) and the sim's amount <= 0 early return (powers.py:2153) agree because Amount is a positive 20. Citations re-verified and renumbered 2026-08-04 (steal() now at powers.py:2146-2156)."
     }
   },
   "guards": [
@@ -61,12 +61,12 @@
     {
       "what": "ThieveryPower.cs:23 base.Target vs the sim's combat.player",
       "verdict": "faithful",
-      "rationale": "C# guards base.Target != null && !base.Target.IsDead and reads base.Target.Player.Gold; the sim reads combat.player.is_dead and combat.player_gold (:1658-1660). Identical in single-player, which is the only scope -- multiplayer is out of scope by the shared audit contract's Global scope section. Flagged rather than waived because it is the sim resolving an identity, not skipping a feature."
+      "rationale": "C# guards base.Target != null && !base.Target.IsDead and reads base.Target.Player.Gold; the sim reads combat.player.is_dead and combat.player_gold (powers.py:2149-2151). Identical in single-player, which is the only scope -- multiplayer is out of scope by the shared audit contract's Global scope section. Flagged rather than waived because it is the sim resolving an identity, not skipping a feature. Citation renumbered 2026-08-04."
     },
     {
       "what": "ThieveryPower.cs:27 DynamicVars.Gold.BaseValue vs self.gold_stolen",
       "verdict": "waiver",
-      "rationale": "C# accumulates the running total into a DynamicVar so the power's description can render it; the sim keeps the same total in a plain attribute (powers.py:1653, :1665) which SurprisePower then reads to size the Fat Gremlin's HeistPower. Same value, and the DynamicVar machinery itself is presentation. Waiver."
+      "rationale": "C# accumulates the running total into a DynamicVar so the power's description can render it; the sim keeps the same total in a plain attribute (powers.py:2144, 2156) which SurprisePower then reads to size the Fat Gremlin's HeistPower. Same value, and the DynamicVar machinery itself is presentation. Waiver. Citation renumbered 2026-08-04."
     }
   ],
   "verdict": "waiver",

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -51,7 +51,7 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     },
     {
@@ -62,13 +62,13 @@
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:2992 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py:3801 `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-139 Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:137-139) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "ShouldScaleInMultiplayer": {
       "maps_to": "no sim counterpart",
@@ -76,7 +76,7 @@
       "rationale": "Multiplayer-only scaling (MultiplayerScalingModel). Out of scope everywhere; the sim is single-player."
     },
     "AfterSideTurnStart": {
-      "maps_to": "powers.py:2994-3002 on_player_turn_start (player.py:169)",
+      "maps_to": "powers.py:3803-3817 after_side_turn_start",
       "verdict": "faithful",
       "issue": "Closed 2026-07-29 (round 7): The sim has the flag now. `CombatManager.PlayersTakingExtraTurn` is cleared and refilled in SwitchFromPlayerToEnemySide (CombatManager.cs:1360-1373) and is still non-empty when StartTurn runs (:435/:439) and therefore when Hook.AfterSideTurnStart fires (:522) -- which is how content tells an EXTRA player turn from an ordinary one. Shipped as `CombatState.players_taking_extra_turn`, cleared on every pass through the switch (CombatManager.cs:1363) before the hook is polled and appended to on the extra-turn arm, so it is populated across `_start_player_turn` exactly as in C#.  This rollup's remaining half WAS the extra-turn guard, and that is what closed (see this record's G1). The SLOT half was already closed in an earlier round -- the power is on `after_side_turn_start`, fired from PlayerCombatState.start_turn after the hand draw -- and is untouched. NOT CLOSED: nothing at this site; both halves of the rollup are now closed.  The text it replaced read: STILL OPEN, and now only the extra-turn guard. The SLOT is CLOSED: RampartPower.cs:21 declares AfterSideTurnStart and the power is on the new `after_side_turn_start` dispatcher (CombatManager.cs:522), fired from PlayerCombatState.start_turn after the hand draw and after `on_player_turn_started` -- see power/crimson_mantle's entry for the split and test/test_turn_start_split.py for the pins. WHAT REMAINS is this unit's other guard, the extra-turn condition, which is what makes the rollup LIVE and is untouched by the slot fix.  NARROWED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass; what follows is what is still open. The issue it replaced read: SLOT, and the sim already has the right one. AbstractModel.AfterSideTurnStart is dispatched by Hook.AfterSideTurnStart at CombatManager.cs:522, i.e. AFTER the player's hand draw; the sim's on_player_turn_start is fired at player.py:169, BEFORE the draw at player.py:183, and the post-draw slot on_player_turn_started (player.py:186 -- whose own comment says it is \"the game's AfterPlayerTurnStart / player-side AfterSideTurnStart, both of which run after the draw\") is available and unused. Identical shape to the already-recorded demon_form / crimson_mantle / inferno finding (power report section 4 item 6) and to the section-5 slot table. The block here lands on ENEMIES, so the pre/post-draw half of this is dormant on its own -- nothing the player draws can read a Turret Operator's block before it plays -- but see the extra-turn guard below, which makes this unit's rollup LIVE. Third-file citations, not hashed here."
     }
@@ -90,17 +90,17 @@
     {
       "what": "RampartPower.cs:23 `side != CombatSide.Player` -> return",
       "verdict": "faithful",
-      "rationale": "Implicit: the sim's on_player_turn_start is only ever fired for the player (player.py:169). Worth noting that this power's OWNER is an enemy while the hook it listens on is the PLAYER's side start -- the one case in this batch where the C# side filter is not an owner filter."
+      "rationale": "Implicit: the sim's after_side_turn_start is only ever fired for the player (player.py:349). Worth noting that this power's OWNER is an enemy while the hook it listens on is the PLAYER's side start -- the one case in this batch where the C# side filter is not an owner filter."
     },
     {
       "what": "RampartPower.cs:27 `base.CombatState.Enemies.Where(c => c.Monster is TurretOperator)`",
       "verdict": "gap",
-      "issue": "powers.py:3000-3002 adds `and not enemy.is_gone` (recurring gap shape 8, a guard the sim ADDS). C#'s CombatState.Enemies is the raw participant list and a corpse the combat retained is still in it, so the game grants block to a dead-but-present Turret Operator and the sim does not. DORMANT: TurretOperator overrides no ShouldCreatureBeRemovedFromCombatAfterDeath, so a dead one leaves the list; and granting block to a corpse is unobservable unless it is later revived. Trigger: a Turret Operator with Illusion/Reattach/Adaptable, or an Osty-style revive."
+      "issue": "powers.py:3815-3817 adds `and not enemy.is_gone` (recurring gap shape 8, a guard the sim ADDS). C#'s CombatState.Enemies is the raw participant list and a corpse the combat retained is still in it, so the game grants block to a dead-but-present Turret Operator and the sim does not. DORMANT: TurretOperator overrides no ShouldCreatureBeRemovedFromCombatAfterDeath, so a dead one leaves the list; and granting block to a corpse is unobservable unless it is later revived. Trigger: a Turret Operator with Illusion/Reattach/Adaptable, or an Osty-style revive."
     },
     {
       "what": "RampartPower.cs:30 `ValueProp.Unpowered` on the block",
       "verdict": "faithful",
-      "rationale": "powers.py:3002 passes `props=ValueProp.UNPOWERED`. Correct, and worth recording because this is exactly the call-site omission that made feel_no_pain and curl_up live gaps (power report section 4 item 4); Rampart is one of the eight siblings that gets it right, and re-verified here at the source rather than trusted."
+      "rationale": "powers.py:3817 passes `props=ValueProp.UNPOWERED`. Correct, and worth recording because this is exactly the call-site omission that made feel_no_pain and curl_up live gaps (power report section 4 item 4); Rampart is one of the eight siblings that gets it right, and re-verified here at the source rather than trusted."
     },
     {
       "what": "Amount 25",

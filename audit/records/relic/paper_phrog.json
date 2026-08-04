@@ -26,27 +26,27 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -61,9 +61,9 @@
       "verdict": "faithful"
     },
     "ModifyVulnerableMultiplier": {
-      "maps_to": "modify_vulnerable_multiplier (paper_phrog.py:21-24), dispatched by HookSystem.modify_vulnerable_multiplier (hooks.py:185-194) from VulnerablePower.modify_damage_multiplicative (powers.py:417)",
+      "maps_to": "modify_vulnerable_multiplier (paper_phrog.py:21-24), dispatched by HookSystem.modify_vulnerable_multiplier (hooks.py:1041-1049) from VulnerablePower.modify_damage_multiplicative (powers.py:711)",
       "verdict": "gap",
-      "issue": "NARROWED. The rollup's G1 dispatch-set text is confirmed accurate and unchanged. NEW: found and enumerated a second, previously unrecorded DORMANT divergence — `PaperPhrog.cs:18-21`'s `target == Owner.Creature` self-damage bail has no sim analogue because `modify_vulnerable_multiplier`'s signature carries no `target`. Reachability: a ported powered-Attack card that damages its own player while that player has self-Vulnerable; none exists today. Fix requires `hooks.py`/`powers.py` (BLOCKED-ON-FOOTPRINT this wave); recommend a follow-up guard entry for this specific gap so it isn't re-lost inside the G1 rollup.",
+      "issue": "NARROWED. The rollup's G1 dispatch-set text is confirmed accurate and unchanged. NEW: found and enumerated a second, previously unrecorded DORMANT divergence \u2014 `PaperPhrog.cs:18-21`'s `target == Owner.Creature` self-damage bail has no sim analogue because `modify_vulnerable_multiplier`'s signature carries no `target`. Reachability: a ported powered-Attack card that damages its own player while that player has self-Vulnerable; none exists today. Fix requires `hooks.py`/`powers.py` (BLOCKED-ON-FOOTPRINT this wave); recommend a follow-up guard entry for this specific gap so it isn't re-lost inside the G1 rollup.",
       "live": false
     }
   },
@@ -71,17 +71,17 @@
     {
       "what": "G1 (DORMANT): C# consults the dealer's phrog ONCE by direct lookup; the sim runs a hook chain over every combat listener, so N copies of the relic would each add 0.25",
       "verdict": "gap",
-      "issue": "MECHANISM: VulnerablePower.cs:40-44 does `dealer.Player?.GetRelic<PaperPhrog>()` and calls the method on that single instance, so the bonus is applied at most once no matter what. hooks.py:190-193 folds `mult` through EVERY listener that defines modify_vulnerable_multiplier, so two instances of the relic in run.relics would give +0.50. REACHABILITY (DORMANT, and the concrete unported thing is named): the sim's only duplicate-relic mechanism is Toy Box's wax copies (Relic.is_wax, relics/base.py:102-104), and a wax Paper Phrog in the same run as the real one would double the bonus. Whether Toy Box can produce a wax copy of an already-held relic is a question about relic/toy_box, which is not audited on this branch, so this is filed dormant rather than live -- porting or confirming any path that puts two Paper Phrogs in one run makes it live. Ordering is NOT part of this divergence: C# applies phrog, then CrueltyPower, then DebilitatePower (VulnerablePower.cs:43-55) and the sim applies cruelty inline before the hook (powers.py:413-417), but every contribution is additive so the sum is order-independent; DebilitatePower has no sim counterpart and is a separate unit's concern."
+      "issue": "MECHANISM: VulnerablePower.cs:40-44 does `dealer.Player?.GetRelic<PaperPhrog>()` and calls the method on that single instance, so the bonus is applied at most once no matter what. hooks.py's modify_vulnerable_multiplier (hooks.py:1041-1049) folds `mult` through EVERY listener that defines it, so two instances of the relic in run.relics would give +0.50. REACHABILITY (DORMANT, and the concrete unported thing is named): the sim's only duplicate-relic mechanism is Toy Box's wax copies (Relic.is_wax, relics/base.py:167), and a wax Paper Phrog in the same run as the real one would double the bonus. Whether Toy Box can produce a wax copy of an already-held relic is a question about relic/toy_box, which is not audited on this branch, so this is filed dormant rather than live -- porting or confirming any path that puts two Paper Phrogs in one run makes it live. Ordering is NOT part of this divergence: C# applies phrog, then CrueltyPower, then DebilitatePower (VulnerablePower.cs:43-55) and the sim applies cruelty inline before the hook (powers.py:707-711), but every contribution is additive so the sum is order-independent; DebilitatePower has no sim counterpart and is a separate unit's concern. (2026-08-04: relics/base.py, hooks.py and powers.py line numbers had drifted; re-verified same shape.)"
     },
     {
       "what": "N1: `if (!props.IsPoweredAttack()) return amount;` (PaperPhrog.cs:22-25) -- the sim's port has no props parameter at all",
       "verdict": "faithful",
-      "rationale": "STRUCTURALLY SATISFIED, and doubly so. C#'s own caller already returned 1m for non-powered damage two lines earlier (VulnerablePower.cs:33-36), so the relic's copy of the check is dead weight in the source too. On the sim side the gate is enforced one level higher: DamageCmd.deal only calls modify_damage_multiplicative at all when `is_powered_attack(props)` (cmds.py:56-58, valueprops.py:47-49 = Move AND NOT Unpowered, matching ValuePropExtensions.cs:5-12), so unpowered damage never reaches VulnerablePower's multiplier, let alone the relic's hook. Checked by reading the props plumbing end to end rather than trusting the signature."
+      "rationale": "STRUCTURALLY SATISFIED, and doubly so. C#'s own caller already returned 1m for non-powered damage two lines earlier (VulnerablePower.cs:33-36), so the relic's copy of the check is dead weight in the source too. STALE-CORRECTED 2026-08-04: this rationale previously described the gate as hoisted into DamageCmd.deal's dispatch; that hoist is gone (per paels_legion.json guard G2's history) -- DamageCmd.deal now calls modify_damage_multiplicative UNCONDITIONALLY (cmds.py:335-336) and VulnerablePower.modify_damage_multiplicative itself self-gates first: `if not is_powered_attack(props): return 1.0` (powers.py:702, citing VulnerablePower.cs:33), using valueprops.py:47-49's `is_powered_attack` = Move AND NOT Unpowered (matching ValuePropExtensions.cs:5-12). So unpowered damage still never reaches the relic's hook -- the conclusion is unchanged, only the described pipeline shape."
     },
     {
       "what": "N2 (DORMANT): `if (target == base.Owner.Creature) return amount;` (PaperPhrog.cs:18-21) -- no bonus when the phrog's own owner is the Vulnerable creature; the sim checks only the dealer",
       "verdict": "gap",
-      "issue": "MECHANISM: paper_phrog.py:22 is `if dealer is self.player`, with no target check. Combined with the caller's requirement that the dealer be the phrog's owner (VulnerablePower.cs:40) and the power's requirement that the target be the Vulnerable holder (:29-32, mirrored at powers.py:407-408), the guard can only matter when the PLAYER is simultaneously the dealer, the Vulnerable creature, and dealing a POWERED attack -- i.e. a powered self-attack. REACHABILITY (DORMANT, executed -- `py audit/tools/relic_probes_b11.py phrog-selfhit`): the probe enumerates all 17 ported sites that deal damage TO the player and classifies each by props and dealer; the count that are both POWERED and player-dealt is ZERO. Every card that hurts its own player uses CARD_HP_LOSS or an unpowered variant (bad_luck, beckon, blood_wall, bloodletting, brand, burn, decay, hemokinesis, infection, offering, regret, toxic, wither), and the one powered site aimed at the player is a MONSTER attack (monsters/base.py:115, `dealer=self`). Porting any card or power that deals POWERED, Move-flagged damage from the player to the player makes it live -- and it would then be live in the SILENT direction: the sim would over-multiply the player's self-damage by 1.75 instead of 1.5. Recorded as a gap, not a waiver: 'no ported card does this' is today's content, not the divergence's shape (binding rule 1)."
+      "issue": "MECHANISM: paper_phrog.py:22 is `if dealer is self.player`, with no target check. Combined with the caller's requirement that the dealer be the phrog's owner (VulnerablePower.cs:40) and the power's requirement that the target be the Vulnerable holder (:29-32, mirrored at powers.py:704), the guard can only matter when the PLAYER is simultaneously the dealer, the Vulnerable creature, and dealing a POWERED attack -- i.e. a powered self-attack. REACHABILITY (DORMANT, executed -- `py audit/tools/relic_probes_b11.py phrog-selfhit`): the probe enumerates all 17 ported sites that deal damage TO the player and classifies each by props and dealer; the count that are both POWERED and player-dealt is ZERO. Every card that hurts its own player uses CARD_HP_LOSS or an unpowered variant (bad_luck, beckon, blood_wall, bloodletting, brand, burn, decay, hemokinesis, infection, offering, regret, toxic, wither), and the one powered site aimed at the player is a MONSTER attack (monsters/base.py:346, `dealer=self`). (2026-08-04: powers.py/monsters/base.py had drifted; re-ran the cited probe, same zero count.) Porting any card or power that deals POWERED, Move-flagged damage from the player to the player makes it live -- and it would then be live in the SILENT direction: the sim would over-multiply the player's self-damage by 1.75 instead of 1.5. Recorded as a gap, not a waiver: 'no ported card does this' is today's content, not the divergence's shape (binding rule 1)."
     },
     {
       "what": "N3: the sim's modify_vulnerable_multiplier hook takes only (dealer, mult), dropping C#'s target, props and cardSource parameters",

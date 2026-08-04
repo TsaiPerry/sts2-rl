@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -41,29 +41,29 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:218 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py:342 `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-140 Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:137-140) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Third-file citations, not hashed here."
     },
     "AfterSideTurnStart": {
-      "maps_to": "powers.py:221-229 on_enemy_turn_start / on_player_turn_start",
+      "maps_to": "powers.py:344-353 after_enemy_side_start / after_side_turn_start",
       "verdict": "faithful",
-      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. DemonFormPower.cs:21 declares AfterSideTurnStart and the power is now on the new `after_side_turn_start` dispatcher (CombatManager.cs:522), which the sim fires AFTER the hand draw and after `on_player_turn_started`. The executed Hellraiser witness inverts back to the game's answer: the Strikes are drawn and auto-played before the Strength lands, so they go out un-Strengthened. See power/crimson_mantle's entry for the split itself. The enemy leg keeps its own guard entry.  The gap it replaced read: LIVE. The player leg is one slot too early. The sim's on_player_turn_start (player.py:169) fires BEFORE the hand draw (player.py:171-186), where C#'s AfterSideTurnStart is dispatched at CombatManager.cs:522, AFTER SetupPlayerTurn (:514) has reset energy and drawn the hand. The sim's matching post-draw slot is on_player_turn_started (player.py:186). EXECUTED: a spy listener records [on_player_turn_start hand=5, 4x on_card_drawn, on_player_turn_started hand=9]. Third-file citations, not hashed here. EXECUTED co-occurrence witness with two ported Ironclad cards: Hellraiser (cards/hellraiser.py:36) auto-plays every Strike as it is DRAWN, and Demon Form (cards/demon_form_card.py:35) grants Strength at turn start. On the turn after Demon Form 2 is played, the sim grants the Strength first and the auto-played Strikes take it with them -- enemy HP 41 -> 17 -- where the game draws (and auto-plays) first and only then grants Strength, leaving those Strikes un-Strengthened at 41 -> 23. Six damage the game never deals. The enemy leg (powers.py:221-224) has the separate per-creature problem recorded in its own guard entry."
+      "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. DemonFormPower.cs:21 declares AfterSideTurnStart and the power is now on the new `after_side_turn_start` dispatcher (CombatManager.cs:522), which the sim fires AFTER the hand draw and after `on_player_turn_started`. The executed Hellraiser witness inverts back to the game's answer: the Strikes are drawn and auto-played before the Strength lands, so they go out un-Strengthened. See power/crimson_mantle's entry for the split itself. The enemy leg keeps its own guard entry.  The gap it replaced read: LIVE. The player leg is one slot too early. The sim's on_player_turn_start (player.py:169) fires BEFORE the hand draw (player.py:171-186), where C#'s AfterSideTurnStart is dispatched at CombatManager.cs:522, AFTER SetupPlayerTurn (:514) has reset energy and drawn the hand. The sim's matching post-draw slot is on_player_turn_started (player.py:186). EXECUTED: a spy listener records [on_player_turn_start hand=5, 4x on_card_drawn, on_player_turn_started hand=9]. Third-file citations, not hashed here. EXECUTED co-occurrence witness with two ported Ironclad cards: Hellraiser (cards/hellraiser.py:36) auto-plays every Strike as it is DRAWN, and Demon Form (cards/demon_form_card.py:35) grants Strength at turn start. On the turn after Demon Form 2 is played, the sim grants the Strength first and the auto-played Strikes take it with them -- enemy HP 41 -> 17 -- where the game draws (and auto-plays) first and only then grants Strength, leaving those Strikes un-Strengthened at 41 -> 23. Six damage the game never deals. The enemy leg (powers.py:344-348) has the separate per-creature problem recorded in its own guard entry."
     }
   },
   "guards": [
@@ -75,7 +75,7 @@
     {
       "what": "DemonFormPower.cs:26 `PowerCmd.Apply<StrengthPower>(Owner, Amount, applier: Owner)`",
       "verdict": "deliberate-divergence",
-      "rationale": "powers.py:223-224 and :228-229 route through StrengthCmd.apply, which adds a modify_strength_given chain C# does not have here and drops `applier = Owner`. Same shape, same reasoning and same non-observability as the matching guard on power/ritual."
+      "rationale": "powers.py:347-348 and :352-353 route through StrengthCmd.apply, which adds a modify_strength_given chain C# does not have here and drops `applier = Owner`. Same shape, same reasoning and same non-observability as the matching guard on power/ritual."
     },
     {
       "what": "DemonFormPower.cs:25 Flash()",
@@ -84,5 +84,5 @@
     }
   ],
   "verdict": "deliberate-divergence",
-  "audited": "2026-07-26"
+  "audited": "2026-08-04"
 }

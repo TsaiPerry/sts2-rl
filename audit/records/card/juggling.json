@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
@@ -31,28 +31,28 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     }
   ],
   "hooks": {
     "ctor": {
-      "maps_to": "class attrs (juggling.py:420-424) + _init_vars (426-427)",
+      "maps_to": "class attrs (juggling.py:21-25) + _init_vars (27-28)",
       "verdict": "faithful",
       "rationale": "`base(1, CardType.Power, CardRarity.Uncommon, TargetType.Self)` (Juggling.cs:11-14) == cost 1 / POWER / UNCOMMON / SELF. No keywords, no CanonicalVars (the power amount is the literal 1)."
     },
     "OnPlay": {
-      "maps_to": "JugglingCard.on_play (juggling.py:432-435)",
+      "maps_to": "JugglingCard.on_play (juggling.py:33-36)",
       "verdict": "faithful",
       "rationale": "`PowerCmd.Apply<JugglingPower>(choiceContext, Owner.Creature, 1m, Owner.Creature, this)` (Juggling.cs:19) == `PowerCmd.apply(ctx.hooks, ctx.player, JugglingPower, 1, applier=ctx.player)`. Presentation, folded in: TriggerAnim (18)."
     },
     "OnUpgrade": {
-      "maps_to": "JugglingCard._on_upgrade (juggling.py:429-430)",
+      "maps_to": "JugglingCard._on_upgrade (juggling.py:30-31)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-29 (round 7): STICKY KEYWORD FIXED AT THE SEAM, per binding rule 3 -- see creature_card_cmds/step52. `Card.downgrade` (cards/base.py) now deletes the instance-level shadow of every CardKeyword-backed attribute before re-running `_init_vars`, which is `DowngradeInternal`'s `_keywords = cardModel.GetKeywordsWithSources(KeywordSources.Local).ToHashSet()` (CardModel.cs:2143). The card file itself is UNCHANGED: the defect was never in `_on_upgrade`, which faithfully ports `AddKeyword`/`RemoveKeyword`, but in the rebuild that was supposed to undo it -- which is why a per-card `_init_vars` line would have been the wrong fix, needing to be repeated for every future card. `py audit/tools/card_probes.py downgrade` goes 5 of 203 -> **0 of 203**. Pinned by test/test_downgrade_rebuild.py::test_upgrade_then_downgrade_restores_the_keyword and by a pool-wide sweep over all seven keywords. NOT CLOSED: nothing at this site.  The text it replaced read: `AddKeyword(CardKeyword.Innate)` (Juggling.cs:24) maps to `self.innate = True`, correct at upgrade level 1. DOWNGRADE IS STICKY: `Card.downgrade` (cards/base.py:150-165) rebuilds by re-running `_init_vars` and re-applying upgrades, and `_init_vars` does not re-seed the flag, so the instance attribute written by `_on_upgrade` survives. C# `DowngradeInternal` rebuilds the whole keyword set from canonical (CardModel.cs:2143). EXECUTED: `py audit/tools/card_probes.py downgrade` lists this card among the 5 of 203 that do not restore. LIVE -- `downgrade()` is reachable from `events/reflections.py:40`, `events/welcome_to_wongos.py:90` and `powers.py:3171` (DampenPower). Same mechanism and same verdict as card/aggression's OnUpgrade entry (rule 3). The fix is one line: re-seed the flag in `_init_vars`, as card/entropy and card/gold_axe do. Observable: a downgraded Juggling still starts every combat in the opening hand in the sim; in the game it does not. Fourth of the five sticky cards, and the third with this exact Innate shape (card/aggression, card/hello_world)."
+      "issue": "Closed 2026-07-29 (round 7), CONFIRMED against current source 2026-08-04. STICKY KEYWORD FIXED AT THE SEAM, per binding rule 3 -- see creature_card_cmds/step52. `Card.downgrade` (cards/base.py:324-355, was `:150-165`) deletes the instance-level shadow of every CardKeyword-backed attribute (`self.__dict__.pop(attr, None)` for each of `_KEYWORD_ATTRS`, base.py:346-347) before re-running `_init_vars` (base.py:348), which is `DowngradeInternal`'s `_keywords = cardModel.GetKeywordsWithSources(KeywordSources.Local).ToHashSet()` (CardModel.cs:2143). The card file itself remains UNCHANGED in substance: the defect was never in `_on_upgrade` (juggling.py:30-31, faithfully ports `AddKeyword`), but in the rebuild that was supposed to undo it. Downgrade reachability RE-VERIFIED against current call sites (all three still present, none any longer calling `.downgrade()` directly -- each now goes through the `CardCmd.downgrade(hooks, card)` wrapper, cmds.py:1337-1352, which adds the `IsEnding` guard `CardCmd.Downgrade` has and `hooks=None` correctly answers False for the two out-of-combat callers): `events/reflections.py:47`, `events/welcome_to_wongos.py:97,99`, and `powers.py:4004` (the DampenPower-equivalent, class body starting powers.py:~3985). Pinned by test/test_downgrade_rebuild.py (file still present, verified by glob) and by a pool-wide sweep over all seven keywords. NOT CLOSED: nothing at this site."
     }
   },
   "guards": [],
   "verdict": "faithful",
-  "audited": "2026-07-26"
+  "audited": "2026-08-04"
 }

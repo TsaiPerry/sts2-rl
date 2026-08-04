@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -21,29 +21,29 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:2689 `power_type = PowerType.DEBUFF`",
+      "maps_to": "powers.py:3348 `power_type = PowerType.DEBUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-139 Power.on_stack",
       "verdict": "faithful",
       "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "ModifyMaxEnergy": {
-      "maps_to": "powers.py:2691-2694 modify_max_energy (hooks.py:203, called at player.py:163)",
+      "maps_to": "powers.py:3350-3353 modify_max_energy (called at player.py:372)",
       "verdict": "faithful",
-      "rationale": "`player != base.Owner.Player -> amount` else `amount - base.Amount` maps exactly to powers.py:2692-2694. Checked deliberately: NEITHER side clamps at 0, so a Waste Away larger than the energy gain produces a negative gain on both -- and the sim then assigns it straight to `self.energy` (player.py:165), which is what C# does too. The sim reproducing an unclamped subtraction rather than tidying it is the right call. Third-file citations, not hashed here."
+      "rationale": "`player != base.Owner.Player -> amount` else `amount - base.Amount` maps exactly to powers.py:3351-3353. Checked deliberately: NEITHER side clamps at 0, so a Waste Away larger than the energy gain produces a negative gain on both -- and the sim then assigns it straight to `self.energy` (player.py:374 or :376, depending on `should_reset`), which is what C# does too. The sim reproducing an unclamped subtraction rather than tidying it is the right call. Third-file citations, not hashed here. Citations re-verified and renumbered 2026-08-04 (player.py's energy-reset function moved; mechanism and order unchanged)."
     }
   },
   "guards": [

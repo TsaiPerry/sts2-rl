@@ -36,17 +36,17 @@
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -64,17 +64,17 @@
     },
     {
       "what": "GenerateInitialOptions (WaterloggedScriptorium.cs:40-66): BLOODY_INK is always offered; TENTACLE_QUILL is offered when Gold >= 55 and replaced by TENTACLE_QUILL_LOCKED (null onChosen) otherwise; PRICKLY_SPONGE likewise against 99. Option ORDER is ink, quill, sponge",
-      "maps_to": "events/waterlogged_scriptorium.py:38-48 builds exactly that list in that order, with the two DISTINCT locked keys the source uses (TENTACLE_QUILL_LOCKED / PRICKLY_SPONGE_LOCKED) rather than one shared key, and EventOption(key, None) is the sim's null onChosen (events/base.py:58-65).",
+      "maps_to": "events/waterlogged_scriptorium.py:38-48 builds exactly that list in that order, with the two DISTINCT locked keys the source uses (TENTACLE_QUILL_LOCKED / PRICKLY_SPONGE_LOCKED) rather than one shared key, and EventOption(key, None) is the sim's null onChosen (events/base.py:58-65, re-verified 2026-08-04 -- `EventOption.__init__`/`locked` property text unchanged at this exact span, despite the file's overall content shifting elsewhere).",
       "verdict": "faithful"
     },
     {
       "what": "BloodyInk (WaterloggedScriptorium.cs:101-105): CreatureCmd.GainMaxHp(Creature, 6)",
-      "maps_to": "events/waterlogged_scriptorium.py:55-57 run.gain_max_hp(6). CreatureCmd.GainMaxHp (CreatureCmd.cs:786-799) is SetMaxHp(MaxHp + amount) followed by Heal(creature, delta), and run.gain_max_hp (run.py:311-314) is `max_hp += amount; heal(amount)` -- the same two steps in the same order. This is the GAIN verb; EV-2 (lose_max_hp clamps instead of damaging) has no counterpart here because GainMaxHp runs no damage pipeline. The only skipped tail is the MapPointHistoryEntry.MaxHpGained counter (CreatureCmd.cs:794-798), which is run-history telemetry with no gameplay reader -- see the GoldLossType guard for the same class of omission.",
+      "maps_to": "events/waterlogged_scriptorium.py:55-57 run.gain_max_hp(6). CreatureCmd.GainMaxHp (CreatureCmd.cs:786-799) is SetMaxHp(MaxHp + amount) followed by Heal(creature, delta), and run.gain_max_hp (run.py:477-480, was 311-314) is `max_hp += amount; heal(amount)` -- the same two steps in the same order. This is the GAIN verb; EV-2 (lose_max_hp clamps instead of damaging) has no counterpart here because GainMaxHp runs no damage pipeline. The only skipped tail is the MapPointHistoryEntry.MaxHpGained counter (CreatureCmd.cs:794-798), which is run-history telemetry with no gameplay reader -- see the GoldLossType guard for the same class of omission. Re-verified 2026-08-04: unchanged, only line numbers moved.",
       "verdict": "faithful"
     },
     {
       "what": "TentacleQuill (WaterloggedScriptorium.cs:85-99): LoseGold(55) FIRST, then FromDeckForEnchantment(Steady, prefs count 1).FirstOrDefault(), then CardCmd.Enchant<Steady>(card, 1m) under a null guard",
-      "maps_to": "events/waterlogged_scriptorium.py:59-62: lose_gold(55) then _enchant(1). Gold-before-selection order preserved. The sim's _enchant loops over run.select_cards(...) so an empty candidate list is the null guard. run.select_cards (run.py:371-390) is the headless stand-in for CardSelectCmd and reproduces its auto-select-all rule (`if cards.Count <= prefs.MinSelect` at CardSelectCmd.cs:576-579) via `count = min(count, len(candidates))`.",
+      "maps_to": "events/waterlogged_scriptorium.py:59-62: lose_gold(55) then _enchant(1). Gold-before-selection order preserved. The sim's _enchant loops over run.select_cards(...) so an empty candidate list is the null guard. run.select_cards (run.py:585-643, was 371-390) is the headless stand-in for CardSelectCmd and reproduces its auto-select-all rule (`if cards.Count <= prefs.MinSelect` at CardSelectCmd.cs:576-579) via `count = min(count, len(candidates))`. Re-verified 2026-08-04: unchanged, only line numbers moved.",
       "verdict": "faithful"
     },
     {
@@ -84,11 +84,11 @@
     },
     {
       "what": "the enchant candidate filter and the Steady effect",
-      "maps_to": "C# filters the DECK pile by `enchantment.CanEnchant(c)` (CardSelectCmd.cs:549); events/waterlogged_scriptorium.py:51 filters `self.run.deck` by SteadyEnchantment.can_enchant. Steady itself is `OnEnchant: Card.AddKeyword(Retain)` (Steady.cs:11-14) against the sim's attach/reset pair (enchantments.py:135-142). Both the base CanEnchant port and the Steady body are already audited by audit/records/enchantment/steady.json -- cited, not re-verdicted (rule 3).",
+      "maps_to": "C# filters the DECK pile by `enchantment.CanEnchant(c)` (CardSelectCmd.cs:549); events/waterlogged_scriptorium.py:51 filters `self.run.deck` by SteadyEnchantment.can_enchant. Steady itself is `OnEnchant: Card.AddKeyword(Retain)` (Steady.cs:11-14) against the sim's attach/reset pair (enchantments.py:265-266, `modify_card` override, was :135-142; base `modify_card` doc at :137-146). Both the base CanEnchant port and the Steady body are already audited by audit/records/enchantment/steady.json -- cited, not re-verdicted (rule 3). Re-verified 2026-08-04: `SteadyEnchantment.modify_card` still sets `self.card.retain = True`, only line numbers moved.",
       "verdict": "faithful"
     },
     {
-      "what": "PlayerCmd.LoseGold's `GoldLossType.Spent` argument (WaterloggedScriptorium.cs:70, :87) is unmodelled -- run.lose_gold (run.py:335-337) takes no loss type",
+      "what": "PlayerCmd.LoseGold's `GoldLossType.Spent` argument (WaterloggedScriptorium.cs:70, :87) is unmodelled -- run.lose_gold (run.py:518-520, was 335-337) takes no loss type",
       "verdict": "deliberate-divergence",
       "rationale": "SAME observable, so deliberate-divergence rather than gap (rule 2), and the SAME verdict the mechanism already carries at event/morphic_grove (GoldLossType.Stolen) and event/round_tea_party (ThatWontSaveToChoiceHistory) -- rule 3. Verified at the enum rather than assumed: GoldLossType.cs:3-5's own doc comment is 'Used to help flavor how the gold was lost in the Map History', and a grep for `GoldLossType` across src finds no reader outside the enum declaration itself and the call sites that pass it. A future run-history/telemetry port would need it."
     },

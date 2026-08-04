@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\hive\\flail_knight.py",
-    "sha256": "becbe219001dd78582bdba64cbdbf1184546b597a655b3d586caef6b721e32a4"
+    "sha256": "e4de06f5ecdc64df31727e4a7b82c119d68b9f9e51551cd051d9be86c7fff1e9"
   },
   "hooks": {
     "MinInitialHp": {
@@ -35,6 +35,13 @@
       "issue": "Closed 2026-07-28: monster_state_machine G1's misread is gone at this site. flail_knight.py:53-58 now reads FlailKnight.cs:50-51's AddBranch(moveState2, 2) / AddBranch(moveState3, 2) as RandomBranchState.AddBranch overload #9 (`int maxRepeats`, RandomBranchState.cs:105) -- repeat_type=CAN_REPEAT_X_TIMES with max_times=2 and add_branch's DEFAULT weight 1.0 -- instead of weight=2.0 with CAN_REPEAT_FOREVER. Verified by reading both sides this session (branch add order WAR_CHANT, FLAIL, RAM and the initial state RAM_MOVE still match FlailKnight.cs:49-57); `py audit/tools/state_machine_probes.py mismatch` now reports 'monsters whose sim port MISREADS the C# branch arguments: 0'. WAS: the positional 2 was read as a weight, shifting the intent distribution and dropping the 'never three in a row' cap."
     }
   },
+  "extra_sources": [
+    {
+      "path": "src/Core/MonsterMoves/MonsterMoveStateMachine/RandomBranchState.cs",
+      "sha256": "40bdd029d51ff7dfe94e907f90add0d630bcfa617fc36ceb182798c330ee0792",
+      "side": "game"
+    }
+  ],
   "guards": [
     {
       "what": "AddBranch(WAR_CHANT, MoveRepeatType.CannotRepeat) - the branch that IS read right",

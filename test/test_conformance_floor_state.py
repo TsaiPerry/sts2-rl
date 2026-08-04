@@ -97,6 +97,122 @@ def test_floor_checkpoints_and_resync_run_to_completion():
     assert all(1 <= f <= 49 for f in checked_floors)
 
 
+@pytest.mark.skipif(not (REC.exists() and BK.exists()), reason="fixtures absent")
+def test_resync_skips_the_final_checkpointed_floor():
+    """The final floor's backup save is an entry-style capture, structurally
+    different from the whole-run END oracle DETECTORS 2/3 already check the
+    post-room state against — comparing them can never converge (code
+    review, 2026-08-04: recording a permanently-unwinnable diff there made a
+    fully-converged replay print DIVERGENCES REMAIN forever). Both the diff
+    AND the resync are skipped for this one floor; its post-state is already
+    covered elsewhere (DETECTORS 2/3 against the true run-END oracle)."""
+    from sts2_rl.conformance.recording import parse_recording
+    from sts2_rl.conformance.runner import ReplayRunner
+    from sts2_rl.conformance.save import parse_save
+
+    b = REC / "933T39V18D" / "floor_49"
+    rec = parse_recording(b / "actions.sts2replay")
+    oracle = parse_save(b / "run.save")
+    saves = _floor_saves()
+    result = ReplayRunner(rec, oracle).run(
+        stop_after_act=2, floor_saves=saves, resync_floors=True)
+    # The run-end stream counters must now match exactly as they do in the
+    # unresynced gate — the final-floor pin was the sole source of the
+    # Shuffle 892-vs-909 phantom.
+    assert [d for d in result.combat_divergences if d.command_index == -1] == []
+    # No floor_* divergence may carry the final floor's own number — the
+    # diff there is unwinnable by construction (two legitimately different
+    # oracles for that floor), so it must not be recorded at all.
+    final_floor = max(saves)
+    assert [d for d in result.divergences
+            if d.stream.startswith("floor_") and d.command_index == final_floor] == []
+
+
+@pytest.mark.skipif(not (REC.exists() and BK.exists()), reason="fixtures absent")
+def test_floor_47_backup_save_is_excluded_as_an_inconsistent_capture():
+    """933T floor_47's backup save (`_FLOOR_ROOTS`) records hp=74 — a value
+    that matches NEITHER the run-end save's room_stats_by_act entry for that
+    room (post-room hp 80, act 2 room 12 exit) NOR its entry hp (66, the
+    value tools/oracle_semantics_probe.py's `hist[F-1]`/`entry-arith` columns
+    both independently derive) NOR any other reachable number. Every other
+    one of the 49 backup floors in that probe table lines up with one of
+    those two references (dominantly ENTRY); 47 (and its stale duplicate 48)
+    are the sole exceptions. Since the sim's own room-12 HP (66) agrees with
+    the history-derived value, the 74 in the floor_47 backup is a mid-room /
+    wrong-moment capture artifact, not ground truth — `_check_floor_state`
+    must skip it exactly like a stale save, leaving the floor unchecked
+    (still safe: the next non-excluded checkpoint compares full state again)."""
+    from sts2_rl.conformance.recording import parse_recording
+    from sts2_rl.conformance.runner import ReplayRunner
+    from sts2_rl.conformance.save import parse_save
+
+    base = REC / "933T39V18D" / "floor_49"
+    rec = parse_recording(base / "actions.sts2replay")
+    oracle = parse_save(base / "run.save")
+    result = ReplayRunner(rec, oracle).run(
+        stop_after_act=2, floor_saves=_floor_saves(), resync_floors=True)
+    floor_47_hp_divs = [
+        d for d in result.divergences
+        if d.stream == "floor_hp" and d.command_index == 47
+    ]
+    assert floor_47_hp_divs == []
+
+
+def test_is_inconsistent_floor_save_requires_sim_agreement_with_history():
+    """Code review Critical fix (2026-08-04): excluding a floor must not rely
+    on oracle-internal evidence alone (backup vs history/arithmetic) — that
+    could silently swallow a REAL divergence on some future floor whose
+    backup happens to be self-inconsistent for an unrelated reason. The
+    floor is excluded ONLY when the backup is unreachable from the history
+    references AND the live sim (`run.hp`) agrees with the one reachable
+    reference. If the sim ALSO disagrees, the floor is NOT excluded — the
+    diff must be recorded so it can be investigated, not silently dropped.
+
+    Unit-level, no fixtures required: constructs a minimal two-point
+    `room_stats_by_act` directly (`ReplayRunner.__new__` + a bare `oracle`)
+    so both branches are exercised deterministically without depending on
+    which real recording floor happens to be inconsistent."""
+    from types import SimpleNamespace
+
+    from sts2_rl.conformance.runner import ReplayRunner
+    from sts2_rl.conformance.save import RoomStats, SaveOracle
+
+    def room(hp, damage_taken=0, hp_healed=0):
+        return RoomStats(map_point_type="combat", current_hp=hp, max_hp=80,
+                          damage_taken=damage_taken, hp_healed=hp_healed,
+                          current_gold=0, gold_gained=0, gold_spent=0,
+                          gold_lost=0, gold_stolen=0, max_hp_gained=0,
+                          max_hp_lost=0)
+
+    # floor 1 (prev): hp 70. floor 2 (cur): hp 50, damage_taken 20, hp_healed
+    # 0 -> arith = 50 + 20 - 0 = 70, matching prev — history is internally
+    # consistent here; the only reachable reference for a floor-2 backup is
+    # 70 (== prev.current_hp == arith; cur.current_hp itself is 50).
+    prev, cur = room(70), room(50, damage_taken=20)
+    runner = ReplayRunner.__new__(ReplayRunner)
+    runner.oracle = SaveOracle(
+        run_seed="x", player_seed=0, ascension=0, acts=[],
+        current_act_index=0, run_counters={}, player_counters={},
+        room_stats_by_act=[[prev, cur]])
+
+    inconsistent_backup = SimpleNamespace(player_current_hp=999)
+
+    # Sim agrees with the one reachable reference (70) -> exclude.
+    sim_agrees = SimpleNamespace(hp=70)
+    assert runner._is_inconsistent_floor_save(2, inconsistent_backup, sim_agrees)
+
+    # Sim ALSO disagrees (neither 50, 70, nor 999) -> do NOT exclude; the
+    # divergence must surface, not be silently swallowed.
+    sim_disagrees = SimpleNamespace(hp=12345)
+    assert not runner._is_inconsistent_floor_save(
+        2, inconsistent_backup, sim_disagrees)
+
+    # A backup that DOES match a reachable reference is never excluded,
+    # regardless of what the sim did (nothing to exclude — it's consistent).
+    consistent_backup = SimpleNamespace(player_current_hp=70)
+    assert not runner._is_inconsistent_floor_save(2, consistent_backup, sim_agrees)
+
+
 @pytest.mark.parametrize("seed", [
     pytest.param("933T39V18D", marks=pytest.mark.skipif(
         not (REC.exists() and BK.exists()), reason="fixtures absent")),

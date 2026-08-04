@@ -16,44 +16,44 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/infested_automaton.py",
-      "sha256": "9f2a892edd9957367fd788a75a09d0e3e50beabfa8302fd4c16557d89084abe5",
+      "sha256": "07e0c7ee92afcdc2df5f4d6d7e2365147513ade98b4b354460cae23ea30be475",
       "side": "sim"
     }
   ],
   "hooks": {
     "MaxUpgradeLevel": {
-      "maps_to": "InjuryCard.max_upgrade_level = 0 (injury.py:314)",
+      "maps_to": "InjuryCard.max_upgrade_level = 0 (injury.py:25)",
       "verdict": "faithful",
       "rationale": "`=> 0` (Injury.cs:8) == the class attribute."
     },
     "CanonicalKeywords": {
-      "maps_to": "InjuryCard.is_playable = False (injury.py:313)",
+      "maps_to": "InjuryCard.is_playable = False (injury.py:24)",
       "verdict": "faithful",
       "rationale": "`{ CardKeyword.Unplayable }` (Injury.cs:10) == `is_playable = False`. NOT Eternal and NOT Ethereal -- Injury is the plainest curse in the pool, removable and permanent in hand -- and the sim leaves both False. It also does NOT override CanBeGeneratedByModifiers, so Injury IS in the random-curse pool on both sides (the sim leaves the True default)."
     },
     "ctor": {
-      "maps_to": "class attrs (injury.py:308-315) + _init_vars (317-318)",
+      "maps_to": "class attrs (injury.py:19-26) + _init_vars (28-29)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-30 (tier-2 campaign): `Card.energy_cost` (`sts2_rl/cards/base.py`) now short-circuits on `self._energy_cost < 0` as its first check, returning the raw canonical value before consulting `_free_this_turn` / `_cost_this_turn` / `_cost_this_combat` / `_cost_delta_this_turn` -- mirrors `CardEnergyCost.GetWithModifiers`'s `if (_base < 0) return num;` short-circuit (`CardEnergyCost.cs:101-104`; the record's `:100-103` cite is one line of decompiler drift), which runs before any local or global modifier. All 29 unplayable curse/status/quest cards now set `self._energy_cost = -1` in `_init_vars` (previously 0), each verified individually against its own C# `base(-1, CardType.X, ...)` constructor -- no exceptions, no ascension-gated cost variant. Readers audit (every non-cards/ `energy_cost` hit read in context): combat play/auto-play/valid_actions/action-mask sites gate on `is_playable` first and never see -1; every global-modifier site routes through `hooks.modify_card_energy_cost`, whose dispatcher ends `return max(0, cost)` -- the sim's analogue of C#'s `Math.Max(0, GetWithModifiers(...))` in `GetAmountToSpend`/`GetResolved` (`CardEnergyCost.cs:134-141`) -- so what is SPENT and what the observation encoder reads (`full_env.py` card_features via `previews.py` preview_card_energy_cost) are byte-for-byte unchanged. The three previously-known readers (`relics/mummified_hand.py`, `potions.py` TouchOfInsanity, `cards/event_cards.py` Enlightenment) remain correct, confirmed by unit tests. NOT closed here: `selectors.py`'s `scripted_card_selector` 'to_draw_top' purpose (Headbutt/Thinking Ahead) ranks by raw `card.energy_cost` unclamped -- a sim-only heuristic with no C# analogue; a curse in a Headbutt-eligible discard pile now ranks below-cost instead of tying at 0. No test exercises it; filed in GAP-QUEUE.md's 'Named work with no entry of its own'. New pins: test/test_unplayable_cost.py (15 tests).  The text it replaced read: CURSE / CURSE / NONE map exactly. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier; the sim runs a base of 0 through the full modifier chain (cards/base.py:222-232). Only what is READ diverges. Same mechanism and same verdict as card/ascenders_bane's ctor entry (rule 3). DORMANT: every ported cost reader filters `> 0` or skips `<= 1`, and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses or statuses."
+      "issue": "Closed 2026-07-30 (tier-2 campaign), CONFIRMED against current source 2026-08-04: `Card.energy_cost` (`sts2_rl/cards/base.py:422-443`, was `:222-232`) short-circuits on `self._energy_cost < 0` as its first check (`base.py:433-434`), returning the raw canonical value before consulting `_free_this_turn` / `_cost_this_turn` / `_cost_this_combat` / `_cost_delta_this_turn` -- mirrors `CardEnergyCost.GetWithModifiers`'s `if (_base < 0) return num;` short-circuit (`CardEnergyCost.cs:101-104`), which runs before any local or global modifier. Injury sets `self._energy_cost = -1` in `_init_vars` (injury.py:29), matching `base(-1, CardType.Curse, ...)`. Readers: combat play/auto-play/valid_actions/action-mask sites gate on `is_playable` first and never see -1; every global-modifier site routes through `hooks.modify_card_energy_cost`, whose dispatcher ends `return max(0, cost)`, so what is SPENT and what the observation encoder reads (`full_env.py:700-744`, was `:455-489`) are unchanged. DORMANT: every ported cost reader filters `> 0` or skips `<= 1`, and `events/infested_automaton.py` (now via `reward_pool_card_ids`, not `pool_card_ids` -- the event was refactored since this record's last audit) still excludes curses/statuses at its two call sites: `_study` filters to `CardType.POWER` (infested_automaton.py:53) and `_touch_core` filters `energy_cost == 0` (infested_automaton.py:61), and Injury's canonical cost is -1, not 0, so neither offer can surface it. New pins: test/test_unplayable_cost.py (15 tests, still present)."
     },
     "OnPlay": {
-      "maps_to": "InjuryCard.on_play -> pass (injury.py:320-321)",
+      "maps_to": "InjuryCard.on_play -> pass (injury.py:31-32)",
       "verdict": "faithful",
       "rationale": "Injury.cs has no members beyond the two overrides -- no OnPlay, no OnTurnEndInHand, no vars. A pure dead draw on both sides."
     }
   },
   "guards": [
     {
-      "what": "the sim adds `is_unpowered = True` (injury.py:315), which has no counterpart in Injury.cs",
+      "what": "the sim adds `is_unpowered = True` (injury.py:26), which has no counterpart in Injury.cs",
       "verdict": "faithful",
       "rationale": "Inert: the flag only steers `DamageCmd.deal`'s prop inference and Injury deals no damage."
     }
   ],
   "verdict": "faithful",
-  "audited": "2026-07-26"
+  "audited": "2026-08-04"
 }

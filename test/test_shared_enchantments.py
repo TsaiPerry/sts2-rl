@@ -61,6 +61,26 @@ def test_nimble_requires_gains_block():
     assert not make_card("feel_no_pain").gains_block
 
 
+def test_nimble_accepts_a_skill_mad_science_only():
+    """Mad Science's GainsBlock is TYPE-dependent — `TinkerTimeType ==
+    CardType.Skill` (MadScience.cs:94) — because only the Skill configuration
+    gains its 8 block. Nimble's CanEnchant reads exactly that flag, so the
+    game accepts a Skill Mad Science and refuses the Attack and Power ones."""
+    from sts2_rl.cards.base import CardType
+
+    nimble = make_enchantment("nimble")
+    skill = make_card("mad_science").configure(CardType.SKILL, "wisdom")
+    attack = make_card("mad_science").configure(CardType.ATTACK, "violence")
+    power = make_card("mad_science").configure(CardType.POWER, "curious")
+
+    assert skill.gains_block
+    assert nimble.can_enchant(skill)
+    assert not attack.gains_block
+    assert not nimble.can_enchant(attack)
+    assert not power.gains_block
+    assert not nimble.can_enchant(power)
+
+
 # ── Vigorous: +amount damage, once per combat ────────────────────────────
 def test_vigorous_bonus_applies_once_then_spends():
     strike, second = make_card("strike"), make_card("strike")

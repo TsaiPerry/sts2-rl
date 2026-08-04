@@ -10,9 +10,9 @@
   },
   "hooks": {
     "RoomType": {
-      "maps_to": "rooms.py:195 `elite_keys=(\"knights\", \"mecha_knight\", \"soul_nexus\")` (glory ActRooms)",
+      "maps_to": "rooms.py:269 `elite_keys=(\"knights\", \"mecha_knight\", \"soul_nexus\")` (glory ActRooms)",
       "verdict": "deliberate-divergence",
-      "rationale": "MechaKnightElite.cs:10 `RoomType => RoomType.Elite`. The sim's `Encounter` dataclass (monsters/base.py) carries no `RoomType` field at all -- the type is modeled structurally by which of `ActRooms`'s four key tuples (`weak_keys`/`normal_keys`/`elite_keys`/`boss_keys`) an encounter id is listed under (rooms.py:37-64). `mecha_knight` is in `elite_keys`, matching `RoomType.Elite`, and this also drives the gold ladder (see the guard below) and the `EliteEncounter` room-visit accessor (`RoomSet.next_elite_encounter`, rooms.py:413-415). Same observable, different architecture -- one shared mechanism across all nine of this batch's units; see `encounter/_room_type_and_weak` in the report."
+      "rationale": "MechaKnightElite.cs:10 `RoomType => RoomType.Elite`. The sim's `Encounter` dataclass (monsters/base.py) carries no `RoomType` field at all -- the type is modeled structurally by which of `ActRooms`'s four key tuples (`weak_keys`/`normal_keys`/`elite_keys`/`boss_keys`) an encounter id is listed under (rooms.py:67-70, field decls). `mecha_knight` is in `elite_keys`, matching `RoomType.Elite`, and this also drives the gold ladder (see the guard below) and the `EliteEncounter` room-visit accessor (`RoomSet.next_elite_encounter`, rooms.py:549). Same observable, different architecture -- one shared mechanism across all nine of this batch's units; see `encounter/_room_type_and_weak` in the report."
     },
     "AllPossibleMonsters": {
       "maps_to": "no sim counterpart",
@@ -31,14 +31,14 @@
       "rationale": "Presentation only, same as GetCameraScaling above."
     },
     "GenerateMonsters": {
-      "maps_to": "monsters/base.py:408-416 Encounter.create_monsters + MECHA_KNIGHT_ELITE (mecha_knight.py:81-84)",
+      "maps_to": "monsters/base.py:476-479 Encounter.create_monsters + MECHA_KNIGHT_ELITE (mecha_knight.py:81-84)",
       "verdict": "faithful",
-      "rationale": "ROSTER: MechaKnightElite.cs:24-27 returns exactly one `(MechaKnight, null)` pair; `MECHA_KNIGHT_ELITE = Encounter(id=\"mecha_knight_elite\", monster_classes=[MechaKnight])` (mecha_knight.py:81-84) -- one monster, same class, matching count and identity. ORDER: trivially matches (single element). SLOT: C# passes `null` (no override of `Slots`, no slot argument construction); the sim's `Encounter.monster_slots` defaults to `()` so `create_monsters`'s `zip(monsters, self.monster_slots)` (base.py:414-415) assigns nothing, leaving `slot_name` at its default `None` -- both sides null. DRAW COUNT: zero on both sides. `MechaKnightElite.GenerateMonsters` (MechaKnightElite.cs:24-27) never touches `base.Rng` -- confirmed by reading the whole file, no `Rng.NextItem`/`NextInt` call anywhere in it. `Encounter.create_monsters` explicitly does not draw for a fixed composition: `monsters/base.py:408-411`'s own comment states \"Fixed composition draws no RNG, so the parity selection_rng (when present) is simply unused here.\" 0 == 0."
+      "rationale": "ROSTER: MechaKnightElite.cs:24-27 returns exactly one `(MechaKnight, null)` pair; `MECHA_KNIGHT_ELITE = Encounter(id=\"mecha_knight_elite\", monster_classes=[MechaKnight])` (mecha_knight.py:81-84) -- one monster, same class, matching count and identity. ORDER: trivially matches (single element). SLOT: C# passes `null` (no override of `Slots`, no slot argument construction); the sim's `Encounter.monster_slots` defaults to `()` so `seat_in_slots`'s `zip(monsters, self.monster_slots)` (base.py:472, called from `create_monsters`) assigns nothing, leaving `slot_name` at its default `None` -- both sides null. DRAW COUNT: zero on both sides. `MechaKnightElite.GenerateMonsters` (MechaKnightElite.cs:24-27) never touches `base.Rng` -- confirmed by reading the whole file, no `Rng.NextItem`/`NextInt` call anywhere in it. `Encounter.create_monsters` explicitly does not draw for a fixed composition: `monsters/base.py:477-478`'s own comment states \"Fixed composition draws no RNG, so the parity selection_rng (when present) is simply unused here.\" 0 == 0."
     },
     "ShouldReceiveCombatHooks": {
       "maps_to": "no sim counterpart (by absence)",
       "verdict": "faithful",
-      "rationale": "`EncounterModel.ShouldReceiveCombatHooks => false` (EncounterModel.cs:39), not overridden by MechaKnightElite. The sim's `Encounter` dataclass (monsters/base.py:352-416) is never passed to `HookSystem.register` anywhere in the codebase (`grep -rn 'hooks.register' sts2_rl/` finds Monster/Card/Relic/Potion/Affliction/Enchantment instances registering themselves, never an `Encounter`) -- the encounter object is never a hook listener on either side, so the `false` is honoured by construction rather than by an explicit flag."
+      "rationale": "`EncounterModel.ShouldReceiveCombatHooks => false` (EncounterModel.cs:39), not overridden by MechaKnightElite. The sim's `Encounter` dataclass (monsters/base.py:353-479) is never passed to `HookSystem.register` anywhere in the codebase (`grep -rn 'hooks.register' sts2_rl/` finds Monster/Card/Relic/Potion/Affliction/Enchantment instances registering themselves, never an `Encounter`) -- the encounter object is never a hook listener on either side, so the `false` is honoured by construction rather than by an explicit flag."
     }
   },
   "guards": [
@@ -50,12 +50,12 @@
     {
       "what": "The Niche HP-roll mechanism, checked specifically as the lead this batch's brief names for `enemy id 151 vs 148` / the 933T Mecha Knight divergence",
       "verdict": "faithful",
-      "rationale": "Investigated and RULED OUT as an encounter-tier explanation. MechaKnight.MinInitialHp == MaxInitialHp == 300 (both non-ascension; per monster/mecha_knight.json, already audited faithful). `Creature.SetUniqueMonsterHpValue` (Creature.cs:371-383) still draws exactly ONE value off `RunState.Rng.Niche` even when min==max (`hashSet = {300}`, `hashSet.Count<=0` is false, so `rng.NextItem(hashSet)` fires -- one `NextInt` call). The sim's `CombatState._roll_parity_hp`/`_assign_parity_monster_hp` (combat.py:402-431) reproduces this exactly: `candidates=[300]` (nothing else on the enemy side has HP 300 to exclude, since Mecha Knight is the encounter's only monster), so `niche.next_int_range(0, 1)` fires -- one draw, same as the game, for the same degenerate reason. This is also independently corroborated by `audit/records/seam/rng_streams.json`'s `RunRngType.Niche` row, already verdicted `faithful for the HP-roll path (wired directly via CombatState._niche, not through CombatRng)` -- not re-verdicted here per rule 3, only confirmed by execution. CONCLUSION: neither this encounter's GenerateMonsters (0 draws, matches) nor the Niche HP-roll (1 draw, matches, and the roll is a no-variance degenerate pick on both sides) can produce an off-by-N draw-count desync at this unit. The `+3-HP cascade` the task brief also names was already explained and fixed by a DIFFERENT, unrelated mechanism -- the Unsettling Lamp / Artifact `PowerCmd.apply` ordering bug (memory note `unsettling-lamp-artifact-order`; Dominate's Strength-from-Vulnerable calc, (23+10)*1.5=49 vs (23+8)*1.5=46 -- nothing to do with the encounter's roster or draw stream). The `enemy id 151 vs 148` figure itself could not be located in any test, doc, or memory file in this repo (searched `audit/`, `docs/`, `.superpowers/`, `test/` and the memory index) -- if it is a real observation from a since-superseded session, its cause is not a draw-count or slot-order defect in ANY of this batch's nine `GenerateMonsters` implementations, all nine of which draw zero and all nine of which this record's siblings independently confirm. Not ruled out: a creature-COUNT (not draw-count) desync from an EARLIER encounter in the run creating a different number of enemies than the game before Mecha Knight is reached, which would shift the cumulative Niche counter without any single roll being individually wrong -- `encounter/axebots`' and `encounter/knights'` slot-order dormant findings in this same batch are the closest candidates, but both are independently proven unobservable (see their own records) and neither changes a CREATURE COUNT, only a creature's `slot_name`, so neither is a counter-shifting mechanism either. No live gap found; nothing in this batch's nine units explains the delta."
+      "rationale": "Investigated and RULED OUT as an encounter-tier explanation. MechaKnight.MinInitialHp == MaxInitialHp == 300 (both non-ascension; per monster/mecha_knight.json, already audited faithful). `Creature.SetUniqueMonsterHpValue` (Creature.cs:371-383) still draws exactly ONE value off `RunState.Rng.Niche` even when min==max (`hashSet = {300}`, `hashSet.Count<=0` is false, so `rng.NextItem(hashSet)` fires -- one `NextInt` call). The sim's `CombatState._roll_parity_hp`/`_assign_parity_monster_hp` (combat.py:423-456) reproduces this exactly: `candidates=[300]` (nothing else on the enemy side has HP 300 to exclude, since Mecha Knight is the encounter's only monster), so `niche.next_int_range(0, 1)` fires -- one draw, same as the game, for the same degenerate reason. This is also independently corroborated by `audit/records/seam/rng_streams.json`'s `RunRngType.Niche` row, already verdicted `faithful for the HP-roll path (wired directly via CombatState._niche, not through CombatRng)` -- not re-verdicted here per rule 3, only confirmed by execution. CONCLUSION: neither this encounter's GenerateMonsters (0 draws, matches) nor the Niche HP-roll (1 draw, matches, and the roll is a no-variance degenerate pick on both sides) can produce an off-by-N draw-count desync at this unit. The `+3-HP cascade` the task brief also names was already explained and fixed by a DIFFERENT, unrelated mechanism -- the Unsettling Lamp / Artifact `PowerCmd.apply` ordering bug (memory note `unsettling-lamp-artifact-order`; Dominate's Strength-from-Vulnerable calc, (23+10)*1.5=49 vs (23+8)*1.5=46 -- nothing to do with the encounter's roster or draw stream). The `enemy id 151 vs 148` figure itself could not be located in any test, doc, or memory file in this repo (searched `audit/`, `docs/`, `.superpowers/`, `test/` and the memory index) -- if it is a real observation from a since-superseded session, its cause is not a draw-count or slot-order defect in ANY of this batch's nine `GenerateMonsters` implementations, all nine of which draw zero and all nine of which this record's siblings independently confirm. Not ruled out: a creature-COUNT (not draw-count) desync from an EARLIER encounter in the run creating a different number of enemies than the game before Mecha Knight is reached, which would shift the cumulative Niche counter without any single roll being individually wrong -- `encounter/axebots`' and `encounter/knights'` slot-order dormant findings in this same batch are the closest candidates, but both are independently proven unobservable (see their own records) and neither changes a CREATURE COUNT, only a creature's `slot_name`, so neither is a counter-shifting mechanism either. No live gap found; nothing in this batch's nine units explains the delta."
     },
     {
       "what": "Reachability",
       "verdict": "faithful",
-      "rationale": "rooms.py:195 lists `mecha_knight` in Glory's `elite_keys`, and `MECHA_KNIGHT_ELITE` is exported and registered in `sts2_rl/monsters/glory/__init__.py`'s `ENCOUNTERS` dict (line 73). Reachable with fully ported content on both sides."
+      "rationale": "rooms.py:269 lists `mecha_knight` in Glory's `elite_keys`, and `MECHA_KNIGHT_ELITE` is exported and registered in `sts2_rl/monsters/glory/__init__.py`'s `ENCOUNTERS` dict (line 73). Reachable with fully ported content on both sides."
     }
   ],
   "verdict": "gap",
@@ -78,17 +78,17 @@
     },
     {
       "path": "sts2_rl\\monsters\\base.py",
-      "sha256": "424336cf4fb7be8026278b7a34af428082d8487fb57f25c3565311fe5c993388",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\combat.py",
-      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     },
     {

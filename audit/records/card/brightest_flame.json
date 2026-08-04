@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     }
   ],
@@ -56,7 +56,7 @@
     {
       "what": "CROSS-RECORD DISAGREEMENT (rule 3): CreatureCmd.LoseMaxHp(..., isFromCard: true) is seam gap G6, which labels itself DORMANT; this card makes it LIVE",
       "verdict": "gap",
-      "issue": "The seam's VERDICT (`gap`) is not disputed and is not re-verdicted here -- only its liveness label is. creature_card_cmds guard G6 reasons: \"Dormant: the two in-combat callers are Brightest Flame (cards/brightest_flame.py:37) and PaperCutsPower (powers.py:2959), neither of which reaches a fatal magnitude, and the isFromCard Move flag exists for cards that are not ported.\" That covers the KILL consequence and the Move flag but misses a third: C# `LoseMaxHp` routes the overflow through `Damage(..., Unblockable | Unpowered | Move, null, null)` (CreatureCmd.cs:826), which fires `Hook.AfterDamageReceived`; the sim's `lose_max_hp` (cmds.py:179-189) only clamps HP and calls `on_hp_changed`. `RupturePower.AfterDamageReceived` gains Strength on ANY unblocked damage its owner receives, and its `cardSource == null` branch (RupturePower.cs:48-51) is exactly the branch LoseMaxHp's null cardSource takes. Rupture IS ported (sts2_rl/cards/rupture_card.py; power at powers.py:272-289, listening on `on_damage_received`). Play Brightest Flame at full HP holding Rupture: newMaxHp < CurrentHp, so the game deals 1 damage and Rupture triggers; the sim gains no Strength. Both halves are ported Ironclad content, so this is LIVE. Reported for the seam owner; this record does not edit audit/records/seam/**."
+      "issue": "The seam's VERDICT (`gap`) is not disputed and is not re-verdicted here -- only its liveness label is. creature_card_cmds guard G6 reasons: \"Dormant: the two in-combat callers are Brightest Flame (cards/brightest_flame.py:37) and PaperCutsPower (powers.py:2959), neither of which reaches a fatal magnitude, and the isFromCard Move flag exists for cards that are not ported.\" That covers the KILL consequence and the Move flag but misses a third: C# `LoseMaxHp` routes the overflow through `Damage(..., Unblockable | Unpowered | Move, null, null)` (CreatureCmd.cs:826), which fires `Hook.AfterDamageReceived`; the sim's `lose_max_hp` (cmds.py:179-189) only clamps HP and calls `on_hp_changed`. `RupturePower.AfterDamageReceived` gains Strength on ANY unblocked damage its owner receives, and its `cardSource == null` branch (RupturePower.cs:48-51) is exactly the branch LoseMaxHp's null cardSource takes. Rupture IS ported (sts2_rl/cards/rupture_card.py; power at powers.py:436-497 (`on_damage_received` at :469-489), listening on `on_damage_received`; the seam quote above cites powers.py:2959 for PaperCutsPower and powers.py:272-289 for Rupture -- both stale after a powers.py reorg, PaperCutsPower is now at :3722 and RupturePower at :436 -- reported for the seam owner, not corrected here since it is a direct quote of creature_card_cmds guard G6). Play Brightest Flame at full HP holding Rupture: newMaxHp < CurrentHp, so the game deals 1 damage and Rupture triggers; the sim gains no Strength. Both halves are ported Ironclad content, so this is LIVE. Reported for the seam owner; this record does not edit audit/records/seam/**."
     }
   ],
   "verdict": "gap",

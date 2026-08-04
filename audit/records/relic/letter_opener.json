@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\letter_opener.py",
-    "sha256": "f37e22695069c27d4c046aab018436cabc296ae5040c479d5a2b2cccd20a4f69"
+    "sha256": "c6e431b7b0e33e590a69a5573c5c42d7fa0038866a8470b82aaf1c46ffcaef1d"
   },
   "extra_sources": [
     {
@@ -31,27 +31,27 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -93,7 +93,7 @@
     "AfterCardPlayed": {
       "maps_to": "on_card_played (letter_opener.py:33-44)",
       "verdict": "gap",
-      "issue": "Same fix and same reasoning as kusarigama. Additionally found that `DamageCmd.deal` itself backstops `should_allow_hitting` (`cmds.py:311-312`), a second, independent reason the pre-fix code was already unobservable via raw HP — the candidate-set bug was strictly \"iterates and calls deal on a target that self-refuses\", never \"damages an unhittable target\". Pinned via `test_letter_opener_does_not_call_damage_on_an_unhittable_enemy` (spies on the deal call itself, not HP).",
+      "issue": "Same fix and same reasoning as kusarigama. Additionally found that `DamageCmd.deal` itself backstops `should_allow_hitting` (`cmds.py:312`, renumbered since prior pass, content unchanged), a second, independent reason the pre-fix code was already unobservable via raw HP \u2014 the candidate-set bug was strictly \"iterates and calls deal on a target that self-refuses\", never \"damages an unhittable target\". Pinned via `test_letter_opener_does_not_call_damage_on_an_unhittable_enemy` (spies on the deal call itself, not HP).",
       "live": false
     },
     "AfterCombatEnd": {
@@ -106,17 +106,17 @@
     {
       "what": "G1 (LIVE): AfterCardPlayed fires once per Replay iteration in C# but once per play in the sim, so a replayed Skill advances the counter by 1 instead of 2",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:597-600) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. "
+      "issue": "Closed 2026-07-27: the hook bracket is per CardPlay now. CombatState._resolve_card_play opens `for play_index in range(play_count)` and fires `hooks.before_card_played` INSIDE it (sts2_rl/combat.py:1155 (renumbered since prior pass, content unchanged)) and `hooks.on_card_played` at the end of each iteration, gated on the combat still being in progress (sts2_rl/combat.py:1209 (renumbered since prior pass, content unchanged)) -- CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` with Hook.BeforeCardPlayed at :1929 and Hook.AfterCardPlayed at :1957-1959. A replayed card therefore fires both hooks once per iteration, as in the game. WAS: combat.py bracketed the WHOLE play-count loop, so a Throwing-Axe-doubled card fired each hook once. "
     },
     {
       "what": "G2 (DORMANT): `Owner.Creature.CombatState.HittableEnemies` (LetterOpener.cs:118) vs the sim's living_enemies() (letter_opener.py:39)",
       "verdict": "gap",
-      "issue": "C# damages `Enemies.Where(e => e.IsHittable)` -- `!IsDead && Hook.ShouldAllowHitting(...)` (src/Core/Combat/CombatState.cs:142; src/Core/Entities/Creatures/Creature.cs:285-299) -- while Relic.living_enemies() filters on `not e.is_gone` only (relics/base.py:294-297). Same mechanism and same verdict as audit/records/relic/bag_of_marbles.json guard G2 (binding rule 3). MILDER HERE than at relic/kusarigama's site, because Letter Opener does not use the set as an RNG population: it iterates it, and DamageCmd.deal itself applies the should_allow_hitting predicate and returns 0 (cmds.py:50-51), so an unhittable enemy simply takes nothing. DORMANT: the ported should_allow_hitting implementers gate on a mid-revival state (IllusionPower powers.py:1572-1575, AdaptablePower powers.py:3372-3375). Porting an effect that makes a living enemy untargetable makes it live only as a difference in hook TRAFFIC (the sim would run the damage pipeline and produce 0), unless the backstop is ever removed. Rule 7: src/Core/Combat/CombatState.cs, src/Core/Entities/Creatures/Creature.cs, relics/base.py, cmds.py and powers.py are not hashed by this record."
+      "issue": "C# damages `Enemies.Where(e => e.IsHittable)` -- `!IsDead && Hook.ShouldAllowHitting(...)` (src/Core/Combat/CombatState.cs:142; src/Core/Entities/Creatures/Creature.cs:285-299) -- while Relic.living_enemies() filters on `not e.is_gone` only (relics/base.py:486-493, renumbered since prior pass, content unchanged). Same mechanism and same verdict as audit/records/relic/bag_of_marbles.json guard G2 (binding rule 3). MILDER HERE than at relic/kusarigama's site, because Letter Opener does not use the set as an RNG population: it iterates it, and DamageCmd.deal itself applies the should_allow_hitting predicate and returns 0 (cmds.py:50-51), so an unhittable enemy simply takes nothing. DORMANT: the ported should_allow_hitting implementers gate on a mid-revival state (IllusionPower powers.py:1572-1575, AdaptablePower powers.py:3372-3375). Porting an effect that makes a living enemy untargetable makes it live only as a difference in hook TRAFFIC (the sim would run the damage pipeline and produce 0), unless the backstop is ever removed. Rule 7: src/Core/Combat/CombatState.cs, src/Core/Entities/Creatures/Creature.cs, relics/base.py, cmds.py and powers.py are not hashed by this record."
     },
     {
       "what": "N1: C# damages the whole set through ONE multi-target `CreatureCmd.Damage(ctx, HittableEnemies, DamageVar, dealer)` call; the sim loops living_enemies() and calls DamageCmd.deal per enemy",
       "verdict": "faithful",
-      "rationale": "Checked because a batched multi-target command could plausibly snapshot state or apply damage simultaneously. It does not: the multi-target overload (src/Core/Commands/CreatureCmd.cs) materialises `targets.ToList()`, returns early if the DEALER is dead, then runs the full per-target pipeline in list order inside a foreach -- i.e. sequentially, exactly like the sim's loop. Two narrow differences, both benign here: C# re-checks `originalTarget.IsDead` at the top of each iteration (so an enemy killed by an earlier iteration's on-death effect is skipped) while the sim's list is computed once, and C#'s dead-dealer early-out has no sim analogue. Neither can bite at 5 unpowered damage from a relic with no on-death chaining in ported content; the sim's `self._check_win()` (letter_opener.py:44) closes the combat if the last enemy died, standing in for the CheckWinCondition that follows every C# command (relics/base.py:299-304). Rule 7: src/Core/Commands/CreatureCmd.cs and relics/base.py are not hashed by this record."
+      "rationale": "Checked because a batched multi-target command could plausibly snapshot state or apply damage simultaneously. It does not: the multi-target overload (src/Core/Commands/CreatureCmd.cs) materialises `targets.ToList()`, returns early if the DEALER is dead, then runs the full per-target pipeline in list order inside a foreach -- i.e. sequentially, exactly like the sim's loop. Two narrow differences, both benign here: C# re-checks `originalTarget.IsDead` at the top of each iteration (so an enemy killed by an earlier iteration's on-death effect is skipped) while the sim's list is computed once, and C#'s dead-dealer early-out has no sim analogue. Neither can bite at 5 unpowered damage from a relic with no on-death chaining in ported content; the sim's `self._check_win()` (letter_opener.py:44) closes the combat if the last enemy died, standing in for the CheckWinCondition that follows every C# command (relics/base.py:499-504, renumbered since prior pass, content unchanged). Rule 7: src/Core/Commands/CreatureCmd.cs and relics/base.py are not hashed by this record."
     },
     {
       "what": "N2: DamageVar(5m, ValueProp.Unpowered) (LetterOpener.cs:42) vs DAMAGE = 5 with DamageProps.NON_CARD_UNPOWERED (letter_opener.py:24, 42), and CardsVar(3) vs SKILLS = 3 (letter_opener.py:23)",
@@ -126,12 +126,12 @@
     {
       "what": "N3: C#'s AfterCardPlayed has no `cardPlay.IsAutoPlay` exclusion (LetterOpener.cs:109-121)",
       "verdict": "faithful",
-      "rationale": "Same check and same conclusion as relic/kunai N1 and relic/kusarigama N5: unlike BrilliantScarf.cs:84-87 this relic counts auto-plays, and letter_opener.py:33-36 counts every on_card_played including the ones combat.py:516's auto_play_card produces -- which matters because MayhemPower auto-plays at turn start (powers.py:3576-3584). Recorded so relic/brilliant_scarf's LIVE G1 is not copied across by pattern-matching. Rule 7: combat.py, powers.py and src/Core/Models/Relics/BrilliantScarf.cs are not hashed by this record."
+      "rationale": "Same check and same conclusion as relic/kunai N1 and relic/kusarigama N5: unlike BrilliantScarf.cs:84-87 this relic counts auto-plays, and letter_opener.py:33-36 counts every on_card_played including the ones combat.py:1403's auto_play_card produces (renumbered since prior pass, content unchanged) -- which matters because MayhemPower auto-plays at turn start (powers.py:3576-3584). Recorded so relic/brilliant_scarf's LIVE G1 is not copied across by pattern-matching. Rule 7: combat.py, powers.py and src/Core/Models/Relics/BrilliantScarf.cs are not hashed by this record."
     },
     {
       "what": "N4: `cardPlay.Card.Owner == base.Owner`, `CombatManager.Instance.IsInProgress`, and `participants.Contains(base.Owner.Creature)`",
       "verdict": "waiver",
-      "rationale": "The Owner comparison and the participants check are the multiplayer filters (single-player: every played card is the player's and the player is the only participant on their side), noted in maps_to per the contract. IsInProgress is structurally satisfied: on_card_played is a combat hook and combat.py:493-494 breaks the play loop once the combat is decided. Rule 7: combat.py are not hashed by this record."
+      "rationale": "The Owner comparison and the participants check are the multiplayer filters (single-player: every played card is the player's and the player is the only participant on their side), noted in maps_to per the contract. IsInProgress is structurally satisfied: on_card_played is a combat hook and combat.py's `_resolve_card_play` gates the dispatch on the combat still being in progress (combat.py:1209, renumbered since prior pass, content unchanged). Rule 7: combat.py are not hashed by this record."
     },
     {
       "what": "N5: `GetSkillsPlayedForTest()` (LetterOpener.cs:138-141)",

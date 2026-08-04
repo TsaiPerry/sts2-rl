@@ -69,7 +69,7 @@
     {
       "what": "Reachability",
       "verdict": "faithful",
-      "rationale": "'owl_magistrate' is in Glory's normal_keys (rooms.py:190) and OWL_MAGISTRATE_NORMAL (owl_magistrate.py:70-73) is a one-monster encounter, matching the C# side."
+      "rationale": "'owl_magistrate' is in Glory's normal_keys (rooms.py:266, re-verified 2026-08-04, was :190, unchanged) and OWL_MAGISTRATE_NORMAL (owl_magistrate.py:70-73) is a one-monster encounter, matching the C# side."
     }
   ],
   "verdict": "waiver",
@@ -77,17 +77,17 @@
   "extra_sources": [
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     }
   ]

@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -81,7 +81,7 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     }
   ],
@@ -130,12 +130,12 @@
     },
     {
       "what": "the two OptionPool2 gates: Claw when `Deck.Count(Goopy.CanEnchant) >= 3`, Tooth when `Deck.Count(IsRemovable) >= 5`",
-      "maps_to": "events/pael.py:42-48: GoopyEnchantment.can_enchant counted against PaelsClaw.MIN_ELIGIBLE (3, relics/paels_claw.py:17) and len(run.removable_cards()) against PaelsTooth.MIN_REMOVABLE (5, relics/paels_tooth.py:20). Both thresholds exact; Goopy's CanEnchant is audited under enchantment/goopy and IsRemovable is run.py:360-362.",
+      "maps_to": "events/pael.py:42-48: GoopyEnchantment.can_enchant counted against PaelsClaw.MIN_ELIGIBLE (3, relics/paels_claw.py:17) and len(run.removable_cards()) against PaelsTooth.MIN_REMOVABLE (5, relics/paels_tooth.py:20). Both thresholds exact; Goopy's CanEnchant is audited under enchantment/goopy and IsRemovable is run.py.",
       "verdict": "faithful"
     },
     {
       "what": "the OptionPool3 gate: append Pael's Legion when `!Owner.HasEventPet()`",
-      "maps_to": "events/pael.py:54-55 `if not run.has_event_pet` (run.py:1085), the same predicate event/byrdonis_nest audits against Player.cs:244-251.",
+      "maps_to": "events/pael.py:54-55 `if not run.has_event_pet` (run.py), the same predicate event/byrdonis_nest audits against Player.cs:244-251.",
       "verdict": "faithful"
     },
     {
@@ -155,7 +155,7 @@
     },
     {
       "what": "AncientEventModel.RelicOption<T>() -- an option whose choice obtains the relic and finishes the event",
-      "maps_to": "events/ancient.py:34-44 _relic_option: the key is the relic id, on_chosen calls run.add_relic(make_relic(rid)) -- which runs the relic's AfterObtained (run.py:546-553), RelicCmd.Obtain's job -- then _finish. Shared by all four ancients audited here.",
+      "maps_to": "events/ancient.py:34-44 _relic_option: the key is the relic id, on_chosen calls run.add_relic(make_relic(rid)) -- which runs the relic's AfterObtained (run.py:957-964), RelicCmd.Obtain's job -- then _finish. Shared by all four ancients audited here.",
       "verdict": "faithful"
     }
   ],

@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
@@ -67,9 +67,9 @@
       "rationale": "See guard N3. C# clears UsedThisCombat at AfterRoomEntered for a CombatRoom (ThrowingAxe.cs:27-36); the sim clears it at on_combat_start, which is the very next combat-entry step (CombatRoom.cs:225-231 runs SetUpCombat -> Hook.AfterRoomEntered -> AfterCombatRoomLoaded, and BeforeCombatStart sits inside the last of those). Nothing can read the flag in between, because the only reader is ModifyCardPlayCount and no card can be played before the first turn opens. Recorded as a divergence rather than faithful because the slot genuinely differs -- this is the reset site `sweep-reset`'s C# census was extended to cover after batch 12 found `permafrost` there."
     },
     "ModifyCardPlayCount": {
-      "maps_to": "modify_card_play_count (throwing_axe.py:30-36), dispatched by HookSystem.modify_card_play_count (hooks.py:224-234) from CombatState._resolve_card_play (combat.py:469-471)",
+      "maps_to": "modify_card_play_count (throwing_axe.py:30-36), dispatched by HookSystem.modify_card_play_count (hooks.py:1110) from CombatState._resolve_card_play (combat.py:1099)",
       "verdict": "faithful",
-      "rationale": "ThrowingAxe.cs:38-49: bail if UsedThisCombat, bail if the card is not the owner's, else `playCount + 1`. throwing_axe.py:33-36 mirrors the used-this-combat bail and the +1; the owner clause is guard N1 (multiplayer). The +1 is a literal on both sides with no DynamicVar and no ascension branch. Executed slot check: hooks.modify_card_play_count is consulted once per play at combat.py:469, on the value `1 + card.base_replay_count`, which is C#'s `GetEnchantedReplayCount() + 1` (CardModel.cs:2017)."
+      "rationale": "ThrowingAxe.cs:38-49: bail if UsedThisCombat, bail if the card is not the owner's, else `playCount + 1`. throwing_axe.py:33-36 mirrors the used-this-combat bail and the +1; the owner clause is guard N1 (multiplayer). The +1 is a literal on both sides with no DynamicVar and no ascension branch. Executed slot check: hooks.modify_card_play_count is consulted once per play at combat.py:1099, on the value `1 + card.base_replay_count`, which is C#'s `GetEnchantedReplayCount() + 1` (CardModel.cs:2017)."
     },
     "AfterModifyingCardPlayCount": {
       "maps_to": "collapsed into modify_card_play_count -- `self.used_this_combat = True` is set at throwing_axe.py:35, inside the modifier, before the +1 is returned",
@@ -91,12 +91,12 @@
     {
       "what": "N2 (EXECUTED): the collapse of ModifyCardPlayCount + AfterModifyingCardPlayCount into one sim method could burn the charge on a non-play query -- it does not",
       "verdict": "faithful",
-      "rationale": "CardModel.cs:2010-2013 warns in so many words that GeneratePlayCount runs a state-modifying hook and so 'you can only run this method in situations where it's okay to modify combat state (i.e. not as part of previews)'. That is the risk the sim's collapse creates: any read-only caller of hooks.modify_card_play_count would silently spend Throwing Axe. `grep -rn 'modify_card_play_count' sts2_rl/` finds exactly two callers -- combat.py:469 (a real play) and cards/drum_of_battle.py:48 -- and the second is faithful too: DrumOfBattle.cs:31-41 calls `GeneratePlayCount(base.CombatState, null)` from its own AfterCardExhausted, which fires Hook.AfterModifyingCardPlayCount and so spends Throwing Axe in the game as well. The sim's previews.py does NOT consult this hook (its damage preview calls modify_hp_lost with no modifiers list, previews.py:82). So there is no preview path and the collapse is safe. Rule 7: combat.py, cards/drum_of_battle.py, previews.py and CardModel.cs are not hashed here."
+      "rationale": "CardModel.cs:2010-2013 warns in so many words that GeneratePlayCount runs a state-modifying hook and so 'you can only run this method in situations where it's okay to modify combat state (i.e. not as part of previews)'. That is the risk the sim's collapse creates: any read-only caller of hooks.modify_card_play_count would silently spend Throwing Axe. `grep -rn 'modify_card_play_count' sts2_rl/` finds exactly two callers -- combat.py:1099 (a real play) and cards/drum_of_battle.py:59 -- and the second is faithful too: DrumOfBattle.cs:31-41 calls `GeneratePlayCount(base.CombatState, null)` from its own AfterCardExhausted, which fires Hook.AfterModifyingCardPlayCount and so spends Throwing Axe in the game as well. The sim's previews.py does NOT consult this hook (its damage preview calls modify_hp_lost with no modifiers list, previews.py:92, RECONFIRMED 2026-08-04 -- only the line number moved). So there is no preview path and the collapse is safe. Rule 7: combat.py, cards/drum_of_battle.py, previews.py and CardModel.cs are not hashed here."
     },
     {
       "what": "N3: the reset trace required by PROMPT.md bug class 13 -- C# resets at AfterRoomEntered AND AfterCombatEnd, the sim only at on_combat_start",
       "verdict": "faithful",
-      "rationale": "TRACE: the only reader of used_this_combat is modify_card_play_count, which is reached only from a card play (N2). on_combat_start runs at combat.py:208, the last statement of CombatState.__init__, i.e. before the first player turn and therefore before any card can be played -- executed reference `py audit/tools/relic_probes.py turn-order` prints on_combat_start ahead of on_block_cleared(turn=1). So the flag is False at every moment a reader can see it, and this relic is the `art_of_war` shape rather than the `belt_buckle` shape. `py audit/tools/relic_probes.py sweep-reset` does not list throwing_axe at all, which agrees. Recorded because sweep A defect 6 (AfterRoomEntered omitted from the C#-side census) means an earlier sweep would have printed 'C# resets: NONE' for exactly this relic; the reset is real and the port does honour it."
+      "rationale": "TRACE: the only reader of used_this_combat is modify_card_play_count, which is reached only from a card play (N2). on_combat_start runs at combat.py:356, the last statement of CombatState.__init__ (RECONFIRMED 2026-08-04 -- only the line number moved), i.e. before the first player turn and therefore before any card can be played -- executed reference `py audit/tools/relic_probes.py turn-order` prints on_combat_start ahead of on_block_cleared(turn=1). So the flag is False at every moment a reader can see it, and this relic is the `art_of_war` shape rather than the `belt_buckle` shape. `py audit/tools/relic_probes.py sweep-reset` does not list throwing_axe at all, which agrees. Recorded because sweep A defect 6 (AfterRoomEntered omitted from the C#-side census) means an earlier sweep would have printed 'C# resets: NONE' for exactly this relic; the reset is real and the port does honour it."
     },
     {
       "what": "N4 (CROSS-RECORD, binding rule 3): this relic is the executed replay source three other records rely on",

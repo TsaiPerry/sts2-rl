@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -21,18 +21,23 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
     },
     {
       "path": "src/Core/Models/Cards/Entrench.cs",
@@ -62,18 +67,18 @@
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:1092 power_type = PowerType.BUFF",
+      "maps_to": "powers.py:1476 power_type = PowerType.BUFF",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-139 Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:137-139) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "ModifyBlockMultiplicative": {
-      "maps_to": "powers.py:1105-1120 UnmovablePower.modify_block_multiplicative plus the hand-rolled counters at :1094-1103, :1122-1130",
+      "maps_to": "powers.py:1489-1507 UnmovablePower.modify_block_multiplicative plus the hand-rolled counters at :1478-1487 (__init__), :1509-1518 (on_card_played / before_side_turn_start)",
       "verdict": "gap",
-      "issue": "Re-executed rather than left narrated: confirmed the reset DOES fire on an extra player turn (round_number unchanged, `_start_player_turn` is the shared entry point for both paths) — the record's mechanism claim is correct. But census of every `should_take_extra_turn` listener in the sim finds exactly one (`relics/paels_eye.py`), and its own trigger condition (`not any cards played this turn`) is structurally incompatible with `_plays_used` having anything nonzero to lose — so today's one live extra-turn source can never actually observe the reset. DORMANT, not previously determined either way. A faithful fix needs `history.py` (a `BlockGainedEntry` type) + `cmds.py` (`BlockCmd` wiring), both outside this lane's footprint — noted, not attempted, since nothing currently depends on it. Pinned by `test/test_r14_powers.py::TestUnmovableResetBoundary` (2 tests).",
+      "issue": "Re-executed rather than left narrated: confirmed the reset DOES fire on an extra player turn (round_number unchanged, `_start_player_turn` is the shared entry point for both paths) \u2014 the record's mechanism claim is correct. But census of every `should_take_extra_turn` listener in the sim finds exactly one (`relics/paels_eye.py`), and its own trigger condition (`not any cards played this turn`) is structurally incompatible with `_plays_used` having anything nonzero to lose \u2014 so today's one live extra-turn source can never actually observe the reset. DORMANT, not previously determined either way. A faithful fix needs `history.py` (a `BlockGainedEntry` type) + `cmds.py` (`BlockCmd` wiring), both outside this lane's footprint \u2014 noted, not attempted, since nothing currently depends on it. Pinned by `test/test_r14_powers.py::TestUnmovableResetBoundary` (2 tests).",
       "live": false
     }
   },
@@ -81,27 +86,27 @@
     {
       "what": "UnmovablePower.cs:23-26 target.IsMonster -> 1m",
       "verdict": "faithful",
-      "rationale": "C# refuses to double a MONSTER's block outright, where powers.py:1111 only tests `target is not self.owner`. Equivalent for the ported content and checked rather than assumed: the sole applier is the Ironclad card (cards/unmovable.py:36, target = ctx.player), no ported monster applies it, and no ported effect copies a player power onto a monster. Named trigger: applying Unmovable to a monster, at which point the sim would double its block and the game would not."
+      "rationale": "C# refuses to double a MONSTER's block outright, where powers.py:1498 only tests `target is not self.owner`. Equivalent for the ported content and checked rather than assumed: the sole applier is the Ironclad card (cards/unmovable.py:36, target = ctx.player), no ported monster applies it, and no ported effect copies a player power onto a monster. Named trigger: applying Unmovable to a monster, at which point the sim would double its block and the game would not."
     },
     {
       "what": "UnmovablePower.cs:27-30 !props.IsCardOrMonsterMove() -> 1m",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: BlockCmd.apply (cmds.py:223-227) no longer gates the modifier passes on `is_powered_attack`; it calls modify_block_additive/multiplicative for EVERY block gain and lets each listener self-gate, mirroring Hook.ModifyBlock (Hook.cs:1310-1340). UnmovablePower now self-gates with `is_card_or_monster_move(props)` (powers.py:1182), which is ValuePropExtensions.cs:23-26's `props.HasFlag(ValueProp.Move)` -- Move ALONE -- so an Unpowered|Move gain (Entrench.cs:23) reaches the multiplier exactly as UnmovablePower.cs:27-30 intends. VERIFIED 2026-07-27 by reading cmds.py:199-233 and powers.py:1175-1193. WAS: the sim's pipeline-level is_powered_attack gate meant the listener never ran for unpowered block, so Entrench from 10 block with Unmovable 1 gave 20 in the sim and 30 in the game."
+      "issue": "Closed 2026-07-27: BlockCmd.apply (cmds.py:223-227) no longer gates the modifier passes on `is_powered_attack`; it calls modify_block_additive/multiplicative for EVERY block gain and lets each listener self-gate, mirroring Hook.ModifyBlock (Hook.cs:1310-1340). UnmovablePower now self-gates with `is_card_or_monster_move(props)` (powers.py:1496), which is ValuePropExtensions.cs:23-26's `props.HasFlag(ValueProp.Move)` -- Move ALONE -- so an Unpowered|Move gain (Entrench.cs:23) reaches the multiplier exactly as UnmovablePower.cs:27-30 intends. VERIFIED 2026-07-27 by reading cmds.py:199-233 and powers.py:1469-1518; citation renumbered 2026-08-04 (class shifted from 1092 to 1469 as other powers were added earlier in the file; content unchanged). WAS: the sim's pipeline-level is_powered_attack gate meant the listener never ran for unpowered block, so Entrench from 10 block with Unmovable 1 gave 20 in the sim and 30 in the game."
     },
     {
       "what": "UnmovablePower.cs:31-34 cardSource.Owner.Creature != base.Owner -> 1m",
       "verdict": "faithful",
-      "rationale": "powers.py:1111 `card is None -> 1.0` plus the owner test. Single-player tautology for the ownership half."
+      "rationale": "powers.py:1495 `card is None -> 1.0` plus the owner test. Single-player tautology for the ownership half."
     },
     {
       "what": "UnmovablePower.cs:35 the CardPlay != cardPlay exclusion, i.e. multiple block gains inside ONE play all double",
       "verdict": "faithful",
-      "rationale": "powers.py:1113-1116 returns 2.0 unconditionally while card is self._active_card, with a comment saying exactly this. Correct for the within-one-play case; the ACROSS-plays case is the (b) divergence on the hook entry."
+      "rationale": "powers.py:1500-1503 returns 2.0 unconditionally while card is self._active_card, with a comment saying exactly this. Correct for the within-one-play case; the ACROSS-plays case is the (b) divergence on the hook entry. Citation renumbered 2026-08-04."
     },
     {
       "what": "UnmovablePower.cs:36-40 num >= base.Amount -> 1m, else 2m",
       "verdict": "faithful",
-      "rationale": "powers.py:1117-1120. The factor 2.0 is dyadic, so this power does not widen hook_dispatch's G9 (executed: py audit/tools/power_census.py multipliers), and it composes with power/no_block's absorbing 0.0 the same way under either aggregation shape."
+      "rationale": "powers.py:1504-1506. The factor 2.0 is dyadic, so this power does not widen hook_dispatch's G9 (executed: py audit/tools/power_census.py multipliers), and it composes with power/no_block's absorbing 0.0 the same way under either aggregation shape."
     }
   ],
   "verdict": "gap",

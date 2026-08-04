@@ -11,7 +11,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl/full_env.py",
-      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "sha256": "4ba9a145147eb29e6f42a10acb70986873bf1bb12d47a12ef764a423572f312f",
       "side": "sim"
     }
   ],

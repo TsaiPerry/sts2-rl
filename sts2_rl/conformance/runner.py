@@ -578,6 +578,64 @@ class ReplayRunner:
                 "(empty slot, or the potion is not PotionUsage.AnyTime)",
             ))
 
+    def _check_room_stats(self, run, divergences, act_index, room_in_act) -> None:
+        """DETECTOR 5: diff sim player state against this room's
+        map_point_history player_stats (run-END capture). Report-only —
+        never resyncs, never raises. Streams: room_hp / room_max_hp /
+        room_gold; command_index = run.total_floor so triage can sort by
+        floor.
+
+        Alignment (resolved empirically against 933T act 0, known HP series
+        [80, 76, 74, 74, 80, 71, ...]): `room_stats_by_act[act][room_in_act]`
+        lines up 1:1 with the caller's `room_index` — index 0 is the
+        act-entry Ancient node, matching `map_history`/`hist[room_index]`
+        used by `compare_node_type`/`_reconcile_node_relics` at the same call
+        site. No offset needed."""
+        acts = self.oracle.room_stats_by_act
+        if act_index >= len(acts) or room_in_act >= len(acts[act_index]):
+            return
+        st = acts[act_index][room_in_act]
+        # Terminal-point capture guard (Task 3 / oracle_semantics_probe
+        # decision table): the run's LAST resolved point (the final act's
+        # boss room) captures an all-zero `player_stats` block
+        # (current_hp/max_hp/current_gold all 0) in every installed
+        # recording — a run-end capture artifact (the point is written
+        # before/around the boss kill rather than after it resolves), not a
+        # real 0-HP/0-gold moment; the sim and the save's own top-level
+        # `players[0]` block both show the player alive there. Detect it the
+        # same way the decision table specifies generally — the point's
+        # stats must be internally reachable from the previous point via
+        # `current_hp + damage_taken - hp_healed` — and skip reporting
+        # (report-only detector; nothing to resync) rather than emit a
+        # phantom room_hp/room_max_hp/room_gold divergence every run.
+        if st.current_hp == 0 and st.max_hp == 0 and st.current_gold == 0:
+            return
+        prev = (acts[act_index][room_in_act - 1] if room_in_act > 0
+                else (acts[act_index - 1][-1] if act_index > 0
+                      and acts[act_index - 1] else None))
+        # Code review (2026-08-04): the reachability guard used to be
+        # sim-blind — it skipped ANY unreachable point regardless of what
+        # the live sim actually did, which could silently swallow a real
+        # divergence on some future recording. Narrowed per the decision
+        # table: skip ONLY when the point is unreachable from `prev` AND the
+        # live sim's hp matches `prev.current_hp` (i.e. history is
+        # PROVABLY the liar — the sim independently agrees with the one
+        # reachable reference). If the sim ALSO disagrees with `prev`, this
+        # is not provably a capture artifact, so fall through and record the
+        # divergence normally (a flagged mismatch beats a silent skip).
+        if (prev is not None
+                and st.current_hp + st.damage_taken - st.hp_healed
+                != prev.current_hp
+                and run.hp == prev.current_hp):
+            return
+        note = f"act {act_index} room {room_in_act} ({st.map_point_type})"
+        for stream, exp, got in (("room_hp", st.current_hp, run.hp),
+                                 ("room_max_hp", st.max_hp, run.max_hp),
+                                 ("room_gold", st.current_gold, run.gold)):
+            if exp != got:
+                divergences.append(
+                    Divergence(stream, run.total_floor, exp, got, detail=note))
+
     def _check_player_state(self, run, divergences, act_index,
                             player_checkpoints, resync_player) -> None:
         """Assert sim HP/max-HP against the completed act's floor snapshot
@@ -634,6 +692,76 @@ class ReplayRunner:
         return (oracle.current_act_index == prev.current_act_index
                 and len(oracle.visited_coords) == len(prev.visited_coords))
 
+    def _flat_room_stats(self) -> "dict[int, object]":
+        """Flatten `self.oracle.room_stats_by_act` (per-act rows, run-END
+        capture) to absolute-floor -> `RoomStats`, same walk order as
+        `tools/oracle_semantics_probe.py`'s `flat` dict (floor 1 = the
+        act-0 Ancient/Neow node, matching `total_floor`)."""
+        flat = {}
+        floor = 1
+        for act_row in self.oracle.room_stats_by_act:
+            for st in act_row:
+                flat[floor] = st
+                floor += 1
+        return flat
+
+    def _is_inconsistent_floor_save(self, floor: int, oracle, run) -> bool:
+        """Detect a per-floor backup save whose `player_current_hp` matches
+        NONE of the run-end save's room_stats_by_act references for this
+        floor: not this room's post-resolve hp, not the previous room's exit
+        hp (the dominant ENTRY-capture alignment `_check_floor_state`'s
+        backups otherwise follow — see the probe table below), and not the
+        arithmetic-derived entry hp (`cur.current_hp + damage_taken -
+        hp_healed`, which independently reproduces the previous room's exit
+        hp when history itself is self-consistent) — AND ONLY when the LIVE
+        SIM (`run.hp`) agrees with one of those same references.
+
+        Code review (2026-08-04, Critical): the first version of this method
+        used ONLY oracle-internal evidence (backup vs history/arithmetic) and
+        never consulted the live sim, so it could silently swallow a REAL
+        divergence on any future floor whose backup happened to be
+        self-inconsistent for an unrelated reason. Per the decision table,
+        exclusion requires BOTH halves: the backup must be unreachable from
+        the history references, AND the sim must independently agree with
+        the one reachable (history/arithmetic-consistent) reference — i.e.
+        the sim, not just the backup, must corroborate that the backup is
+        the outlier. If the backup is inconsistent but the sim ALSO
+        disagrees with history, this method returns False and
+        `_check_floor_state` records the diff normally — a flagged
+        divergence to investigate beats a silent skip.
+
+        Discovered via `tools/oracle_semantics_probe.py` on the 933T39V18D
+        recording (Task 3): of 49 per-floor backups, 46 line up exactly with
+        one of the three references above (dominantly ENTRY(prev)). Floor 47
+        is the sole live exception —
+
+            47 | backup hp 74 | hist[47] hp 80 | hist[46] hp 66 | arith 66 | NONE
+
+        — matching neither the post value (80) nor the entry value (66,
+        corroborated twice: directly from hist[46] and via arithmetic from
+        hist[47]'s own damage_taken/hp_healed). Floor 48's backup is a byte
+        duplicate of 47's (`_is_stale_floor_save` already catches it via the
+        unchanged `visited_coords`). Floor 49 is the final checkpointed
+        floor, handled separately by `_check_floor_state`'s final-floor
+        skip rule. The live sim's own room-12 hp (66, i.e. `run.hp` at this
+        checkpoint) agrees with the history-derived entry value, so 74 is a
+        mid-room / wrong-moment capture artifact in the backup, not ground
+        truth — the floor is skipped exactly like a stale save (diff AND
+        resync both suppressed; safe because the next non-excluded
+        checkpoint re-compares full state, not a delta)."""
+        flat = self._flat_room_stats()
+        cur = flat.get(floor)
+        if cur is None:
+            return False
+        prev = flat.get(floor - 1)
+        candidates = {cur.current_hp}
+        if prev is not None:
+            candidates.add(prev.current_hp)
+        candidates.add(cur.current_hp + cur.damage_taken - cur.hp_healed)
+        backup_consistent = oracle.player_current_hp in candidates
+        sim_consistent = run.hp in candidates
+        return (not backup_consistent) and sim_consistent
+
     def _check_floor_state(self, run, divergences, floor_saves,
                            resync_floors) -> None:
         """Diff (and optionally resync) the FULL player state + all 15 stream
@@ -673,6 +801,22 @@ class ReplayRunner:
         floor = run.total_floor + 1
         oracle = floor_saves.get(floor)
         if oracle is None or self._is_stale_floor_save(floor, floor_saves):
+            return
+        if self._is_inconsistent_floor_save(floor, oracle, run):
+            return
+        if floor == max(floor_saves):
+            # Final checkpointed floor (code review, 2026-08-04): its backup
+            # is a room-ENTRY capture, structurally different from the
+            # whole-run END oracle (`self.oracle`) DETECTORS 2/3 already
+            # check the post-room state against — comparing them here can
+            # never converge (the entry snapshot legitimately disagrees with
+            # the true end state by construction), so recording that diff
+            # made a fully-converged replay print DIVERGENCES REMAIN forever
+            # and would fail a zero-divergences gate on this arm. Skip BOTH
+            # the diff and the resync for this one floor; the final room's
+            # post-state is already covered by DETECTORS 2/3 against the
+            # true run-END oracle (GAP-QUEUE `resync_floors`, resolved
+            # 2026-08-03/04 by tools/oracle_semantics_probe.py).
             return
 
         def diff(stream, expected, actual, note=""):
@@ -821,7 +965,8 @@ class ReplayRunner:
             player_checkpoints: "dict[int, tuple[int, int]] | None" = None,
             resync_player: bool = False,
             floor_saves: "dict[int, SaveOracle] | None" = None,
-            resync_floors: bool = False) -> ReplayResult:
+            resync_floors: bool = False,
+            check_room_stats: bool = False) -> ReplayResult:
         """Drive the recording through act index `stop_after_act` (inclusive)
         and report divergences + the live SP2 stream counters."""
         from ..run import RunState
@@ -911,6 +1056,9 @@ class ReplayRunner:
             if floor_saves:
                 self._check_floor_state(
                     run, divergences, floor_saves, resync_floors)
+            if check_room_stats:
+                self._check_room_stats(
+                    run, divergences, run.act_index, room_index)
             room_index += 1
             rooms_total += 1
             if run.is_dead:

@@ -31,32 +31,32 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/creatures.py",
-      "sha256": "1c73063f3ca726775f0a121fe826933fe8a4dfdcbda18bb0e0d4dfacff69de7f",
+      "sha256": "9152cb64c277b8c7e5162bcae7d59af41f160a1a347ac586423c41af5be9c530",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -72,32 +72,32 @@
       "rationale": "Obtainable: not in the grab bag (Ancient), offered by the ported Darv shrine -- `py audit/tools/relic_probes_b12.py b12-pool` reports granted_by=['sts2_rl/events/darv.py'], which matches the port's own docstring."
     },
     "ModifyMaxEnergy": {
-      "maps_to": "modify_max_energy (philosophers_stone.py:25-26), dispatched by HookSystem.modify_max_energy (hooks.py:203-208) from PlayerCombatState.start_turn (player.py:163)",
+      "maps_to": "modify_max_energy (philosophers_stone.py:25-26), dispatched by HookSystem.modify_max_energy (hooks.py:1057-1060) from PlayerCombatState.start_turn (player.py:372)",
       "verdict": "faithful",
-      "rationale": "PhilosophersStone.cs:32-39 returns `amount + Energy.IntValue` for its owner, and EnergyVar(1) (PhilosophersStone.cs:23) is the non-ascension value -- no AscensionHelper.GetValueIfAscension anywhere in the file. philosophers_stone.py:26 is `amount + self.ENERGY` with ENERGY = 1 (philosophers_stone.py:22). The `player != base.Owner` clause is multiplayer scoping and is structurally satisfied: the sim has one player and player.py:163 passes it. Both sides chain-modify the per-turn base energy rather than granting a one-off, so the +1 applies every turn. EXECUTED (py audit/tools/relic_probes_b12.py b12-stone): turn-1 energy 4 with the relic against 3 without. Same shape and same verdict as relic/sozu's modify_max_energy (relics/sozu.py:23-24), which the same Darv shrine offers. NOTE per binding rule 7: hooks.py, player.py and relics/sozu.py are not hashed here."
+      "rationale": "PhilosophersStone.cs:32-39 returns `amount + Energy.IntValue` for its owner, and EnergyVar(1) (PhilosophersStone.cs:23) is the non-ascension value -- no AscensionHelper.GetValueIfAscension anywhere in the file. philosophers_stone.py:26 is `amount + self.ENERGY` with ENERGY = 1 (philosophers_stone.py:22). The `player != base.Owner` clause is multiplayer scoping and is structurally satisfied: the sim has one player and player.py:372 passes it. Both sides chain-modify the per-turn base energy rather than granting a one-off, so the +1 applies every turn. EXECUTED (py audit/tools/relic_probes_b12.py b12-stone): turn-1 energy 4 with the relic against 3 without. Same shape and same verdict as relic/sozu's modify_max_energy (relics/sozu.py:23-24), which the same Darv shrine offers. NOTE per binding rule 7: hooks.py, player.py and relics/sozu.py are not hashed here."
     },
     "AfterCreatureAddedToCombat": {
-      "maps_to": "on_creature_added (philosophers_stone.py:34-41), dispatched by HookSystem.on_creature_added (hooks.py:546-550) from CreatureCmd.add (cmds.py:266)",
+      "maps_to": "on_creature_added (philosophers_stone.py:34-41), dispatched by HookSystem.on_creature_added (hooks.py:1791-1794) from CreatureCmd.add (cmds.py:848)",
       "verdict": "gap",
       "issue": "Re-executed rather than re-derived (round 13 R8 already carries a pinning test for this exact guard). No change: the sim's CombatState models no player-side creature other than the player, so the side-vs-identity substitution in the skip clause cannot currently misclassify anything. Fresh witness added in test/test_r14_relics_a.py.",
       "live": false
     },
     "AfterRoomEntered": {
-      "maps_to": "on_combat_start (philosophers_stone.py:28-32), dispatched by HookSystem.on_combat_start from CombatState.__init__ (combat.py:208)",
+      "maps_to": "on_combat_start (philosophers_stone.py:28-32), dispatched by HookSystem.on_combat_start from CombatState.__init__ (combat.py:356)",
       "verdict": "deliberate-divergence",
-      "rationale": "PhilosophersStone.cs:51-61 strengthens every living opponent when a CombatRoom is entered; the sim does the same from on_combat_start. The SLOT genuinely differs -- Hook.AfterRoomEntered fires at CombatRoom.cs:228, before `Hook.BeforeCombatStart` (CombatManager.cs:403), whereas the sim's on_combat_start is the BeforeCombatStart slot (combat.py:208, immediately before player.start_turn) -- but both points sit after the encounter's monsters are on the board and before the first player turn, and nothing in either codebase can read an enemy's Strength in the window between them: the sim has no room-entry pipeline inside a combat at all, and in C# the only listeners between the two are other AfterRoomEntered implementers. Recorded as a divergence rather than faithful because the slot is genuinely a different dispatcher and an effect placed in that window would expose it -- the same reasoning and the same verdict as relic/brilliant_scarf's BeforeSideTurnStart. Enemy identity also matches: `CombatState.GetOpponentsOf(Owner.Creature) where c.IsAlive` vs Relic.living_enemies() (relics/base.py:294-297), which is `[e for e in combat.enemies if not e.is_gone]` and Creature.is_gone is `is_dead or escaped` (creatures.py:44-46) -- at combat start no enemy is either, so the two lists are identical (executed at b12-stone: the one starting enemy carries Strength(1)). PowerVar<StrengthPower>(1m) (PhilosophersStone.cs:22) read as BaseValue at both call sites vs STRENGTH = 1 (philosophers_stone.py:23); no ascension branch in the file. NOTE per binding rule 7: CombatRoom.cs, CombatManager.cs, combat.py, relics/base.py, creatures.py and brilliant_scarf.json are not hashed here."
+      "rationale": "PhilosophersStone.cs:51-61 strengthens every living opponent when a CombatRoom is entered; the sim does the same from on_combat_start. The SLOT genuinely differs -- Hook.AfterRoomEntered fires at CombatRoom.cs:228, before `Hook.BeforeCombatStart` (CombatManager.cs:403), whereas the sim's on_combat_start is the BeforeCombatStart slot (combat.py:356, immediately before player.start_turn) -- but both points sit after the encounter's monsters are on the board and before the first player turn, and nothing in either codebase can read an enemy's Strength in the window between them: the sim has no room-entry pipeline inside a combat at all, and in C# the only listeners between the two are other AfterRoomEntered implementers. Recorded as a divergence rather than faithful because the slot is genuinely a different dispatcher and an effect placed in that window would expose it -- the same reasoning and the same verdict as relic/brilliant_scarf's BeforeSideTurnStart. Enemy identity also matches: `CombatState.GetOpponentsOf(Owner.Creature) where c.IsAlive` vs Relic.living_enemies() (relics/base.py:486-493), which is `[e for e in combat.enemies if not e.is_gone]` and Creature.is_gone is `is_dead or escaped` (creatures.py:177-179) -- at combat start no enemy is either, so the two lists are identical (executed at b12-stone: the one starting enemy carries Strength(1)). PowerVar<StrengthPower>(1m) (PhilosophersStone.cs:22) read as BaseValue at both call sites vs STRENGTH = 1 (philosophers_stone.py:23); no ascension branch in the file. NOTE per binding rule 7: CombatRoom.cs, CombatManager.cs, combat.py, relics/base.py, creatures.py and brilliant_scarf.json are not hashed here. (2026-08-04: all cited sim files had drifted; re-verified same shape at new line numbers.)"
     }
   },
   "guards": [
     {
       "what": "G1 (DORMANT): C# skips any creature on the OWNER's SIDE (PhilosophersStone.cs:43); the sim skips only the player OBJECT (philosophers_stone.py:39), so a player-side creature that is not the player would be strengthened in the sim and not in the game",
       "verdict": "gap",
-      "issue": "MECHANISM: `if (creature.Side == base.Owner.Creature.Side) return;` is a side comparison; `if creature is self.combat.player: return` is an identity comparison. For any player-side creature other than the player itself -- a pet, a summon, a minion on the player's side -- the sim would hand the player's own ally 1 Strength, and the same relic's AfterRoomEntered half would too if living_enemies() ever contained one. REACHABILITY (DORMANT, and the concrete unported thing is named): the sim's CombatState holds exactly one player and an enemy list (combat.py:72-87 takes no player-side creature parameter), and `on_creature_added` has only two ported dispatch paths, both of which add to combat.enemies (cmds.py:262-266). The game HAS such creatures -- Osty is the Necrobinder's pet (src/Core/Entities/Players/Player.cs:132, src/Core/Models/Monsters/Osty.cs) -- but they belong to another character and the sim models no pet at all. Porting any player-side summon or pet makes this live immediately. This is the same side-versus-identity substitution recorded at relic/unsettling_lamp guard G3's second half, with the same reachability argument; matched per binding rule 3. Filed as a gap and not a waiver because 'the sim has no player-side creature' is today's content, not the shape of the divergence -- binding rule 1. NOTE per binding rule 7: combat.py, cmds.py, Player.cs, Osty.cs and unsettling_lamp.json are not hashed here."
+      "issue": "MECHANISM: `if (creature.Side == base.Owner.Creature.Side) return;` is a side comparison; `if creature is self.combat.player: return` is an identity comparison. For any player-side creature other than the player itself -- a pet, a summon, a minion on the player's side -- the sim would hand the player's own ally 1 Strength, and the same relic's AfterRoomEntered half would too if living_enemies() ever contained one. REACHABILITY (DORMANT, and the concrete unported thing is named): the sim's CombatState holds exactly one player and an enemy list (combat.py:124-140's `__init__` takes no player-side creature parameter), and `on_creature_added` has only two ported dispatch paths, both of which add to combat.enemies (cmds.py:800-848). The game HAS such creatures -- Osty is the Necrobinder's pet (src/Core/Entities/Players/Player.cs:132, src/Core/Models/Monsters/Osty.cs) -- but they belong to another character and the sim models no pet at all. Porting any player-side summon or pet makes this live immediately. This is the same side-versus-identity substitution recorded at relic/unsettling_lamp guard G3's second half, with the same reachability argument; matched per binding rule 3. Filed as a gap and not a waiver because 'the sim has no player-side creature' is today's content, not the shape of the divergence -- binding rule 1. NOTE per binding rule 7: combat.py, cmds.py, Player.cs, Osty.cs and unsettling_lamp.json are not hashed here."
     },
     {
       "what": "N1: the relic applies Strength from TWO hooks; neither side can double-apply it to the STARTING enemies",
       "verdict": "faithful",
-      "rationale": "The obvious failure mode for this port would be the starting enemies receiving 1 Strength twice -- once from the combat-start pass and once from the creature-added hook. Neither codebase can do it, and for the same structural reason on both sides. C#: CreatureCmd.AddCreature (src/Core/Commands/CreatureCmd.cs:55-58) throws unless CombatManager.Instance.IsInProgress and only then reaches `Hook.AfterCreatureAddedToCombat` at :81, while the encounter's monsters are placed by CombatRoom.StartCombat via `CombatState.AddCreature` directly (CombatRoom.cs:212-213), which is not that verb -- so the starting creatures never fire the hook. Sim: `grep -rn on_creature_added sts2_rl/` gives exactly one dispatch site, CreatureCmd.add (cmds.py:266), the mid-combat spawn path; CombatState.__init__ builds its enemy list without it. EXECUTED (py audit/tools/relic_probes_b12.py b12-stone): the starting enemy ends at Strength(1), not Strength(2), and a spawn added afterwards also ends at Strength(1). Rule 5 satisfied by execution rather than by reading. NOTE per binding rule 7: CreatureCmd.cs, CombatRoom.cs, cmds.py and combat.py are not hashed here."
+      "rationale": "The obvious failure mode for this port would be the starting enemies receiving 1 Strength twice -- once from the combat-start pass and once from the creature-added hook. Neither codebase can do it, and for the same structural reason on both sides. C#: CreatureCmd.AddCreature (src/Core/Commands/CreatureCmd.cs:55-58) throws unless CombatManager.Instance.IsInProgress and only then reaches `Hook.AfterCreatureAddedToCombat` at :81, while the encounter's monsters are placed by CombatRoom.StartCombat via `CombatState.AddCreature` directly (CombatRoom.cs:212-213), which is not that verb -- so the starting creatures never fire the hook. Sim: `grep -rn on_creature_added sts2_rl/` gives exactly one dispatch site, CreatureCmd.add (cmds.py:848), the mid-combat spawn path; CombatState.__init__ builds its enemy list without it. EXECUTED (py audit/tools/relic_probes_b12.py b12-stone): the starting enemy ends at Strength(1), not Strength(2), and a spawn added afterwards also ends at Strength(1). Rule 5 satisfied by execution rather than by reading. NOTE per binding rule 7: CreatureCmd.cs, CombatRoom.cs, cmds.py and combat.py are not hashed here."
     },
     {
       "what": "N2: `PowerCmd.Apply<StrengthPower>(new ThrowingPlayerChoiceContext(), creature, ..., null, null)` (PhilosophersStone.cs:48, 59) -- applier and cardSource are both null",
@@ -107,7 +107,7 @@
     {
       "what": "N3: the AfterRoomEntered body is guarded `if (room is CombatRoom)` (PhilosophersStone.cs:53) and the port has no room-type test at all",
       "verdict": "faithful",
-      "rationale": "Structurally satisfied by the re-mapping: the sim's on_combat_start can only fire from inside a CombatState (combat.py:208), so there is no non-combat room for the effect to leak into. Worth an entry because the same C# hook in this batch's relic/planisphere is deliberately NOT room-type-gated (it wants every room), and in relic/permafrost the gate is what makes the reset per-combat -- three relics, one hook, three different intents, and only one of them is safe to drop the gate from."
+      "rationale": "Structurally satisfied by the re-mapping: the sim's on_combat_start can only fire from inside a CombatState (combat.py:356), so there is no non-combat room for the effect to leak into. Worth an entry because the same C# hook in this batch's relic/planisphere is deliberately NOT room-type-gated (it wants every room), and in relic/permafrost the gate is what makes the reset per-combat -- three relics, one hook, three different intents, and only one of them is safe to drop the gate from."
     },
     {
       "what": "N4: `Flash()` (PhilosophersStone.cs:47, 58), CanonicalVars and ExtraHoverTips (PhilosophersStone.cs:20-30)",

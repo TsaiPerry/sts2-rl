@@ -21,12 +21,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
@@ -44,22 +49,22 @@
     "UsedThisCombat": {
       "maps_to": "the `_used` bool (sts2_rl/relics/ruined_helmet.py), cleared by reset_for_combat at every attach",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/ruined_helmet.py:23-25 clears `_used` at the combat boundary, which is the whole of the divergence -- the field itself was never the problem. WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:215-228) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:247-250) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/ruined_helmet.py:23-25 clears `_used` at the combat boundary, which is the whole of the divergence -- the field itself was never the problem. WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
     },
     "TryModifyPowerAmountReceived": {
-      "maps_to": "modify_power_amount (ruined_helmet.py:23-39), dispatched by hooks.modify_power_amount (hooks.py:170-183) from PowerCmd.apply (cmds.py:297)",
+      "maps_to": "modify_power_amount_received (ruined_helmet.py:27-57), dispatched by hooks.modify_power_amount_received (hooks.py:970) from PowerCmd.apply (cmds.py:975)",
       "verdict": "faithful",
       "issue": "Closed 2026-08-01 (tier-2 round 13): STALE. Replaces 'the RECEIVED-side phase being collapsed into the sim's single flat chain (G2)'. hooks.py now dispatches modify_power_amount_given_additive / _multiplicative / modify_power_amount_received as three separate calls, matching PowerCmd.cs:120-127/:227-234 and Hook.cs:1888-1912 (GIVEN = two passes, additive then multiplicative) vs Hook.cs:1915-1930 (RECEIVED = one pass of full-value overrides), with C#'s applier gate at the call site. ruined_helmet.py is a real listener on the RECEIVED chain alone. seam/power_cmd's own G3 closed 2026-07-31 (Task 17), FIVE DAYS AFTER this record's audit date, and this record's copy of the same guard was never flipped -- the round's recurring cross-record staleness pattern. Pinned: test_ruined_helmet_doubles_once_via_the_real_received_chain.  The text it replaced read: Rollup of guards G2 and G3 per binding rule 4. The four C# clauses are reproduced exactly -- `canonicalPower is StrengthPower`, `target == Owner.Creature`, `amount <= 0`, `UsedThisCombat` (RuinedHelmet.cs:35-50) against ruined_helmet.py:31-37 -- and so is the `modifiedAmount *= 2m` (RuinedHelmet.cs:51 vs :38). EXECUTED (`py audit/tools/relic_probes_b13.py ruined-helmet`): a first +2 Strength lands as 4 and a second as +2 (total 6), which is C#'s answer; an applier=None application is also doubled, matching the fact that neither side has an applier clause here. What is verdicted is the RECEIVED-side phase being collapsed into the sim's single flat chain (G2) and the After-event's side effect being hand-inlined (G3)."
     },
     "AfterModifyingPowerAmountReceived": {
-      "maps_to": "the `self._used = True` assignment inside modify_power_amount (ruined_helmet.py:36) -- there is no separate sim hook",
+      "maps_to": "after_modify_power_amount_received (ruined_helmet.py:59-62), dispatched by hooks.after_modify_power_amount_received (hooks.py:1020) from cmds.py:994 -- there is no separate sim hook",
       "verdict": "faithful",
       "issue": "Closed 2026-08-01 (tier-2 round 13): STALE. Replaces 'the mark-used side effect is hand-inlined into the modifier, so it fires at a point C# would not have reached'. after_modify_power_amount_received is now ruined_helmet.py's OWN separate method, dispatched by hooks.py's real companion event (mirroring Hook.cs:811-824) only for listeners whose modifier actually changed the amount, exactly as RuinedHelmet.cs:55-60. seam/power_cmd's G4 closed the same day (2026-07-31, Task 18). Proved structurally: calling the bare modifier returns the doubled amount and leaves _used False; only the companion event sets it. Pinned: test_ruined_helmet_mark_used_lives_in_the_companion_event_not_the_modifier.  The text it replaced read: Rollup of guard G3 per binding rule 4. RuinedHelmet.cs:55-60 is a SEPARATE C# hook that fires only for listeners whose Try returned true (Hook.cs:1917-1931 collects them into `receivedModifiers`; PowerCmd.cs:152 and :242 dispatch to exactly those), and only after the amount has actually been set. The sim folds the 'mark used' effect into the modifier itself, which is audit/records/seam/power_cmd.json gap G4."
     },
     "AfterCombatEnd": {
       "maps_to": "reset_for_combat (sts2_rl/relics/ruined_helmet.py:23-25)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/ruined_helmet.py:23-25 clears `_used` (RuinedHelmet.cs:62-66). WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:215-228) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:247-250) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/ruined_helmet.py:23-25 clears `_used` (RuinedHelmet.cs:57-61). WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
     },
     "ExtraHoverTips": {
       "maps_to": "no counterpart",
@@ -71,7 +76,7 @@
     {
       "what": "G1 (LIVE): `_used` is never reset, so Ruined Helmet doubles nothing from combat 2 onward",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/ruined_helmet.py:23-25 clears `_used` (RuinedHelmet.cs:57-61 AfterCombatEnd). WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:215-228) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:247-250) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/ruined_helmet.py:23-25 clears `_used` (RuinedHelmet.cs:57-61 AfterCombatEnd). WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
     },
     {
       "what": "G2 (DORMANT): C#'s RECEIVED-side predicate chain is a separately-sequenced phase; the sim has one flat registration-order chain",

@@ -11,33 +11,33 @@
   "extra_sources": [
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     }
   ],
   "hooks": {
     "CanonicalKeywords": {
-      "maps_to": "ForgottenRitualCard.exhausts = True (forgotten_ritual.py:109)",
+      "maps_to": "ForgottenRitualCard.exhausts = True (forgotten_ritual.py:29)",
       "verdict": "faithful",
       "rationale": "`{ CardKeyword.Exhaust }` (ForgottenRitual.cs:21) == `exhausts = True`. Unlike card/evil_eye, whose Exhaust hover tip is only a reference, this card really does exhaust itself."
     },
     "ctor": {
-      "maps_to": "class attrs (forgotten_ritual.py:104-109) + _init_vars (111-113)",
+      "maps_to": "class attrs (forgotten_ritual.py:24-29) + _init_vars (31-33)",
       "verdict": "faithful",
       "rationale": "`base(1, CardType.Skill, CardRarity.Uncommon, TargetType.Self)` (ForgottenRitual.cs:35-38) == cost 1 / SKILL / UNCOMMON / SELF."
     },
     "CanonicalVars": {
-      "maps_to": "ForgottenRitualCard._energy = 3 (forgotten_ritual.py:113)",
+      "maps_to": "ForgottenRitualCard._energy = 3 (forgotten_ritual.py:33)",
       "verdict": "faithful",
       "rationale": "`new EnergyVar(3)` (ForgottenRitual.cs:23) == `_energy = 3`, which `magic_number` surfaces."
     },
     "OnPlay": {
-      "maps_to": "ForgottenRitualCard.on_play (forgotten_ritual.py:118-121)",
+      "maps_to": "ForgottenRitualCard.on_play (forgotten_ritual.py:38-41)",
       "verdict": "faithful",
-      "rationale": "`if (WasCardExhaustedThisTurn) { ... GainEnergy(Energy.IntValue) }` (ForgottenRitual.cs:42-48) == `if ctx.combat.history.card_exhausted_this_turn(): EnergyCmd.gain(ctx.hooks, ctx.player, self._energy)`, and the predicate is the same history query card/evil_eye uses (`History.Entries.OfType<CardExhaustedEntry>().Any(e => e.HappenedThisTurn(CombatState) && e.Card.Owner == Owner)`, ForgottenRitual.cs:33). The TIMING subtlety is right on both sides and the sim's docstring states it: the card's OWN Exhaust keyword fires AFTER OnPlay (combat.py:498-502 moves it to the exhaust pile after the play-count loop), so a first Forgotten Ritual does not pay for itself. Presentation, folded in: the purple ground-fire VFX (44-45), TriggerAnim (46) and ShouldGlowGoldInternal (19)."
+      "rationale": "`if (WasCardExhaustedThisTurn) { ... GainEnergy(Energy.IntValue) }` (ForgottenRitual.cs:42-48) == `if ctx.combat.history.card_exhausted_this_turn(): EnergyCmd.gain(ctx.hooks, ctx.player, self._energy)`, and the predicate is the same history query card/evil_eye uses (`History.Entries.OfType<CardExhaustedEntry>().Any(e => e.HappenedThisTurn(CombatState) && e.Card.Owner == Owner)`, ForgottenRitual.cs:33). The TIMING subtlety is right on both sides and the sim's docstring states it: the card's OWN Exhaust keyword fires AFTER OnPlay (combat.py:1141, `_move_to_result_pile_after_play`, moves it to the exhaust pile after the play-count loop -- was cited at :498-502 pre-move), so a first Forgotten Ritual does not pay for itself. Presentation, folded in: the purple ground-fire VFX (44-45), TriggerAnim (46) and ShouldGlowGoldInternal (19)."
     },
     "OnUpgrade": {
-      "maps_to": "ForgottenRitualCard._on_upgrade (forgotten_ritual.py:115-116)",
+      "maps_to": "ForgottenRitualCard._on_upgrade (forgotten_ritual.py:35-36)",
       "verdict": "faithful",
       "rationale": "`DynamicVars.Energy.UpgradeValueBy(1m)` (ForgottenRitual.cs:53) == `self._energy += 1` (3 -> 4)."
     }

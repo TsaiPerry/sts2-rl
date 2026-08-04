@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -48,10 +48,10 @@
     "IsUsedUp": {
       "maps_to": "is_used_up property (maw_bank.py:28-30)",
       "verdict": "faithful",
-      "rationale": "`IsUsedUp => HasItemBeenBought` (MawBank.cs:23) is mirrored exactly. It is a live read, not display: Relic.is_tradable (relics/base.py:132) excludes used-up relics from the trade events, so a spent Maw Bank stops being tradable on both sides."
+      "rationale": "`IsUsedUp => HasItemBeenBought` (MawBank.cs:23) is mirrored exactly. It is a live read, not display: Relic.is_tradable (relics/base.py) excludes used-up relics from the trade events, so a spent Maw Bank stops being tradable on both sides."
     },
     "AfterRoomEntered": {
-      "maps_to": "after_room_entered (maw_bank.py:32-34), dispatched once per map-point entry from RunState.enter_point (run.py:980-983)",
+      "maps_to": "after_room_entered (maw_bank.py:32-34), dispatched once per map-point entry from RunState.enter_point (run.py)",
       "verdict": "faithful",
       "rationale": "MawBank.cs:43-50 grants GoldVar(12) when `RunState.BaseRoom == room && !HasItemBeenBought`. Both clauses check out -- the flag clause is mirrored at maw_bank.py:33 and the BaseRoom clause is guard N1's subject. EXECUTED (py audit/tools/relic_probes_b09.py b09-maw-bank): three room entries give +12 each (99 -> 111 -> 123 -> 135), and a fourth after a purchase gives nothing."
     },
@@ -65,7 +65,7 @@
     {
       "what": "N1: `base.Owner.RunState.BaseRoom == room` (MawBank.cs:45) -- the base of the ROOM STACK, not the current room -- has no explicit counterpart in the port",
       "verdict": "faithful",
-      "rationale": "This is the guard that stops Maw Bank paying twice for one map point. IRunState documents the distinction precisely (IRunState.cs:98-116): CurrentRoom is the LAST room entered at the current map point and BaseRoom is the FIRST, and they differ 'like at an event where one of the options starts a combat'; RunState.BaseRoom is `_currentRooms.FirstOrDefault()` (RunState.cs:185), and the stack is cleared to one room on every travel. So `BaseRoom == room` is true exactly once per map point. The sim satisfies it STRUCTURALLY rather than by porting it: after_room_entered has exactly ONE dispatch site (`grep -c` over run.py: 1 hit, run.py:983) and it sits in enter_point, immediately after the total_floor increment (run.py:976), so it fires once per map point and never for a nested room -- a ported event that starts a combat does not re-enter a point. Recorded as a guard rather than left implicit because the equivalence is a property of the sim's room model, not of maw_bank.py, so a future nested-room dispatch would break it silently. Rule 7: leans on run.py and IRunState.cs/RunState.cs, none hashed here."
+      "rationale": "This is the guard that stops Maw Bank paying twice for one map point. IRunState documents the distinction precisely (IRunState.cs:98-116): CurrentRoom is the LAST room entered at the current map point and BaseRoom is the FIRST, and they differ 'like at an event where one of the options starts a combat'; RunState.BaseRoom is `_currentRooms.FirstOrDefault()` (RunState.cs:185), and the stack is cleared to one room on every travel. So `BaseRoom == room` is true exactly once per map point. The sim satisfies it STRUCTURALLY rather than by porting it: after_room_entered has exactly ONE dispatch site (`grep -c` over run.py: 1 hit, run.py) and it sits in enter_point, immediately after the total_floor increment (run.py), so it fires once per map point and never for a nested room -- a ported event that starts a combat does not re-enter a point. Recorded as a guard rather than left implicit because the equivalence is a property of the sim's room model, not of maw_bank.py, so a future nested-room dispatch would break it silently. Rule 7: leans on run.py and IRunState.cs/RunState.cs, none hashed here."
     },
     {
       "what": "N2: `HasItemBeenBought` is a [SavedProperty] carrying RUN-level state (MawBank.cs:25-41); the sim keeps it as an instance field set in __init__ (maw_bank.py:24-26) and never resets it",
@@ -80,7 +80,7 @@
     {
       "what": "N4: PlayerCmd.GainGold (MawBank.cs:48) vs run.gain_gold (maw_bank.py:34)",
       "verdict": "faithful",
-      "rationale": "run.gain_gold (run.py:325-333) runs the Hook.ModifyGoldGained chain over every relic first, truncates toward zero and no-ops on a non-positive amount, matching PlayerCmd.GainGold. Checked because it is the interaction point with Ectoplasm (which zeroes gold gains) -- Maw Bank's payout goes through the chain on both sides rather than around it."
+      "rationale": "run.gain_gold (run.py) runs the Hook.ModifyGoldGained chain over every relic first, truncates toward zero and no-ops on a non-positive amount, matching PlayerCmd.GainGold. Checked because it is the interaction point with Ectoplasm (which zeroes gold gains) -- Maw Bank's payout goes through the chain on both sides rather than around it."
     },
     {
       "what": "N5: the `goldSpent` the sim reports for a cost-ignored purchase",

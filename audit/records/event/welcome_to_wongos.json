@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -61,7 +61,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "3caf6a189d109feb62c5ab57f03028277542a8bf12311898e7445be27ce199b2",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -84,7 +84,7 @@
     },
     {
       "what": "the three purchases (WelcomeToWongos.cs:133-153): LoseGold FIRST, then RelicCmd.Obtain -- a Common shop-legal grab-bag pull for the bargain bin, the pre-rolled featured Rare, and a fixed WongosMysteryTicket for the mystery box",
-      "maps_to": "events/welcome_to_wongos.py:65-85 reproduces all three including the gold-first order. run.add_relic (run.py:546-553) runs the relic's after_obtained, which is RelicCmd.Obtain's job. The sim's extra `if relic is not None` guards are defensive: the source's PullNextRelicFromFront never returns null (it substitutes FallbackRelic) -- see the EV-11 guard for what the sim substitutes instead.",
+      "maps_to": "events/welcome_to_wongos.py:65-85 reproduces all three including the gold-first order. run.add_relic (run.py:957-963, was 546-553) runs the relic's after_obtained, which is RelicCmd.Obtain's job. The sim's extra `if relic is not None` guards are defensive: the source's PullNextRelicFromFront never returns null (it substitutes FallbackRelic) -- see the EV-11 guard for what the sim substitutes instead. Re-verified 2026-08-04.",
       "verdict": "faithful"
     },
     {
@@ -94,7 +94,7 @@
     },
     {
       "what": "EV-3: Leave's `base.Rng.NextItem(Deck.Cards.Where(IsUpgraded))` (WelcomeToWongos.cs:158) -- events/welcome_to_wongos.py:90 uses self.rng.choice, so this event's single random draw rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- Leave's downgrade pick runs on `self.event_rng` (events/welcome_to_wongos.py:91-97), matching `base.Rng` (WelcomeToWongos.cs:158). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- Leave's downgrade pick runs on `self.event_rng` (events/welcome_to_wongos.py:91-97), matching `base.Rng` (WelcomeToWongos.cs:158). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:93-96 (was 96-99); legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them. Re-verified 2026-08-04.",
       "verdict": "faithful"
     },
     {
@@ -103,7 +103,7 @@
       "rationale": "ALREADY RECORDED as creature_card_cmds step 52 (rule 3, not re-verdicted); noted here only so this unit's record shows it is in the radius. The stream-4 report's cross-record note 1 already narrowed step 52's liveness to the IN-COMBAT downgrade, because Enchantment.reset() (enchantments.py:214-216, called from combat.py:131 for every deck card) self-heals an out-of-combat downgrade before the card is next played -- and Wongo's LEAVE is an out-of-combat downgrade, so the divergence window closes at the next combat setup. Carried at step 52's verdict."
     },
     {
-      "what": "EV-11: BARGAIN_BIN's Common pull (WelcomeToWongos.cs:136) and GenerateInitialOptions' Rare pull (:80) calls run.pull_relic_from_front (run.py:559-595), which scans the merged bag for the first relic of the asked rarity passing the filter and, on no match, pops the FRONT OF THE BAG at any rarity. The game's RelicGrabBag.GetAvailableDeque (RelicGrabBag.cs:218-243) instead walks a rarity LADDER (Shop -> Common -> Uncommon -> Rare -> None) and RelicFactory.PullNextRelicFromFront falls back to `FallbackRelic` = Circlet (RelicFactory.cs:13, :47)",
+      "what": "EV-11: BARGAIN_BIN's Common pull (WelcomeToWongos.cs:136) and GenerateInitialOptions' Rare pull (:80) calls run.pull_relic_from_front (run.py:970-1021, was 559-595), which scans the merged bag for the first relic of the asked rarity passing the filter and, on no match, pops the FRONT OF THE BAG at any rarity. The game's RelicGrabBag.GetAvailableDeque (RelicGrabBag.cs:218-243) instead walks a rarity LADDER (Shop -> Common -> Uncommon -> Rare -> None) and RelicFactory.PullNextRelicFromFront falls back to `FallbackRelic` = Circlet (RelicFactory.cs:13, :47)",
       "verdict": "faithful",
       "issue": "Closed 2026-08-03. RE-EXECUTED THIS ENTRY'S OWN PROBE (`py audit/tools/event_probes_c.py grabbag`): 'circlet ported ... sim=True C#=True' and 'FEATURED_ITEM with no Rare left: sim=circlet C#=circlet' both read MATCH where the entry recorded 'gremlin_horn' against the game's Circlet, and BARGAIN_BIN with the Common deque emptied now pulls an UNCOMMON -- the probe's own description of what the game does ('GetAvailableDeque escalates Common -> Uncommon -> Rare ... only when the ladder ends does PullNextRelicFromFront return Circlet'). THE PROBE CAUGHT A HALF-FIX: the first cut of this change returned the Circlet as soon as the ASKED rarity was dry, which is what PullFromFront alone reads like (RelicGrabBag.cs:129-135); the escalation lives one call deeper, in GetAvailableDeque, and the probe is what surfaced it. The Circlet itself is ported at audit/records/relic/circlet.json.",
       "maps_to": "`RunState.pull_relic_from_front` (sts2_rl/run.py) is `GetAvailableDeque`'s shape now: drop the `IsAllowed` rejects, then CLIMB while the asked rarity holds nothing passing the filter -- Shop -> Common -> Uncommon -> Rare -> None (RelicGrabBag.cs:227-237, ported as `_NEXT_RARITY`) -- and when the ladder ends, hand out `RelicFactory.FallbackRelic`, the Circlet (RelicFactory.cs:13/47). A pull never reaches DOWN to a lower rarity, and never returns nothing. Both of this event's legs use the three-argument overload, so neither costs a RollRarity draw on either side."

@@ -6,16 +6,16 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\glory\\fabricator.py",
-    "sha256": "789a1a3297f11e8b4097b8c315c4d63c2509d5e1d68a164d4d56ce40a4326284"
+    "sha256": "b3df21ebed6055dabca3cef5e5a0d1efc96279b98aae518d80ad669b6fbfeb3e"
   },
   "hooks": {
     "MinInitialHp": {
-      "maps_to": "min_hp = 18 (fabricator.py:95)",
+      "maps_to": "min_hp = 18 (fabricator.py:117)",
       "verdict": "faithful",
       "rationale": "Zapbot.cs:21 GetValueIfAscension(ToughEnemies, 19, 18) -> non-ascension 18."
     },
     "MaxInitialHp": {
-      "maps_to": "max_hp = 23 (fabricator.py:96)",
+      "maps_to": "max_hp = 23 (fabricator.py:118)",
       "verdict": "faithful",
       "rationale": "Zapbot.cs:23 GetValueIfAscension(ToughEnemies, 24, 23) -> non-ascension 23."
     },
@@ -25,14 +25,14 @@
       "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. DamageSfxType.Armor."
     },
     "AfterAddedToRoom": {
-      "maps_to": "Zapbot.__init__ -> PowerCmd.apply(hooks, self, HighVoltagePower, 2) (fabricator.py:98-102)",
+      "maps_to": "Zapbot.__init__ -> PowerCmd.apply(hooks, self, HighVoltagePower, 2) (fabricator.py:120-124)",
       "verdict": "deliberate-divergence",
-      "rationale": "SHARED-FINDINGS section 2 (monster stream), copied verbatim per governing rule 3 and not re-derived. The sim has no add-to-room phase -- creature creation *is* construction -- so AfterAddedToRoom's effect is applied from __init__ (fabricator.py:98-102). Same observable today, established by execution rather than assumed, on all three clauses: (a) listener set -- the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:26-40 / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on `target is self.player` / `applier is self.player` / `card is not None`, and a monster's starting power is self-applied with no card, so none of them can fire. sts2_rl/potions.py implements none of the four hooks. (b) HP-roll inversion -- the sim applies the power before the Niche roll and the game after it; of the 35 constructor-applied power classes only IllusionPower mentions max_hp at all and only inside revive() (powers.py:1581), never at apply time. (c) roll ordering -- MachineMonster.__init__ rolls the first move (state_machine.py:301) *before* the subclass applies its powers, and `py audit/tools/monster_probes.py roll-order` shows all 29 machine sites are sticky-no-op: this unit's initial state is a MoveState, so monster_state_machine step 30's early return fires and the first roll evaluates no branch and reads no power. Concrete trigger that would make it a gap: any relic, potion or power that listens on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. RULE 7: the four relic files and powers.py cited above are NOT hashed by this record (powers.py IS hashed here for other entries); flagged explicitly as the shared finding instructs. ZAPBOT-SPECIFIC ESCALATION CHECK (the shared finding requires one rather than a blind copy, because Zapbot is a MID-COMBAT spawn and not a combat-start monster): Zapbot.cs:29-38 is the only one of the four bots whose AfterAddedToRoom is async and carries a real effect -- PowerCmd.Apply<HighVoltagePower>(ctx, Creature, 2m, Creature, null) after the same TestMode.IsOff visual block the other three have. The sim applies it from __init__, i.e. BEFORE CreatureCmd.add (cmds.py:237-266) puts the bot in combat.enemies, assigns its net_id and rolls its parity Niche HP, whereas C# creates the creature (CreateCreature -> SetUniqueMonsterHpValue, CombatState.cs:232-247), adds it, and only then awaits AfterAddedToRoom (CreatureCmd.cs:68-71). Both inversions are covered by the shared finding's clauses (a) and (b) -- HighVoltagePower's amount is the literal 2 and reads no HP -- and clause (c) holds because Zapbot's initial state is the MoveState 'ZAP', so the constructor roll is a sticky no-op. The one thing the shared finding does NOT cover and this entry adds: Zapbot's __init__ does not read hooks.combat.enemies at all (contrast Fabricator._alive_count), so the not-yet-assigned enemy list cannot bite. The MinionPower the Fabricator then applies (Fabricator.cs:116 / fabricator.py:182) lands AFTER HighVoltage on both sides."
+      "rationale": "SHARED-FINDINGS section 2 (monster stream), copied verbatim per governing rule 3 and not re-derived. The sim has no add-to-room phase -- creature creation *is* construction -- so AfterAddedToRoom's effect is applied from __init__ (fabricator.py:120-124). Same observable today, established by execution rather than assumed, on all three clauses: (a) listener set -- the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:26-40 / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on `target is self.player` / `applier is self.player` / `card is not None`, and a monster's starting power is self-applied with no card, so none of them can fire. sts2_rl/potions.py implements none of the four hooks. (b) HP-roll inversion -- the sim applies the power before the Niche roll and the game after it; of the 35 constructor-applied power classes only IllusionPower mentions max_hp at all and only inside revive() (powers.py:2063-2067), never at apply time. (c) roll ordering -- MachineMonster.__init__ rolls the first move (state_machine.py:301) *before* the subclass applies its powers, and `py audit/tools/monster_probes.py roll-order` shows all 29 machine sites are sticky-no-op: this unit's initial state is a MoveState, so monster_state_machine step 30's early return fires and the first roll evaluates no branch and reads no power. Concrete trigger that would make it a gap: any relic, potion or power that listens on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. RULE 7: the four relic files and powers.py cited above are NOT hashed by this record (powers.py IS hashed here for other entries); flagged explicitly as the shared finding instructs. ZAPBOT-SPECIFIC ESCALATION CHECK (the shared finding requires one rather than a blind copy, because Zapbot is a MID-COMBAT spawn and not a combat-start monster): Zapbot.cs:29-38 is the only one of the four bots whose AfterAddedToRoom is async and carries a real effect -- PowerCmd.Apply<HighVoltagePower>(ctx, Creature, 2m, Creature, null) after the same TestMode.IsOff visual block the other three have. The sim applies it from __init__, i.e. BEFORE CreatureCmd.add (cmds.py:799-844) puts the bot in combat.enemies, assigns its net_id and rolls its parity Niche HP, whereas C# creates the creature (CreateCreature -> SetUniqueMonsterHpValue, CombatState.cs:232-247), adds it, and only then awaits AfterAddedToRoom (CreatureCmd.cs:68-71). Both inversions are covered by the shared finding's clauses (a) and (b) -- HighVoltagePower's amount is the literal 2 and reads no HP -- and clause (c) holds because Zapbot's initial state is the MoveState 'ZAP', so the constructor roll is a sticky no-op. The one thing the shared finding does NOT cover and this entry adds: Zapbot's __init__ does not read hooks.combat.enemies at all (contrast Fabricator._alive_count), so the not-yet-assigned enemy list cannot bite. The MinionPower the Fabricator then applies (Fabricator.cs:116 / fabricator.py:218) lands AFTER HighVoltage on both sides."
     },
     "GenerateMoveStateMachine": {
-      "maps_to": "Zapbot.build_machine (fabricator.py:104-109)",
+      "maps_to": "Zapbot.build_machine (fabricator.py:126-131)",
       "verdict": "faithful",
-      "rationale": "Zapbot.cs:40-47 is one self-looping MoveState('ZAP', ZapMove, new SingleAttackIntent(14)); fabricator.py:104-109 is identical, id included (note the id is 'ZAP', not 'ZAP_MOVE' -- the ports rename freely and here they did not need to). No branch state on either side."
+      "rationale": "Zapbot.cs:40-47 is one self-looping MoveState('ZAP', ZapMove, new SingleAttackIntent(14)); fabricator.py:126-131 is identical, id included (note the id is 'ZAP', not 'ZAP_MOVE' -- the ports rename freely and here they did not need to). No branch state on either side."
     }
   },
   "guards": [
@@ -56,6 +56,31 @@
   "audited": "2026-07-27",
   "extra_sources": [
     {
+      "path": "src\\Core\\Models\\Monsters\\Fabricator.cs",
+      "sha256": "bf9982c8be0fabe16e2f9377123f8cb7616beb4d2aa59ef5775aa57342d82556",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Monsters\\Guardbot.cs",
+      "sha256": "b4a364a9ab2ae80771bd8f6d9107976f486d099b25fd7a02f0cfcd3b8126218a",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Monsters\\Noisebot.cs",
+      "sha256": "82168937713cdada6ce64dcd0c3b066377ce80271b2f8b02a72e79a65f08cff1",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Models\\Monsters\\Stabbot.cs",
+      "sha256": "f610107eccc16d343595edb17d18a340bb84ef26125a54fee063d113168bab99",
+      "side": "game"
+    },
+    {
+      "path": "src\\Core\\Combat\\CombatState.cs",
+      "sha256": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+      "side": "game"
+    },
+    {
       "path": "src\\Core\\Models\\Encounters\\FabricatorNormal.cs",
       "sha256": "fa62a116ba3cc8338da0e81b67a72b8016bffb73af57c6f907cd517d68a0ba7a",
       "side": "game"
@@ -67,12 +92,12 @@
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -82,12 +107,12 @@
     },
     {
       "path": "sts2_rl\\powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     }
   ]

@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/full_env.py",
-      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "sha256": "4ba9a145147eb29e6f42a10acb70986873bf1bb12d47a12ef764a423572f312f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     }
   ],
@@ -76,7 +76,7 @@
     {
       "what": "GRASPING_VINES_MOVE is constructed with TWO intents - `new SingleAttackIntent(GraspingVinesDamage)` AND `new CardDebuffIntent()` (VineShambler.cs:47) - but the port telegraphs only `Intent(MoveType.ATTACK, damage=8)` (vine_shambler.py:32-33), with an empty `also`",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-28: GRASPING_VINES now telegraphs BOTH intents. vine_shambler.py:33-36 returns `Intent(MoveType.ATTACK, damage=8, also=(MoveType.CARD_DEBUFF,))`, matching VineShambler.cs:47's `new MoveState(\"GRASPING_VINES_MOVE\", GraspingVinesMove, new SingleAttackIntent(GraspingVinesDamage), new CardDebuffIntent())`. MoveType.CARD_DEBUFF (monsters/base.py) is read by env.py:165 / full_env.py:569, so the observation feature now fires. WAS: a bare ATTACK intent with an empty `also`, and nothing in the sim ever set CARD_DEBUFF."
+      "issue": "Closed 2026-07-28: GRASPING_VINES now telegraphs BOTH intents. vine_shambler.py:33-36 returns `Intent(MoveType.ATTACK, damage=8, also=(MoveType.CARD_DEBUFF,))`, matching VineShambler.cs:47's `new MoveState(\"GRASPING_VINES_MOVE\", GraspingVinesMove, new SingleAttackIntent(GraspingVinesDamage), new CardDebuffIntent())`. MoveType.CARD_DEBUFF (monsters/base.py) is read by env.py:165 / full_env.py:796-797, so the observation feature now fires. WAS: a bare ATTACK intent with an empty `also`, and nothing in the sim ever set CARD_DEBUFF."
     },
     {
       "what": "GraspingVinesDamage / SwipeDamage x _swipeRepeat / ChompDamage (VineShambler.cs:38,40,42 and :20 - GetValueIfAscension(DeadlyEnemies, 9, 8), (7, 6), (18, 16); repeat const 2) vs vine_shambler.py:13-16 (8 / 6 x 2 / 16)",

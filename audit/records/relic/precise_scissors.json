@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/cards/spoils_map.py",
-      "sha256": "5dfefa066d40393aca4a8dd154d5e2d90cd5b178614aab1d767286a4576d0e3f",
+      "sha256": "0a662a88cbb2afb53921a5fb7203d4470cab182d0ea48b445294d056bf3b83c6",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -56,7 +56,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -67,12 +67,12 @@
       "rationale": "Obtainable: not in the grab bag (Ancient), granted by the ported Neow event -- `py audit/tools/relic_probes_b12.py b12-pool` reports granted_by=['sts2_rl/events/neow.py']."
     },
     "HasUponPickupEffect": {
-      "maps_to": "has_upon_pickup_effect = True (precise_scissors.py:13), read by Relic.is_tradable (relics/base.py:132)",
+      "maps_to": "has_upon_pickup_effect = True (precise_scissors.py:13), read by Relic.is_tradable (relics/base.py:189-198)",
       "verdict": "faithful",
-      "rationale": "Matches PreciseScissors.cs:14. Ancient rarity already makes the relic untradable through the other clause of Relic.is_tradable (relics/base.py:134-136), so the flag is belt-and-braces here, exactly as in the source."
+      "rationale": "Matches PreciseScissors.cs:14. Ancient rarity already makes the relic untradable through the other clause of Relic.is_tradable (relics/base.py:197-198), so the flag is belt-and-braces here, exactly as in the source."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (precise_scissors.py:15-17), dispatched by RunState.add_relic (run.py:552)",
+      "maps_to": "after_obtained (precise_scissors.py:15-17), dispatched by RunState.add_relic (run.py:957-963)",
       "verdict": "faithful",
       "issue": "Closed 2026-07-29 (round 6): `Hook.BeforeCardRemoved` exists and every deck removal fires it. `RunState.remove_cards` now has CardPileCmd.RemoveFromDeck's shape (CardPileCmd.cs:52-70): one card at a time, `before_card_removed` BEFORE the unlink. `RunState.before_card_removed` is the dispatcher (Hook.cs:299-305) and walks the DECK as well as the relics, because RunState.IterateHookListeners yields the deck and the hook's only implementer in the whole decompiled game is a CARD -- SpoilsMap.cs:100-116, now ported on sts2_rl/cards/spoils_map.py with its three guards in source order. The four relics that bypassed the verb -- preserved_fog (which called `run.deck.remove` directly), biiig_hug, meat_cleaver and paels_tooth -- go through `remove_cards` now, so precarious_shears and precise_scissors get the dispatch through the path they already used. EXECUTED: with the old bare removal a removed Spoils Map left its treasure-node quest pinned and the node still payable; test_shop_and_map_mods.py::test_spoils_map_unpins_its_quest_when_removed_from_the_deck pins it. NOT closed: the `HasBeenRemovedFromState` marking this entry also named -- no sim card carries the flag and nothing reads it.  The text it replaced read: Rollup of guard G1 per binding rule 4. The relic's own arithmetic is faithful -- one removable deck card chosen and removed, executed at b12-cutters (deck 10 -> 9) with the candidate filter matching CardModel.IsRemovable (guard N1) -- but the removal goes through a bare `deck.remove` instead of the game's CardPileCmd.RemoveFromDeck, which drops the Hook.BeforeCardRemoved dispatch that verb exists to make (G1)."
     }
@@ -86,17 +86,17 @@
     {
       "what": "N1: the candidate filter -- `FromDeckForRemoval` takes `c.IsRemovable` (CardSelectCmd.cs:621-625) vs `run.removable_cards()`",
       "verdict": "faithful",
-      "rationale": "CardModel.IsRemovable is `!Keywords.Contains(CardKeyword.Eternal)` (src/Core/Models/CardModel.cs:737) and RunState.removable_cards is `[c for c in self.deck if not c.eternal]` (run.py:360-362), whose own docstring cites the same source line -- one clause, same clause. The `filter` parameter FromDeckForRemoval accepts is unused by this relic (Pomander's sibling Magic Pot is the source's example of a caller that supplies one). The sorting order C# applies -- curses first, via `(c.Type != CardType.Curse) ? deck.IndexOf(c) : -999999999` (CardSelectCmd.cs:624) -- is the removal screen's display order and does not constrain the selection, which is a player choice on both sides; the sim's default uniform-random fallback in select_cards (run.py:388-390) is a policy stand-in, not a fidelity claim. NOTE per binding rule 7: CardSelectCmd.cs, CardModel.cs and run.py are not hashed here."
+      "rationale": "CardModel.IsRemovable is `!Keywords.Contains(CardKeyword.Eternal)` (src/Core/Models/CardModel.cs:737) and RunState.removable_cards is `[c for c in self.deck if not c.eternal]` (run.py:564-566), whose own docstring cites the same source line -- one clause, same clause. The `filter` parameter FromDeckForRemoval accepts is unused by this relic (Pomander's sibling Magic Pot is the source's example of a caller that supplies one). The sorting order C# applies -- curses first, via `(c.Type != CardType.Curse) ? deck.IndexOf(c) : -999999999` (CardSelectCmd.cs:624) -- is the removal screen's display order and does not constrain the selection, which is a player choice on both sides; the sim's default uniform-random fallback in select_cards (run.py:638-643) is a policy stand-in, not a fidelity claim. NOTE per binding rule 7: CardSelectCmd.cs, CardModel.cs and run.py are not hashed here."
     },
     {
       "what": "N2: `CardSelectorPrefs(RemoveSelectionPrompt, Cards.IntValue = 1)` (PreciseScissors.cs:20) vs the literal 1 (precise_scissors.py:16)",
       "verdict": "faithful",
-      "rationale": "CardsVar(1) (PreciseScissors.cs:16) is the pinned non-ascension value -- no AscensionHelper.GetValueIfAscension anywhere in the file -- and the sim's literal 1 matches; checked against the C# rather than the port's docstring per PROMPT.md bug class 19, since this port names no constant of its own (unlike its siblings precarious_shears.py:14 and preserved_fog.py:15, which do). MinSelect == MaxSelect == 1 makes RequireManualConfirmation false (src/Core/CardSelection/CardSelectorPrefs.cs:62-77), so a deck with one removable card is auto-taken -- and RunState.select_cards clamps to `min(count, len(candidates))` and returns [] on an empty list (run.py:371-390), which is the same behaviour including the degenerate case. EXECUTED (b12-cutters): deck 10 -> 9. NOTE per binding rule 7: CardSelectorPrefs.cs and run.py are not hashed here."
+      "rationale": "CardsVar(1) (PreciseScissors.cs:16) is the pinned non-ascension value -- no AscensionHelper.GetValueIfAscension anywhere in the file -- and the sim's literal 1 matches; checked against the C# rather than the port's docstring per PROMPT.md bug class 19, since this port names no constant of its own (unlike its siblings precarious_shears.py:14 and preserved_fog.py:15, which do). MinSelect == MaxSelect == 1 makes RequireManualConfirmation false (src/Core/CardSelection/CardSelectorPrefs.cs:62-77), so a deck with one removable card is auto-taken -- and RunState.select_cards clamps to `min(count, len(candidates))` and returns [] on an empty list (run.py:632-634), which is the same behaviour including the degenerate case. EXECUTED (b12-cutters): deck 10 -> 9. NOTE per binding rule 7: CardSelectorPrefs.cs and run.py are not hashed here."
     },
     {
       "what": "N3: `FromDeckGeneric` returns an empty selection when `player.Creature.IsDead` (CardSelectCmd.cs:640-643); the sim has no such check",
       "verdict": "faithful",
-      "rationale": "Structurally satisfied: RunState.add_relic is only reached from a reward/event/shop path the driver runs while the player is alive, and RunState.heal / lose_hp cannot fire between add_relic and after_obtained (run.py:546-552 is a two-statement body). Recorded rather than skipped because the same C# guard IS load-bearing for the sibling relic/precarious_shears, which deals 16 damage in the same handler and can therefore kill -- there the death test would matter if the source removed cards after damaging instead of before. Rule 5: this is a structural argument about the call site, not an unexecuted claim about a value never occurring. NOTE per binding rule 7: CardSelectCmd.cs and run.py are not hashed here."
+      "rationale": "Structurally satisfied: RunState.add_relic is only reached from a reward/event/shop path the driver runs while the player is alive, and RunState.heal / lose_hp cannot fire between add_relic and after_obtained (run.py:957-964: append, then after_obtained, then return -- no intervening call). Recorded rather than skipped because the same C# guard IS load-bearing for the sibling relic/precarious_shears, which deals 16 damage in the same handler and can therefore kill -- there the death test would matter if the source removed cards after damaging instead of before. Rule 5: this is a structural argument about the call site, not an unexecuted claim about a value never occurring. NOTE per binding rule 7: CardSelectCmd.cs and run.py are not hashed here."
     },
     {
       "what": "N4: the RemoveSelectionPrompt LocString, the removal tween and NCard preview (CardPileCmd.cs:63-71)",

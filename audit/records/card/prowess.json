@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     }
   ],
@@ -34,7 +34,7 @@
     "OnPlay": {
       "maps_to": "ProwessCard.on_play (colorless_powers.py:279-286)",
       "verdict": "deliberate-divergence",
-      "rationale": "Both amounts and the Strength-then-Dexterity order match (Prowess.cs:33-34). The divergence is the verb for the FIRST half: C# calls `PowerCmd.Apply<StrengthPower>` while the sim calls `StrengthCmd.apply`, which runs `hooks.modify_strength_given` before `PowerCmd.apply` (cmds.py:349-361); the Dexterity half correctly uses `PowerCmd.apply` directly. Same mechanism and same verdict as card/inflame's OnPlay entry and card/fight_me's guard (rule 3): the sim's `StrengthCmd` is a documented re-architecture of C#'s `Hook.ModifyPowerAmountGiven` / `...Received` chain, which `PowerCmd.Apply` runs anyway (PowerCmd.cs:120-125), so the observable Strength gained is the same. It becomes a gap if a ported `modify_strength_given` listener diverges from the general power-amount modifiers -- and note that would then make Strength and Dexterity behave asymmetrically on THIS card, which is the clearest way to spot it."
+      "rationale": "Both amounts and the Strength-then-Dexterity order match (Prowess.cs:33-34). The divergence is the verb for the FIRST half: C# calls `PowerCmd.Apply<StrengthPower>` while the sim calls `StrengthCmd.apply`, which runs `hooks.modify_strength_given` before `PowerCmd.apply` (cmds.py:1155-1167); the Dexterity half correctly uses `PowerCmd.apply` directly. Same mechanism and same verdict as card/inflame's OnPlay entry and card/fight_me's guard (rule 3): the sim's `StrengthCmd` is a documented re-architecture of C#'s `Hook.ModifyPowerAmountGiven` / `...Received` chain, which `PowerCmd.Apply` runs anyway (PowerCmd.cs:120-125), so the observable Strength gained is the same. It becomes a gap if a ported `modify_strength_given` listener diverges from the general power-amount modifiers -- and note that would then make Strength and Dexterity behave asymmetrically on THIS card, which is the clearest way to spot it."
     },
     "OnUpgrade": {
       "maps_to": "ProwessCard._on_upgrade (colorless_powers.py:276-277)",

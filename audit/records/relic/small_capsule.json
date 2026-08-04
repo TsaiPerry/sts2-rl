@@ -26,17 +26,17 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -91,7 +91,7 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
+      "sha256": "a1aecf30215574f9bc62dd01cb7c73346bbc1b9b84dd5dcc8dabd67101f8c345",
       "side": "sim"
     }
   ],
@@ -99,29 +99,29 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.ANCIENT (small_capsule.py:13)",
       "verdict": "faithful",
-      "rationale": "SmallCapsule.cs:11 is RelicRarity.Ancient. Ancient means it is never grab-bag or shop stock: executed (py audit/tools/relic_probes_b15.py b15-pool) the relic is absent from the 126-relic transcribed grab bag and its only ported grant path is events/neow.py -- which is also the C# situation (SmallCapsule is a Neow option). Ancient also makes Relic.is_tradable False (relics/base.py:132-136), matching RelicModel.IsTradable's Ancient exclusion."
+      "rationale": "SmallCapsule.cs:11 is RelicRarity.Ancient. Ancient means it is never grab-bag or shop stock: executed (py audit/tools/relic_probes_b15.py b15-pool) the relic is absent from the 126-relic transcribed grab bag and its only ported grant path is events/neow.py -- which is also the C# situation (SmallCapsule is a Neow option). Ancient also makes Relic.is_tradable False (relics/base.py:188-199), matching RelicModel.IsTradable's Ancient exclusion."
     },
     "AfterObtained": {
       "maps_to": "after_obtained (sts2_rl/relics/small_capsule.py:16-19) -- one PullNextRelicFromFront offered through RunState.offer_relic",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:475-496) and `RunState.offer_potion` (sts2_rl/run.py:498-506) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. sts2_rl/relics/small_capsule.py:18-19 pulls and offers through `run.offer_relic`. WAS: the pulled relic was granted unconditionally."
+      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:692-713) and `RunState.offer_potion` (sts2_rl/run.py:715-723) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. sts2_rl/relics/small_capsule.py:18-19 pulls and offers through `run.offer_relic`. WAS: the pulled relic was granted unconditionally."
     }
   },
   "guards": [
     {
       "what": "G1: `RewardsCmd.OfferCustom(Owner, [new RelicReward(Owner)])` (SmallCapsule.cs:15-18) is a reward SCREEN the player may decline; after_obtained grants the pulled relic unconditionally",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:475-496) and `RunState.offer_potion` (sts2_rl/run.py:498-506) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. sts2_rl/relics/small_capsule.py:18-19 pulls and offers through `run.offer_relic`. WAS: the pulled relic was granted unconditionally."
+      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:692-713) and `RunState.offer_potion` (sts2_rl/run.py:715-723) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. sts2_rl/relics/small_capsule.py:18-19 pulls and offers through `run.offer_relic`. WAS: the pulled relic was granted unconditionally."
     },
     {
       "what": "N1: `new RelicReward(base.Owner)` -- the no-rarity constructor -- and which RNG stream its rarity roll comes off",
       "verdict": "faithful",
-      "rationale": "RelicReward(Player) (RelicReward.cs:56-59) leaves _rarity at RelicRarity.None, so Populate takes the `_rarity == RelicRarity.None` arm and calls `RelicFactory.PullNextRelicFromFront(base.Player)` with no rarity and no rng override (RelicReward.cs:81-91). The sim's obtain_relic_from_grab_bag(rarity_rng=None) reaches pull_relic_from_front with rarity=None, which rolls the rarity on run.rewards_rng (run.py:587-589) -- and run.rewards_rng is the per-player Rewards stream (run.py:271-274), which is precisely what the default PullNextRelicFromFront(player) overload uses (pull_relic_from_front's own docstring cites RelicFactory.cs:28/82). So this is NOT an instance of PROMPT.md bug class 16's silent-stream fallback: the stream is named on both sides and it is the same one. Checked deliberately because relic/calling_bell G2 is the failure mode here -- a relic-granting relic that never burns the pull -- and this port does burn it (executed: grab bag 96 -> 95). Rule 7: RelicReward.cs, RewardsCmd.cs and run.py are not hashed by this record."
+      "rationale": "RelicReward(Player) (RelicReward.cs:56-59) leaves _rarity at RelicRarity.None, so Populate takes the `_rarity == RelicRarity.None` arm and calls `RelicFactory.PullNextRelicFromFront(base.Player)` with no rarity and no rng override (RelicReward.cs:81-91). The sim's obtain_relic_from_grab_bag(rarity_rng=None) reaches pull_relic_from_front with rarity=None, which rolls the rarity on run.rewards_rng (run.py:1006-1008) -- and run.rewards_rng is the per-player Rewards stream (run.py:367-371), which is precisely what the default PullNextRelicFromFront(player) overload uses (pull_relic_from_front's own docstring cites RelicFactory.cs:28/82). So this is NOT an instance of PROMPT.md bug class 16's silent-stream fallback: the stream is named on both sides and it is the same one. Checked deliberately because relic/calling_bell G2 is the failure mode here -- a relic-granting relic that never burns the pull -- and this port does burn it (executed: grab bag 96 -> 95). Rule 7: RelicReward.cs, RewardsCmd.cs and run.py are not hashed by this record."
     },
     {
       "what": "N2: no `undo_after_obtained`, although the pickup mutates run state outside the relic itself (it adds a second relic)",
       "verdict": "faithful",
-      "rationale": "PROMPT.md v6 item 3 (rule-3 resolution): the ABSENCE of undo_after_obtained is faithful at every site -- the helper has no C# counterpart (nothing in the game un-picks a relic), so a sim lacking it is not diverging from the source, which is the only question this audit asks. OPERATIONAL CONSEQUENCE worth flagging (a tooling defect, not a fidelity gap): the conformance runner grants a node's relic and then swaps it for the one the save says was really picked (sts2_rl/conformance/runner.py:461, 694 -- verified by grep per binding rule 8), and a discarded Small Capsule leaves BOTH the free relic in run.relics AND the burned grab-bag pull behind, which shifts every later relic pull in the run. Distinct from the mango/strawberry family (PROMPT.md v6 item 3's second half), whose undo EXISTS and clamps; here there is none at all. Rule 7: leans on relics/base.py:143-150 and conformance/runner.py, neither hashed here."
+      "rationale": "PROMPT.md v6 item 3 (rule-3 resolution): the ABSENCE of undo_after_obtained is faithful at every site -- the helper has no C# counterpart (nothing in the game un-picks a relic), so a sim lacking it is not diverging from the source, which is the only question this audit asks. OPERATIONAL CONSEQUENCE worth flagging (a tooling defect, not a fidelity gap): the conformance runner grants a node's relic and then swaps it for the one the save says was really picked (sts2_rl/conformance/runner.py:504, 910 -- verified by grep per binding rule 8, RECONFIRMED 2026-08-04), and a discarded Small Capsule leaves BOTH the free relic in run.relics AND the burned grab-bag pull behind, which shifts every later relic pull in the run. Distinct from the mango/strawberry family (PROMPT.md v6 item 3's second half), whose undo EXISTS and clamps; here there is none at all. Rule 7: leans on relics/base.py:206-213 and conformance/runner.py, neither hashed here."
     }
   ],
   "verdict": "faithful",

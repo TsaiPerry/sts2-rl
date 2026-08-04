@@ -6,13 +6,18 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\fake_merchant.py",
-    "sha256": "fdfe33aa23b58cd08022468f2cc63cc6c8d906c5563eb23b71490d7b23f101e0"
+    "sha256": "3cdf97cef9fdd75e1e6e5eb7dc945cc8b915f78d95060cd9132d6fe8c6badd59"
   },
   "extra_sources": [
     {
       "path": "src/Core/Models/EncounterModel.cs",
       "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
       "side": "game"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -62,7 +67,7 @@
     {
       "what": "encounter/_entry_slug_mismatch: `FAKE_MERCHANT_EVENT_ENCOUNTER.entry` = `FAKE_MERCHANT_EVENT` (from `id=\"fake_merchant_event\"`), but the game's real `Id.Entry` for `FakeMerchantEventEncounter` is `FAKE_MERCHANT_EVENT_ENCOUNTER` (`StringHelper.Slugify(type.Name)` via `ModelDb.GetEntry`) -- the sim's id drops the '_ENCOUNTER' suffix. Executed: `py audit/tools/encounter_probes_e9.py entry-slug-mismatch` prints MISMATCH.",
       "verdict": "faithful",
-      "rationale": "CLOSED 2026-08-03 (gap-fix pass). `Encounter` gained an explicit `entry_slug` field and `Encounter.entry` returns it when set, so this unit seeds `make_encounter_rng` with the game's real `ModelId.Entry` while keeping its sim id. A mechanical sweep of ALL 87 sim encounters against `src/Core/Models/Encounters/*.cs` (audit/tools/encounter_entry_sweep.py) found two more the unit batches had not checked — `fuzzy_wurm_crawler` (FuzzyWurmCrawlerWeak) and `overgrowth_crawlers_normal` (OvergrowthCrawlers) — and now reports MATCH for every one. Pinned by test/test_encounter_entry_slugs.py.\n\nWHAT THE GAP SAID: Same mechanism as `battleworn_dummy_event/G1` and (LIVE) `punch_off_event/G1`. Dormant here because FakeMerchantEventEncounter.GenerateMonsters draws zero values from `base.Rng` (see the GenerateMonsters entry above); `py audit/tools/encounter_probes_e9.py dormant-4-zero-draws` confirms the sim's `create_monsters` output is byte-identical under two unrelated seeds."
+      "rationale": "CLOSED 2026-08-03 (gap-fix pass). `Encounter` gained an explicit `entry_slug` field and `Encounter.entry` returns it when set, so this unit seeds `make_encounter_rng` with the game's real `ModelId.Entry` while keeping its sim id. A mechanical sweep of ALL 87 sim encounters against `src/Core/Models/Encounters/*.cs` (audit/tools/encounter_entry_sweep.py) found two more the unit batches had not checked \u2014 `fuzzy_wurm_crawler` (FuzzyWurmCrawlerWeak) and `overgrowth_crawlers_normal` (OvergrowthCrawlers) \u2014 and now reports MATCH for every one. Pinned by test/test_encounter_entry_slugs.py.\n\nWHAT THE GAP SAID: Same mechanism as `battleworn_dummy_event/G1` and (LIVE) `punch_off_event/G1`. Dormant here because FakeMerchantEventEncounter.GenerateMonsters draws zero values from `base.Rng` (see the GenerateMonsters entry above); `py audit/tools/encounter_probes_e9.py dormant-4-zero-draws` confirms the sim's `create_monsters` output is byte-identical under two unrelated seeds."
     }
   ],
   "verdict": "deliberate-divergence",

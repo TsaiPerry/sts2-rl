@@ -16,6 +16,33 @@ from sts2_rl.rng import RunRngType, PlayerRngType, snake_case
 
 
 @dataclass
+class RoomStats:
+    """One resolved map point's player_stats from `map_point_history`.
+
+    Capture-moment alignment was established empirically (against 933T act 0,
+    known HP series [80, 76, 74, 74, 80, 71, ...]) rather than assumed:
+    `room_stats_by_act[act][i]` lines up 1:1 with `room_index` as tracked by
+    the runner — index 0 is the act-entry Ancient node, and `current_hp` at
+    index i is the player's HP AFTER that room resolves (run-END capture). No
+    offset needed; use `room_index` directly. This is a THIRD, independent
+    oracle alongside the run-end truncation save and the per-floor backup
+    saves (see tools/oracle_semantics_probe.py), and it can disagree with
+    them — do not assume this alignment generalizes without re-checking."""
+    map_point_type: str
+    current_hp: int
+    max_hp: int
+    damage_taken: int
+    hp_healed: int
+    current_gold: int
+    gold_gained: int
+    gold_spent: int
+    gold_lost: int
+    gold_stolen: int
+    max_hp_gained: int
+    max_hp_lost: int
+
+
+@dataclass
 class SaveOracle:
     run_seed: str
     player_seed: int
@@ -36,6 +63,7 @@ class SaveOracle:
     visited_coords: list = field(default_factory=list)
     map_history: list = field(default_factory=list)
     events_seen: list[str] = field(default_factory=list)   # game ids, e.g. "EVENT.WHISPERING_HOLLOW"
+    room_stats_by_act: list[list["RoomStats"]] = field(default_factory=list)
     # `UnlockState` — the PROFILE the recording was made on. Read by the runner
     # so `ActModel.ApplyDiscoveryOrderModifications` (which overrides an act's
     # rolled boss for a profile with unseen bosses) is driven by the fixture's
@@ -67,6 +95,25 @@ def parse_save(path) -> SaveOracle:
             "ancient": rooms.get("ancient_id"),
             "second_boss": rooms.get("second_boss_id"),
         })
+    room_stats: list[list[RoomStats]] = []
+    for act in d.get("map_point_history", []):
+        row = []
+        for pt in act:
+            ps = (pt.get("player_stats") or [{}])[0]
+            row.append(RoomStats(
+                map_point_type=pt.get("map_point_type", ""),
+                current_hp=ps.get("current_hp", 0),
+                max_hp=ps.get("max_hp", 0),
+                damage_taken=ps.get("damage_taken", 0),
+                hp_healed=ps.get("hp_healed", 0),
+                current_gold=ps.get("current_gold", 0),
+                gold_gained=ps.get("gold_gained", 0),
+                gold_spent=ps.get("gold_spent", 0),
+                gold_lost=ps.get("gold_lost", 0),
+                gold_stolen=ps.get("gold_stolen", 0),
+                max_hp_gained=ps.get("max_hp_gained", 0),
+                max_hp_lost=ps.get("max_hp_lost", 0)))
+        room_stats.append(row)
     return SaveOracle(
         run_seed=d["rng"]["seed"],
         player_seed=prng["seed"],
@@ -89,4 +136,5 @@ def parse_save(path) -> SaveOracle:
         events_seen=d.get("events_seen", []),
         encounters_seen=player.get("unlock_state", {}).get("encounters_seen", []),
         number_of_runs=player.get("unlock_state", {}).get("number_of_runs", 0),
+        room_stats_by_act=room_stats,
     )

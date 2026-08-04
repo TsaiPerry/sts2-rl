@@ -46,12 +46,12 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
+      "sha256": "a1aecf30215574f9bc62dd01cb7c73346bbc1b9b84dd5dcc8dabd67101f8c345",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/brain_leech.py",
-      "sha256": "220a635f96c3938d07bb172ecd05641c9808d471f8a5c32575712e33b0188f30",
+      "sha256": "18ff0492ba63d24b23a7fa21c25c7c832094cbeed9cfa5fffeee0a85f5f830f0",
       "side": "sim"
     },
     {
@@ -71,12 +71,12 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -96,14 +96,14 @@
       "rationale": "PaelsWing.cs:30-40 shows `RewardsSacrificed % Sacrifices`, or the full Sacrifices value during the activation flourish. RelicModel.Flash(), base.Status = RelicStatus.* and InvokeDisplayAmountChanged() are presentation only (the relic card's glow, its greyed/active state and its counter in the relic bar); the sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim -- the same verdict audit/records/relic/unsettling_lamp.json N5 and audit/records/relic/belt_buckle.json N1 give RelicStatus writes (binding rule 3)."
     },
     "TryModifyCardRewardAlternatives": {
-      "maps_to": "modify_combat_rewards (paels_wing.py:22-24), which sets rewards.sacrifice_relic (rewards.py:397); the driver surfaces the option (driver.py:142) and calls back into on_sacrifice (driver.py:365)",
+      "maps_to": "modify_combat_rewards (paels_wing.py:22-24), which sets rewards.sacrifice_relic (rewards.py:751 setter); the driver surfaces the option (driver.py:255) and calls back into on_sacrifice (driver.py:607)",
       "verdict": "faithful",
-      "rationale": "STALE (round 11): the rollup summarized guard G1 alone, and G1 was closed 2026-07-28 (the alternative now reaches every CardReward, including the rest-site screen Dream Catcher adds) but the summary was never regenerated. RE-EXECUTED today: `py -m pytest test/test_relic_tier1_gaps.py -k test_paels_wing_offers_its_sacrifice_on_the_rest_site_card_reward -v` passes -- `apply_reward_modifiers` now runs on every reward set (not just `generate_combat_rewards`), so a Dream Catcher rest-site choice correctly carries `sacrifice_relic` set. N1-N4 were already faithful/waiver, so with G1 closed the whole rollup flips. The issue it replaced read: Rollup of guard G1 per binding rule 4. The alternative's payload is right -- the SACRIFICE key (PaelsWing.cs:79 vs rewards.py:393-397's documented \"SACRIFICE\" semantics) and PostAlternateCardRewardAction.EndSelectionAndCompleteReward, i.e. the cards are forgone and the reward completes, which is what driver.py:365 does -- and `base.Owner != player` (line 75) is structurally satisfied by the single-player run. What diverges is WHICH card rewards see it: C# adds the alternative to EVERY CardReward and the sim only to a CombatRewards. See G1."
+      "rationale": "STALE (round 11): the rollup summarized guard G1 alone, and G1 was closed 2026-07-28 (the alternative now reaches every CardReward, including the rest-site screen Dream Catcher adds) but the summary was never regenerated. RE-EXECUTED today: `py -m pytest test/test_relic_tier1_gaps.py -k test_paels_wing_offers_its_sacrifice_on_the_rest_site_card_reward -v` passes -- `apply_reward_modifiers` (rewards.py:792) now runs on every reward set (not just `generate_combat_rewards`), so a Dream Catcher rest-site choice correctly carries `sacrifice_relic` set. N1-N4 were already faithful/waiver, so with G1 closed the whole rollup flips. The issue it replaced read: Rollup of guard G1 per binding rule 4. The alternative's payload is right -- the SACRIFICE key (PaelsWing.cs:79 vs rewards.py's documented \"SACRIFICE\" semantics) and PostAlternateCardRewardAction.EndSelectionAndCompleteReward, i.e. the cards are forgone and the reward completes, which is what driver.py's sacrifice callback does -- and `base.Owner != player` (line 75) is structurally satisfied by the single-player run. What diverges is WHICH card rewards see it: C# adds the alternative to EVERY CardReward and the sim only to a CombatRewards. See G1. (2026-08-04 re-audit: rewards.py was substantially reworked since -- `sacrifice_relic` is now a CombatRewards property delegating to the first CardRewardGroup, and `apply_reward_modifiers` documents BOTH C# dispatch entry points (generate-time and offer-time) explicitly -- but the observable behavior this hook entry describes is unchanged; re-ran the cited test, still green.)"
     },
     "OnSacrifice": {
       "maps_to": "on_sacrifice(run) (paels_wing.py:26-31)",
       "verdict": "faithful",
-      "rationale": "PaelsWing.cs:83-92: `RewardsSacrificed++`, then on every Sacrifices-th sacrifice, `RelicCmd.Obtain(RelicFactory.PullNextRelicFromFront(base.Owner).ToMutable(), base.Owner)`. paels_wing.py:29-31 increments and calls `run.obtain_relic_from_grab_bag()` on the same modulo. The period matches: CanonicalVars pins Sacrifices at 2m (PaelsWing.cs:42) with no AscensionHelper.GetValueIfAscension in the file, and SACRIFICES_PER_RELIC = 2 (paels_wing.py:16). The counter is a per-RUN [SavedProperty] (:58-71) that C# never resets, and the sim likewise never resets it -- sweep A's static scan flags `rewards_sacrificed` as unreset state and its own C#-reset column reports NONE for this relic, which is the correct reading (this is intended run-level persistence on both sides, like happy_flower's turn counter). RNG stream (PROMPT.md bug class 16): `PullNextRelicFromFront(player)` rolls the rarity on `player.PlayerRng.Rewards`, and run.obtain_relic_from_grab_bag -> pull_relic_from_front with rarity_rng=None falls through to `self.rewards_rng`, which IS player_rng.rewards on a parity run (run.py:586-590, :271-274) -- so the stream is right, not silently defaulted to the shared random.Random. TaskHelper.RunSafely(DoActivateVisuals()) (:89, :94-99) is presentation."
+      "rationale": "PaelsWing.cs:83-92: `RewardsSacrificed++`, then on every Sacrifices-th sacrifice, `RelicCmd.Obtain(RelicFactory.PullNextRelicFromFront(base.Owner).ToMutable(), base.Owner)`. paels_wing.py:29-31 increments and calls `run.obtain_relic_from_grab_bag()` on the same modulo. The period matches: CanonicalVars pins Sacrifices at 2m (PaelsWing.cs:42) with no AscensionHelper.GetValueIfAscension in the file, and SACRIFICES_PER_RELIC = 2 (paels_wing.py:16). The counter is a per-RUN [SavedProperty] (:58-71) that C# never resets, and the sim likewise never resets it -- sweep A's static scan flags `rewards_sacrificed` as unreset state and its own C#-reset column reports NONE for this relic, which is the correct reading (this is intended run-level persistence on both sides, like happy_flower's turn counter). RNG stream (PROMPT.md bug class 16): `PullNextRelicFromFront(player)` rolls the rarity on `player.PlayerRng.Rewards`, and run.obtain_relic_from_grab_bag -> pull_relic_from_front with rarity_rng=None falls through to `self.rewards_rng` (run.py:368), which IS player_rng.rewards on a parity run -- so the stream is right, not silently defaulted to the shared random.Random. TaskHelper.RunSafely(DoActivateVisuals()) (:89, :94-99) is presentation. (2026-08-04: run.py had drifted substantially; re-verified rewards_rng's parity routing is unchanged.)"
     }
   },
   "guards": [

@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/creatures.py",
-      "sha256": "1c73063f3ca726775f0a121fe826933fe8a4dfdcbda18bb0e0d4dfacff69de7f",
+      "sha256": "9152cb64c277b8c7e5162bcae7d59af41f160a1a347ac586423c41af5be9c530",
       "side": "sim"
     }
   ],
@@ -61,7 +61,7 @@
     {
       "what": "the enemy list filters `is_gone`, matching C#'s `where c.IsAlive` (AttackCommand.cs:544-546)",
       "verdict": "faithful",
-      "rationale": "Unlike card/breakthrough, which uses `is_dead` here, Conflagration uses `is_gone` (`is_dead or escaped`, creatures.py:44-46), which is the correct analogue of IsAlive."
+      "rationale": "Unlike card/breakthrough, which uses `is_dead` here, Conflagration uses `is_gone` (`is_dead or escaped`, creatures.py:177-179 (re-pinned 2026-08-04, was :44-46; content shifted, unchanged: is_gone = is_dead or escaped)), which is the correct analogue of IsAlive."
     }
   ],
   "verdict": "gap",

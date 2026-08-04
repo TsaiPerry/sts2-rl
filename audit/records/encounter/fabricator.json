@@ -10,7 +10,7 @@
   },
   "hooks": {
     "RoomType": {
-      "maps_to": "rooms.py:191 `normal_keys=(..., \"fabricator\", ...)` (glory ActRooms)",
+      "maps_to": "rooms.py:265 `normal_keys=(..., \"fabricator\", ...)` (glory ActRooms)",
       "verdict": "deliberate-divergence",
       "rationale": "FabricatorNormal.cs:15 `RoomType => RoomType.Monster`. Modeled structurally by pool membership. One shared mechanism across this batch; see `encounter/_room_type_and_weak` in the report."
     },
@@ -65,7 +65,7 @@
     {
       "what": "Reachability",
       "verdict": "faithful",
-      "rationale": "rooms.py:191 lists `fabricator` in Glory's `normal_keys`, and `FABRICATOR_NORMAL` is registered in `sts2_rl/monsters/glory/__init__.py`'s `ENCOUNTERS` dict (line 64)."
+      "rationale": "rooms.py:265 lists `fabricator` in Glory's `normal_keys`, and `FABRICATOR_NORMAL` is registered in `sts2_rl/monsters/glory/__init__.py`'s `ENCOUNTERS` dict (line 64)."
     }
   ],
   "verdict": "gap",
@@ -83,17 +83,17 @@
     },
     {
       "path": "sts2_rl\\monsters\\base.py",
-      "sha256": "424336cf4fb7be8026278b7a34af428082d8487fb57f25c3565311fe5c993388",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\combat.py",
-      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     }
   ]

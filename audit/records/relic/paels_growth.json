@@ -41,17 +41,17 @@
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -61,21 +61,21 @@
       "verdict": "faithful"
     },
     "AfterObtained": {
-      "maps_to": "after_obtained(run) (paels_growth.py:18-25), dispatched by RunState.add_relic (run.py:552)",
+      "maps_to": "after_obtained(run) (paels_growth.py:18-25), dispatched by RunState.add_relic (run.py:957)",
       "verdict": "faithful",
       "rationale": "PaelsGrowth.cs:22-29 selects 1 card via `CardSelectCmd.FromDeckForEnchantment(prefs: (EnchantSelectionPrompt, 1), player, enchantment: Clone, amount: 1)` then `CardCmd.Enchant<Clone>(item, 4m)`. FromDeckForEnchantment filters the deck pile on `enchantment.CanEnchant(c)` (CardSelectCmd.cs:547-551), which paels_growth.py:21 mirrors with `CloneEnchantment.can_enchant`; the count of 1 matches `run.select_cards(\"enchant\", candidates, 1)`. The applied amount is the literal 4m at line 26 -- note it is NOT the selection `amount: 1`, which is the number of CARDS -- and paels_growth.py:24 sets `enchantment.amount = self.CLONE_AMOUNT` with CLONE_AMOUNT = 4 (:16). No AscensionHelper.GetValueIfAscension in the file. CardCmd.Preview (line 27) is presentation."
     },
     "TryModifyRestSiteOptions": {
-      "maps_to": "modify_rest_site_options (paels_growth.py:27-48), dispatched over run.relics by the rest-site driver (Relic.modify_rest_site_options, relics/base.py:233-237)",
+      "maps_to": "modify_rest_site_options (paels_growth.py:27-48), dispatched over run.relics by the rest-site driver (Relic.modify_rest_site_options, relics/base.py:407-410)",
       "verdict": "faithful",
-      "rationale": "PaelsGrowth.cs:31-39 appends a CloneRestSiteOption for its owner; the sim appends `RestSiteOption(\"CLONE\", clone)`, matching CloneRestSiteOption.OptionId (CloneRestSiteOption.cs:25). The option body matches too: C#'s OnSelect snapshots `Owner.Deck.Cards.Where(c => c.Enchantment is Clone).ToList()` (:44) and, per card, `RunState.CloneCard(item)` (:48) then `CardPileCmd.Add(card, PileType.Deck)` (:50). The sim snapshots the same set with a list comprehension (paels_growth.py:36-38), rebuilds, and appends with run.add_card -- which is the sim's CardPileCmd.Add-for-the-deck (it dispatches ModifyCardBeingAddedToDeck and AfterCardChangedPiles, run.py:341-354), so the egg relics still get their substitution pass. Deck placement matches: CardPileCmd.Add defaults to CardPilePosition.Bottom (CardPileCmd.cs:259) and run.add_card appends. `player != base.Owner` is structurally satisfied (single player). The clone fidelity itself is N1."
+      "rationale": "PaelsGrowth.cs:31-39 appends a CloneRestSiteOption for its owner; the sim appends `RestSiteOption(\"CLONE\", clone)`, matching CloneRestSiteOption.OptionId (CloneRestSiteOption.cs:25). The option body matches too: C#'s OnSelect snapshots `Owner.Deck.Cards.Where(c => c.Enchantment is Clone).ToList()` (:44) and, per card, `RunState.CloneCard(item)` (:48) then `CardPileCmd.Add(card, PileType.Deck)` (:50). The sim snapshots the same set with a list comprehension (paels_growth.py:36-38), rebuilds, and appends with run.add_card -- which is the sim's CardPileCmd.Add-for-the-deck (it dispatches ModifyCardBeingAddedToDeck and AfterCardChangedPiles, run.py:524-536), so the egg relics still get their substitution pass. Deck placement matches: CardPileCmd.Add defaults to CardPilePosition.Bottom (CardPileCmd.cs:259) and run.add_card appends. `player != base.Owner` is structurally satisfied (single player). The clone fidelity itself is N1."
     }
   },
   "guards": [
     {
       "what": "N1 (sweep E hit, settled: NO observable at this site): `RunState.CloneCard` is `ClonePreservingMutability()` (RunState.cs:394-398; CardModel.cs:2168-2179) -- a full model clone -- while paels_growth.py:39-45 REBUILDS from the id and replays the upgrades (PROMPT.md bug class 17)",
       "verdict": "faithful",
-      "rationale": "CONFIRMS-BY-NARROWING .superpowers/sdd/content-relic-sweeps.md sweep E, which lists relics/paels_growth.py:39 as one of five shallow-rebuild sites. A true clone carries upgrade level, enchantment, affliction, keyword edits and local energy-cost modifiers. At THIS site the input set is filtered to Clone-enchanted RUN-DECK cards, and each of the five is accounted for: upgrade level is replayed under an is_upgradable guard (paels_growth.py:40-42, so bug class 14 does not fire); the enchantment is re-created with the original's amount (:43-45), and a card holds at most one enchantment, so no other enchantment can be present; an affliction cannot be present at all, because run.create_combat deep-copies the deck into every combat (run.py:1136) and afflictions are applied to the combat copies; the only ported permanent keyword and cost edits are performed BY enchantments (enchantments.py:135-142, :289-296, :322-331), which the one-enchantment rule excludes. EXECUTED (`py audit/tools/relic_probes_b11.py growth-clone`): an upgraded, Clone(4)-enchanted Bash clones to `lvl=1 ench=clone/4 affl=None cost=2 exhausts=False`, identical to the original on every field, appended at the deck's end. So sweep E over-reports at this site -- reported in .superpowers/sdd/relic-batch-11-lessons.md, and the shared sweep is left untouched per the concurrency contract. NOTE per binding rule 7: the rationale leans on sts2_rl/run.py, sts2_rl/enchantments.py and sts2_rl/cards/base.py, none of which this record hashes."
+      "rationale": "CONFIRMS-BY-NARROWING .superpowers/sdd/content-relic-sweeps.md sweep E, which lists relics/paels_growth.py:39 as one of five shallow-rebuild sites. A true clone carries upgrade level, enchantment, affliction, keyword edits and local energy-cost modifiers. At THIS site the input set is filtered to Clone-enchanted RUN-DECK cards, and each of the five is accounted for: upgrade level is replayed under an is_upgradable guard (paels_growth.py:40-42, so bug class 14 does not fire); the enchantment is re-created with the original's amount (:43-45), and a card holds at most one enchantment, so no other enchantment can be present; an affliction cannot be present at all, because run.create_combat deep-copies the deck into every combat (run.py:1693) and afflictions are applied to the combat copies; the only ported permanent keyword and cost edits are performed BY enchantments (enchantments.py: GoopyEnchantment.modify_card 438-439, CloneEnchantment 656-662 is inert (see N3)), which the one-enchantment rule excludes. EXECUTED (`py audit/tools/relic_probes_b11.py growth-clone`): an upgraded, Clone(4)-enchanted Bash clones to `lvl=1 ench=clone/4 affl=None cost=2 exhausts=False`, identical to the original on every field, appended at the deck's end. So sweep E over-reports at this site -- reported in .superpowers/sdd/relic-batch-11-lessons.md, and the shared sweep is left untouched per the concurrency contract. NOTE per binding rule 7: the rationale leans on sts2_rl/run.py, sts2_rl/enchantments.py and sts2_rl/cards/base.py, none of which this record hashes. (2026-08-04 re-audit: re-ran the growth-clone probe; output unchanged from the quoted line above, so the finding still holds even though the cited internal line numbers had drifted.)"
     },
     {
       "what": "N2: repeated use of the rest-site option DOUBLES the Clone set on both sides",
@@ -85,7 +85,7 @@
     {
       "what": "N3: Clone.cs is an inert enchantment (its own doc comment: 'doesn't actually do anything on its own')",
       "verdict": "faithful",
-      "rationale": "CloneEnchantment (enchantments.py:508-515, not hashed here -- binding rule 7) is likewise behaviourless, so the marker semantics match and there is no dropped enchantment behaviour hiding behind the relic. Confirmed by reading Clone.cs in full (9 lines, no overrides)."
+      "rationale": "CloneEnchantment (enchantments.py:656-662, not hashed here -- binding rule 7) is likewise behaviourless, so the marker semantics match and there is no dropped enchantment behaviour hiding behind the relic. Confirmed by reading Clone.cs in full (9 lines, no overrides). (2026-08-04: re-checked the class still declares no method overrides; line number had drifted from a stale earlier pin.)"
     },
     {
       "what": "N4 (PROMPT.md bug class 16): no RelicModel.IsAllowed override; no Rng stream is named or consumed",

@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     }
   ],
@@ -39,7 +39,7 @@
     "OnPlay": {
       "maps_to": "FiendFireCard.on_play (fiend_fire.py:34-43)",
       "verdict": "faithful",
-      "rationale": "All three steps and their order match, and the ordering is the whole card: SNAPSHOT the hand and its count first (`List<CardModel> list = Hand.Cards.ToList(); int cardCount = list.Count`, FiendFire.cs:33-34 == `hand = list(ctx.player.hand)`), THEN exhaust every card in the snapshot (35-38), THEN attack `cardCount` times (40-41 == `for _ in range(len(hand))`). Taking the count before the exhausts is load-bearing on both sides -- an exhaust that adds a card to hand (Dark Embrace draws) must not change the hit count -- and both iterate a COPY, so mutating the hand mid-loop is safe. Fiend Fire itself is never in the snapshot: C# holds it in the Play pile, the sim in the discard-pile limbo (combat.py:452-454). The sim's per-hit `if target.is_gone or ctx.player.is_dead: break` is the correct analogue of AttackCommand's `validTargets.Count == 0` and `Attacker.IsDead` breaks (AttackCommand.cs:540-550) -- it skips further HITS, not a separate effect, so it does not carry the card/bash CanReceivePowers finding. Presentation, folded in: the per-hit BeforeDamage ground-fire VFX with its growing scale (42-54) and ExtraRunAssetPaths (23)."
+      "rationale": "All three steps and their order match, and the ordering is the whole card: SNAPSHOT the hand and its count first (`List<CardModel> list = Hand.Cards.ToList(); int cardCount = list.Count`, FiendFire.cs:33-34 == `hand = list(ctx.player.hand)`), THEN exhaust every card in the snapshot (35-38), THEN attack `cardCount` times (40-41 == `for _ in range(len(hand))`). Taking the count before the exhausts is load-bearing on both sides -- an exhaust that adds a card to hand (Dark Embrace draws) must not change the hit count -- and both iterate a COPY, so mutating the hand mid-loop is safe. Fiend Fire itself is never in the snapshot: C# holds it in the Play pile, and the sim now does too -- the old 'discard-pile limbo' compensation is gone; a resolving card sits in a real `player.play_pile` (combat.py:1031-1058 `_add_to_play_pile`, was cited at :452-454 pre-move). The sim's per-hit `if target.is_gone or ctx.player.is_dead: break` is the correct analogue of AttackCommand's `validTargets.Count == 0` and `Attacker.IsDead` breaks (AttackCommand.cs:540-550) -- it skips further HITS, not a separate effect, so it does not carry the card/bash CanReceivePowers finding. Presentation, folded in: the per-hit BeforeDamage ground-fire VFX with its growing scale (42-54) and ExtraRunAssetPaths (23)."
     },
     "OnUpgrade": {
       "maps_to": "FiendFireCard._on_upgrade (fiend_fire.py:31-32)",

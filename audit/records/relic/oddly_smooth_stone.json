@@ -36,17 +36,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -56,9 +56,9 @@
       "verdict": "faithful"
     },
     "AfterRoomEntered": {
-      "maps_to": "on_combat_start (oddly_smooth_stone.py:14-17). The sim's Relic base DOES expose a run-level after_room_entered (relics/base.py:194), so the literal mapping existed and was not taken.",
+      "maps_to": "on_combat_start (oddly_smooth_stone.py:14-17). The sim's Relic base DOES expose a run-level after_room_entered (relics/base.py), so the literal mapping existed and was not taken.",
       "verdict": "deliberate-divergence",
-      "rationale": "OddlySmoothStone.cs:21-28 applies PowerVar<DexterityPower>(1m).BaseValue to its owner on AfterRoomEntered when the room `is CombatRoom`; the sim applies the same amount to the same target with the same applier from on_combat_start. This is EXACTLY the mechanism audit/records/relic/bronze_scales.json and audit/records/relic/gorget.json already verdicted deliberate-divergence for the identical AfterRoomEntered(CombatRoom) + PowerCmd.Apply body -- one verdict per mechanism, binding rule 3, matched and not re-derived. Sequence read rather than assumed: CombatRoom.cs:228 fires Hook.AfterRoomEntered AFTER CombatManager.SetUpCombat and BEFORE AfterCombatRoomLoaded, which then runs AfterCreatureAdded (CombatManager.cs:396), Hook.BeforeCombatStart (:403) and StartTurn (:418) -- so in C# the Dexterity lands one slot earlier than the sim's on_combat_start. AbstractModel.cs:1231-1232 documents AfterRoomEntered+CombatRoom as THE intended slot for 'start of combat effects that should execute before the start of the first turn (like applying powers)'. WHY THIS UNIT NEEDED MORE THAN THE RULE-3 MATCH: Dexterity is not inert like Thorns or Plating -- it MODIFIES block gains (cmds.py:145-147), so any listener in the intervening window that gains powered block would read 1 in the game and 0 in the sim. EXECUTED (py audit/tools/relic_probes_b10.py oddly-smooth-stone): a scan of every ported on_combat_start listener under sts2_rl/relics and sts2_rl/powers.py finds exactly ONE that touches BlockCmd -- PlatingPower._gain_block (powers.py:1058-1061) -- and it is reached from on_combat_start only for the ENEMY side (powers.py:1054-1056) and applied with props=ValueProp.UNPOWERED, so the player's Dexterity cannot reach it. Same observable today; combat start gives powers={'dexterity': 1} and block 0. Rule 7: relics/bronze_scales.py, relics/gorget.py, CombatRoom.cs, CombatManager.cs, AbstractModel.cs, cmds.py, powers.py and relics/base.py are NOT hashed by this record."
+      "rationale": "OddlySmoothStone.cs:21-28 applies PowerVar<DexterityPower>(1m).BaseValue to its owner on AfterRoomEntered when the room `is CombatRoom`; the sim applies the same amount to the same target with the same applier from on_combat_start. This is EXACTLY the mechanism audit/records/relic/bronze_scales.json and audit/records/relic/gorget.json already verdicted deliberate-divergence for the identical AfterRoomEntered(CombatRoom) + PowerCmd.Apply body -- one verdict per mechanism, binding rule 3, matched and not re-derived. Sequence read rather than assumed: CombatRoom.cs:228 fires Hook.AfterRoomEntered AFTER CombatManager.SetUpCombat and BEFORE AfterCombatRoomLoaded, which then runs AfterCreatureAdded (CombatManager.cs:396), Hook.BeforeCombatStart (:403) and StartTurn (:418) -- so in C# the Dexterity lands one slot earlier than the sim's on_combat_start. AbstractModel.cs:1231-1232 documents AfterRoomEntered+CombatRoom as THE intended slot for 'start of combat effects that should execute before the start of the first turn (like applying powers)'. WHY THIS UNIT NEEDED MORE THAN THE RULE-3 MATCH: Dexterity is not inert like Thorns or Plating -- it MODIFIES block gains (cmds.py:145-147), so any listener in the intervening window that gains powered block would read 1 in the game and 0 in the sim. EXECUTED (py audit/tools/relic_probes_b10.py oddly-smooth-stone): a scan of every ported on_combat_start listener under sts2_rl/relics and sts2_rl/powers.py finds exactly ONE that touches BlockCmd -- PlatingPower._gain_block (powers.py) -- and it is reached from on_combat_start only for the ENEMY side (powers.py) and applied with props=ValueProp.UNPOWERED, so the player's Dexterity cannot reach it. Same observable today; combat start gives powers={'dexterity': 1} and block 0. Rule 7: relics/bronze_scales.py, relics/gorget.py, CombatRoom.cs, CombatManager.cs, AbstractModel.cs, cmds.py, powers.py and relics/base.py are NOT hashed by this record."
     }
   },
   "guards": [

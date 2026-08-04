@@ -31,12 +31,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
       "side": "sim"
     },
     {
@@ -106,12 +106,12 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
+      "sha256": "a1aecf30215574f9bc62dd01cb7c73346bbc1b9b84dd5dcc8dabd67101f8c345",
       "side": "sim"
     },
     {
@@ -126,7 +126,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -138,7 +138,7 @@
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (lost_coffer.py:14)",
       "verdict": "faithful",
-      "rationale": "Matches LostCoffer.cs:14. Load-bearing beyond display: Relic.is_tradable (relics/base.py:132) excludes any relic with an upon-pickup effect, so a dropped declaration would make the Coffer tradable at Ranwid the Elder / the Relic Trader."
+      "rationale": "Matches LostCoffer.cs:14. Load-bearing beyond display: Relic.is_tradable (relics/base.py:188-199, renumbered since prior pass, content unchanged) excludes any relic with an upon-pickup effect, so a dropped declaration would make the Coffer tradable at Ranwid the Elder / the Relic Trader."
     },
     "AfterObtained": {
       "maps_to": "after_obtained (sts2_rl/relics/lost_coffer.py:16-37) -- a 3-card REGULAR-odds screen through the skippable 'card_reward' selector, then one PotionReward through RunState.offer_potion",
@@ -150,7 +150,7 @@
     {
       "what": "G1: `RewardsCmd.OfferCustom` (LostCoffer.cs:22) is a take-or-SKIP reward screen -- SCOPED TO THE POTION HALF, which the port grants unconditionally (the card half does model the decline)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:475-496) and `RunState.offer_potion` (sts2_rl/run.py:498-506) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. sts2_rl/relics/lost_coffer.py:31-37 now routes the potion through `run.offer_potion`, and the card half already went through the skippable 'card_reward' selector (lost_coffer.py:22). WAS: the potion half was granted unconditionally."
+      "issue": "Closed 2026-07-27: the take-or-skip seam exists and this site uses it. `RunState.offer_relic` (sts2_rl/run.py:692-713, renumbered since prior pass, content unchanged) and `RunState.offer_potion` (sts2_rl/run.py:715-721, renumbered since prior pass, content unchanged) are the port of RewardsCmd.OfferCustom's declinable RelicReward / PotionReward: they consult `run.reward_selector` (the driver surfaces it as a REWARD_RELIC / REWARD_POTION decision) and only call add_relic / add_potion on a take, so a declined relic never runs its AfterObtained -- RelicReward.OnSelect (RelicReward.cs:109-115) is the only path to RelicCmd.Obtain. sts2_rl/relics/lost_coffer.py:31-37 now routes the potion through `run.offer_potion`, and the card half already went through the skippable 'card_reward' selector (lost_coffer.py:22). WAS: the potion half was granted unconditionally."
     },
     {
       "what": "G2 (LIVE, grade A -- stream desync): PotionReward (LostCoffer.cs:21) rolls `PotionFactory.CreateRandomPotionOutOfCombat` off `Player.PlayerRng.Rewards`; the port rolls the legacy shared `random.Random`",
@@ -160,12 +160,12 @@
     {
       "what": "N1: the CardCreationOptions (LostCoffer.cs:19) -- character card pool ONLY (a single-element list, no Colorless), CardCreationSource.Other, CardRarityOddsType.RegularEncounter, cardCount 3, no NoUpgradeRoll flag",
       "verdict": "faithful",
-      "rationale": "Every clause checks out against rewards.create_reward_cards(run, RarityOddsType.REGULAR, mutate_pity=False) (lost_coffer.py:19-21). (a) count: the default CARD_REWARD_COUNT is 3 (rewards.py:109, 238), matching `new CardReward(options, 3, ...)`. (b) odds: RarityOddsType.REGULAR is CardRarityOddsType.RegularEncounter (rewards.py:75, 84). (c) pity: `mutate_pity=False` is CORRECT and non-obvious -- CardFactory.RollForRarity (CardFactory.cs:244-261) takes the MUTATING `PlayerOdds.CardRarity.Roll` only when `source == CardCreationSource.Encounter` (or ForceRarityOddsChange), and this caller passes Other, so RollWithBaseOdds is right. (d) upgrade roll: no NoUpgradeRoll flag is set, so CardFactory.cs:98-102 does roll for upgrades, and create_reward_cards keeps its act-scaled upgrade draw. (e) pool: the sim's Ironclad reward pool is the character pool, and the `pool=None` default is exactly that (rewards.py:258-267). `CardCreationFlags.IsCardReward`, added by CardReward's own ctor (CardReward.cs:114), is guard N2's subject."
+      "rationale": "Every clause checks out against rewards.create_reward_cards(run, RarityOddsType.REGULAR, mutate_pity=False) (lost_coffer.py:19-21). (a) count: the default CARD_REWARD_COUNT is 3 (rewards.py:180, 316, renumbered since prior pass, content unchanged), matching `new CardReward(options, 3, ...)`. (b) odds: RarityOddsType.REGULAR is CardRarityOddsType.RegularEncounter (rewards.py:76-79, renumbered since prior pass, content unchanged). (c) pity: `mutate_pity=False` is CORRECT and non-obvious -- CardFactory.RollForRarity (CardFactory.cs:244-261) takes the MUTATING `PlayerOdds.CardRarity.Roll` only when `source == CardCreationSource.Encounter` (or ForceRarityOddsChange), and this caller passes Other, so RollWithBaseOdds is right. (d) upgrade roll: no NoUpgradeRoll flag is set, so CardFactory.cs:98-102 does roll for upgrades, and create_reward_cards keeps its act-scaled upgrade draw. (e) pool: the sim's Ironclad reward pool is the character pool, and the `pool=None` default is exactly that (rewards.py:313-323, renumbered since prior pass, content unchanged). `CardCreationFlags.IsCardReward`, added by CardReward's own ctor (CardReward.cs:114), is guard N2's subject."
     },
     {
       "what": "N2: `CardCreationFlags.IsCardReward` is set by CardReward's constructor (CardReward.cs:110-118); the sim has no card-creation flag concept at all",
       "verdict": "gap",
-      "issue": "The flag exists so that relics which affect card REWARDS only (CardCreationFlags.cs:56-60 names Prismatic Gem and Dingy Rug) can tell a reward roll from any other card creation. The sim's create_reward_cards runs `modify_card_reward_options` over every relic with no flag to discriminate on (rewards.py:297-301). DORMANT and NOT this relic's defect: the divergence would need a ported relic that keys off IsCardReward, and it belongs to rewards.py rather than lost_coffer.py. Recorded here because this is the record that reads the flag being set. Porting Prismatic Gem or Dingy Rug makes it live. Rule 7: leans on rewards.py and CardCreationFlags.cs, neither hashed here."
+      "issue": "The flag exists so that relics which affect card REWARDS only (CardCreationFlags.cs:56-60 names Prismatic Gem and Dingy Rug) can tell a reward roll from any other card creation. The sim's create_reward_cards runs `modify_card_reward_options` over every relic with no flag to discriminate on (rewards.py:470-476, renumbered since prior pass, content unchanged). DORMANT and NOT this relic's defect: the divergence would need a ported relic that keys off IsCardReward, and it belongs to rewards.py rather than lost_coffer.py. Recorded here because this is the record that reads the flag being set. Porting Prismatic Gem or Dingy Rug makes it live. Rule 7: leans on rewards.py and CardCreationFlags.cs, neither hashed here."
     },
     {
       "what": "N3: the ORDER -- card reward first, potion second (LostCoffer.cs:20-21), and both offered on ONE screen",

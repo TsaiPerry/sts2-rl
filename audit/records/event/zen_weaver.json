@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -44,17 +44,17 @@
     },
     {
       "what": "GenerateInitialOptions (ZenWeaver.cs:37-44): BREATHING_TECHNIQUES is NEVER locked (no gold check at all, even though it costs 50), the other two lock below 125 and 250, and both locked options share ONE loc key, `...options.LOCKED`, via CreateLockedOption (:76-79)",
-      "maps_to": "events/zen_weaver.py:34-44 reproduces all three, including the shared 'LOCKED' key for both -- the sim does not invent per-option locked keys here, matching the source (contrast waterlogged_scriptorium, which really does have two distinct locked keys). The unlocked BREATHING option is not a bug on either side: PlayerCmd.LoseGold and run.lose_gold (run.py:335-337) both floor at 0, so buying it with less than 50 gold simply zeroes the purse.",
+      "maps_to": "events/zen_weaver.py:34-44 reproduces all three, including the shared 'LOCKED' key for both -- the sim does not invent per-option locked keys here, matching the source (contrast waterlogged_scriptorium, which really does have two distinct locked keys). The unlocked BREATHING option is not a bug on either side: PlayerCmd.LoseGold and run.lose_gold (run.py:518-520, was 335-337) both floor at 0, so buying it with less than 50 gold simply zeroes the purse.",
       "verdict": "faithful"
     },
     {
       "what": "BreathingTechniques (ZenWeaver.cs:46-56): LoseGold(50) FIRST, then TWO separately-created Enlightenment cards added to the Deck pile in one CardPileCmd.Add(array, PileType.Deck) call",
-      "maps_to": "events/zen_weaver.py:46-50: lose_gold(50) then two run.add_card(make_card('enlightenment')) calls. 'enlightenment' IS ported. The bulk Add is not a different verb: CardPileCmd.Add(cards, pile) loops `foreach (CardModel card5 in cards)` and runs the per-card deck-entry path inside the loop (CardPileCmd.cs:307-341), so two singleton adds are the same dispatch sequence. run.add_card runs Hook.ModifyCardBeingAddedToDeck (run.py:341-354), so the egg relics can upgrade the Enlightenments here exactly as the game allows -- this is an ADD, not a transform, so creature_card_cmds G3 does not apply.",
+      "maps_to": "events/zen_weaver.py:46-50: lose_gold(50) then two run.add_card(make_card('enlightenment')) calls. 'enlightenment' IS ported. The bulk Add is not a different verb: CardPileCmd.Add(cards, pile) loops `foreach (CardModel card5 in cards)` and runs the per-card deck-entry path inside the loop (CardPileCmd.cs:307-341), so two singleton adds are the same dispatch sequence. run.add_card runs Hook.ModifyCardBeingAddedToDeck (run.py:524-536, was 341-354), so the egg relics can upgrade the Enlightenments here exactly as the game allows -- this is an ADD, not a transform, so creature_card_cmds G3 does not apply. Re-verified 2026-08-04: `add_card` still runs `modify_card_being_added_to_deck` before appending, only the run.py line numbers moved.",
       "verdict": "faithful"
     },
     {
       "what": "EmotionalAwareness / ArachnidAcupuncture (ZenWeaver.cs:58-74) share RemoveCardsAndProceed(cost, count), which selects and REMOVES first and pays SECOND -- the opposite order to BreathingTechniques -- with counts 1 and 2",
-      "maps_to": "events/zen_weaver.py:52-63 _remove_and_pay does select_cards -> remove_cards -> lose_gold, preserving that inverted order, with the same two counts. run.removable_cards (run.py:360-362) is CardModel.IsRemovable, which is what FromDeckForRemoval's screen enforces, and run.select_cards reproduces CardSelectCmd's auto-select-all rule for a deck smaller than the ask (CardSelectCmd.cs:576-579).",
+      "maps_to": "events/zen_weaver.py:52-63 _remove_and_pay does select_cards -> remove_cards -> lose_gold, preserving that inverted order, with the same two counts. run.removable_cards (run.py:564-566, was 360-362) is CardModel.IsRemovable, which is what FromDeckForRemoval's screen enforces, and run.select_cards reproduces CardSelectCmd's auto-select-all rule for a deck smaller than the ask (CardSelectCmd.cs:576-579). Re-verified 2026-08-04: unchanged, only line numbers moved.",
       "verdict": "faithful"
     },
     {
@@ -63,7 +63,7 @@
       "verdict": "faithful"
     },
     {
-      "what": "PlayerCmd.LoseGold's `GoldLossType.Spent` argument (ZenWeaver.cs:48, :73) is unmodelled -- run.lose_gold (run.py:335-337) takes no loss type",
+      "what": "PlayerCmd.LoseGold's `GoldLossType.Spent` argument (ZenWeaver.cs:48, :73) is unmodelled -- run.lose_gold (run.py:518-520, was 335-337) takes no loss type",
       "verdict": "deliberate-divergence",
       "rationale": "SAME observable, so deliberate-divergence rather than gap (rule 2), and the SAME verdict the mechanism already carries at event/morphic_grove (GoldLossType.Stolen) and event/round_tea_party (ThatWontSaveToChoiceHistory) -- rule 3. GoldLossType.cs:3-5's own doc comment is 'Used to help flavor how the gold was lost in the Map History', and a grep for `GoldLossType` across src finds no reader outside the enum declaration and the call sites that pass it."
     },

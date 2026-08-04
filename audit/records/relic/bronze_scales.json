@@ -11,7 +11,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -23,7 +23,7 @@
     "AfterRoomEntered": {
       "maps_to": "on_combat_start (bronze_scales.py:13-16)",
       "verdict": "deliberate-divergence",
-      "rationale": "BronzeScales.cs:11-18 applies PowerVar<ThornsPower>(3m).BaseValue to its owner on AfterRoomEntered when the room `is CombatRoom`. The sim uses on_combat_start, the combat-scoped hook, with the same amount and the same applier (the owner). Same observable: the game's room-entered hook for a combat room fires as the combat room is set up, and Thorns is a per-combat power on both sides, so the player enters every fight -- and only a fight -- with 3 Thorns. The sim's Relic base does expose a run-level after_room_entered (relics/base.py:194), and using it would have been the literal mapping; the combat hook is the better one here because the sim's rooms and combats are separate objects and the power belongs to the combat. Contrast relic/big_mushroom, whose AfterRoomEntered is genuinely run-level (a sprite scale) and is waived as presentation."
+      "rationale": "BronzeScales.cs:11-18 applies PowerVar<ThornsPower>(3m).BaseValue to its owner on AfterRoomEntered when the room `is CombatRoom`. The sim uses on_combat_start, the combat-scoped hook, with the same amount and the same applier (the owner). Same observable: the game's room-entered hook for a combat room fires as the combat room is set up, and Thorns is a per-combat power on both sides, so the player enters every fight -- and only a fight -- with 3 Thorns. The sim's Relic base does expose a run-level after_room_entered (relics/base.py:350, was :194), and using it would have been the literal mapping; the combat hook is the better one here because the sim's rooms and combats are separate objects and the power belongs to the combat. Contrast relic/big_mushroom, whose AfterRoomEntered is genuinely run-level (a sprite scale) and is waived as presentation."
     }
   },
   "guards": [

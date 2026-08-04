@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\trash_heap_cards.py",
-    "sha256": "f93265bdcd41fa82dd09ab914501270537ae907e02f97679dd58dd2345183e20"
+    "sha256": "9367e6b7a5549cac19271d1173a73d90f9c9cfd86f83d67bdce7f827f1e24c9d"
   },
   "extra_sources": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     }
   ],

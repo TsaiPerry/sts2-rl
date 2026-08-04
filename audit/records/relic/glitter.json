@@ -26,7 +26,12 @@
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -36,7 +41,7 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
       "side": "sim"
     }
   ],
@@ -46,21 +51,21 @@
       "verdict": "faithful"
     },
     "TryModifyCardRewardOptionsLate": {
-      "maps_to": "modify_card_reward_options (glitter.py:16-21), dispatched by rewards.py:298-301 over run.relics",
+      "maps_to": "modify_card_reward_options (glitter.py:16-21), dispatched by rewards.py:473 over run.relics",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-31 (tier-2 campaign): Re-confirmed DORMANT and closed on re-execution. Its guard is G1 (clone-vs-mutate), a DIFFERENT guard from Driftwood's dispatch-site gap, and is unaffected by the rest_heal_rewards fix that closed the sibling entry.  The text it replaced read: NARROWED 2026-07-27. The phase half (G2) is CLOSED: `modify_card_reward_options_late` is its own base member (sts2_rl/relics/base.py:247-251) and rewards.create_reward_cards runs the plain pass over every relic and THEN the Late pass (sts2_rl/rewards.py:304-315), matching Hook.cs:1444-1466; sts2_rl/relics/glitter.py:16-21 is a Late implementer. WHAT REMAINS is guard G1: C# enchants a CLONE (`RunState.CloneCard(card)` then `CardCmd.Enchant<Glam>(card2, 1m)` then `cardReward.ModifyCard(card2, this)`, Glitter.cs:30-32) and the port attaches Glam in place; the sim still has no clone helper. DORMANT, for G1's own reason: a reward option is a freshly created card with no per-instance state to lose."
+      "issue": "Closed 2026-07-31 (tier-2 campaign): Re-confirmed DORMANT and closed on re-execution. Its guard is G1 (clone-vs-mutate), a DIFFERENT guard from Driftwood's dispatch-site gap, and is unaffected by the rest_heal_rewards fix that closed the sibling entry.  The text it replaced read: NARROWED 2026-07-27. The phase half (G2) is CLOSED: `modify_card_reward_options_late` is its own base member (sts2_rl/relics/base.py:247-251) and rewards.create_reward_cards runs the plain pass over every relic and THEN the Late pass (sts2_rl/rewards.py:460-476), matching Hook.cs:1444-1466; sts2_rl/relics/glitter.py:16-21 is a Late implementer. WHAT REMAINS is guard G1: C# enchants a CLONE (`RunState.CloneCard(card)` then `CardCmd.Enchant<Glam>(card2, 1m)` then `cardReward.ModifyCard(card2, this)`, Glitter.cs:30-32) and the port attaches Glam in place; the sim still has no clone helper. DORMANT, for G1's own reason: a reward option is a freshly created card with no per-instance state to lose."
     }
   },
   "guards": [
     {
       "what": "G1 (DORMANT): `base.Owner.RunState.CloneCard(card)` then `CardCmd.Enchant<Glam>(card2, 1m)` then `cardReward.ModifyCard(card2, this)` (Glitter.cs:30-32) vs `GlamEnchantment().attach(card)` in place (glitter.py:21)",
       "verdict": "gap",
-      "issue": "PROMPT.md bug class 17. CardScope.CloneCard -> ClonePreservingMutability (CardModel.cs:2168-2179) carries upgrade level, enchantment, affliction, keyword edits and local energy-cost modifiers, and the sim has no clone helper at all -- sweep E lists five sim sites that rebuild from the id and keep only the upgrade level. Same mechanism, same verdict as audit/records/relic/burning_sticks.json G3 and audit/records/relic/frozen_egg.json G3, binding rule 3. DORMANT, settled by execution rather than by argument (`py audit/tools/relic_probes_b06.py b06-misc`): a reward option is a freshly created card with no per-instance state to lose, and the one collision that could matter -- a second enchanting relic on the same option -- is closed on BOTH sides by the same rule, that a card holds one enchantment. C#'s EnchantmentModel.CanEnchant refuses an already-enchanted card unless `IsStackable && same type`, and `grep IsStackable src/Core/Models/Enchantments/` finds NO override of the `=> false` default (EnchantmentModel.cs:173, 289); the sim's Enchantment.can_enchant returns `card.enchantment is None` (enchantments.py:51-58). Probe: a Strike already carrying Swift reports `Glam.can_enchant = False`, matching C#. The residual divergence is identity -- the game keeps the un-enchanted original alive for the reward screen's 'modified by' display and hands the deck a new model -- which is presentation plus the reverse of sweep E's data loss. Porting a stackable enchantment, or any effect holding a handle on a reward option across the pick, makes it live."
+      "issue": "PROMPT.md bug class 17. CardScope.CloneCard -> ClonePreservingMutability (CardModel.cs:2168-2179) carries upgrade level, enchantment, affliction, keyword edits and local energy-cost modifiers, and the sim has no clone helper at all -- sweep E lists five sim sites that rebuild from the id and keep only the upgrade level. Same mechanism, same verdict as audit/records/relic/burning_sticks.json G3 and audit/records/relic/frozen_egg.json G3, binding rule 3. DORMANT, settled by execution rather than by argument (`py audit/tools/relic_probes_b06.py b06-misc`): a reward option is a freshly created card with no per-instance state to lose, and the one collision that could matter -- a second enchanting relic on the same option -- is closed on BOTH sides by the same rule, that a card holds one enchantment. C#'s EnchantmentModel.CanEnchant refuses an already-enchanted card unless `IsStackable && same type`, and `grep IsStackable src/Core/Models/Enchantments/` finds NO override of the `=> false` default (EnchantmentModel.cs:173, 289); the sim's Enchantment.can_enchant returns `card.enchantment is None` (enchantments.py:120-129). Probe: a Strike already carrying Swift reports `Glam.can_enchant = False`, matching C#. The residual divergence is identity -- the game keeps the un-enchanted original alive for the reward screen's 'modified by' display and hands the deck a new model -- which is presentation plus the reverse of sweep E's data loss. Porting a stackable enchantment, or any effect holding a handle on a reward option across the pick, makes it live."
     },
     {
-      "what": "G2 (DORMANT): the hook is TryModifyCardRewardOptions**Late** and rewards.py:298-301 is a single flat pass over run.relics",
+      "what": "G2 (DORMANT): the hook is TryModifyCardRewardOptions**Late** and rewards.py:473 is a single flat pass over run.relics",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: Hook.TryModifyCardRewardOptions' TWO complete passes are modelled. `Relic` declares `modify_card_reward_options` (the plain pass) and `modify_card_reward_options_late` as SEPARATE members (sts2_rl/relics/base.py:241-251), and rewards.create_reward_cards runs every relic's plain hook and THEN every relic's Late hook (sts2_rl/rewards.py:304-315), which is Hook.cs:1444-1466. A Late implementer is therefore guaranteed to see everything the plain pass added, whatever order the relics were picked up in. WAS: one flat `for relic in list(run.relics)` loop, so the phase guarantee was registration-order luck."
+      "issue": "Closed 2026-07-27: Hook.TryModifyCardRewardOptions' TWO complete passes are modelled. `Relic` declares `modify_card_reward_options` (the plain pass) and `modify_card_reward_options_late` as SEPARATE members (sts2_rl/relics/base.py:305-325), and rewards.create_reward_cards runs every relic's plain hook and THEN every relic's Late hook (sts2_rl/rewards.py:460-476), which is Hook.cs:1444-1466. A Late implementer is therefore guaranteed to see everything the plain pass added, whatever order the relics were picked up in. WAS: one flat `for relic in list(run.relics)` loop, so the phase guarantee was registration-order luck."
     },
     {
       "what": "N1: `player != base.Owner` (Glitter.cs:20-23)",
@@ -68,14 +73,14 @@
       "rationale": "Multiplayer-only ownership filter; the sim has one player and one reward screen. Waived under the shared contract's multiplayer exclusion."
     },
     {
-      "what": "N2: `CardCmd.Enchant<Glam>(card2, 1m)` -- amount 1 -- vs `GlamEnchantment()` with the base class's default amount (enchantments.py:42)",
+      "what": "N2: `CardCmd.Enchant<Glam>(card2, 1m)` -- amount 1 -- vs `GlamEnchantment()` with the base class's default amount (enchantments.py:110)",
       "verdict": "faithful",
-      "rationale": "Enchantment.__init__ defaults amount to 1, so the sim's bare constructor is Glam 1. No AscensionHelper branch in Glitter.cs, so 1m is the pinned non-ascension value, and Glam's own port is a faithful EnchantPlayCount +Amount once per combat (enchantments.py:220-241 vs Glam.cs). Recorded because the amount is invisible at the sim's call site -- a fixer changing the default would silently change this relic."
+      "rationale": "Enchantment.__init__ defaults amount to 1, so the sim's bare constructor is Glam 1. No AscensionHelper branch in Glitter.cs, so 1m is the pinned non-ascension value, and Glam's own port is a faithful EnchantPlayCount +Amount once per combat (enchantments.py:351-371 vs Glam.cs). Recorded because the amount is invisible at the sim's call site -- a fixer changing the default would silently change this relic."
     },
     {
       "what": "N3: `glam.CanEnchant(card)` (Glitter.cs:28) vs `GlamEnchantment.can_enchant(card)` (glitter.py:20)",
       "verdict": "faithful",
-      "rationale": "Glam adds no CanEnchant/CanEnchantCardType override, so C# uses EnchantmentModel.CanEnchant's base clauses: not Status/Curse/Quest (`(uint)(type - 4) <= 2u`), the type check, no Unplayable card sitting in the Deck pile, and no existing enchantment. Enchantment.can_enchant (enchantments.py:51-58) has the same four with one narrowing: it refuses an unplayable card in ANY pile, where C# only refuses one in the Deck pile. Not a divergence at this site -- a reward option is not in any pile yet -- so it is recorded here rather than verdicted; if it matters anywhere it belongs to the enchantment kind's own records, which are not on this branch (audit/records/enchantment/** lives on the event+enchantment stream's branch). Executed (`py audit/tools/relic_probes_b06.py b06-misc`): given options [strike, dazed], Glitter Glams the Strike and leaves the Dazed (a Status) alone."
+      "rationale": "Glam adds no CanEnchant/CanEnchantCardType override, so C# uses EnchantmentModel.CanEnchant's base clauses: not Status/Curse/Quest (`(uint)(type - 4) <= 2u`), the type check, no Unplayable card sitting in the Deck pile, and no existing enchantment. Enchantment.can_enchant (enchantments.py:120-129) has the same four with one narrowing: it refuses an unplayable card in ANY pile, where C# only refuses one in the Deck pile. Not a divergence at this site -- a reward option is not in any pile yet -- so it is recorded here rather than verdicted; if it matters anywhere it belongs to the enchantment kind's own records, which are not on this branch (audit/records/enchantment/** lives on the event+enchantment stream's branch). Executed (`py audit/tools/relic_probes_b06.py b06-misc`): given options [strike, dazed], Glitter Glams the Strike and leaves the Dazed (a Status) alone."
     },
     {
       "what": "N4: ExtraHoverTips (Glitter.cs:16) and the `return true` 'did modify' bookkeeping value",

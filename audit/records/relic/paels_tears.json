@@ -26,22 +26,22 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -51,9 +51,9 @@
       "verdict": "faithful"
     },
     "BeforeSideTurnEnd": {
-      "maps_to": "on_player_turn_end (paels_tears.py:27-28), dispatched by HookSystem.on_player_turn_end (hooks.py:297-301) from CombatState.end_turn (combat.py:654)",
+      "maps_to": "on_player_turn_end (paels_tears.py:27-28), dispatched by HookSystem.on_player_turn_end (hooks.py:1262-1265) from CombatState._end_turn_internal (combat.py:1768)",
       "verdict": "faithful",
-      "rationale": "PaelsTears.cs:38-46 records `HadLeftoverEnergy = base.Owner.PlayerCombatState.Energy > 0` behind a participation check; paels_tears.py:28 is `self.had_leftover_energy = player.energy > 0`. Slot is right: hooks.py:297-307 documents on_player_turn_end as Hook.BeforeTurnEnd, and BeforeSideTurnEnd is Hook.BeforeTurnEnd's THIRD sub-slot (Hook.cs:1254-1260) -- the last of the three, so anything that spends or grants energy in BeforeSideTurnEndVeryEarly/Early is already counted on both sides. The participation check is structurally satisfied: the sim only fires this from the player's own end_turn. Strictly greater than zero on both sides, so an exactly-empty energy pool records False."
+      "rationale": "PaelsTears.cs:38-46 records `HadLeftoverEnergy = base.Owner.PlayerCombatState.Energy > 0` behind a participation check; paels_tears.py:28 is `self.had_leftover_energy = player.energy > 0`. Slot is right: on_player_turn_end is Hook.BeforeTurnEnd, and BeforeSideTurnEnd is Hook.BeforeTurnEnd's THIRD sub-slot (Hook.cs:1254-1260) -- the last of the three, so anything that spends or grants energy in BeforeSideTurnEndVeryEarly/Early is already counted on both sides. The participation check is structurally satisfied: the sim only fires this from the player's own end_turn. Strictly greater than zero on both sides, so an exactly-empty energy pool records False. (2026-08-04 re-audit: hooks.py/combat.py line numbers had drifted; call shape re-verified unchanged.)"
     },
     "AfterSideTurnStart": {
       "maps_to": "on_player_turn_started (paels_tears.py:30-33), i.e. the POST-draw turn-start slot",
@@ -63,24 +63,24 @@
     "AfterCombatEnd": {
       "maps_to": "reset_for_combat (sts2_rl/relics/paels_tears.py:27-30)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/paels_tears.py:27-30 clears `had_leftover_energy` (PaelsTears.cs:57-61, the relic's only reset). WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:215-228) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:247-250) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/paels_tears.py:27-30 clears `had_leftover_energy` (PaelsTears.cs:57-61, the relic's only reset). WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): `had_leftover_energy` is never reset, so combat 2 opens with +2 free energy on turn 1 (PROMPT.md bug class 13)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/paels_tears.py:27-30 clears `had_leftover_energy` (PaelsTears.cs:60-64 AfterCombatEnd). WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:215-228) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:247-250) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/paels_tears.py:27-30 clears `had_leftover_energy` (PaelsTears.cs:60-64 AfterCombatEnd). WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
     },
     {
       "what": "G2 (LIVE, mechanism owned by relic/paels_eye G3): on a Pael's Eye extra turn the sim skips on_player_turn_end entirely, so the flag is never refreshed before the extra turn reads it",
       "verdict": "faithful",
-      "rationale": "The mechanism this entry rolls up (paels_eye G3) is closed: sts2_rl/combat.py:793 fires `on_player_turn_end` before the extra-turn test at :823, exactly as CombatManager.cs:1179's Hook.BeforeTurnEnd precedes :1366's Hook.ShouldTakeExtraTurn. Consequently relics/paels_tears.py:32-33 latches `had_leftover_energy` from the just-ended turn's unspent energy (PaelsTears.cs:38-46), and the extra turn's `on_player_turn_started` at relics/paels_tears.py:35-38 reads a freshly-set flag rather than the previous turn's stale one — so the +2 Energy on a Pael's-Eye extra turn now matches PaelsTears.cs:48-54.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: MECHANISM: the sim's CombatState.end_turn consults should_take_extra_turn FIRST and returns (combat.py:648-652), so on_player_turn_end (combat.py:654) never runs on that turn; C# runs the whole turn-end pass and only then asks (CombatManager.cs:1179 vs :1366). The consequence for THIS relic is that the extra turn's on_player_turn_started reads a stale had_leftover_energy: C# would have just set it from the (necessarily unspent, since no card was played) energy pool and granted +2, whereas the sim grants +2 only if the PREVIOUS turn happened to leave the flag set. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b11.py eye-turnend` shows the on_player_turn_end slot firing without Pael's Eye and not firing with it, on the same end_turn call). Both relics are Ancient and co-obtainable: the ported Pael shrine offers one option from each of three pools per visit (Pael.cs:154-172; events/pael.py) and repeats across acts, with Tears in pool 1 and Eye in pool 3. Per binding rule 3 this is ONE mechanism with ONE verdict: it is recorded in full at audit/records/relic/paels_eye.json guard G3, which owns the extra-turn machinery, and reproduced here because the observable (2 energy) is this relic's."
+      "rationale": "The mechanism this entry rolls up (paels_eye G3) is closed: sts2_rl/combat.py:1768 fires `on_player_turn_end` before the extra-turn test at :1814, exactly as CombatManager.cs:1179's Hook.BeforeTurnEnd precedes :1366's Hook.ShouldTakeExtraTurn (2026-08-04: re-verified after combat.py line drift, same shape). Consequently relics/paels_tears.py:32-33 latches `had_leftover_energy` from the just-ended turn's unspent energy (PaelsTears.cs:38-46), and the extra turn's `on_player_turn_started` at relics/paels_tears.py:35-38 reads a freshly-set flag rather than the previous turn's stale one \u2014 so the +2 Energy on a Pael's-Eye extra turn now matches PaelsTears.cs:48-54.  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: MECHANISM: the sim's CombatState.end_turn consults should_take_extra_turn FIRST and returns (combat.py:648-652), so on_player_turn_end (combat.py:654) never runs on that turn; C# runs the whole turn-end pass and only then asks (CombatManager.cs:1179 vs :1366). The consequence for THIS relic is that the extra turn's on_player_turn_started reads a stale had_leftover_energy: C# would have just set it from the (necessarily unspent, since no card was played) energy pool and granted +2, whereas the sim grants +2 only if the PREVIOUS turn happened to leave the flag set. REACHABILITY (LIVE, executed -- `py audit/tools/relic_probes_b11.py eye-turnend` shows the on_player_turn_end slot firing without Pael's Eye and not firing with it, on the same end_turn call). Both relics are Ancient and co-obtainable: the ported Pael shrine offers one option from each of three pools per visit (Pael.cs:154-172; events/pael.py) and repeats across acts, with Tears in pool 1 and Eye in pool 3. Per binding rule 3 this is ONE mechanism with ONE verdict: it is recorded in full at audit/records/relic/paels_eye.json guard G3, which owns the extra-turn machinery, and reproduced here because the observable (2 energy) is this relic's."
     },
     {
       "what": "N1: `participants.Contains(base.Owner.Creature)` on both hooks (PaelsTears.cs:40, :50)",
       "verdict": "faithful",
-      "rationale": "Structurally satisfied: the sim fires on_player_turn_end only from the player's own end_turn (combat.py:654) and on_player_turn_started only from PlayerCombatState.start_turn (player.py:184), so the owner is always a participant. Multiplayer-only in effect, noted per the shared contract rather than verdicted as a divergence."
+      "rationale": "Structurally satisfied: the sim fires on_player_turn_end only from the player's own _end_turn_internal (combat.py:1768) and on_player_turn_started only from PlayerCombatState.start_turn (player.py:418), so the owner is always a participant. Multiplayer-only in effect, noted per the shared contract rather than verdicted as a divergence."
     },
     {
       "what": "N2: PlayerCmd.GainEnergy vs EnergyCmd.gain (paels_tears.py:32-33)",

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -36,37 +36,42 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/valueprops.py",
       "sha256": "921396859f69d89b0170584da481bf7ed5e88303f328e739666f976b2c74c3b4",
       "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
+      "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:3705 power_type = PowerType.BUFF",
+      "maps_to": "powers.py:4640 power_type = PowerType.BUFF",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-139 Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:137-139) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "InstanceType": {
-      "maps_to": "no sim counterpart; cmds.py:308 keys stacking on power id alone",
+      "maps_to": "no sim counterpart; cmds.py:928 keys stacking on power id alone",
       "verdict": "faithful",
       "issue": "Closed 2026-07-30 (tier-2 campaign): RollingBoulderPower.instance_type = PowerInstanceType.INSTANCED (sts2_rl/powers.py), mirroring RollingBoulderPower.cs:24. Two plays now deal 5+5=10 on the next turn and 10+10=20 on the one after (each instance grows by its own +5) instead of one merged instance's 10, then 15, then 20. Verified by test/test_powers.py::TestPowerInstanceType::test_rolling_boulder_two_applications_deal_independent_growing_damage, which also confirms the two applications are distinct objects.  The text it replaced read: PowerInstanceType.Instanced (RollingBoulderPower.cs:24) means every application is an independently tracked instance with its own growing Amount; the sim's PowerCmd.apply merges by id via on_stack (cmds.py:308-311). This is audit/records/seam/power_cmd.json's gap G5 and is not re-verdicted here (binding rule 3) -- G5 lists this power as one of its 11 ported InstanceType units and notes it is among the nine that do not acknowledge the distinction at all, unlike ToricToughnessPower and TheBombPower. What is PER-UNIT is reachability, and for this power two simultaneous instances are REACHABLE and the divergence is arithmetic, not just bookkeeping: the ported Colorless card Rolling Boulder (cards/colorless_powers.py:294-314) is a normal deck card that can be drawn and played twice in one combat, and it applies 5 each time. Two C# instances then deal 5 + 5 = 10 on the next turn and 10 + 10 = 20 on the one after (each grows by its own +5, RollingBoulderPower.cs:52); one merged sim instance holds 10 and deals 10, then 15, then 20 -- so the sim is 5 short on turn 2 and 5 short again on turn 3, converging only later. It also fires ONE damage sweep where the game fires two, which halves the number of on_damage_received dispatches (Thorns, Curl Up) the enemies see. This is the clearest reachable G5 witness among the ported InstanceType units and is recorded here for the seam session's dormancy argument. RULE-3 NOTE (2026-07-26 review fix pass): power/the_bomb, the other ported G5 unit that hand-rolls a workaround, carried `deliberate-divergence` on this same mechanism and is now `gap` too, so G5 has one verdict at every site. Its residue is state-shaped rather than arithmetic -- one merged power at `amount = min(fuses)` where the game has N instances with N Amounts -- because its fuse list does reproduce the damage exactly. LIVE 2026-07-29 (round 11): binding to seam-power-cmd's re-verdict of G5, done concurrently in this round -- G5 now carries `\"live\": true`. This site's own reachability holds independently of G5's own probe (which demonstrates the same mechanism against AutomationPower/PanachePower, not this power): EXECUTED here -- two `PowerCmd.apply(hooks, player, RollingBoulderPower, 5)` calls in one combat produce exactly one `rolling_boulder` entry in `player.powers` with `amount == 10` (not two independent Amount-5 instances), confirming the merge this entry describes actually happens in code, not just in prose. No dedup gate exists for colorless power-card rewards (`grep -i 'unique|dedup' sts2_rl/rewards.py` -> nothing, the same fact G5 itself cites), so drawing two Rolling Boulders across two reward screens is ordinary play. LIVE at both the mechanism level and this site."
     },
     "AfterPlayerTurnStart": {
-      "maps_to": "powers.py:3708-3724 on_player_turn_started (player.py:186)",
+      "maps_to": "powers.py:4644-4659 on_player_turn_started",
       "verdict": "faithful",
       "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. RollingBoulderPower declares AfterPlayerTurnStart and keeps `on_player_turn_started`, which is now that hook and only that hook -- the AfterSideTurnStart listeners it used to share the walk with are on `after_side_turn_start`. See power/crimson_mantle's entry.  The gap it replaced read: NARROWED 2026-07-27. ONE of the three collapsed phases has been split out: Hook.AfterAutoPrePlayPhaseEntered now has its own sim dispatch, `hooks.after_auto_pre_play_phase_entered` (hooks.py:480-486), fired at player.py:221 strictly after `on_player_turn_started` (:218), and MayhemPower moved onto it (powers.py:3763) -- so the executed Mayhem witnesses this entry pointed at are resolved. WHAT REMAINS is the other half of the collapse: `on_player_turn_started` (player.py:218) is still ONE slot serving BOTH Hook.AfterPlayerTurnStart (CombatManager.cs:675) and Hook.AfterSideTurnStart (:522), which the game runs in that fixed order, so the relative order of two powers on opposite sides of that boundary is still hook-registration order. VERIFIED by reading hooks.py, player.py and powers.py."
     }
@@ -75,32 +80,32 @@
     {
       "what": "RollingBoulderPower.cs:30-33 player != base.Owner.Player",
       "verdict": "faithful",
-      "rationale": "powers.py:3711-3712. Identical."
+      "rationale": "powers.py:4647-4648. Identical."
     },
     {
       "what": "RollingBoulderPower.cs:37 CombatState.HittableEnemies (TestMode arm)",
       "verdict": "gap",
-      "issue": "The sim iterates combat.enemies filtered on not enemy.is_gone (powers.py:3716) where C# uses CombatState.HittableEnemies, which additionally consults Hook.ShouldAllowHitting (Creature.cs:308-322), so the sim aims at creatures the game considers unhittable -- a mid-revival Illusion (powers.py:1572-1575) or a withered Decimillipede segment (powers.py:2354-2357). DORMANT: DamageCmd.deal re-checks should_allow_hitting at entry (cmds.py:51-52) and returns 0, so no damage lands; what still differs is that the command runs at all. Same finding and same verdict as power/inferno's and power/constrict's HittableEnemies guards, per binding rule 3. NOTE the non-TestMode arm (RollingBoulderPower.cs:39-51) fires the damage tasks per creature off a targeting SIGNAL and awaits them together; that is presentation/targeting plumbing and the TestMode arm is the canonical semantics. Third-file citations, not hashed here."
+      "issue": "The sim iterates combat.enemies filtered on not enemy.is_gone (powers.py:4652) where C# uses CombatState.HittableEnemies, which additionally consults Hook.ShouldAllowHitting (Creature.cs:308-322), so the sim aims at creatures the game considers unhittable -- a mid-revival Illusion (powers.py:1572-1575) or a withered Decimillipede segment (powers.py:2354-2357). DORMANT: DamageCmd.deal re-checks should_allow_hitting at entry (cmds.py:51-52) and returns 0, so no damage lands; what still differs is that the command runs at all. Same finding and same verdict as power/inferno's and power/constrict's HittableEnemies guards, per binding rule 3. NOTE the non-TestMode arm (RollingBoulderPower.cs:39-51) fires the damage tasks per creature off a targeting SIGNAL and awaits them together; that is presentation/targeting plumbing and the TestMode arm is the canonical semantics. Third-file citations, not hashed here."
     },
     {
       "what": "RollingBoulderPower.cs:57 CreatureCmd.Damage(..., ValueProp.Unpowered, base.Owner)",
       "verdict": "faithful",
-      "rationale": "powers.py:3717-3720 passes DamageProps.NON_CARD_UNPOWERED (valueprops.py:42 -- UNPOWERED alone, so blockable, matching C# omitting Unblockable) and dealer=self.owner. Both the props and the dealer are right, which is worth recording: this is the same call shape whose omitted props made power/feel_no_pain and power/curl_up live gaps, and the same dealer= that power/thorns and power/constrict drop."
+      "rationale": "powers.py:4653-4656 passes DamageProps.NON_CARD_UNPOWERED (valueprops.py:42 -- UNPOWERED alone, so blockable, matching C# omitting Unblockable) and dealer=self.owner. Both the props and the dealer are right, which is worth recording: this is the same call shape whose omitted props made power/feel_no_pain and power/curl_up live gaps, and the same dealer= that power/thorns and power/constrict drop."
     },
     {
       "what": "RollingBoulderPower.cs:52 SetAmount(Amount + DynamicVars.Damage.IntValue)",
       "verdict": "faithful",
-      "rationale": "The increment is 5 on both sides: RollingBoulderPower.cs:26's CanonicalVars declares new DamageVar(5m, ValueProp.Unpowered) and powers.py:3706 sets INCREMENT = 5. Non-ascension by construction (no AscensionHelper.GetValueIfAscension anywhere in the file). The sim also fires hooks.on_power_amount_changed for the growth (powers.py:3724), which C# gets from SetAmount's own notification path. Third-file citation, not hashed here."
+      "rationale": "The increment is 5 on both sides: RollingBoulderPower.cs:26's CanonicalVars declares new DamageVar(5m, ValueProp.Unpowered) and powers.py:4642 sets INCREMENT = 5. Non-ascension by construction (no AscensionHelper.GetValueIfAscension anywhere in the file). The sim also fires hooks.on_power_amount_changed for the growth (powers.py:4660), which C# gets from SetAmount's own notification path. Third-file citation, not hashed here."
     },
     {
       "what": "The sim ADDS an end-of-combat check the C# power does not have",
       "verdict": "deliberate-divergence",
-      "rationale": "powers.py:3721-3722 calls combat._end_combat(player_won=True) when the boulder killed the last enemy, and :3714 bails when combat.is_over. C# has neither -- the win check is CombatManager's job (CheckWinCondition), and Hook.IterateCombatHookListeners' IsOverOrEnding gate (Hook.cs:53-63) is what stops later listeners, which is hook_dispatch's G8. The sim needs the inline call because it has no such gate. Same observable (the combat ends and the player wins), different mechanism, and it is the sim compensating for a recorded engine gap rather than a divergence of this power."
+      "rationale": "powers.py:4657-4658 calls combat._end_combat(player_won=True) when the boulder killed the last enemy, and :4650 bails when combat.is_over. C# has neither -- the win check is CombatManager's job (CheckWinCondition), and Hook.IterateCombatHookListeners' IsOverOrEnding gate (Hook.cs:53-63) is what stops later listeners, which is hook_dispatch's G8. The sim needs the inline call because it has no such gate. Same observable (the combat ends and the player wins), different mechanism, and it is the sim compensating for a recorded engine gap rather than a divergence of this power."
     },
     {
       "what": "Registration-order contention with Mayhem in the collapsed slot",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: MayhemPower moved to the sim's new AutoPrePlay phase -- `after_auto_pre_play_phase_entered` (powers.py:3763), dispatched at player.py:221 strictly AFTER `on_player_turn_started` (:218) -- so it no longer shares a dispatch with this power and the order is fixed rather than registration order. That mirrors CombatManager.cs:568's RunAutoPrePlayPhase running after Hook.AfterSideTurnStart (:522) and Hook.AfterPlayerTurnStart (:675), so the executed witness this guard carried now resolves the way the game does. VERIFIED 2026-07-27 by reading hooks.py:480-486, player.py:218-221 and powers.py."
+      "issue": "Closed 2026-07-27: MayhemPower moved to the sim's new AutoPrePlay phase -- `after_auto_pre_play_phase_entered` (powers.py:4486), dispatched at player.py:357 strictly AFTER `on_player_turn_started` (:418, historically :218) -- so it no longer shares a dispatch with this power and the order is fixed rather than registration order. That mirrors CombatManager.cs:568's RunAutoPrePlayPhase running after Hook.AfterSideTurnStart (:522) and Hook.AfterPlayerTurnStart (:675), so the executed witness this guard carried now resolves the way the game does. VERIFIED by reading hooks.py:1244-1249, player.py:349-357 and powers.py."
     }
   ],
   "verdict": "gap",

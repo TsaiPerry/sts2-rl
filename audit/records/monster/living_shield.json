@@ -32,7 +32,7 @@
     "AfterAddedToRoom": {
       "maps_to": "turret_operator.py:72-76 __init__ -> PowerCmd.apply(RampartPower, 25)",
       "verdict": "deliberate-divergence",
-      "rationale": "SHARED-FINDINGS section 2, copied verbatim in substance. The sim has no add-to-room phase -- creature creation *is* construction -- so AfterAddedToRoom's effect is applied from `__init__` (turret_operator.py:74-76). The game applies it from MonsterModel.AfterAddedToRoom awaited by CombatManager.AfterCreatureAdded inside StartCombatInternal, i.e. after every creature is on the board and before Hook.BeforeCombatStart; the sim runs it at create_monsters (combat.py:134), before relics attach (combat.py:157-159), before belt potions register (combat.py:164-166), before the parity Niche HP roll (combat.py:152-153) and before hooks.on_combat_start (combat.py:208). Same observable today on all three clauses: (a) listener set -- the four ported listeners on the reachable hooks (relics/ruined_helmet.py, relics/unsettling_lamp.py, relics/vambrace.py, relics/paels_legion.py) all gate on the player or on a non-null card and a monster's starting power is self-applied with no card; (b) HP-roll inversion -- of the 35 constructor-applied power classes only IllusionPower mentions max_hp, and only inside revive() (powers.py:1581); (c) roll ordering -- EXECUTED, `py audit/tools/monster_probes.py roll-order` prints `living_shield  sticky-no-op   initial=SHIELD_SLAM_MOVE (MoveState)`, so monster_state_machine step 30's early return fires and the constructor's first roll evaluates no branch and reads no power. Concrete trigger that would make it a gap: any relic, potion or power listening on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. Rule 7: the four relic files and powers.py are cited by name here and are NOT all hashed by this record. Amount checked: LivingShield.cs:35 applies 25m and _RAMPART_BLOCK is 25 (turret_operator.py:24). ESCALATION CHECK, because SHARED-FINDINGS section 2 requires one whenever the unit's graph reads combat state: LivingShield's ConditionalBranchState condition calls `_ally_count`, which reads `self._hooks.combat.enemies` (turret_operator.py:78-84) -- and that attribute does NOT exist yet during create_monsters (the assignment at combat.py:134 has not completed). The condition is nevertheless never evaluated during construction, and that is EXECUTED, not assumed: `py audit/tools/monster_probes.py roll-order` prints `living_shield sticky-no-op initial=SHIELD_SLAM_MOVE (MoveState)`, i.e. monster_state_machine step 30's early return fires on the constructor's roll, and `py audit/tools/monster_probes_b08.py graphs` builds the monster without an AttributeError. RampartPower's own behaviour is audit/records/power/rampart.json's, not re-verdicted here."
+      "rationale": "SHARED-FINDINGS section 2, copied verbatim in substance. The sim has no add-to-room phase -- creature creation *is* construction -- so AfterAddedToRoom's effect is applied from `__init__` (turret_operator.py:74-76). The game applies it from MonsterModel.AfterAddedToRoom awaited by CombatManager.AfterCreatureAdded inside StartCombatInternal, i.e. after every creature is on the board and before Hook.BeforeCombatStart; the sim runs it at create_monsters (combat.py:241, re-verified 2026-08-04, was :134), before relics attach (combat.py:274, was :157-159), before belt potions register (bare filename, was :164-166), before the parity Niche HP roll (combat.py:266-269, was :152-153) and before hooks.on_combat_start (combat.py:356, was :208). Same observable today on all three clauses: (a) listener set -- the four ported listeners on the reachable hooks (relics/ruined_helmet.py, relics/unsettling_lamp.py, relics/vambrace.py, relics/paels_legion.py) all gate on the player or on a non-null card and a monster's starting power is self-applied with no card; (b) HP-roll inversion -- of the 35 constructor-applied power classes only IllusionPower mentions max_hp, and only inside revive() (powers.py:2063, re-verified 2026-08-04, was :1581, logic unchanged); (c) roll ordering -- EXECUTED, `py audit/tools/monster_probes.py roll-order` prints `living_shield  sticky-no-op   initial=SHIELD_SLAM_MOVE (MoveState)`, so monster_state_machine step 30's early return fires and the constructor's first roll evaluates no branch and reads no power. Concrete trigger that would make it a gap: any relic, potion or power listening on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. Rule 7: the four relic files and powers.py are cited by name here and are NOT all hashed by this record. Amount checked: LivingShield.cs:35 applies 25m and _RAMPART_BLOCK is 25 (turret_operator.py:24). ESCALATION CHECK, because SHARED-FINDINGS section 2 requires one whenever the unit's graph reads combat state: LivingShield's ConditionalBranchState condition calls `_ally_count`, which reads `self._hooks.combat.enemies` (turret_operator.py:78-84) -- and that attribute does NOT exist yet during create_monsters (the assignment at combat.py:241, re-verified 2026-08-04, was :134, has not completed). The condition is nevertheless never evaluated during construction, and that is EXECUTED, not assumed: `py audit/tools/monster_probes.py roll-order` prints `living_shield sticky-no-op initial=SHIELD_SLAM_MOVE (MoveState)`, i.e. monster_state_machine step 30's early return fires on the constructor's roll, and `py audit/tools/monster_probes_b08.py graphs` builds the monster without an AttributeError. RampartPower's own behaviour is audit/records/power/rampart.json's, not re-verdicted here."
     },
     "GenerateMoveStateMachine": {
       "maps_to": "turret_operator.py:86-100 build_machine",
@@ -44,7 +44,7 @@
     {
       "what": "GetAllyCount (LivingShield.cs:71-74) vs the sim's _ally_count -- two different filters that must agree",
       "verdict": "faithful",
-      "rationale": "C# is `CombatState.GetTeammatesOf(Creature).Count(c => c.IsAlive && c != Creature)`; GetTeammatesOf is GetCreaturesOnSide(creature.Side) and INCLUDES the creature itself (CombatState.cs:394-400), which is what the `c != Creature` term is for, and IsAlive is `CurrentHp > 0` (Creature.cs:206). The sim is `sum(1 for c in combat.enemies if c is not self and not c.is_gone)` (turret_operator.py:78-84), where is_gone is `is_dead or escaped` and is_dead is `hp <= 0` (creatures.py:40-46). The two filters differ in wording and agree in every reachable state, EXECUTED (`py audit/tools/monster_probes_b08.py ally-count`): both alive -> 1; the Turret Operator at 0 HP -> 0; and -- the case the wordings could have parted on -- the Turret Operator at 0 HP with retained_after_death=True (a corpse the combat deliberately KEEPS in `enemies`, SHARED-FINDINGS section 7's death-is-not-removal shape) -> still 0, because is_gone tests HP and not membership. C# reaches the same answer for the same reason: a retained corpse is still in Enemies and still fails IsAlive. The `escaped` term is the sim's only extra, and it is the sim's way of expressing what C# expresses by REMOVING the creature from Enemies (CreatureCmd.Escape), so it is the same filter. Note the condition is evaluated at ROLL time, not at construction -- see the AfterAddedToRoom entry's escalation check."
+      "rationale": "C# is `CombatState.GetTeammatesOf(Creature).Count(c => c.IsAlive && c != Creature)`; GetTeammatesOf is GetCreaturesOnSide(creature.Side) and INCLUDES the creature itself (CombatState.cs:394-400), which is what the `c != Creature` term is for, and IsAlive is `CurrentHp > 0` (Creature.cs:206). The sim is `sum(1 for c in combat.enemies if c is not self and not c.is_gone)` (turret_operator.py:78-84), where is_gone is `is_dead or escaped` and is_dead is `hp <= 0` (creatures.py:173-179, re-verified 2026-08-04, was :40-46, same properties moved). The two filters differ in wording and agree in every reachable state, EXECUTED (`py audit/tools/monster_probes_b08.py ally-count`): both alive -> 1; the Turret Operator at 0 HP -> 0; and -- the case the wordings could have parted on -- the Turret Operator at 0 HP with retained_after_death=True (a corpse the combat deliberately KEEPS in `enemies`, SHARED-FINDINGS section 7's death-is-not-removal shape) -> still 0, because is_gone tests HP and not membership. C# reaches the same answer for the same reason: a retained corpse is still in Enemies and still fails IsAlive. The `escaped` term is the sim's only extra, and it is the sim's way of expressing what C# expresses by REMOVING the creature from Enemies (CreatureCmd.Escape), so it is the same filter. Note the condition is evaluated at ROLL time, not at construction -- see the AfterAddedToRoom entry's escalation check."
     },
     {
       "what": "Conditional branch add order and the C# throw when nothing matches",
@@ -59,12 +59,12 @@
     {
       "what": "Multi-hit / attack loop",
       "verdict": "faithful",
-      "rationale": "monsters/base.py:107-118 `_execute_attack` fires before_attack, loops `hits` times through DamageCmd.deal and breaks when the player or the attacker is dead; then after_attack. C#'s AttackCommand.Execute (AttackCommand.cs:528-546) has the same two loop guards -- `if (Attacker.IsDead) break;` and an empty alive-target list -- and the sim's single target IS the player, so the two loops agree hit for hit. The one asymmetry is C#'s PRE-loop `if (Attacker.IsDead) return this;` (AttackCommand.cs:528-531), which also skips Hook.BeforeAttack; the sim has no such pre-guard. Unreachable for this unit and EXECUTED rather than asserted (rule 5): a sim monster can only take a turn while dead if `retained_after_death` is set (combat.py:292, :306), that flag is written only where hooks.should_remove_from_combat_after_death returns False (cmds.py:102-104, :200-202), and `grep -rn 'def should_remove_from_combat_after_death' sts2_rl/` returns exactly two sites -- the hook itself (hooks.py:603) and ReattachPower (powers.py:2338), which this monster never holds."
+      "rationale": "monsters/base.py:338-349 (re-verified 2026-08-04, was :107-118) `_execute_attack` fires before_attack, loops `hits` times through DamageCmd.deal and breaks when the player or the attacker is dead; then after_attack. C#'s AttackCommand.Execute (AttackCommand.cs:528-546) has the same two loop guards -- `if (Attacker.IsDead) break;` and an empty alive-target list -- and the sim's single target IS the player, so the two loops agree hit for hit. The one asymmetry is C#'s PRE-loop `if (Attacker.IsDead) return this;` (AttackCommand.cs:528-531), which also skips Hook.BeforeAttack; the sim has no such pre-guard. Unreachable for this unit and EXECUTED rather than asserted (rule 5): a sim monster can only take a turn while dead if `retained_after_death` is set (bare filename, was combat.py:292, :306; re-verified 2026-08-04 the same is_gone/retained_after_death gate still exists, moved), that flag is written only where hooks.should_remove_from_combat_after_death returns False (bare filename, was cmds.py:102-104, :200-202), and `grep -rn 'def should_remove_from_combat_after_death' sts2_rl/` returns exactly two sites -- the hook itself (hooks.py:1892, re-verified 2026-08-04, was :603) and ReattachPower (bare filename, was powers.py:2338), which this monster never holds."
     },
     {
       "what": "Encounter and pool reachability",
       "verdict": "faithful",
-      "rationale": "TurretOperatorWeak.cs generates (LivingShield, null) then (TurretOperator, null), RoomType.Monster with IsWeak = true; TURRET_OPERATOR_WEAK (turret_operator.py:112-115) is `[LivingShield, TurretOperator]` in the same order. EXECUTED (`py audit/tools/monster_probes_b08.py ally-count`): `slots: ['LivingShield', 'TurretOperator']`. The order fixes the CombatId numbering the replay targets by, and it is also what makes LivingShield's ally test meaningful. Registered as Glory's weak key `turret_operator` (monsters/glory/__init__.py:60, rooms.py:188)."
+      "rationale": "TurretOperatorWeak.cs generates (LivingShield, null) then (TurretOperator, null), RoomType.Monster with IsWeak = true; TURRET_OPERATOR_WEAK (turret_operator.py:112-115) is `[LivingShield, TurretOperator]` in the same order. EXECUTED (`py audit/tools/monster_probes_b08.py ally-count`): `slots: ['LivingShield', 'TurretOperator']`. The order fixes the CombatId numbering the replay targets by, and it is also what makes LivingShield's ally test meaningful. Registered as Glory's weak key `turret_operator` (monsters/glory/__init__.py:60, rooms.py:262, re-verified 2026-08-04, was :188, moved)."
     }
   ],
   "verdict": "deliberate-divergence",
@@ -112,37 +112,37 @@
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/creatures.py",
-      "sha256": "1c73063f3ca726775f0a121fe826933fe8a4dfdcbda18bb0e0d4dfacff69de7f",
+      "sha256": "9152cb64c277b8c7e5162bcae7d59af41f160a1a347ac586423c41af5be9c530",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     },
     {

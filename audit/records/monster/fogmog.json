@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\overgrowth\\fogmog.py",
-    "sha256": "e5161c53f584695d3b8bcd0447f1255f2698f2cc54d7d0d42e12f07ec8aa403a"
+    "sha256": "7b30f626b55b5758bd4492f5f03ae77d6eb5f19b63a7440d4bbe3fa22056d439"
   },
   "hooks": {
     "MinInitialHp": {
@@ -47,19 +47,19 @@
       "rationale": "Load-bearing, because the two nodes have different follow-ups (SWIPE -> BRANCH, SWIPE_RANDOM -> HEADBUTT) and different CannotRepeat identities inside BRANCH. Collapsing them would change the graph. monster_state_machine G8's dormancy note calls this pair 'the game's own near-miss' for duplicate state ids; the port keeps the ids distinct too, so no duplicate-key question arises."
     },
     {
-      "what": "IllusionMove is guarded by `base.CombatState.IsLiveCombat()` (Fogmog.cs:64) and the port summons unconditionally (fogmog.py:93-95)",
+      "what": "IllusionMove is guarded by `base.CombatState.IsLiveCombat()` (Fogmog.cs:64) and the port summons unconditionally (fogmog.py:93-100)",
       "verdict": "faithful",
       "rationale": "Executed: CombatState.cs:608 `public bool IsLiveCombat() { return true; }` -- the real combat state's implementation is a constant true, and the only other implementers are ICombatState.cs's declaration and NullCombatState.cs (a mock). So the guard is a test/mock hatch, never false in a shipping combat, and the port's unconditional summon is the shipping behaviour. This is PROMPT.md bug class 18's shape checked before verdicting."
     },
     {
       "what": "The summoned Eye With Teeth is added during the ENEMY side, where CombatManager.AfterCreatureAdded declines to roll a move (monster_state_machine step 48 / G9 clause b)",
       "verdict": "faithful",
-      "rationale": "G9 clause b is the seam's dormant gap and is not re-verdicted. It cannot bite through THIS summon anyway, because EyeWithTeeth is a hand-rolled Monster with no machine and no roll on either side: executed, `py audit/tools/monster_probes_b01.py chain` shows 0 MonsterAi draws over 20 of its turns. The sim's CreatureCmd.add does roll the spawn's parity HP on the Niche stream before it joins the list (cmds.py:249-253), mirroring CreateCreature, and assigns the CombatId in attach order."
+      "rationale": "G9 clause b is the seam's dormant gap and is not re-verdicted. It cannot bite through THIS summon anyway, because EyeWithTeeth is a hand-rolled Monster with no machine and no roll on either side: executed, `py audit/tools/monster_probes_b01.py chain` shows 0 MonsterAi draws over 20 of its turns. The sim's CreatureCmd.add does roll the spawn's parity HP on the Niche stream before it joins the list (cmds.py:819-827), mirroring CreateCreature, and assigns the CombatId in attach order."
     },
     {
       "what": "Move numerics: SwipeDamage 8 + StrengthPower 1, HeadbuttDamage 14, and the swipe intent's second BuffIntent",
       "verdict": "faithful",
-      "rationale": "Read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) -- the LAST argument (PROMPT.md v5). Fogmog.cs:32 (DeadlyEnemies, 9, 8) -> 8 = _SWIPE_DMG; :34 (16, 14) -> 14 = _HEADBUTT_DMG (fogmog.py:19-21). SwipeMove damages then applies StrengthPower 1m (:72-76) and the port keeps that order (fogmog.py:97-101); HeadbuttMove applies nothing (:79-85 vs :103-104). Both swipe nodes telegraph SingleAttackIntent + BuffIntent and the port gives them one shared `swipe_intent` with also=(BUFF,)."
+      "rationale": "Read from the NON-ascension branch of AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) -- the LAST argument (PROMPT.md v5). Fogmog.cs:32 (DeadlyEnemies, 9, 8) -> 8 = _SWIPE_DMG; :34 (16, 14) -> 14 = _HEADBUTT_DMG (fogmog.py:19-21). SwipeMove damages then applies StrengthPower 1m (:72-76) and the port keeps that order (fogmog.py:102-106); HeadbuttMove applies nothing (:79-85 vs :103-104). Both swipe nodes telegraph SingleAttackIntent + BuffIntent and the port gives them one shared `swipe_intent` with also=(BUFF,)."
     },
     {
       "what": "ShouldShowMoveInBestiary hides SWIPE_RANDOM_MOVE and HEADBUTT_MOVE (Fogmog.cs:105-112)",
@@ -74,7 +74,7 @@
     {
       "what": "Range-bound convention on the initial-HP roll: Rng.NextInt(min, max) is max-EXCLUSIVE (Rng.cs:101-109) where Python's random.randint(a, b) INCLUDES b",
       "verdict": "faithful",
-      "rationale": "Checked as a convention, not just as constants. The GAME's range is [MinInitialHp, MaxInitialHp] INCLUSIVE, because Creature.SetUniqueMonsterHpValue compensates for the exclusive bound explicitly: `int num = Monster.MaxInitialHp + 1` (Creature.cs:378) feeds BOTH `Enumerable.Range(minInitialHp, num - minInitialHp)` (Creature.cs:379) and the fallback `rng.NextInt(minInitialHp, num)` (Creature.cs:383). The sim's parity port matches on both arms: `candidates = [v for v in range(lo, hi + 1) ...]` picked with `niche.next_int_range(0, len(candidates))`, fallback `niche.next_int_range(lo, hi + 1)` (combat.py:224-243), and `next_int_range` is itself max-exclusive (rng.py:182-186) -- so the two `+ 1`s land exactly where C# puts them. This unit's MaxInitialHp is `=> MinInitialHp`, so the range is the single value 74 and no endpoint can be lost; the check is recorded anyway because an off-by-one would turn a one-element candidate list into an empty one and change which ARM of SetUniqueMonsterHpValue runs (NextItem vs NextInt), which is a stream-position difference even when the HP is identical. Executed (`py audit/tools/monster_probes_b01.py hprange`, 400 seeded combats per unit): declared [74,74], observed [74,74], and the observed set is exactly the full inclusive range, so the top endpoint 74 does occur. All 15 units of this batch pass. NOTE the legacy (non-parity) path is also right by a different route: Monster.__init__'s `rng.randint(self.min_hp, self.max_hp)` (monsters/base.py:78) is inclusive on both ends, matching the game's inclusive range, and in parity mode it is overwritten before anything reads it. Rule 7: Creature.cs, Rng.cs, sts2_rl/combat.py and sts2_rl/rng.py are hashed in extra_sources."
+      "rationale": "Checked as a convention, not just as constants. The GAME's range is [MinInitialHp, MaxInitialHp] INCLUSIVE, because Creature.SetUniqueMonsterHpValue compensates for the exclusive bound explicitly: `int num = Monster.MaxInitialHp + 1` (Creature.cs:378) feeds BOTH `Enumerable.Range(minInitialHp, num - minInitialHp)` (Creature.cs:379) and the fallback `rng.NextInt(minInitialHp, num)` (Creature.cs:383). The sim's parity port matches on both arms: `candidates = [v for v in range(lo, hi + 1) ...]` picked with `niche.next_int_range(0, len(candidates))`, fallback `niche.next_int_range(lo, hi + 1)` (combat.py:422-442), and `next_int_range` is itself max-exclusive (rng.py:182-186) -- so the two `+ 1`s land exactly where C# puts them. This unit's MaxInitialHp is `=> MinInitialHp`, so the range is the single value 74 and no endpoint can be lost; the check is recorded anyway because an off-by-one would turn a one-element candidate list into an empty one and change which ARM of SetUniqueMonsterHpValue runs (NextItem vs NextInt), which is a stream-position difference even when the HP is identical. Executed (`py audit/tools/monster_probes_b01.py hprange`, 400 seeded combats per unit): declared [74,74], observed [74,74], and the observed set is exactly the full inclusive range, so the top endpoint 74 does occur. All 15 units of this batch pass. NOTE the legacy (non-parity) path is also right by a different route: Monster.__init__'s `rng.randint(self.min_hp, self.max_hp)` (monsters/base.py:78) is inclusive on both ends, matching the game's inclusive range, and in parity mode it is overwritten before anything reads it. Rule 7: Creature.cs, Rng.cs, sts2_rl/combat.py and sts2_rl/rng.py are hashed in extra_sources."
     }
   ],
   "verdict": "waiver",
@@ -97,12 +97,12 @@
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {

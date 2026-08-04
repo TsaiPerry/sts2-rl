@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -39,7 +39,7 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.SHOP (membership_card.py:13)",
       "verdict": "faithful",
-      "rationale": "Matches MembershipCard.cs:16. Live rather than declarative: Shop rarity is what puts the relic in the grab bag AND on the shelf, and it sets merchant_cost 200 (relics/base.py:54-62)."
+      "rationale": "Matches MembershipCard.cs:16. Live rather than declarative: Shop rarity is what puts the relic in the grab bag AND on the shelf, and it sets merchant_cost 200 (relics/base.py)."
     },
     "ModifyMerchantPrice": {
       "maps_to": "modify_merchant_price (sts2_rl/relics/membership_card.py:16-20), folded per read by the MerchantEntry.cost property (sts2_rl/shop.py:178-183)",

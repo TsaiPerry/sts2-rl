@@ -1,0 +1,2311 @@
+[
+  {
+    "unit": "monster/scroll_of_biting",
+    "class": "b",
+    "files": [
+      {
+        "path": "src/Core/Models/Monsters/ScrollOfBiting.cs",
+        "side": "game",
+        "recorded_sha": "36138c02e24b461e6145e591ba695baa9cdd52fa5debf13fbfe45416616c3d26",
+        "current_sha": "36138c02e24b461e6145e591ba695baa9cdd52fa5debf13fbfe45416616c3d26",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/glory/scroll_of_biting.py",
+        "side": "sim",
+        "recorded_sha": "553067979e60041c347356874dcc2f084ebf7c275bfc99d95d63010adf836ab6",
+        "current_sha": "553067979e60041c347356874dcc2f084ebf7c275bfc99d95d63010adf836ab6",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/glory/scroll_of_biting.py:35",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/scroll_of_biting.py:36",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/scroll_of_biting.py:38-49",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/scroll_of_biting.py:38-49",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/scroll_of_biting.py:23",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/scroll_of_biting.py:45-46",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/scroll_of_biting.py:51-68",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/scroll_of_biting.py:66-68",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/scroll_of_biting.py:100-108",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/scroll_of_biting.py:104",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/scroll_of_biting.py:96-101",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/scroll_of_biting.py:19-23",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/scroll_of_biting.py:38-46",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "src/Core/Models/Encounters/ScrollsOfBitingWeak.cs",
+        "side": "game",
+        "recorded_sha": "fc0972a52008d577df97e1c32942d8e2b0beb1e8d2977b73e19caa2630a2b8f3",
+        "current_sha": "fc0972a52008d577df97e1c32942d8e2b0beb1e8d2977b73e19caa2630a2b8f3",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Models/Encounters/ScrollsOfBitingNormal.cs",
+        "side": "game",
+        "recorded_sha": "a6b35af7e55980d1b6886fe48fbb92dd8b7fd7ca27f70c4766a0025add70b9d6",
+        "current_sha": "a6b35af7e55980d1b6886fe48fbb92dd8b7fd7ca27f70c4766a0025add70b9d6",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Models/EncounterModel.cs",
+        "side": "game",
+        "recorded_sha": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
+        "current_sha": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Nodes/Combat/NCreature.cs",
+        "side": "game",
+        "recorded_sha": "905d28a4ca154006d145cf33e967d34c945770eb5c29462ff28160419e52de11",
+        "current_sha": "905d28a4ca154006d145cf33e967d34c945770eb5c29462ff28160419e52de11",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/state_machine.py",
+        "side": "sim",
+        "recorded_sha": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
+        "current_sha": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/state_machine.py:301",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "sts2_rl/combat.py",
+        "side": "sim",
+        "recorded_sha": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+        "current_sha": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/combat_rng.py",
+        "side": "sim",
+        "recorded_sha": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
+        "current_sha": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/cmds.py",
+        "side": "sim",
+        "recorded_sha": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+        "current_sha": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/rooms.py",
+        "side": "sim",
+        "recorded_sha": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+        "current_sha": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
+        "historical_found": true,
+        "spans": []
+      }
+    ],
+    "reason": "cites unhashed file: relics/ruined_helmet.py; cites unhashed file: relics/unsettling_lamp.py; cites unhashed file: relics/vambrace.py; cites unhashed file: relics/paels_legion.py; cites unhashed file: powers.py; cites unhashed file: RandomBranchState.cs; cites unhashed file: run.py"
+  },
+  {
+    "unit": "monster/sewer_clam",
+    "class": "b",
+    "files": [
+      {
+        "path": "src/Core/Models/Monsters/SewerClam.cs",
+        "side": "game",
+        "recorded_sha": "cf6a5cae946be06f049684e8625ae551a0daf0ed1dcb7a936cd7ec55fba152f2",
+        "current_sha": "cf6a5cae946be06f049684e8625ae551a0daf0ed1dcb7a936cd7ec55fba152f2",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/underdocks/sewer_clam.py",
+        "side": "sim",
+        "recorded_sha": "27f5f7ea740f0d937117ea30e3c62794c8166ea9f3f1a2f14615836a3538f236",
+        "current_sha": "27f5f7ea740f0d937117ea30e3c62794c8166ea9f3f1a2f14615836a3538f236",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/underdocks/sewer_clam.py:23",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/underdocks/sewer_clam.py:24",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/underdocks/sewer_clam.py:26-30",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/underdocks/sewer_clam.py:26-30",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/underdocks/sewer_clam.py:30",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/underdocks/sewer_clam.py:32-41",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/underdocks/sewer_clam.py:39-41",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/underdocks/sewer_clam.py:13-15",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/underdocks/sewer_clam.py:19-20",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "sts2_rl/powers.py",
+        "side": "sim",
+        "recorded_sha": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+        "current_sha": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
+        "historical_found": false,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/combat.py",
+        "side": "sim",
+        "recorded_sha": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+        "current_sha": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/combat.py:356",
+            "identical": false
+          },
+          {
+            "cite": "sts2_rl/combat.py:272-274",
+            "identical": false
+          }
+        ]
+      }
+    ],
+    "reason": "cites unhashed file: relics/ruined_helmet.py; cites unhashed file: relics/unsettling_lamp.py; cites unhashed file: relics/vambrace.py; cites unhashed file: relics/paels_legion.py; cites unhashed file: state_machine.py; historical text not recoverable: sts2_rl/powers.py; span changed: sts2_rl/combat.py"
+  },
+  {
+    "unit": "monster/shrinker_beetle",
+    "class": "b",
+    "files": [
+      {
+        "path": "src/Core/Models/Monsters/ShrinkerBeetle.cs",
+        "side": "game",
+        "recorded_sha": "55ec3478a5bfe0840864f6b66d375b0e8fd548e97dec639d6d68b0c1c5d18eb7",
+        "current_sha": "55ec3478a5bfe0840864f6b66d375b0e8fd548e97dec639d6d68b0c1c5d18eb7",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/overgrowth/shrinker_beetle.py",
+        "side": "sim",
+        "recorded_sha": "37bf6cdde5a527615bbb931c083ecd1c8c65cff8573a6096a78806e08d90f57e",
+        "current_sha": "37bf6cdde5a527615bbb931c083ecd1c8c65cff8573a6096a78806e08d90f57e",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/overgrowth/shrinker_beetle.py:20",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/overgrowth/shrinker_beetle.py:21",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/overgrowth/shrinker_beetle.py:13",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/overgrowth/shrinker_beetle.py:40",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/overgrowth/shrinker_beetle.py:31",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/overgrowth/shrinker_beetle.py:14-15",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "src/Core/Entities/Creatures/Creature.cs",
+        "side": "game",
+        "recorded_sha": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+        "current_sha": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Random/Rng.cs",
+        "side": "game",
+        "recorded_sha": "495ff2a8884105d5b3e50942c63379d91dedeb80d0e7ff86cf8669ccbc519974",
+        "current_sha": "495ff2a8884105d5b3e50942c63379d91dedeb80d0e7ff86cf8669ccbc519974",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/combat.py",
+        "side": "sim",
+        "recorded_sha": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+        "current_sha": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/combat.py:224-243",
+            "identical": false
+          }
+        ]
+      },
+      {
+        "path": "sts2_rl/monsters/base.py",
+        "side": "sim",
+        "recorded_sha": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+        "current_sha": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/state_machine.py",
+        "side": "sim",
+        "recorded_sha": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
+        "current_sha": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/rng.py",
+        "side": "sim",
+        "recorded_sha": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
+        "current_sha": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/rng.py:182-186",
+            "identical": true
+          }
+        ]
+      }
+    ],
+    "reason": "span changed: sts2_rl/combat.py"
+  },
+  {
+    "unit": "monster/slimed_berserker",
+    "class": "b",
+    "files": [
+      {
+        "path": "src/Core/Models/Monsters/SlimedBerserker.cs",
+        "side": "game",
+        "recorded_sha": "b7704ffc1c64d6a38a5e35acd6e0588f5e47171b1579c5e01cecb4d03dad5807",
+        "current_sha": "b7704ffc1c64d6a38a5e35acd6e0588f5e47171b1579c5e01cecb4d03dad5807",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/glory/slimed_berserker.py",
+        "side": "sim",
+        "recorded_sha": "6a6aebce17e4366c82891fcf7be8e0187b9ff0f6f690b6f2448d15c5cbf1201a",
+        "current_sha": "6a6aebce17e4366c82891fcf7be8e0187b9ff0f6f690b6f2448d15c5cbf1201a",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/glory/slimed_berserker.py:29",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/slimed_berserker.py:30",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/slimed_berserker.py:31-51",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/slimed_berserker.py:47-50",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/slimed_berserker.py:13-18",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/slimed_berserker.py:65-66",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/slimed_berserker.py:53-57",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/slimed_berserker.py:32-34",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "src/Core/Commands/CardPileCmd.cs",
+        "side": "game",
+        "recorded_sha": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+        "current_sha": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/MonsterMoves/Intents/StatusIntent.cs",
+        "side": "game",
+        "recorded_sha": "3b9bf8b0cade87ff11671285cc5e656cd353506ce8c5a69e0963e0e1a9944d77",
+        "current_sha": "3b9bf8b0cade87ff11671285cc5e656cd353506ce8c5a69e0963e0e1a9944d77",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/cmds.py",
+        "side": "sim",
+        "recorded_sha": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+        "current_sha": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/cmds.py:471",
+            "identical": false
+          }
+        ]
+      },
+      {
+        "path": "sts2_rl/monsters/base.py",
+        "side": "sim",
+        "recorded_sha": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+        "current_sha": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/powers.py",
+        "side": "sim",
+        "recorded_sha": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+        "current_sha": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
+        "historical_found": false,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/rooms.py",
+        "side": "sim",
+        "recorded_sha": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+        "current_sha": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
+        "historical_found": true,
+        "spans": []
+      }
+    ],
+    "reason": "cites unhashed file: relics/unsettling_lamp.py; span changed: sts2_rl/cmds.py; historical text not recoverable: sts2_rl/powers.py"
+  },
+  {
+    "unit": "monster/slithering_strangler",
+    "class": "b",
+    "files": [
+      {
+        "path": "src/Core/Models/Monsters/SlitheringStrangler.cs",
+        "side": "game",
+        "recorded_sha": "fbbef8cd7c935e145494246622bbea6ffc0f5691697a302c58df0bd22fe3f967",
+        "current_sha": "fbbef8cd7c935e145494246622bbea6ffc0f5691697a302c58df0bd22fe3f967",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/overgrowth/slithering_strangler.py",
+        "side": "sim",
+        "recorded_sha": "8e0893bdecbd3aa8f7e314ae9657fe3dfa61f1b140f217299d10c12b504891ed",
+        "current_sha": "8e0893bdecbd3aa8f7e314ae9657fe3dfa61f1b140f217299d10c12b504891ed",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/overgrowth/slithering_strangler.py:22-23",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/overgrowth/slithering_strangler.py:22-23",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/overgrowth/slithering_strangler.py:28",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/overgrowth/slithering_strangler.py:14-17",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/overgrowth/slithering_strangler.py:64-87",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/overgrowth/slithering_strangler.py:66-77",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "src/Core/Models/Encounters/SlitheringStranglerNormal.cs",
+        "side": "game",
+        "recorded_sha": "1af7c46608c9701eae1723d222a9fe3c987d313f64875696c9daf205a351fd6f",
+        "current_sha": "1af7c46608c9701eae1723d222a9fe3c987d313f64875696c9daf205a351fd6f",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/MonsterMoves/MonsterMoveStateMachine/RandomBranchState.cs",
+        "side": "game",
+        "recorded_sha": "40bdd029d51ff7dfe94e907f90add0d630bcfa617fc36ceb182798c330ee0792",
+        "current_sha": "40bdd029d51ff7dfe94e907f90add0d630bcfa617fc36ceb182798c330ee0792",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/cmds.py",
+        "side": "sim",
+        "recorded_sha": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+        "current_sha": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/overgrowth/ceremonial_beast.py",
+        "side": "sim",
+        "recorded_sha": "3890c1e4b5d92983eebe18b258a71d2c4a6e0fa192bcbe215116acfe046f16f3",
+        "current_sha": "3890c1e4b5d92983eebe18b258a71d2c4a6e0fa192bcbe215116acfe046f16f3",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/state_machine.py",
+        "side": "sim",
+        "recorded_sha": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
+        "current_sha": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/rooms.py",
+        "side": "sim",
+        "recorded_sha": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+        "current_sha": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
+        "historical_found": true,
+        "spans": []
+      }
+    ],
+    "reason": "cites unhashed file: run.py; cites unhashed file: EncounterModel.cs"
+  },
+  {
+    "unit": "monster/snapping_jaxfruit",
+    "class": "b",
+    "files": [
+      {
+        "path": "src/Core/Models/Monsters/SnappingJaxfruit.cs",
+        "side": "game",
+        "recorded_sha": "8c6f621bc495af4e61ee670374431ad513cd3936d29ec42dc9537704d92c27ef",
+        "current_sha": "8c6f621bc495af4e61ee670374431ad513cd3936d29ec42dc9537704d92c27ef",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/overgrowth/snapping_jaxfruit.py",
+        "side": "sim",
+        "recorded_sha": "484416c4c857d3d8746e481aba663adb4f89ba76fce2b2cc59e34ad1159be594",
+        "current_sha": "484416c4c857d3d8746e481aba663adb4f89ba76fce2b2cc59e34ad1159be594",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/overgrowth/snapping_jaxfruit.py:18",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/overgrowth/snapping_jaxfruit.py:19",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/overgrowth/snapping_jaxfruit.py:21-22",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/overgrowth/snapping_jaxfruit.py:24-32",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/overgrowth/snapping_jaxfruit.py:12-13",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/overgrowth/snapping_jaxfruit.py:32",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/overgrowth/snapping_jaxfruit.py:35-42",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "src/Core/Entities/Creatures/Creature.cs",
+        "side": "game",
+        "recorded_sha": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+        "current_sha": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Models/MonsterModel.cs",
+        "side": "game",
+        "recorded_sha": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+        "current_sha": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Random/Rng.cs",
+        "side": "game",
+        "recorded_sha": "495ff2a8884105d5b3e50942c63379d91dedeb80d0e7ff86cf8669ccbc519974",
+        "current_sha": "495ff2a8884105d5b3e50942c63379d91dedeb80d0e7ff86cf8669ccbc519974",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/combat.py",
+        "side": "sim",
+        "recorded_sha": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+        "current_sha": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/combat.py:224-243",
+            "identical": false
+          }
+        ]
+      },
+      {
+        "path": "sts2_rl/monsters/base.py",
+        "side": "sim",
+        "recorded_sha": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+        "current_sha": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/overgrowth/flyconid.py",
+        "side": "sim",
+        "recorded_sha": "702bcbe5b830d0c6b2199f4b2328d24028290098aa5494342ec13ebd02926957",
+        "current_sha": "702bcbe5b830d0c6b2199f4b2328d24028290098aa5494342ec13ebd02926957",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/rng.py",
+        "side": "sim",
+        "recorded_sha": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
+        "current_sha": "20feb30bda9366b0fd6a9213ee3d96648563a761a731c42c2b1145915324a091",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/rng.py:182-186",
+            "identical": true
+          }
+        ]
+      }
+    ],
+    "reason": "cites unhashed file: cubex_construct.py; cites unhashed file: fogmog.py; span changed: sts2_rl/combat.py"
+  },
+  {
+    "unit": "monster/soul_fysh",
+    "class": "a",
+    "files": [
+      {
+        "path": "src/Core/Models/Monsters/SoulFysh.cs",
+        "side": "game",
+        "recorded_sha": "728ac2eedd08ea4d974abfb7801797c6eb2625244a01206446e964695076ab24",
+        "current_sha": "728ac2eedd08ea4d974abfb7801797c6eb2625244a01206446e964695076ab24",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/underdocks/soul_fysh.py",
+        "side": "sim",
+        "recorded_sha": "4c072f390bc091b4197a1699ce769ae2fa5f78d5b8fa00718d14226dcca6c87c",
+        "current_sha": "4c072f390bc091b4197a1699ce769ae2fa5f78d5b8fa00718d14226dcca6c87c",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/underdocks/soul_fysh.py:33-59",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/underdocks/soul_fysh.py:13-18",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/underdocks/soul_fysh.py:61-65",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/underdocks/soul_fysh.py:81-85",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "sts2_rl/cmds.py",
+        "side": "sim",
+        "recorded_sha": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+        "current_sha": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
+        "historical_found": true,
+        "spans": []
+      }
+    ],
+    "reason": "all cited spans byte-identical"
+  },
+  {
+    "unit": "monster/soul_nexus",
+    "class": "b",
+    "files": [
+      {
+        "path": "src/Core/Models/Monsters/SoulNexus.cs",
+        "side": "game",
+        "recorded_sha": "7b30b1db0adbf736c71c4121d5ebf0fc6e1597f5be434a7017b0d1e3a204f8a3",
+        "current_sha": "7b30b1db0adbf736c71c4121d5ebf0fc6e1597f5be434a7017b0d1e3a204f8a3",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/glory/soul_nexus.py",
+        "side": "sim",
+        "recorded_sha": "614cdb3a8d5503e007e078e4b9a2fd7c57acc9afaad2869e88c27242ec035cbb",
+        "current_sha": "614cdb3a8d5503e007e078e4b9a2fd7c57acc9afaad2869e88c27242ec035cbb",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/glory/soul_nexus.py:35",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/soul_nexus.py:36",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/soul_nexus.py:38-55",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/soul_nexus.py:52-54",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/soul_nexus.py:52",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/soul_nexus.py:63-68",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/soul_nexus.py:71-74",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "src/Core/MonsterMoves/MonsterMoveStateMachine/RandomBranchState.cs",
+        "side": "game",
+        "recorded_sha": "40bdd029d51ff7dfe94e907f90add0d630bcfa617fc36ceb182798c330ee0792",
+        "current_sha": "40bdd029d51ff7dfe94e907f90add0d630bcfa617fc36ceb182798c330ee0792",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/MonsterMoves/MonsterMoveStateMachine/MonsterMoveStateMachine.cs",
+        "side": "game",
+        "recorded_sha": "467f003e8a7586372fb8a16756a05b40c552e52cf19d32441ed2e2924cec8dd3",
+        "current_sha": "467f003e8a7586372fb8a16756a05b40c552e52cf19d32441ed2e2924cec8dd3",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Models/MonsterModel.cs",
+        "side": "game",
+        "recorded_sha": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+        "current_sha": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Models/Encounters/SoulNexusElite.cs",
+        "side": "game",
+        "recorded_sha": "2cbd4b0d80faa7420d68f29ceb0d4b000aa2b129a9ca629193657729b1e6d0d5",
+        "current_sha": "2cbd4b0d80faa7420d68f29ceb0d4b000aa2b129a9ca629193657729b1e6d0d5",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Commands/Builders/AttackCommand.cs",
+        "side": "game",
+        "recorded_sha": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+        "current_sha": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/state_machine.py",
+        "side": "sim",
+        "recorded_sha": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
+        "current_sha": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/state_machine.py:201-204",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "sts2_rl/monsters/base.py",
+        "side": "sim",
+        "recorded_sha": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+        "current_sha": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/cmds.py",
+        "side": "sim",
+        "recorded_sha": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+        "current_sha": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/combat.py",
+        "side": "sim",
+        "recorded_sha": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+        "current_sha": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/powers.py",
+        "side": "sim",
+        "recorded_sha": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+        "current_sha": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
+        "historical_found": false,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/rooms.py",
+        "side": "sim",
+        "recorded_sha": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+        "current_sha": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/glory/__init__.py",
+        "side": "sim",
+        "recorded_sha": "e6c59412b30ced070af1f3997caee4230e37919816dada6103abf557dd88ef8d",
+        "current_sha": "e6c59412b30ced070af1f3997caee4230e37919816dada6103abf557dd88ef8d",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/glory/__init__.py:74",
+            "identical": true
+          }
+        ]
+      }
+    ],
+    "reason": "cites unhashed file: NCreature.cs; historical text not recoverable: sts2_rl/powers.py"
+  },
+  {
+    "unit": "monster/spiny_toad",
+    "class": "b",
+    "files": [
+      {
+        "path": "src/Core/Models/Monsters/SpinyToad.cs",
+        "side": "game",
+        "recorded_sha": "0d9805768700deb448bb21bc31ed83daadb9da1c2b42a365281583e343323e4e",
+        "current_sha": "0d9805768700deb448bb21bc31ed83daadb9da1c2b42a365281583e343323e4e",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/hive/spiny_toad.py",
+        "side": "sim",
+        "recorded_sha": "56194dc18e5e87f815b9d8a7326f863f5f3762d17245e4f696b3fe62618fd060",
+        "current_sha": "56194dc18e5e87f815b9d8a7326f863f5f3762d17245e4f696b3fe62618fd060",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/hive/spiny_toad.py:23",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/spiny_toad.py:24",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/spiny_toad.py:26-40",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/spiny_toad.py:13",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/spiny_toad.py:47-51",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/spiny_toad.py:45",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/spiny_toad.py:57-60",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "src/Core/Models/MonsterModel.cs",
+        "side": "game",
+        "recorded_sha": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+        "current_sha": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Commands/PowerCmd.cs",
+        "side": "game",
+        "recorded_sha": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+        "current_sha": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/cmds.py",
+        "side": "sim",
+        "recorded_sha": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+        "current_sha": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/rooms.py",
+        "side": "sim",
+        "recorded_sha": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+        "current_sha": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/base.py",
+        "side": "sim",
+        "recorded_sha": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+        "current_sha": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
+        "historical_found": true,
+        "spans": []
+      }
+    ],
+    "reason": "cites unhashed file: powers.py; cites unhashed file: powers.py; cites unhashed file: powers.py; cites unhashed file: powers.py; cites unhashed file: relics/ruined_helmet.py; cites unhashed file: relics/unsettling_lamp.py; cites unhashed file: unsettling_lamp.py"
+  },
+  {
+    "unit": "monster/terror_eel",
+    "class": "b",
+    "files": [
+      {
+        "path": "src/Core/Models/Monsters/TerrorEel.cs",
+        "side": "game",
+        "recorded_sha": "ac1efcdeb3e8238b6ce80db5e1a9518ff0a9b08e205289ceeb7c477a3ec7628b",
+        "current_sha": "ac1efcdeb3e8238b6ce80db5e1a9518ff0a9b08e205289ceeb7c477a3ec7628b",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/underdocks/terror_eel.py",
+        "side": "sim",
+        "recorded_sha": "314c8d55ff9856dba52e426492d11b02d44fc8562bd52ccab276292b3f04c3cb",
+        "current_sha": "314c8d55ff9856dba52e426492d11b02d44fc8562bd52ccab276292b3f04c3cb",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/underdocks/terror_eel.py:31-35",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/underdocks/terror_eel.py:31-35",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/underdocks/terror_eel.py:37-56",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/underdocks/terror_eel.py:37-56",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/underdocks/terror_eel.py:58-65",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/underdocks/terror_eel.py:13-18",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "src/Core/Combat/CombatManager.cs",
+        "side": "game",
+        "recorded_sha": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+        "current_sha": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Entities/Creatures/Creature.cs",
+        "side": "game",
+        "recorded_sha": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+        "current_sha": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Models/Powers/ShriekPower.cs",
+        "side": "game",
+        "recorded_sha": "4695f16955ff21fd5b84bb8403067ab0b55e982c8153b1eca3ea05bbeda233df",
+        "current_sha": "4695f16955ff21fd5b84bb8403067ab0b55e982c8153b1eca3ea05bbeda233df",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/powers.py",
+        "side": "sim",
+        "recorded_sha": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+        "current_sha": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
+        "historical_found": false,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/cmds.py",
+        "side": "sim",
+        "recorded_sha": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+        "current_sha": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
+        "historical_found": true,
+        "spans": []
+      }
+    ],
+    "reason": "historical text not recoverable: sts2_rl/powers.py"
+  },
+  {
+    "unit": "monster/test_subject",
+    "class": "b",
+    "files": [
+      {
+        "path": "src/Core/Models/Monsters/TestSubject.cs",
+        "side": "game",
+        "recorded_sha": "b7e6e24a3633e53c5e272001d4ea0f973122e7d69e20370e76da872301c8b675",
+        "current_sha": "b7e6e24a3633e53c5e272001d4ea0f973122e7d69e20370e76da872301c8b675",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/glory/test_subject.py",
+        "side": "sim",
+        "recorded_sha": "800eed5a3cd3bb1471be6533ce6035049a0b185d8cf2662e0019126b77840fa7",
+        "current_sha": "800eed5a3cd3bb1471be6533ce6035049a0b185d8cf2662e0019126b77840fa7",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:51",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:44-49",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:52",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:53",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:55-62",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:59-62",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:67-113",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:22-31",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:115-119",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:115-119",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:121-125",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:19-20",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:34",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:71",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:106-107",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:128",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:131-141",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:64-65",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:96",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:166-167",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/test_subject.py:171-174",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "src/Core/Commands/CreatureCmd.cs",
+        "side": "game",
+        "recorded_sha": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+        "current_sha": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Commands/Builders/AttackCommand.cs",
+        "side": "game",
+        "recorded_sha": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+        "current_sha": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Entities/Creatures/Creature.cs",
+        "side": "game",
+        "recorded_sha": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+        "current_sha": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Models/MonsterModel.cs",
+        "side": "game",
+        "recorded_sha": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+        "current_sha": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Models/PowerModel.cs",
+        "side": "game",
+        "recorded_sha": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+        "current_sha": "2cc44bddbdd6de6e1d3ded50110a0aace66bc37a942dbf1c5af2af08b9a80dbc",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Models/Powers/AdaptablePower.cs",
+        "side": "game",
+        "recorded_sha": "d52696c9f8e9b8753844c46a7d9e1a8644bcadcf332a93042fa8440ad91285d4",
+        "current_sha": "d52696c9f8e9b8753844c46a7d9e1a8644bcadcf332a93042fa8440ad91285d4",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Models/Powers/PainfulStabsPower.cs",
+        "side": "game",
+        "recorded_sha": "831faebcd0e3abddd1d9970cef5ccb5968e8c6f82c5c8531ab4f37ab7d2d71a9",
+        "current_sha": "831faebcd0e3abddd1d9970cef5ccb5968e8c6f82c5c8531ab4f37ab7d2d71a9",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Models/Relics/GremlinHorn.cs",
+        "side": "game",
+        "recorded_sha": "a132a06a66a9e90ee324e2a2316cbfb4f324705e0fef8e3c07561ce73b605ae6",
+        "current_sha": "a132a06a66a9e90ee324e2a2316cbfb4f324705e0fef8e3c07561ce73b605ae6",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/MonsterMoves/MonsterMoveStateMachine/ConditionalBranchState.cs",
+        "side": "game",
+        "recorded_sha": "8c5ef3a0e557fd5fc2c49b0f38c9848fd02a205cd116009aed406b7667b599f3",
+        "current_sha": "8c5ef3a0e557fd5fc2c49b0f38c9848fd02a205cd116009aed406b7667b599f3",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/MonsterMoves/MonsterMoveStateMachine/MonsterMoveStateMachine.cs",
+        "side": "game",
+        "recorded_sha": "467f003e8a7586372fb8a16756a05b40c552e52cf19d32441ed2e2924cec8dd3",
+        "current_sha": "467f003e8a7586372fb8a16756a05b40c552e52cf19d32441ed2e2924cec8dd3",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/MonsterMoves/MonsterMoveStateMachine/MoveState.cs",
+        "side": "game",
+        "recorded_sha": "6e3b275ec182774006eb6e1451bc4d835c76ea033fb0a6c73a31d1224473007e",
+        "current_sha": "6e3b275ec182774006eb6e1451bc4d835c76ea033fb0a6c73a31d1224473007e",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Models/Encounters/TestSubjectBoss.cs",
+        "side": "game",
+        "recorded_sha": "2b79aee0c4e2dc5af23b39aecddd9c808c0954c26347d6080366fc54fad96c4f",
+        "current_sha": "2b79aee0c4e2dc5af23b39aecddd9c808c0954c26347d6080366fc54fad96c4f",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/state_machine.py",
+        "side": "sim",
+        "recorded_sha": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
+        "current_sha": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/state_machine.py:124-127",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/state_machine.py:129-131",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/state_machine.py:133-134",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/state_machine.py:262-266",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/state_machine.py:228-232",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/state_machine.py:119-121",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "sts2_rl/monsters/base.py",
+        "side": "sim",
+        "recorded_sha": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+        "current_sha": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/cmds.py",
+        "side": "sim",
+        "recorded_sha": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+        "current_sha": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/cmds.py:30-65",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/cmds.py:67-84",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/cmds.py:30-65",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/cmds.py:67-84",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/cmds.py:56-65",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "sts2_rl/hooks.py",
+        "side": "sim",
+        "recorded_sha": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+        "current_sha": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/combat.py",
+        "side": "sim",
+        "recorded_sha": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+        "current_sha": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/combat.py:240-244",
+            "identical": false
+          },
+          {
+            "cite": "sts2_rl/combat.py:272-274",
+            "identical": false
+          },
+          {
+            "cite": "sts2_rl/combat.py:279-281",
+            "identical": false
+          },
+          {
+            "cite": "sts2_rl/combat.py:266-268",
+            "identical": false
+          },
+          {
+            "cite": "sts2_rl/combat.py:356",
+            "identical": false
+          }
+        ]
+      },
+      {
+        "path": "sts2_rl/creatures.py",
+        "side": "sim",
+        "recorded_sha": "1c73063f3ca726775f0a121fe826933fe8a4dfdcbda18bb0e0d4dfacff69de7f",
+        "current_sha": "9152cb64c277b8c7e5162bcae7d59af41f160a1a347ac586423c41af5be9c530",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/powers.py",
+        "side": "sim",
+        "recorded_sha": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+        "current_sha": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
+        "historical_found": false,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/relics/gremlin_horn.py",
+        "side": "sim",
+        "recorded_sha": "de5871f094733c2b80a069680ef27d2d68bc3ef069a3ee2218ed445447b7e4ff",
+        "current_sha": "de5871f094733c2b80a069680ef27d2d68bc3ef069a3ee2218ed445447b7e4ff",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/rooms.py",
+        "side": "sim",
+        "recorded_sha": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+        "current_sha": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/full_env.py",
+        "side": "sim",
+        "recorded_sha": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+        "current_sha": "4ba9a145147eb29e6f42a10acb70986873bf1bb12d47a12ef764a423572f312f",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/full_env.py:571-572",
+            "identical": false
+          }
+        ]
+      },
+      {
+        "path": "sts2_rl/monsters/glory/__init__.py",
+        "side": "sim",
+        "recorded_sha": "e6c59412b30ced070af1f3997caee4230e37919816dada6103abf557dd88ef8d",
+        "current_sha": "e6c59412b30ced070af1f3997caee4230e37919816dada6103abf557dd88ef8d",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/glory/__init__.py:78",
+            "identical": true
+          }
+        ]
+      }
+    ],
+    "reason": "cites unhashed file: conformance/combat_driver.py; cites unhashed file: ExtraRunFields.cs; cites unhashed file: ProgressSaveManager.cs; cites unhashed file: conformance/combat_driver.py; cites unhashed file: DoomPower.cs; cites unhashed file: DoomPower.cs; cites unhashed file: DoomPower.cs; cites unhashed file: DoomPower.cs; cites unhashed file: DoomPower.cs; cites unhashed file: TorchHeadAmalgam.cs; cites unhashed file: DoomPower.cs; cites unhashed file: IllusionPower.cs; cites unhashed file: NCreatureStateDisplay.cs; cites unhashed file: NPower.cs; cites unhashed file: Aeonglass.cs; cites unhashed file: TheInsatiable.cs; cites unhashed file: Vantom.cs; cites unhashed file: env.py; cites unhashed file: previews.py; span changed: sts2_rl/combat.py; historical text not recoverable: sts2_rl/powers.py; span changed: sts2_rl/full_env.py"
+  },
+  {
+    "unit": "monster/the_forgotten",
+    "class": "b",
+    "files": [
+      {
+        "path": "src/Core/Models/Monsters/TheForgotten.cs",
+        "side": "game",
+        "recorded_sha": "b794f95e50cf2521ba12606ebf1802c1f86893c737b00cf7771add60560965ab",
+        "current_sha": "b794f95e50cf2521ba12606ebf1802c1f86893c737b00cf7771add60560965ab",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/glory/the_lost_and_forgotten.py",
+        "side": "sim",
+        "recorded_sha": "3a48359cec493d954570f09d23a5943f5065c942f6d064397dc6ce97b1c678f1",
+        "current_sha": "3a48359cec493d954570f09d23a5943f5065c942f6d064397dc6ce97b1c678f1",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/glory/the_lost_and_forgotten.py:69",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/the_lost_and_forgotten.py:70",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/the_lost_and_forgotten.py:72-76",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/the_lost_and_forgotten.py:74-76",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/the_lost_and_forgotten.py:82-93",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/the_lost_and_forgotten.py:95-101",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/the_lost_and_forgotten.py:78-80",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/the_lost_and_forgotten.py:107-110",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "src/Core/Models/MonsterModel.cs",
+        "side": "game",
+        "recorded_sha": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+        "current_sha": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Commands/Builders/AttackCommand.cs",
+        "side": "game",
+        "recorded_sha": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+        "current_sha": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Models/Encounters/TheLostAndForgottenNormal.cs",
+        "side": "game",
+        "recorded_sha": "7aef08948cdba811e42407947615cae984bb6c5d9ca11ca3e463f277c6f778cc",
+        "current_sha": "7aef08948cdba811e42407947615cae984bb6c5d9ca11ca3e463f277c6f778cc",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/MonsterMoves/MonsterMoveStateMachine/MonsterMoveStateMachine.cs",
+        "side": "game",
+        "recorded_sha": "467f003e8a7586372fb8a16756a05b40c552e52cf19d32441ed2e2924cec8dd3",
+        "current_sha": "467f003e8a7586372fb8a16756a05b40c552e52cf19d32441ed2e2924cec8dd3",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/state_machine.py",
+        "side": "sim",
+        "recorded_sha": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
+        "current_sha": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/base.py",
+        "side": "sim",
+        "recorded_sha": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+        "current_sha": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/cmds.py",
+        "side": "sim",
+        "recorded_sha": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+        "current_sha": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/combat.py",
+        "side": "sim",
+        "recorded_sha": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+        "current_sha": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/combat.py:240-244",
+            "identical": false
+          },
+          {
+            "cite": "sts2_rl/combat.py:272-274",
+            "identical": false
+          },
+          {
+            "cite": "sts2_rl/combat.py:279-281",
+            "identical": false
+          },
+          {
+            "cite": "sts2_rl/combat.py:266-268",
+            "identical": false
+          },
+          {
+            "cite": "sts2_rl/combat.py:356",
+            "identical": false
+          }
+        ]
+      },
+      {
+        "path": "sts2_rl/powers.py",
+        "side": "sim",
+        "recorded_sha": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+        "current_sha": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
+        "historical_found": false,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/rooms.py",
+        "side": "sim",
+        "recorded_sha": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+        "current_sha": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/glory/__init__.py",
+        "side": "sim",
+        "recorded_sha": "e6c59412b30ced070af1f3997caee4230e37919816dada6103abf557dd88ef8d",
+        "current_sha": "e6c59412b30ced070af1f3997caee4230e37919816dada6103abf557dd88ef8d",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/glory/__init__.py:70",
+            "identical": true
+          }
+        ]
+      }
+    ],
+    "reason": "span changed: sts2_rl/combat.py; historical text not recoverable: sts2_rl/powers.py"
+  },
+  {
+    "unit": "monster/the_insatiable",
+    "class": "b",
+    "files": [
+      {
+        "path": "src/Core/Models/Monsters/TheInsatiable.cs",
+        "side": "game",
+        "recorded_sha": "66c6ad48b3544056e8f8057bea38376c919e70dfc153b79cf9525737eb68660f",
+        "current_sha": "66c6ad48b3544056e8f8057bea38376c919e70dfc153b79cf9525737eb68660f",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/hive/the_insatiable.py",
+        "side": "sim",
+        "recorded_sha": "c69438d60834cfdfc6793f3bd44fe83d4392373b5c7ff4a56687c14e53374b38",
+        "current_sha": "c69438d60834cfdfc6793f3bd44fe83d4392373b5c7ff4a56687c14e53374b38",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/hive/the_insatiable.py:30",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/the_insatiable.py:31",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/the_insatiable.py:33-58",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/the_insatiable.py:71-93",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/the_insatiable.py:64",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/the_insatiable.py:14-15",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/the_insatiable.py:36",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/the_insatiable.py:64-68",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/the_insatiable.py:64",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "src/Core/Commands/CardPileCmd.cs",
+        "side": "game",
+        "recorded_sha": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+        "current_sha": "4bc599d4f58de90db206f2509c6467d7b769bed92a67df7d3fc681a21959fe47",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Commands/PowerCmd.cs",
+        "side": "game",
+        "recorded_sha": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+        "current_sha": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/cmds.py",
+        "side": "sim",
+        "recorded_sha": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+        "current_sha": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/combat_rng.py",
+        "side": "sim",
+        "recorded_sha": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
+        "current_sha": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/rooms.py",
+        "side": "sim",
+        "recorded_sha": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+        "current_sha": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/base.py",
+        "side": "sim",
+        "recorded_sha": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+        "current_sha": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
+        "historical_found": true,
+        "spans": []
+      }
+    ],
+    "reason": "cites unhashed file: Aeonglass.cs; cites unhashed file: TestSubject.cs; cites unhashed file: Vantom.cs; cites unhashed file: powers.py; cites unhashed file: powers.py; cites unhashed file: powers.py; cites unhashed file: powers.py; cites unhashed file: relics/ruined_helmet.py; cites unhashed file: relics/unsettling_lamp.py; cites unhashed file: unsettling_lamp.py"
+  },
+  {
+    "unit": "monster/the_lost",
+    "class": "b",
+    "files": [
+      {
+        "path": "src/Core/Models/Monsters/TheLost.cs",
+        "side": "game",
+        "recorded_sha": "388a51eb8d265412e9543f592ddb80fddeeb5e3bbed13874d4d66c50af4e7afc",
+        "current_sha": "388a51eb8d265412e9543f592ddb80fddeeb5e3bbed13874d4d66c50af4e7afc",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/glory/the_lost_and_forgotten.py",
+        "side": "sim",
+        "recorded_sha": "3a48359cec493d954570f09d23a5943f5065c942f6d064397dc6ce97b1c678f1",
+        "current_sha": "3a48359cec493d954570f09d23a5943f5065c942f6d064397dc6ce97b1c678f1",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/glory/the_lost_and_forgotten.py:29",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/the_lost_and_forgotten.py:30",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/the_lost_and_forgotten.py:32-36",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/the_lost_and_forgotten.py:34-36",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/the_lost_and_forgotten.py:38-49",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/the_lost_and_forgotten.py:51-55",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/the_lost_and_forgotten.py:107-110",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "src/Core/Models/MonsterModel.cs",
+        "side": "game",
+        "recorded_sha": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+        "current_sha": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Commands/Builders/AttackCommand.cs",
+        "side": "game",
+        "recorded_sha": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+        "current_sha": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Models/Encounters/TheLostAndForgottenNormal.cs",
+        "side": "game",
+        "recorded_sha": "7aef08948cdba811e42407947615cae984bb6c5d9ca11ca3e463f277c6f778cc",
+        "current_sha": "7aef08948cdba811e42407947615cae984bb6c5d9ca11ca3e463f277c6f778cc",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/MonsterMoves/MonsterMoveStateMachine/MonsterMoveStateMachine.cs",
+        "side": "game",
+        "recorded_sha": "467f003e8a7586372fb8a16756a05b40c552e52cf19d32441ed2e2924cec8dd3",
+        "current_sha": "467f003e8a7586372fb8a16756a05b40c552e52cf19d32441ed2e2924cec8dd3",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/state_machine.py",
+        "side": "sim",
+        "recorded_sha": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
+        "current_sha": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/base.py",
+        "side": "sim",
+        "recorded_sha": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+        "current_sha": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/cmds.py",
+        "side": "sim",
+        "recorded_sha": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+        "current_sha": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/combat.py",
+        "side": "sim",
+        "recorded_sha": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+        "current_sha": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/combat.py:240-244",
+            "identical": false
+          },
+          {
+            "cite": "sts2_rl/combat.py:272-274",
+            "identical": false
+          },
+          {
+            "cite": "sts2_rl/combat.py:279-281",
+            "identical": false
+          },
+          {
+            "cite": "sts2_rl/combat.py:266-268",
+            "identical": false
+          },
+          {
+            "cite": "sts2_rl/combat.py:356",
+            "identical": false
+          }
+        ]
+      },
+      {
+        "path": "sts2_rl/powers.py",
+        "side": "sim",
+        "recorded_sha": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+        "current_sha": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
+        "historical_found": false,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/rooms.py",
+        "side": "sim",
+        "recorded_sha": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+        "current_sha": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/glory/__init__.py",
+        "side": "sim",
+        "recorded_sha": "e6c59412b30ced070af1f3997caee4230e37919816dada6103abf557dd88ef8d",
+        "current_sha": "e6c59412b30ced070af1f3997caee4230e37919816dada6103abf557dd88ef8d",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/glory/__init__.py:70",
+            "identical": true
+          }
+        ]
+      }
+    ],
+    "reason": "cites unhashed file: PossessStrengthPower.cs; span changed: sts2_rl/combat.py; historical text not recoverable: sts2_rl/powers.py"
+  },
+  {
+    "unit": "monster/thieving_hopper",
+    "class": "b",
+    "files": [
+      {
+        "path": "src/Core/Models/Monsters/ThievingHopper.cs",
+        "side": "game",
+        "recorded_sha": "e5c0b4f597ba6c57161525918fb70d7abb3c36b9095006b269e38567c1125ec3",
+        "current_sha": "e5c0b4f597ba6c57161525918fb70d7abb3c36b9095006b269e38567c1125ec3",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/hive/thieving_hopper.py",
+        "side": "sim",
+        "recorded_sha": "276bca6f2ac105b94c8b37e3db919ce92039ac43407e88bc9411a9b5766ffd76",
+        "current_sha": "f53942cb48feefaaec62ea27439cf446f99ae47ad864aa322180c2bd704bf2ce",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/hive/thieving_hopper.py:35",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/thieving_hopper.py:36",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/thieving_hopper.py:38-43",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/thieving_hopper.py:38-43",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/thieving_hopper.py:45-66",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/thieving_hopper.py:59-63",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/thieving_hopper.py:105",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/thieving_hopper.py:68-86",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/thieving_hopper.py:85-87",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/thieving_hopper.py:22",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/thieving_hopper.py:39",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/thieving_hopper.py:43",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "src/Core/Entities/Cards/CardRarity.cs",
+        "side": "game",
+        "recorded_sha": "dd7951d709102796321eeec186b29a04a287b4632ba25e925909d7113ef6c813",
+        "current_sha": "dd7951d709102796321eeec186b29a04a287b4632ba25e925909d7113ef6c813",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Commands/PowerCmd.cs",
+        "side": "game",
+        "recorded_sha": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+        "current_sha": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/cards/base.py",
+        "side": "sim",
+        "recorded_sha": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+        "current_sha": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/enchantments.py",
+        "side": "sim",
+        "recorded_sha": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+        "current_sha": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/combat_rng.py",
+        "side": "sim",
+        "recorded_sha": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
+        "current_sha": "f8c7d64ea444f18a173615c6011234e7aa923004e96bba7e68bda6157a509a1f",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/cmds.py",
+        "side": "sim",
+        "recorded_sha": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+        "current_sha": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/rooms.py",
+        "side": "sim",
+        "recorded_sha": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+        "current_sha": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/powers.py",
+        "side": "sim",
+        "recorded_sha": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+        "current_sha": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
+        "historical_found": false,
+        "spans": []
+      }
+    ],
+    "reason": "cites unhashed file: relics/ruined_helmet.py; cites unhashed file: relics/unsettling_lamp.py; cites unhashed file: relics/vambrace.py; cites unhashed file: relics/paels_legion.py; cites unhashed file: FlutterPower.cs; cites unhashed file: relics/ruined_helmet.py; cites unhashed file: relics/unsettling_lamp.py; cites unhashed file: unsettling_lamp.py; historical text not recoverable: sts2_rl/powers.py"
+  },
+  {
+    "unit": "monster/tunneler",
+    "class": "b",
+    "files": [
+      {
+        "path": "src/Core/Models/Monsters/Tunneler.cs",
+        "side": "game",
+        "recorded_sha": "2e33ed96d3d3a04a2731f169a82303d299d787c3268d839cf397b052b18c48d9",
+        "current_sha": "2e33ed96d3d3a04a2731f169a82303d299d787c3268d839cf397b052b18c48d9",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/hive/tunneler.py",
+        "side": "sim",
+        "recorded_sha": "9c216bdd35f30cd6c6f83129c7d0475583c654c0a2b6c1cdb34940819671ea32",
+        "current_sha": "9c216bdd35f30cd6c6f83129c7d0475583c654c0a2b6c1cdb34940819671ea32",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/hive/tunneler.py:23",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/tunneler.py:24",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/tunneler.py:26-42",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/tunneler.py:44-48",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/tunneler.py:62-63",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/tunneler.py:37",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/tunneler.py:13",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/tunneler.py:56-57",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/tunneler.py:59-60",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/tunneler.py:56",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/hive/tunneler.py:66-69",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "src/Core/Models/Powers/BurrowedPower.cs",
+        "side": "game",
+        "recorded_sha": "cb3883038f4216255583b135beadf5e91ae334f9d732778d827a5c2df6093956",
+        "current_sha": "cb3883038f4216255583b135beadf5e91ae334f9d732778d827a5c2df6093956",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Commands/PowerCmd.cs",
+        "side": "game",
+        "recorded_sha": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+        "current_sha": "d344a2ecdd846e26a02fcd14d3ebf48f6c99056fa3b3e0ccbaa43fe9901dc993",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/powers.py",
+        "side": "sim",
+        "recorded_sha": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+        "current_sha": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
+        "historical_found": false,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/cmds.py",
+        "side": "sim",
+        "recorded_sha": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+        "current_sha": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/rooms.py",
+        "side": "sim",
+        "recorded_sha": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+        "current_sha": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/state_machine.py",
+        "side": "sim",
+        "recorded_sha": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
+        "current_sha": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/state_machine.py:320-330",
+            "identical": true
+          }
+        ]
+      }
+    ],
+    "reason": "cites unhashed file: relics/ruined_helmet.py; cites unhashed file: relics/unsettling_lamp.py; cites unhashed file: unsettling_lamp.py; historical text not recoverable: sts2_rl/powers.py"
+  },
+  {
+    "unit": "monster/turret_operator",
+    "class": "b",
+    "files": [
+      {
+        "path": "src/Core/Models/Monsters/TurretOperator.cs",
+        "side": "game",
+        "recorded_sha": "bf458de9434e3bfb4921f0e388891638b1a9b1a35019787543af72b9ebb0dd1e",
+        "current_sha": "bf458de9434e3bfb4921f0e388891638b1a9b1a35019787543af72b9ebb0dd1e",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/glory/turret_operator.py",
+        "side": "sim",
+        "recorded_sha": "59b8ba3a89a64d15015e268f4ed09c5bb23f5a569b65be28e110af1e733caebd",
+        "current_sha": "59b8ba3a89a64d15015e268f4ed09c5bb23f5a569b65be28e110af1e733caebd",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/glory/turret_operator.py:34",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/turret_operator.py:35",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/turret_operator.py:37-50",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/turret_operator.py:38-45",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/turret_operator.py:55-58",
+            "identical": true
+          },
+          {
+            "cite": "sts2_rl/monsters/glory/turret_operator.py:112-115",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "src/Core/Models/MonsterModel.cs",
+        "side": "game",
+        "recorded_sha": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+        "current_sha": "9d1f6a08d79769d8a293d0ace1c96a789f6818d33b2cb7d4200e615c1c6cdbea",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Commands/Builders/AttackCommand.cs",
+        "side": "game",
+        "recorded_sha": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+        "current_sha": "b846ba848f7d9a456294004cfe18255a7b919244443ca8498f812f796e9e01c3",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Entities/Creatures/Creature.cs",
+        "side": "game",
+        "recorded_sha": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+        "current_sha": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Combat/CombatState.cs",
+        "side": "game",
+        "recorded_sha": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+        "current_sha": "b3150c69fae0c33b48b7957c3a67bc4e5867d1641e05062cd3f5edd0a9d9f2e2",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/MonsterMoves/MonsterMoveStateMachine/ConditionalBranchState.cs",
+        "side": "game",
+        "recorded_sha": "8c5ef3a0e557fd5fc2c49b0f38c9848fd02a205cd116009aed406b7667b599f3",
+        "current_sha": "8c5ef3a0e557fd5fc2c49b0f38c9848fd02a205cd116009aed406b7667b599f3",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/MonsterMoves/MonsterMoveStateMachine/MonsterMoveStateMachine.cs",
+        "side": "game",
+        "recorded_sha": "467f003e8a7586372fb8a16756a05b40c552e52cf19d32441ed2e2924cec8dd3",
+        "current_sha": "467f003e8a7586372fb8a16756a05b40c552e52cf19d32441ed2e2924cec8dd3",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "src/Core/Models/Encounters/TurretOperatorWeak.cs",
+        "side": "game",
+        "recorded_sha": "998337f7118b974fd5ed537d4743e7f5e8ad01d25e3885f3fd99a29b24fc5d7b",
+        "current_sha": "998337f7118b974fd5ed537d4743e7f5e8ad01d25e3885f3fd99a29b24fc5d7b",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/state_machine.py",
+        "side": "sim",
+        "recorded_sha": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
+        "current_sha": "92f9854ef41b22ac134a1a54b89cfe50a38188a4a09746876a949a296d21b76b",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/state_machine.py:86-87",
+            "identical": true
+          }
+        ]
+      },
+      {
+        "path": "sts2_rl/monsters/base.py",
+        "side": "sim",
+        "recorded_sha": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+        "current_sha": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/cmds.py",
+        "side": "sim",
+        "recorded_sha": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+        "current_sha": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/hooks.py",
+        "side": "sim",
+        "recorded_sha": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+        "current_sha": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/combat.py",
+        "side": "sim",
+        "recorded_sha": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+        "current_sha": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/creatures.py",
+        "side": "sim",
+        "recorded_sha": "1c73063f3ca726775f0a121fe826933fe8a4dfdcbda18bb0e0d4dfacff69de7f",
+        "current_sha": "9152cb64c277b8c7e5162bcae7d59af41f160a1a347ac586423c41af5be9c530",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/powers.py",
+        "side": "sim",
+        "recorded_sha": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+        "current_sha": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
+        "historical_found": false,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/rooms.py",
+        "side": "sim",
+        "recorded_sha": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+        "current_sha": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
+        "historical_found": true,
+        "spans": []
+      },
+      {
+        "path": "sts2_rl/monsters/glory/__init__.py",
+        "side": "sim",
+        "recorded_sha": "e6c59412b30ced070af1f3997caee4230e37919816dada6103abf557dd88ef8d",
+        "current_sha": "e6c59412b30ced070af1f3997caee4230e37919816dada6103abf557dd88ef8d",
+        "historical_found": true,
+        "spans": [
+          {
+            "cite": "sts2_rl/monsters/glory/__init__.py:60",
+            "identical": true
+          }
+        ]
+      }
+    ],
+    "reason": "cites unhashed file: Fogmog.cs; historical text not recoverable: sts2_rl/powers.py"
+  }
+]

@@ -6,31 +6,31 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_skills.py",
-    "sha256": "1cdf31a3bd59e95b239df163b0724e4f99ef299bd67256cc94fcc683e1ed1840"
+    "sha256": "73d875726c8cb8ca6a213dea6f43267d57717f5a1d6b65d34ca2ecea7f4ab66f"
   },
   "hooks": {
     "CanonicalKeywords": {
-      "maps_to": "ShockwaveCard.exhausts = True (colorless_skills.py:656)",
+      "maps_to": "ShockwaveCard.exhausts = True (colorless_skills.py:724)",
       "verdict": "faithful",
       "rationale": "`{ CardKeyword.Exhaust }` (Shockwave.cs:19) == `exhausts = True`."
     },
     "ctor": {
-      "maps_to": "class attrs (colorless_skills.py:651-657) + _init_vars (659-661)",
+      "maps_to": "class attrs (colorless_skills.py:719-725) + _init_vars (727-729)",
       "verdict": "faithful",
-      "rationale": "`base(2, CardType.Skill, CardRarity.Uncommon, TargetType.AllEnemies)` (Shockwave.cs:27-30) == cost 2 / SKILL / UNCOMMON / ALL_ENEMIES. `handles_own_routing = True` (657) is faithful: C#'s OnPlay iterates HittableEnemies itself, so the sim must not let the framework call `on_play` once per enemy on top of that."
+      "rationale": "`base(2, CardType.Skill, CardRarity.Uncommon, TargetType.AllEnemies)` (Shockwave.cs:27-30) == cost 2 / SKILL / UNCOMMON / ALL_ENEMIES. `handles_own_routing = True` (725) is faithful: C#'s OnPlay iterates HittableEnemies itself, so the sim must not let the framework call `on_play` once per enemy on top of that."
     },
     "CanonicalVars": {
-      "maps_to": "ShockwaveCard._power_amount = 3 (colorless_skills.py:661)",
+      "maps_to": "ShockwaveCard._power_amount = 3 (colorless_skills.py:729)",
       "verdict": "faithful",
       "rationale": "`new DynamicVar(\"Power\", 3m)` (Shockwave.cs:17) == `_power_amount = 3`, used for BOTH debuffs. Safe collapse here because C# reads the single `Power` var for both applications (Shockwave.cs:36, 39-40) -- unlike card/prowess, where two separate C# vars happened to coincide."
     },
     "OnPlay": {
-      "maps_to": "ShockwaveCard.on_play (colorless_skills.py:666-677)",
+      "maps_to": "ShockwaveCard.on_play (colorless_skills.py:734-744)",
       "verdict": "faithful",
       "rationale": "`foreach (enemy in CombatState.HittableEnemies) { await PowerCmd.Apply<WeakPower>(...); await PowerCmd.Apply<VulnerablePower>(...); }` (Shockwave.cs:37-41) == `for enemy in [e for e in ctx.enemies if not e.is_gone]: PowerCmd.apply(WeakPower); PowerCmd.apply(VulnerablePower)`. Weak BEFORE Vulnerable per enemy, and the enemy loop is the OUTER loop on both sides, which matters for a per-application listener. `is_gone` is the right analogue of HittableEnemies here, and unlike the damage AoEs there is no per-hit fan-out question -- these are powers, so C# applies them one creature at a time too and the conflagration finding does not apply. Presentation, folded in: TriggerAnim (34), the flying-slash VFX (35) and two hover tips (21-25)."
     },
     "OnUpgrade": {
-      "maps_to": "ShockwaveCard._on_upgrade (colorless_skills.py:663-664)",
+      "maps_to": "ShockwaveCard._on_upgrade (colorless_skills.py:731-732)",
       "verdict": "faithful",
       "rationale": "`DynamicVars[\"Power\"].UpgradeValueBy(2m)` (Shockwave.cs:46) == `self._power_amount += 2` (3 -> 5), raising BOTH debuffs."
     }

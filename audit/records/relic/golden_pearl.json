@@ -16,17 +16,17 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -38,10 +38,10 @@
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (golden_pearl.py:13)",
       "verdict": "faithful",
-      "rationale": "Matches GoldenPearl.cs:13. Load-bearing beyond display: Relic.is_tradable (relics/base.py:132) returns False for any relic with an upon-pickup effect, so dropping the declaration would wrongly offer Golden Pearl to the trade events. Rule 7: relics/base.py is not hashed by this record."
+      "rationale": "Matches GoldenPearl.cs:13. Load-bearing beyond display: Relic.is_tradable (relics/base.py:189) returns False for any relic with an upon-pickup effect, so dropping the declaration would wrongly offer Golden Pearl to the trade events. Rule 7: relics/base.py is not hashed by this record."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (golden_pearl.py:16-17) -> run.gain_gold(150) (run.py:325-333), dispatched by RunState.add_relic",
+      "maps_to": "after_obtained (golden_pearl.py:16-17) -> run.gain_gold(150) (run.py:500-516), dispatched by RunState.add_relic",
       "verdict": "faithful",
       "rationale": "GoldenPearl.cs:17-20 calls PlayerCmd.GainGold(DynamicVars.Gold.BaseValue, Owner) and PlayerCmd.cs:141-169 is Hook.ModifyGoldGained -> AfterModifyingGoldGained -> `if (!(amount > 0)) return` -> `player.Gold += (int)amount` -> Hook.AfterGoldGained. run.gain_gold reproduces the modifier chain, the positivity gate and the truncation in the same order. EXECUTED (py audit/tools/relic_probes_b07.py pearl-gold): gold 99 -> 249. The two omitted legs are verdicted at guards N2 and N3. Rule 7: PlayerCmd.cs and run.py are not hashed by this record."
     }
@@ -53,14 +53,14 @@
       "rationale": "No AscensionHelper.GetValueIfAscension anywhere in the file, so 150 is the pinned non-ascension value."
     },
     {
-      "what": "N2 (DORMANT): PlayerCmd.GainGold's `Hook.AfterGoldGained(runState, player)` tail (PlayerCmd.cs:169) has no sim counterpart at all -- neither this relic nor the sim's Relic base declares an after_gold_gained hook",
-      "verdict": "gap",
-      "issue": "MECHANISM: every gold gain in the game ends with a full listener pass over AfterGoldGained; run.gain_gold (run.py:325-333) stops after the addition. Golden Pearl itself does not implement AfterGoldGained, so the relic's OWN behaviour is unaffected -- this is recorded because Golden Pearl is the largest single gold grant in the pool and is therefore the loudest trigger for whatever listens. DORMANT, and the concrete unported thing is named: `grep -rn AfterGoldGained sts2_rl/ --include=*.py` returns ZERO hits, and the sweeps already classified AfterGoldGained as one of the dropped C# hooks with no sim base method at all (.superpowers/sdd/content-relic-sweeps.md, Sweep C's tail list), so a base-class hook has to be added before any relic can listen. Porting any AfterGoldGained implementer makes it live. Filed as a gap and not a waiver because 'the sim has no such hook' is today's content, not the divergence's shape (binding rule 1). Rule 7: PlayerCmd.cs, run.py and the sweeps file are not hashed by this record."
+      "what": "N2 (CLOSED): PlayerCmd.GainGold's `Hook.AfterGoldGained(runState, player)` tail (PlayerCmd.cs:169) -- whether the sim dispatches it",
+      "verdict": "faithful",
+      "issue": "REVISED on this re-audit pass: the premise is now false -- `Relic.after_gold_gained` is a real base member (`sts2_rl/relics/base.py:373-386`) and `RunState.gain_gold` (`sts2_rl/run.py:500-516`) dispatches it over every relic AFTER `self.gold += gained` (run.py:513-516), matching `PlayerCmd.cs:168-169`'s post-addition AfterGoldGained pass, and it sits behind the same `if amount > 0` gate on the MODIFIED amount that C#'s `if (!(amount > 0m)) return;` does (run.py:512-513) -- so a zeroed gain (Ectoplasm) skips the whole tail on both sides, per the sim's own updated docstring. `sts2_rl/relics/dragon_fruit.py` is a real ported implementer reading the new balance. Golden Pearl itself still does not implement `after_gold_gained`, so its own behaviour is unchanged by this closure; what changes is that its 150-gold grant now correctly notifies every listener (Dragon Fruit) the way the game does, where the record previously said no sim listener could exist at all. Verified by reading `run.py:500-516` and `relics/base.py:373-386` directly on this pass, and by `grep -rln 'def after_gold_gained' sts2_rl/relics/*.py` returning `base.py` and `dragon_fruit.py`."
     },
     {
-      "what": "N3: the sim's Relic.undo_after_obtained (relics/base.py:143-150) is not implemented, so a Golden Pearl the conformance runner grants and then un-picks leaves +150 gold behind",
+      "what": "N3: the sim's Relic.undo_after_obtained (relics/base.py:206-214) is not implemented, so a Golden Pearl the conformance runner grants and then un-picks leaves +150 gold behind",
       "verdict": "faithful",
-      "rationale": "Not a source-to-sim divergence: undo_after_obtained has NO C# counterpart (nothing in the game ever un-picks a relic) and its own docstring says it exists for the conformance runner, which grants a node's relic and then swaps it for the one the save recorded (conformance/runner.py:452-462). Verdicted faithful for that reason, but flagged because the five relics that DO implement it (lees_waffle, looming_fruit, mango, pear, strawberry -- executed: `grep -rn 'def undo_after_obtained' sts2_rl/relics/`) are all max-HP relics, and gold is diffed at every floor boundary by the same detector (runner.py:615 `diff('floor_gold', oracle.gold, run.gold)`) before being resynced at runner.py:645. So an un-picked Golden Pearl produces a spurious floor_gold diff of exactly 150 on any seed whose node offered it. Cheap to close (one two-line undo) and it belongs to the same family as batch 1's big_mushroom finding. Rule 7: relics/base.py and conformance/runner.py are not hashed by this record."
+      "rationale": "Not a source-to-sim divergence: undo_after_obtained has NO C# counterpart (nothing in the game ever un-picks a relic) and its own docstring says it exists for the conformance runner, which grants a node's relic and then swaps it for the one the save recorded (conformance/runner.py:490-508). Verdicted faithful for that reason, but flagged because the five relics that DO implement it (lees_waffle, looming_fruit, mango, pear, strawberry -- executed: `grep -rn 'def undo_after_obtained' sts2_rl/relics/`) are all max-HP relics, and gold is diffed at every floor boundary by the same detector (runner.py:831 `diff('floor_gold', oracle.gold, run.gold)`) before being resynced at runner.py:861. So an un-picked Golden Pearl produces a spurious floor_gold diff of exactly 150 on any seed whose node offered it. Cheap to close (one two-line undo) and it belongs to the same family as batch 1's big_mushroom finding. Rule 7: relics/base.py and conformance/runner.py are not hashed by this record."
     },
     {
       "what": "N4: CanonicalVars / the GoldVar display (GoldenPearl.cs:15)",
@@ -68,6 +68,6 @@
       "rationale": "RelicModel.Flash() / FlashSfx / base.Status / ShowCounter / DisplayAmount / InvokeDisplayAmountChanged / CanonicalVars / ExtraHoverTips / Cmd.Wait / CardCmd.PreviewCardPileAdd are presentation only -- the relic bar's glow, counter, sfx and hover text, and animation timing. The sim has no relic UI. Waived under the shared contract's presentation/animation exclusion, not under an unreachability claim."
     }
   ],
-  "verdict": "gap",
+  "verdict": "waiver",
   "audited": "2026-07-26"
 }

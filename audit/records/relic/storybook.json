@@ -26,17 +26,17 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -57,16 +57,16 @@
       "rationale": "Storybook.cs:13 is RelicRarity.Ancient. EXECUTED (b15-pool): absent from the grab bag, granted by the ported Tezcatara shrine (events/tezcatara.py)."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (storybook.py:14-17) -> run.add_card(make_card('brightest_flame')) (run.py:341-354)",
+      "maps_to": "after_obtained (storybook.py:14-17) -> run.add_card(make_card('brightest_flame')) (run.py:524-537)",
       "verdict": "faithful",
       "rationale": "Rollup of guards N1-N4 per binding rule 4 -- every one of them is faithful, so this hook is too. Storybook.cs:17-21 creates a BrightestFlame on the run and adds it to PileType.Deck; the port does the same with the ported card."
     }
   },
   "guards": [
     {
-      "what": "N1: `CardPileCmd.Add(card, PileType.Deck)` (Storybook.cs:20) vs `run.add_card` (run.py:341-354) -- the INSERTION POSITION and the two deck hooks",
+      "what": "N1: `CardPileCmd.Add(card, PileType.Deck)` (Storybook.cs:20) vs `run.add_card` (run.py:524-537) -- the INSERTION POSITION and the two deck hooks",
       "verdict": "faithful",
-      "rationale": "Checked against PROMPT.md bug class 8 (append position), which relic/arcane_scroll left as an open question. CardPileCmd.Add reaches CardPile.AddInternal with the default `index = -1`, whose else-arm is `_cards.Add(card)` -- an APPEND at the end of the deck (CardPile.cs:83-97). run.add_card appends too (run.py:349). It also dispatches the same two hooks in the same order: Hook.ModifyCardBeingAddedToDeck before the append (run.py:345-348) and the AfterCardChangedPiles-for-deck analogue after it (run.py:352-353), matching CardPileCmd's deck arm at CardPileCmd.cs:379-396. EXECUTED (py audit/tools/relic_probes_b15.py b15-misc): after add_relic('storybook') the deck tail is ['brightest_flame']. Rule 7: run.py, CardPileCmd.cs and CardPile.cs are not hashed here."
+      "rationale": "Checked against PROMPT.md bug class 8 (append position), which relic/arcane_scroll left as an open question. CardPileCmd.Add reaches CardPile.AddInternal with the default `index = -1`, whose else-arm is `_cards.Add(card)` -- an APPEND at the end of the deck (CardPile.cs:83-97). run.add_card appends too (run.py:532). It also dispatches the same two hooks in the same order: Hook.ModifyCardBeingAddedToDeck before the append (run.py:528-531) and the AfterCardChangedPiles-for-deck analogue after it (run.py:535-536), matching CardPileCmd's deck arm at CardPileCmd.cs:379-396. EXECUTED (py audit/tools/relic_probes_b15.py b15-misc): after add_relic('storybook') the deck tail is ['brightest_flame']. Rule 7: run.py, CardPileCmd.cs and CardPile.cs are not hashed here."
     },
     {
       "what": "N2: `Hook.ShouldAddToDeck` is consulted by CardPileCmd's deck arm (CardPileCmd.cs:384) and the sim has no such hook",
@@ -81,7 +81,7 @@
     {
       "what": "N4: no undo_after_obtained, and no HasUponPickupEffect declaration",
       "verdict": "faithful",
-      "rationale": "PROMPT.md v6 item 3 (rule-3 resolution): the ABSENCE of undo_after_obtained is faithful at every site -- the helper has no C# counterpart (nothing in the game un-picks a relic), so a sim lacking it is not diverging from the source, which is the only question this audit asks. The deck edit is not run state 'outside run.relics' of the max-HP kind, but it IS unrecoverable on a conformance relic swap, so the same operational caveat as relic/small_capsule N2 applies (a discarded Storybook leaves a Brightest Flame in the deck, which conformance/runner.py:618's (id, upgrade_level) deck comparison would report). Separately: Storybook.cs declares no HasUponPickupEffect override, so the port's default False (relics/base.py:96) is correct -- and it is moot for IsTradable because Ancient rarity already excludes it (relics/base.py:132-136)."
+      "rationale": "PROMPT.md v6 item 3 (rule-3 resolution): the ABSENCE of undo_after_obtained is faithful at every site -- the helper has no C# counterpart (nothing in the game un-picks a relic), so a sim lacking it is not diverging from the source, which is the only question this audit asks. The deck edit is not run state 'outside run.relics' of the max-HP kind, but it IS unrecoverable on a conformance relic swap, so the same operational caveat as relic/small_capsule N2 applies (a discarded Storybook leaves a Brightest Flame in the deck, which conformance/runner.py:834's (id, upgrade_level) deck comparison would report). Separately: Storybook.cs declares no HasUponPickupEffect override, so the port's default False (relics/base.py:159) is correct -- and it is moot for IsTradable because Ancient rarity already excludes it (relics/base.py:188-199)."
     },
     {
       "what": "N5: `CardCmd.PreviewCardPileAdd(..., 2f)` (Storybook.cs:20) and ExtraHoverTips (Storybook.cs:15)",

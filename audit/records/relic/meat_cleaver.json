@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
+      "sha256": "a1aecf30215574f9bc62dd01cb7c73346bbc1b9b84dd5dcc8dabd67101f8c345",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -31,7 +31,7 @@
       "verdict": "faithful"
     },
     "TryModifyRestSiteOptions": {
-      "maps_to": "modify_rest_site_options (meat_cleaver.py:19-30), dispatched from RunState.rest_site_options (run.py:1069-1073) after the deck cards' contributions",
+      "maps_to": "modify_rest_site_options (meat_cleaver.py:19-30), dispatched from RunState.rest_site_options (run.py) after the deck cards' contributions",
       "verdict": "gap",
       "live": false,
       "issue": "RE-EXECUTED 2026-07-30 (round 11). Guard G1 is NOT part of the gap -- it is `deliberate-divergence` (the sim omits a disabled option rather than adding one greyed out; same reachable action set, since the sim has no rest-site UI to show the grey row). WHAT REMAINS is guard G2 alone, still DORMANT and unchanged in today's code: `inspect.getsource(RunState.select_cards)` (`.superpowers/sdd/unlabelled/probes/relic-5-checks.py meat-cleaver-cancel`) still has no decline/cancel return path -- it always returns exactly `count` cards, or `[]` only when there are no candidates at all -- so `run.select_cards` cannot express `CookRestSiteOption`'s `Cancelable = true` early-out (CookRestSiteOption.cs:45-54), and neither can any other selector the sim has today. Confirms G2's own reachability claim rather than inheriting it: `grep -in cancel sts2_rl/run.py` finds nothing. Disposition unchanged."
@@ -41,12 +41,12 @@
     {
       "what": "G2 (DORMANT): CookRestSiteOption's card-removal screen is `Cancelable = true` and a cancel makes the whole option a no-op (CookRestSiteOption.cs:45-54); the sim's cook always removes 2 cards and always grants the 9 Max HP",
       "verdict": "gap",
-      "issue": "MECHANISM: CookRestSiteOption.OnSelect builds `CardSelectorPrefs(RemoveSelectionPrompt, 2) { Cancelable = true, RequireManualConfirmation = true }`, and `if (!enumerable.Any()) return false` -- cancelling removes nothing, grants no Max HP, and returns false so the rest-site visit is not consumed. meat_cleaver.py:23-28 has no cancel path: run.select_cards returns `min(count, len(candidates))` cards or `[]` only when there are no candidates (run.py:384-390), and the option's callable always falls through to run.gain_max_hp. REACHABILITY (DORMANT, and the concrete missing thing is named): the sim has no way to EXPRESS a cancel -- run.select_cards' contract returns cards, never a declination, and its two selectors (a policy callable and a uniform random fallback) both always return `count` cards. So no ported content can reach the C# arm. Adding a selector protocol that can decline -- which the same run.select_cards would need for relic/pael's Clone and the Smith grid too -- makes it live immediately. Filed as a dormant gap rather than waived under the contract's out-of-combat-UI exclusion because the divergent consequence is STATE (2 deck cards and 9 Max HP, plus whether the rest visit is spent), not the screen. Rule 7: leans on run.py, unhashed here."
+      "issue": "MECHANISM: CookRestSiteOption.OnSelect builds `CardSelectorPrefs(RemoveSelectionPrompt, 2) { Cancelable = true, RequireManualConfirmation = true }`, and `if (!enumerable.Any()) return false` -- cancelling removes nothing, grants no Max HP, and returns false so the rest-site visit is not consumed. meat_cleaver.py:23-28 has no cancel path: run.select_cards returns `min(count, len(candidates))` cards or `[]` only when there are no candidates (run.py), and the option's callable always falls through to run.gain_max_hp. REACHABILITY (DORMANT, and the concrete missing thing is named): the sim has no way to EXPRESS a cancel -- run.select_cards' contract returns cards, never a declination, and its two selectors (a policy callable and a uniform random fallback) both always return `count` cards. So no ported content can reach the C# arm. Adding a selector protocol that can decline -- which the same run.select_cards would need for relic/pael's Clone and the Smith grid too -- makes it live immediately. Filed as a dormant gap rather than waived under the contract's out-of-combat-UI exclusion because the divergent consequence is STATE (2 deck cards and 9 Max HP, plus whether the rest visit is spent), not the screen. Rule 7: leans on run.py, unhashed here."
     },
     {
       "what": "G1: C# ALWAYS adds the option and disables it below the threshold (`IsEnabled => GetRemovableCardCount(Owner) >= 2`, CookRestSiteOption.cs:36); the sim omits it entirely (meat_cleaver.py:20-21)",
       "verdict": "deliberate-divergence",
-      "rationale": "TryModifyRestSiteOptions unconditionally does `options.Add(new CookRestSiteOption(player))` (MeatCleaver.cs:21) and lets IsEnabled grey it out; the port hoists the enable test to the ADD and returns early. Same observable: a disabled option and an absent option are the same reachable action set, and the sim has no rest-site UI in which the greyed row could be seen. EXECUTED (py audit/tools/relic_probes_b09.py b09-simple): with a full starting deck the options list is ['COOK']; with one deck card it is []. Recorded as a divergence rather than faithful because the sim's rest-site option list is POSITIONAL for its driver -- driver.py:530 selects with `options.pop(idx - REST_LEAVE - 1)` -- so omitting a row shifts the index of every later relic-provided option (Shovel's DIG, Girya's LIFT, Pael's Growth's CLONE), and any future work that maps recorded OptionIds onto indices must not assume the two lists line up. Rule 7: leans on driver.py, unhashed here."
+      "rationale": "TryModifyRestSiteOptions unconditionally does `options.Add(new CookRestSiteOption(player))` (MeatCleaver.cs:21) and lets IsEnabled grey it out; the port hoists the enable test to the ADD and returns early. Same observable: a disabled option and an absent option are the same reachable action set, and the sim has no rest-site UI in which the greyed row could be seen. EXECUTED (py audit/tools/relic_probes_b09.py b09-simple): with a full starting deck the options list is ['COOK']; with one deck card it is []. Recorded as a divergence rather than faithful because the sim's rest-site option list is POSITIONAL for its driver -- driver.py selects with `options.pop(idx - REST_LEAVE - 1)` -- so omitting a row shifts the index of every later relic-provided option (Shovel's DIG, Girya's LIFT, Pael's Growth's CLONE), and any future work that maps recorded OptionIds onto indices must not assume the two lists line up. Rule 7: leans on driver.py, unhashed here."
     },
     {
       "what": "N1: `player != base.Owner -> return false` (MeatCleaver.cs:17-20)",
@@ -61,7 +61,7 @@
     {
       "what": "N3: the ORDER and semantics of the effect -- remove the chosen cards, THEN GainMaxHp; `IsRemovable` as the candidate filter",
       "verdict": "faithful",
-      "rationale": "CookRestSiteOption.cs:55-59 removes each chosen card via CardPileCmd.RemoveFromDeck and only then calls CreatureCmd.GainMaxHp(9); meat_cleaver.py:24-28 does the same in the same order, and run.gain_max_hp is GainMaxHp's raise-then-heal pair, so the 9 Max HP also heals 9 on both sides. The candidate set matches: C# counts `PileType.Deck.GetPile(player).Cards.Count(c => c.IsRemovable)` (line 63-66) and run.removable_cards() is `not c.eternal` (run.py:359-361), which is what CardModel.IsRemovable means. EXECUTED: deck 10 -> 8 and max HP 80 -> 89."
+      "rationale": "CookRestSiteOption.cs:55-59 removes each chosen card via CardPileCmd.RemoveFromDeck and only then calls CreatureCmd.GainMaxHp(9); meat_cleaver.py:24-28 does the same in the same order, and run.gain_max_hp is GainMaxHp's raise-then-heal pair, so the 9 Max HP also heals 9 on both sides. The candidate set matches: C# counts `PileType.Deck.GetPile(player).Cards.Count(c => c.IsRemovable)` (line 63-66) and run.removable_cards() is `not c.eternal` (run.py), which is what CardModel.IsRemovable means. EXECUTED: deck 10 -> 8 and max HP 80 -> 89."
     },
     {
       "what": "N4: ExtraHoverTips / the StaticHoverTip.Cook tip (MeatCleaver.cs:13)",

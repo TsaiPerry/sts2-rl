@@ -121,12 +121,32 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
       "path": "sts2_rl/shop.py",
       "sha256": "89c0628c5a3e7ef69a3db1b56315b3d861c14a2fa5ea01dd6aba3153f5becc3d",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Runs/RelicGrabBag.cs",
+      "sha256": "9bb001cbc618f21cebaf7ceb324812010972d92b7a6ed043f268e56fce5a541c",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/neow.py",
+      "sha256": "df11695f9bff2d43c3408f0fb60403bdd3957015edcc052b424c4e1d242bde6c",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/rewards.py",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
       "side": "sim"
     }
   ],
@@ -137,14 +157,14 @@
       "rationale": "ToxicEgg.cs:14. Executed: Rare in the transcribed grab bag (relic_pools.py:144 'RELIC.TOXIC_EGG'), `py audit/tools/relic_probes_b16.py pool`. Rule 7: relics/_eggs.py is the shared base this port's whole behaviour lives in and it is NOT hashed by this record -- every hook entry below leans on it."
     },
     "IsAllowed": {
-      "maps_to": "is_allowed (sts2_rl/relics/_eggs.py:35) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:82-84), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) before every pool pull",
+      "maps_to": "is_allowed (sts2_rl/relics/_eggs.py:35) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:89-91), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:1080-1087) before every pool pull",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/_eggs.py:35), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:253, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/_eggs.py:35), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:1080-1087) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:970), pull_relic_from_back (run.py:1023) and the Shop-rarity bag (run.py:1089-1098) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:265-277 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:84) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     "TryModifyCardRewardOptionsLate": {
-      "maps_to": "modify_card_reward_options_late (sts2_rl/relics/_eggs.py:41-44) via `_applies`, dispatched in the second complete pass of rewards.create_reward_cards (sts2_rl/rewards.py:314-315)",
+      "maps_to": "modify_card_reward_options_late (sts2_rl/relics/_eggs.py:41-44) via `_applies`, dispatched in the second complete pass of rewards.create_reward_cards (sts2_rl/rewards.py:469-474)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the rollup's only remaining gap was G2, the collapsed Late phase (N1 was already waived as dead C# code). Closed 2026-07-27: Hook.TryModifyCardRewardOptions' TWO complete passes are modelled. `Relic` declares `modify_card_reward_options` (the plain pass) and `modify_card_reward_options_late` as SEPARATE members (sts2_rl/relics/base.py:241-251), and rewards.create_reward_cards runs every relic's plain hook and THEN every relic's Late hook (sts2_rl/rewards.py:304-315), which is Hook.cs:1444-1466. A Late implementer is therefore guaranteed to see everything the plain pass added, whatever order the relics were picked up in. WAS: one flat `for relic in list(run.relics)` loop, so the phase guarantee was registration-order luck."
+      "issue": "Closed 2026-07-27: the rollup's only remaining gap was G2, the collapsed Late phase (N1 was already waived as dead C# code). Closed 2026-07-27: Hook.TryModifyCardRewardOptions' TWO complete passes are modelled. `Relic` declares `modify_card_reward_options` (the plain pass) and `modify_card_reward_options_late` as SEPARATE members (sts2_rl/relics/base.py:241-251), and rewards.create_reward_cards runs every relic's plain hook and THEN every relic's Late hook (sts2_rl/rewards.py:468-476), which is Hook.cs:1444-1466. A Late implementer is therefore guaranteed to see everything the plain pass added, whatever order the relics were picked up in. WAS: one flat `for relic in list(run.relics)` loop, so the phase guarantee was registration-order luck."
     },
     "ModifyMerchantCardCreationResults": {
       "maps_to": "EggRelic.modify_merchant_card_results (_eggs.py:44-45), dispatched from shop.py:87",
@@ -161,12 +181,12 @@
     {
       "what": "G1 (LIVE): `IsAllowed => IsBeforeAct3TreasureChest(runState)` (TotalFloor < 41) is entirely unmodelled, so the relic stays pullable for the whole run",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/_eggs.py:35), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:253, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/_eggs.py:35), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:1080-1087) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:970), pull_relic_from_back (run.py:1023) and the Shop-rarity bag (run.py:1089-1098) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:265-277 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:84) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     {
       "what": "G2 (DORMANT): the hook is TryModifyCardRewardOptions**Late** and the sim's modify_card_reward_options is a single flat pass with no phase structure",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: Hook.TryModifyCardRewardOptions' TWO complete passes are modelled. `Relic` declares `modify_card_reward_options` (the plain pass) and `modify_card_reward_options_late` as SEPARATE members (sts2_rl/relics/base.py:241-251), and rewards.create_reward_cards runs every relic's plain hook and THEN every relic's Late hook (sts2_rl/rewards.py:304-315), which is Hook.cs:1444-1466. A Late implementer is therefore guaranteed to see everything the plain pass added, whatever order the relics were picked up in. WAS: one flat `for relic in list(run.relics)` loop, so the phase guarantee was registration-order luck."
+      "issue": "Closed 2026-07-27: Hook.TryModifyCardRewardOptions' TWO complete passes are modelled. `Relic` declares `modify_card_reward_options` (the plain pass) and `modify_card_reward_options_late` as SEPARATE members (sts2_rl/relics/base.py:241-251), and rewards.create_reward_cards runs every relic's plain hook and THEN every relic's Late hook (sts2_rl/rewards.py:468-476), which is Hook.cs:1444-1466. A Late implementer is therefore guaranteed to see everything the plain pass added, whatever order the relics were picked up in. WAS: one flat `for relic in list(run.relics)` loop, so the phase guarantee was registration-order luck."
     },
     {
       "what": "N1: `options.Flags.HasFlag(CardCreationFlags.NoHookUpgrades)` (ToxicEgg.cs:27-30) -- the sim's hook signature carries no options at all",

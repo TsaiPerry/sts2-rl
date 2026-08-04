@@ -6,26 +6,26 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_skills.py",
-    "sha256": "1cdf31a3bd59e95b239df163b0724e4f99ef299bd67256cc94fcc683e1ed1840"
+    "sha256": "73d875726c8cb8ca6a213dea6f43267d57717f5a1d6b65d34ca2ecea7f4ab66f"
   },
   "hooks": {
     "ctor": {
-      "maps_to": "class attrs (colorless_skills.py:338-342) + _init_vars (344-346)",
+      "maps_to": "class attrs (colorless_skills.py:404-408) + _init_vars (410-412)",
       "verdict": "faithful",
       "rationale": "`base(0, CardType.Skill, CardRarity.Uncommon, TargetType.Self)` (Impatience.cs:17-20) == cost 0 / SKILL / UNCOMMON / SELF."
     },
     "CanonicalVars": {
-      "maps_to": "ImpatienceCard._cards = 2 (colorless_skills.py:346)",
+      "maps_to": "ImpatienceCard._cards = 2 (colorless_skills.py:412)",
       "verdict": "faithful",
       "rationale": "`new CardsVar(2)` (Impatience.cs:15) == `_cards = 2`."
     },
     "OnPlay": {
-      "maps_to": "ImpatienceCard.on_play (colorless_skills.py:351-354)",
+      "maps_to": "ImpatienceCard.on_play (colorless_skills.py:417-420)",
       "verdict": "faithful",
-      "rationale": "`if (!PileType.Hand.GetPile(Owner).Cards.Any(c => c.Type == CardType.Attack)) await CardPileCmd.Draw(..., Cards.BaseValue, Owner)` (Impatience.cs:29-32) == `if not any(c.card_type == CardType.ATTACK for c in ctx.player.hand): DrawCmd.draw(ctx.player, self._cards)`. The condition is checked at play time and Impatience itself is out of the hand on both sides (Play pile in C#, discard-pile limbo in the sim) -- and it is a Skill anyway, so it could not satisfy the Attack test. Presentation, folded in: ShouldGlowGoldInternal (13), which is the same predicate driving the gold-glow highlight."
+      "rationale": "`if (!PileType.Hand.GetPile(Owner).Cards.Any(c => c.Type == CardType.Attack)) await CardPileCmd.Draw(..., Cards.BaseValue, Owner)` (Impatience.cs:29-32) == `if not any(c.card_type == CardType.ATTACK for c in ctx.player.hand): DrawCmd.draw(ctx.player, self._cards)`. The condition is checked at play time and Impatience itself is out of the hand on both sides -- the old 'discard-pile limbo' compensation is gone; a resolving card now sits in a real `player.play_pile` (combat.py:1031-1058 `_add_to_play_pile`), the sim's own Play-pile equivalent -- and it is a Skill anyway, so it could not satisfy the Attack test. Presentation, folded in: ShouldGlowGoldInternal (13), which is the same predicate driving the gold-glow highlight."
     },
     "OnUpgrade": {
-      "maps_to": "ImpatienceCard._on_upgrade (colorless_skills.py:348-349)",
+      "maps_to": "ImpatienceCard._on_upgrade (colorless_skills.py:414-415)",
       "verdict": "faithful",
       "rationale": "`DynamicVars.Cards.UpgradeValueBy(1m)` (Impatience.cs:24) == `self._cards += 1` (2 -> 3). Note C# declares OnUpgrade before OnPlay in this file; no behavioural consequence."
     }

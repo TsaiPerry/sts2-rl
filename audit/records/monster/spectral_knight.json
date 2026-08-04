@@ -6,16 +6,16 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\glory\\knights.py",
-    "sha256": "c0ef52dd119eee94e8cdf1d8f4a25ab2e22cb35c3589c30f1a099b10563c418c"
+    "sha256": "770bb43ec309cbb39b40367a45e947e09ff94772c17acfd41cc4082a5988ae49"
   },
   "hooks": {
     "MinInitialHp": {
-      "maps_to": "min_hp = 93 (knights.py:94)",
+      "maps_to": "min_hp = 93 (knights.py:112)",
       "verdict": "faithful",
       "rationale": "SpectralKnight.cs:32 GetValueIfAscension(ToughEnemies, 97, 93) -> non-ascension 93."
     },
     "MaxInitialHp": {
-      "maps_to": "max_hp = 93 (knights.py:95)",
+      "maps_to": "max_hp = 93 (knights.py:113)",
       "verdict": "faithful",
       "rationale": "SpectralKnight.cs:34 `MaxInitialHp => MinInitialHp` = 93."
     },
@@ -30,9 +30,9 @@
       "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5."
     },
     "GenerateMoveStateMachine": {
-      "maps_to": "SpectralKnight.build_machine (knights.py:97-115)",
+      "maps_to": "SpectralKnight.build_machine (knights.py:115-137)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-28: monster_state_machine G1's misread is gone at this site. knights.py:111-116 now reads SpectralKnight.cs:52's AddBranch(moveState2, 2) as RandomBranchState.AddBranch overload #9 (`int maxRepeats`, RandomBranchState.cs:105) -- repeat_type=CAN_REPEAT_X_TIMES with max_times=2 and add_branch's DEFAULT weight 1.0 -- instead of weight=2.0 with CAN_REPEAT_FOREVER. Verified by reading both sides this session (the HEX->SOUL_SLASH->RAND chain, the SOUL_SLASH-then-SOUL_FLAME add order, the CannotRepeat second branch and the HEX initial state were already faithful and still are); `py audit/tools/state_machine_probes.py mismatch` now reports 'monsters whose sim port MISREADS the C# branch arguments: 0'. WAS: the positional 2 was read as a weight, shifting the intent distribution and dropping the 'never three in a row' cap."
+      "issue": "Closed 2026-07-28: monster_state_machine G1's misread is gone at this site. knights.py:129-134 now reads SpectralKnight.cs:52's AddBranch(moveState2, 2) as RandomBranchState.AddBranch overload #9 (`int maxRepeats`, RandomBranchState.cs:105) -- repeat_type=CAN_REPEAT_X_TIMES with max_times=2 and add_branch's DEFAULT weight 1.0 -- instead of weight=2.0 with CAN_REPEAT_FOREVER. Verified by reading both sides this session (the HEX->SOUL_SLASH->RAND chain, the SOUL_SLASH-then-SOUL_FLAME add order, the CannotRepeat second branch and the HEX initial state were already faithful and still are); `py audit/tools/state_machine_probes.py mismatch` now reports 'monsters whose sim port MISREADS the C# branch arguments: 0'. WAS: the positional 2 was read as a weight, shifting the intent distribution and dropping the 'never three in a row' cap."
     }
   },
   "guards": [
@@ -67,12 +67,12 @@
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     }
   ]

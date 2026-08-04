@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\fake_merchant.py",
-    "sha256": "b988afdfbe947f93dc619f6a22907d77137bdba4363fc04de23641f5ed6d87d5"
+    "sha256": "2378d7dce03e5f88f7d0daabe8dab60e890e8d25b7df89745b138a797b7f3f9d"
   },
   "extra_sources": [
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/actmap.py",
-      "sha256": "1d4cb7a59c716b79d7b13d8478d0d705b7ea092cb41380fcb241860bd722206a",
+      "sha256": "64c5a16873b1fbd176c515a29bd0f6e0d74182e1f179955b9226719247b3378e",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     }
   ],
@@ -88,17 +88,17 @@
     },
     {
       "what": "EV-5: BeforeEventStarted's `_inventoryRelics.ToList().UnstableShuffle(base.Rng).Take(6)` (FakeMerchant.cs:116-117) -- note this one is UnstableShuffle, so only the STREAM is wrong, not the shape is `...ToList().StableShuffle(base.Rng).Take(n)`; the sim uses `self.rng.shuffle(stock)` then `[:6]` (events/fake_merchant.py:63-65), which IS the right shape for UnstableShuffle",
-      "maps_to": "Closed 2026-07-28: this site was only ever wrong on the STREAM (the source is UnstableShuffle, FakeMerchant.cs:116-117), and events/fake_merchant.py:66-67 now shuffles on `self.event_rng` -- right shape, right stream. actmap.stable_shuffle (actmap.py:193-201) is sort-then-Fisher-Yates, the port of ListExtensions.StableShuffle, and the sort key is now the game's -- player._compare_to_key (player.py:23-34) is CardModel.CompareTo, i.e. the UPPERCASE ModelId entry then the upgrade level. Was: `random.sample` / a bare `shuffle`, which drop the stabilizing sort.",
+      "maps_to": "Closed 2026-07-28: this site was only ever wrong on the STREAM (the source is UnstableShuffle, FakeMerchant.cs:116-117), and events/fake_merchant.py:66-67 now shuffles on `self.event_rng` -- right shape, right stream. actmap.stable_shuffle (actmap.py) is sort-then-Fisher-Yates, the port of ListExtensions.StableShuffle, and the sort key is now the game's -- player._compare_to_key (player.py) is CardModel.CompareTo, i.e. the UPPERCASE ModelId entry then the upgrade level. Was: `random.sample` / a bare `shuffle`, which drop the stabilizing sort.",
       "verdict": "faithful"
     },
     {
       "what": "where the stock roll happens in the lifecycle",
-      "maps_to": "C# stocks in BeforeEventStarted (FakeMerchant.cs:113-124); the sim stocks in calculate_vars (events/fake_merchant.py:60-65). Both run before the initial options are generated -- Event.begin calls calculate_vars then initial_options (events/base.py:126-130) -- so the six-relic draw precedes anything the player can do in both engines. The relative order against CalculateVars is moot here: this event overrides only one of the two.",
+      "maps_to": "C# stocks in BeforeEventStarted (FakeMerchant.cs:113-124); the sim stocks in calculate_vars (events/fake_merchant.py:60-65). Both run before the initial options are generated -- Event.begin calls calculate_vars then initial_options (events/base.py) -- so the six-relic draw precedes anything the player can do in both engines. The relative order against CalculateVars is moot here: this event overrides only one of the two.",
       "verdict": "faithful"
     },
     {
       "what": "EV-3: the stock UnstableShuffle (FakeMerchant.cs:116) rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- the stock UnstableShuffle runs on `self.event_rng` (events/fake_merchant.py:66-67), matching `base.Rng` (FakeMerchant.cs:116). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- the stock UnstableShuffle runs on `self.event_rng` (events/fake_merchant.py:66-67), matching `base.Rng` (FakeMerchant.cs:116). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
       "verdict": "faithful"
     },
     {

@@ -13,45 +13,45 @@
   "sim_sources": [
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "8be566a77bf360fa01389c168bd403215a95e2c9366c63160d85db2346fa4428"
+      "sha256": "416789386ad4af19cb52a3c275a2c39c1708bb90ebc4dc5c8fb4e88a7055d557"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "a1bbd3bbbb94aa4eae709d0fc0acdd157fd6c5355a1d67c59a815e0e00e630c5"
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016"
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "3caf6a189d109feb62c5ab57f03028277542a8bf12311898e7445be27ce199b2"
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040"
     }
   ],
   "extra_sources": [
     {
       "path": "src/Core/Hooks/Hook.cs",
-      "sha256": "e6a1bbdf2e7b3a2f941b2de5dff283cd2538b220e703e771b53d9042e97111d4",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
       "side": "game"
     },
     {
       "path": "src/Core/Entities/Players/Player.cs",
-      "sha256": "4672a42656cec2b61d7f720000a462648b12d303d92af92d21c0ac3325d156db",
+      "sha256": "ffde0e9e7ef543bcf6a41016f76ce0e7c1924a64aeb351fde03e64ddba0022fe",
       "side": "game"
     },
     {
       "path": "src/Core/Models/Relics/BeltBuckle.cs",
-      "sha256": "860e63d5cd988cffb84c4b63178adc7a018b4071be2e783900766cb5096d158a",
+      "sha256": "1e72315fdaf11e92a555144fa8b255f3735bde2aaf590f92f6ece0288cab2831",
       "side": "game"
     },
     {
       "path": "src/Core/Models/Relics/Sozu.cs",
-      "sha256": "f91bf90297f47bd2b9dac224078f2c1cd8f4604d981a9a5a3b5ce7461ecfc250",
+      "sha256": "e4526ab54c41f21ad2aa135a7a41dff433b2f9b586041b319676b81011fc0c77",
       "side": "game"
     },
     {
       "path": "src/Core/Models/Potions/FoulPotion.cs",
-      "sha256": "5fb3b0fed42e91677b0cb6d49c4a7e6422406c357f61e8cca1c0ca7cc5d5913c",
+      "sha256": "dff3b7f714ea975f3bee9114a38fb13619fc7c8860ceea94cf43d8f76c506e48",
       "side": "game"
     },
     {
@@ -66,12 +66,12 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "11b4f9bc91ddfa01813c14e63f56cc9c0d8f54a8d777e563e94a798421febefe",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/belt_buckle.py",
-      "sha256": "d53eca3206beff1eef99547d413fa24bea175fa170d4c8f9e9922171e29dcc1f",
+      "sha256": "58183b20722a852a92ddf11297e096314d6a7d522f06883e78ad19f6bd949d1c",
       "side": "sim"
     },
     {
@@ -81,57 +81,57 @@
     },
     {
       "path": "sts2_rl/relics/petrified_toad.py",
-      "sha256": "1ec05e5b66a5122905e5701bd978c173f547bef905ecf862b0baee3e5f618d50",
+      "sha256": "147dfbbc5f92060f7b3fd8dcff45919e25847d8093005a22b6fa365027601b8c",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/delicate_frond.py",
-      "sha256": "b92938475c6725d9ea192a18128dc02cc5a070d759a5a48e30ad87d690ba8b56",
+      "sha256": "c179a633d56de8d648aee72a1573bb439448c18df0710172e87fbdd136deedde",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/colorless_skills.py",
-      "sha256": "c13dfe72568ec69cf7d5071a5f943845bca24a3ace370221a5d681756230f867",
+      "sha256": "73d875726c8cb8ca6a213dea6f43267d57717f5a1d6b65d34ca2ecea7f4ab66f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "a9badf73750f625b05cda5494c8477aa19ead8a6373c93db20213638819390d5",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "src/Core/Combat/CombatManager.cs",
-      "sha256": "7ae1b7259e72befa07f4aceaa9ab0e23783fc55876bcde6090b9b2cfae65a43e",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
       "side": "game"
     },
     {
       "path": "src/Core/Factories/PotionFactory.cs",
-      "sha256": "5b150e742b36f1235aa503d477dd8530d221bfbb8469fd2954bd43e1f4e32cc3",
+      "sha256": "1687ca4ceedeb04089122f8ff673cc33639873e98f210e5b6cd0dbc40c5b3aa3",
       "side": "game"
     },
     {
       "path": "src/Core/Models/CardModel.cs",
-      "sha256": "2e0c6eea66dfc1098c82386fa15838c6d376a83953a895c028b4f2ef60816919",
+      "sha256": "bb3ea9a22a833e6505bbf70dd9d3ec209f00003f2d68f5933a9e074a0d22fc21",
       "side": "game"
     },
     {
       "path": "src/Core/Models/Potions/FairyInABottle.cs",
-      "sha256": "a69db9c41545c7f5a29a9d3ee4bcfc2746bcbb3eba0525a3ccbf86142d6459b1",
+      "sha256": "f1cf24bf8230d51b14d9d105ff39690e9ba85c2cc8ceaccb3dae000dbf13911b",
       "side": "game"
     },
     {
       "path": "src/Core/Models/Potions/FruitJuice.cs",
-      "sha256": "d07229b27c818fe509dd4fb360e12c967bda26880b7c6953217e9290944bf71e",
+      "sha256": "63737f83ad6ff0565a4257ab7236060b35767a176d27c841cdb832860d2106d1",
       "side": "game"
     },
     {
       "path": "src/Core/Models/Potions/RegenPotion.cs",
-      "sha256": "7f33d4d5255e8fbfdb04580abc8022a99b67f28d2e4e467d8f5e85535996854f",
+      "sha256": "0adeee5f2055e46ed5a38b3be6ff5b8bfbe91e7a902505a00ebbe31aaa8529c6",
       "side": "game"
     },
     {
       "path": "sts2_rl/events/fake_merchant.py",
-      "sha256": "b988afdfbe947f93dc619f6a22907d77137bdba4363fc04de23641f5ed6d87d5",
+      "sha256": "2378d7dce03e5f88f7d0daabe8dab60e890e8d25b7df89745b138a797b7f3f9d",
       "side": "sim"
     },
     {
@@ -146,12 +146,12 @@
     },
     {
       "path": "sts2_rl/events/the_future_of_potions.py",
-      "sha256": "2d293a7a43d7052df138ddecde938d210d557d5e610ccf9f3c7ac049a7016847",
+      "sha256": "ea514ea5a26ab6215fb8ce48b59eefcb42b29b4bc06734794a6b4fe5372f5868",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/alchemical_coffer.py",
-      "sha256": "fcb66ed14022901bbb6f6cac6ad1c0182cecc9eb8a25fc7399b021221f3ecfdf",
+      "sha256": "bc3203bf74e01eff428f4a523864d28cf93882933a4838b4293e9ab28b85a8ee",
       "side": "sim"
     },
     {
@@ -224,7 +224,7 @@
     {
       "what": "13. PotionModel.PassesCustomUsabilityCheck (PotionModel.cs:164, default true; 1 override: FoulPotion.cs:51-68)",
       "verdict": "faithful",
-      "rationale": "CLOSED 2026-08-03 (gap-fix pass). `Potion.passes_custom_usability_check` is ported as a default-True hook and consulted by BOTH use paths (`RunState.use_potion`, `CombatState.use_potion`), with FoulPotion's override (FoulPotion.cs:51-68) refusing the drink outside combat, a shop whose merchant still stands, or the Fake Merchant event. `RunState` gained the `current_room_type`/`current_event` it needs (set in `enter_point`). The event arm of `FoulPotion.OnUse` (FoulPotion.cs:89-108) is ported at the same time — `use_out_of_combat` now routes to `FakeMerchant.foul_potion_thrown` instead of paying the shop's 100 gold — because admitting that room without it would have introduced a new divergence. Tests: test/test_potions.py::TestFoulPotionUsabilityCheck.\n\nWHAT THE GAP SAID: The sim has NO general concept of this virtual at all -- not a stub, not a always-true default, nothing. `CombatState.use_potion`'s only gates are phase/slot-bounds/`automatic` (combat.py:1577-1587) and `RunState.use_potion`'s only gates are slot-bounds/None/`usage != USAGE_ANY_TIME` (run.py:810-817); neither calls anything resembling a usability check. The default (true) never restricts the other 50 potions, so this is only observable at FoulPotion, which restricts itself to combat, an un-opened MerchantRoom, or the FakeMerchant event (FoulPotion.cs:51-68). This exact gap is already filed at `audit/records/potion/foul_potion.json`'s `PassesCustomUsabilityCheck` hook and its guard G1, matched here per rule 3 rather than re-derived -- but that record's own `live: false` / 'DORMANT... no production caller reaches RunState.use_potion' text is dated 2026-07-27 and is now STALE: its own sibling `Usage` hook entry (dated 2026-07-28, round 3) says the conformance ReplayRunner was wired to drive an out-of-combat `UsePotion` through `RunState.use_potion`, and that wiring is real and live in the main replay loop -- `conformance/runner.py:846` calls `self._use_map_potion(run, cmd, divergences, room_index)` inside the room-command dispatch loop, and `_use_map_potion` (runner.py:542-569) calls `run.use_potion(slot)` at :564. So a recorded save that drinks Foul Potion outside a shop (at a rest site, on the map, at any non-Merchant event) now reaches `FoulPotion.use_out_of_combat` with no usability gate and pays 100 gold where the game refuses the drink outright -- LIVE via the conformance replay path, not dormant. Flagged as a cross-record disagreement in this record's report; `potion/foul_potion.json` is not edited here per the brief."
+      "rationale": "CLOSED 2026-08-03 (gap-fix pass). `Potion.passes_custom_usability_check` is ported as a default-True hook and consulted by BOTH use paths (`RunState.use_potion`, `CombatState.use_potion`), with FoulPotion's override (FoulPotion.cs:51-68) refusing the drink outside combat, a shop whose merchant still stands, or the Fake Merchant event. `RunState` gained the `current_room_type`/`current_event` it needs (set in `enter_point`). The event arm of `FoulPotion.OnUse` (FoulPotion.cs:89-108) is ported at the same time \u2014 `use_out_of_combat` now routes to `FakeMerchant.foul_potion_thrown` instead of paying the shop's 100 gold \u2014 because admitting that room without it would have introduced a new divergence. Tests: test/test_potions.py::TestFoulPotionUsabilityCheck.\n\nWHAT THE GAP SAID: The sim has NO general concept of this virtual at all -- not a stub, not a always-true default, nothing. `CombatState.use_potion`'s only gates are phase/slot-bounds/`automatic` (combat.py:1577-1587) and `RunState.use_potion`'s only gates are slot-bounds/None/`usage != USAGE_ANY_TIME` (run.py:810-817); neither calls anything resembling a usability check. The default (true) never restricts the other 50 potions, so this is only observable at FoulPotion, which restricts itself to combat, an un-opened MerchantRoom, or the FakeMerchant event (FoulPotion.cs:51-68). This exact gap is already filed at `audit/records/potion/foul_potion.json`'s `PassesCustomUsabilityCheck` hook and its guard G1, matched here per rule 3 rather than re-derived -- but that record's own `live: false` / 'DORMANT... no production caller reaches RunState.use_potion' text is dated 2026-07-27 and is now STALE: its own sibling `Usage` hook entry (dated 2026-07-28, round 3) says the conformance ReplayRunner was wired to drive an out-of-combat `UsePotion` through `RunState.use_potion`, and that wiring is real and live in the main replay loop -- `conformance/runner.py:846` calls `self._use_map_potion(run, cmd, divergences, room_index)` inside the room-command dispatch loop, and `_use_map_potion` (runner.py:542-569) calls `run.use_potion(slot)` at :564. So a recorded save that drinks Foul Potion outside a shop (at a rest site, on the map, at any non-Merchant event) now reaches `FoulPotion.use_out_of_combat` with no usability gate and pays 100 gold where the game refuses the drink outright -- LIVE via the conformance replay path, not dormant. Flagged as a cross-record disagreement in this record's report; `potion/foul_potion.json` is not edited here per the brief."
     },
     {
       "what": "14. PotionModel.ShouldReceiveCombatHooks => true (PotionModel.cs:197, unconditional; no potion overrides it -- grep -rn 'override.*ShouldReceiveCombatHooks' src/Core/Models/Potions/ returns nothing)",

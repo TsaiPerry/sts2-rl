@@ -11,7 +11,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -33,7 +33,7 @@
     "AfterObtained": {
       "maps_to": "no counterpart; the port is a documented stub (kaleidoscope.py:8-12)",
       "verdict": "waiver",
-      "rationale": "Kaleidoscope.cs:33-50 builds CardsVar(2) = 2 CardRewards, each of 3 cards drawn from three OTHER characters' card pools (`Where(p => p != base.Owner.Character.CardPool)`), and offers them via RewardsCmd.OfferCustom. Waived under the shared contract's explicit 'characters other than Ironclad' exclusion -- the effect is not merely unreachable, its entire content domain (Silent/Defect/Regent/Necrobinder card pools) is outside the sim's scope by design, exactly like the orb machinery hook_dispatch guard N7 waives. This is NOT the 'the sim has no such system' shape binding rule 1 forbids waiving: the sim HAS a card-reward system (rewards.py) and a working after_obtained dispatch (run.py:552, the premise Sweep C proves live for every other stub) -- what it does not have, and will not have while it is Ironclad-only, is the cards. EXECUTED (probe kaleido-neow): add_relic('kaleidoscope') leaves the deck unchanged at 10, which is the correct no-op given there is nothing to offer. Because IsAllowedAtNeow already blocks the ONLY ported grant path (events/neow.py, the sole non-vocab reference to the id -- executed by probe `pool`), no ported run can reach this hook at all. Rule 7: rewards.py, run.py and events/neow.py are not hashed by this record."
+      "rationale": "Kaleidoscope.cs:33-50 builds CardsVar(2) = 2 CardRewards, each of 3 cards drawn from three OTHER characters' card pools (`Where(p => p != base.Owner.Character.CardPool)`), and offers them via RewardsCmd.OfferCustom. Waived under the shared contract's explicit 'characters other than Ironclad' exclusion -- the effect is not merely unreachable, its entire content domain (Silent/Defect/Regent/Necrobinder card pools) is outside the sim's scope by design, exactly like the orb machinery hook_dispatch guard N7 waives. This is NOT the 'the sim has no such system' shape binding rule 1 forbids waiving: the sim HAS a card-reward system (rewards.py) and a working after_obtained dispatch (run.py:957-963, renumbered since prior pass, content unchanged, the premise Sweep C proves live for every other stub) -- what it does not have, and will not have while it is Ironclad-only, is the cards. EXECUTED (probe kaleido-neow): add_relic('kaleidoscope') leaves the deck unchanged at 10, which is the correct no-op given there is nothing to offer. Because IsAllowedAtNeow already blocks the ONLY ported grant path (events/neow.py, the sole non-vocab reference to the id -- executed by probe `pool`), no ported run can reach this hook at all. Rule 7: rewards.py, run.py and events/neow.py are not hashed by this record."
     }
   },
   "guards": [

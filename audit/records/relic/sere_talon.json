@@ -11,7 +11,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "0e7260041e0b6693c08bf4aa4ddbb8743311d7fd72d6212fdc7c7d358a7c5030",
+      "sha256": "0b6b63592c62386b478927b39f5f758720079c9377ecda32ca94df150369e7e4",
       "side": "sim"
     },
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -54,7 +54,7 @@
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (sere_talon.py:15)",
       "verdict": "faithful",
-      "rationale": "Matches SereTalon.cs:22, and correctly excludes the relic from the trade events via Relic.is_tradable (relics/base.py:132). Rule 7: relics/base.py is not hashed here."
+      "rationale": "Matches SereTalon.cs:22, and correctly excludes the relic from the trade events via Relic.is_tradable (relics/base.py:189-198). Rule 7: relics/base.py is not hashed here."
     },
     "AfterObtained": {
       "maps_to": "after_obtained (sts2_rl/relics/sere_talon.py:20-37): 2 distinct curses drawn NextItem-and-Remove on run.rng_set.niche, then 3 Wish cards",
@@ -86,12 +86,12 @@
     {
       "what": "N5: `CardPileCmd.Add(card, PileType.Deck)` (SereTalon.cs:44, :52) vs run.add_card (sere_talon.py:25, :27), and the curse-then-Wish ORDER",
       "verdict": "faithful",
-      "rationale": "run.add_card runs modify_card_being_added_to_deck before the append and after_card_added_to_deck after it (run.py:341-354), which are the sim's two deck-add hooks -- the same bracket CardPileCmd.Add provides. The order is load-bearing and matches: C# adds both curses (lines 39-45) before any Wish (lines 48-53), and the sim does the same, so a relic that reacts to a deck add (Darkstone Periapt's +6 Max HP on a gained Curse) sees the curses first on both sides. Rule 7: run.py and relics/darkstone_periapt.py are not hashed here."
+      "rationale": "run.add_card runs modify_card_being_added_to_deck before the append and after_card_added_to_deck after it (run.py:524-537), which are the sim's two deck-add hooks -- the same bracket CardPileCmd.Add provides. The order is load-bearing and matches: C# adds both curses (lines 39-45) before any Wish (lines 48-53), and the sim does the same, so a relic that reacts to a deck add (Darkstone Periapt's +6 Max HP on a gained Curse) sees the curses first on both sides. Rule 7: run.py and relics/darkstone_periapt.py are not hashed here."
     },
     {
       "what": "N6: `undo_after_obtained` is not implemented, and the pickup adds 5 cards to the run deck",
       "verdict": "faithful",
-      "rationale": "The consequence, for the record: a conformance-runner relic swap leaves two curses and three Wishes in the deck, which the (id, upgrade_level) deck comparison reports. Per PROMPT.md v6 binding item 3, the ABSENCE of undo_after_obtained is faithful at every site: the helper has no C# counterpart -- nothing in the game un-picks a relic -- so a sim lacking it is not diverging from the source, which is the only question this audit asks. Flagged for its operational consequence only, which is a tooling defect and not a fidelity gap. Rule 7: relics/base.py:143-150 and conformance/runner.py are not hashed here."
+      "rationale": "The consequence, for the record: a conformance-runner relic swap leaves two curses and three Wishes in the deck, which the (id, upgrade_level) deck comparison reports. Per PROMPT.md v6 binding item 3, the ABSENCE of undo_after_obtained is faithful at every site: the helper has no C# counterpart -- nothing in the game un-picks a relic -- so a sim lacking it is not diverging from the source, which is the only question this audit asks. Flagged for its operational consequence only, which is a tooling defect and not a fidelity gap. Rule 7: relics/base.py:206-213 and conformance/runner.py are not hashed here."
     },
     {
       "what": "N7: the relic holds no state (PROMPT.md classes 10, 13); `CardCmd.PreviewCardPileAdd` and `Cmd.Wait(0.75f)` (SereTalon.cs:46-47, :54-55); ExtraHoverTips (line 30)",

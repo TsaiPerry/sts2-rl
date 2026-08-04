@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -36,13 +36,13 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:325 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py:569 `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
@@ -61,9 +61,9 @@
       "rationale": "Multiplayer-only. ShouldScaleInMultiplayer / GetScaledAmountForMultiplayer feed PowerCmd.Apply's MultiplayerScalingModel leg (PowerCmd.cs:128-131), already waived as step 14 of audit/records/seam/power_cmd.json. The sim is single-player."
     },
     "TryModifyPowerAmountReceived": {
-      "maps_to": "cmds.py:299-306, a hand-written branch inside PowerCmd.apply -- ArtifactPower itself declares no hook (powers.py:315-325)",
-      "verdict": "gap",
-      "issue": "The interception is reimplemented outside the hook system entirely, and the debuff test is the wrong one. C# (ArtifactPower.cs:17-36) is a TryModifyPowerAmountReceived listener whose three guards are `target != Owner`, `canonicalPower.GetTypeForAmount(amount) != Debuff`, and `!canonicalPower.IsVisible`; cmds.py:299 instead tests the applied class's static `power_cls.power_type == PowerType.DEBUFF`. That is audit/records/seam/power_cmd.json's gap G1 and its guard G3 (Artifact is not a modify_power_amount listener at all); per binding rule 3 this entry carries the identical verdict and is cross-referenced rather than re-argued -- DORMANT in both directions, trigger = porting Malaise.cs:39 or Resonance.cs:33. Recorded here because it is THIS unit's only real behaviour and a reader of artifact.json must not be left thinking the port is hook-shaped."
+      "maps_to": "powers.py:571-583 ArtifactPower.modify_power_amount_received, a real listener dispatched by hooks.modify_power_amount_received (cmds.py:975)",
+      "verdict": "faithful",
+      "issue": "STALE as filed. RE-EXECUTED: the premise (\"the interception is reimplemented outside the hook system entirely ... cmds.py:299 instead tests the applied class's static power_cls.power_type\") no longer matches the source. ArtifactPower is now a real `modify_power_amount_received` listener (powers.py:571-583, power_cmd/G3+G4 already closed -- see cmds.py:940-976's own citations of ArtifactPower.cs:17-41), with all three C# guards read line for line: `target is not self.owner -> None` (ArtifactPower.cs:19-23), `power_cls.type_for_amount(amount) != PowerType.DEBUFF -> None` (ArtifactPower.cs:24, SIGN-AWARE per power_cmd/G1, not the static `Type`), and the IsVisible test omitted with the same game-wide waiver as the guard entry below (ArtifactPower.cs:29-33). The old hand-written cmds.py branch this entry described is gone; the dispatcher is `hooks.modify_power_amount_received` (cmds.py:975), a single unconditional pass over RECEIVED listeners (Hook.cs:1917-1930 has no applier gate), matching this power's shape exactly. Cross-reference: power_cmd G1/G3/G4 should be re-verified as closed by whichever session owns audit/records/seam/power_cmd.json; not edited here (out of batch). VERIFIED by reading powers.py:552-587 and cmds.py:940-976 together."
     },
     "AfterModifyingPowerAmountReceived": {
       "maps_to": "cmds.py:301-305 `artifact.amount -= 1` + on_power_amount_changed + _expire",
@@ -93,6 +93,6 @@
       "rationale": "C# declares no turn hook on ArtifactPower and the sim's class body is empty of hooks (powers.py:315-325). Both remove it only by stack exhaustion."
     }
   ],
-  "verdict": "gap",
-  "audited": "2026-07-26"
+  "verdict": "waiver",
+  "audited": "2026-08-04"
 }

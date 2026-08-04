@@ -26,17 +26,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -48,7 +48,7 @@
     "IsUsedUp": {
       "maps_to": "is_used_up property (ember_tea.py:24-26)",
       "verdict": "faithful",
-      "rationale": "EmberTea.cs:23 is `CombatsLeft <= 0`; ember_tea.py:26 is `self.combats_left <= 0`, overriding the base default (relics/base.py:120-124). The flag's only non-presentation consumer on either side is tradability: RelicModel.IsTradable bails on IsUsedUp (RelicModel.cs:176-183) and relics/base.py:126-136 mirrors it -- a grep of the whole game source for IsUsedUp outside RelicModel.cs and Models/Relics/ returns ZERO hits, so there is no other reader to diverge. Rule 7: RelicModel.cs and relics/base.py are unhashed here."
+      "rationale": "EmberTea.cs:23 is `CombatsLeft <= 0`; ember_tea.py:26 is `self.combats_left <= 0`, overriding the base default (relics/base.py:183-186, re-pinned 2026-08-04, was :120-124). The flag's only non-presentation consumer on either side is tradability: RelicModel.IsTradable bails on IsUsedUp (RelicModel.cs:176-183) and relics/base.py:189-199, re-pinned 2026-08-04, was :126-136 mirrors it -- a grep of the whole game source for IsUsedUp outside RelicModel.cs and Models/Relics/ returns ZERO hits, so there is no other reader to diverge. Rule 7: RelicModel.cs and relics/base.py are unhashed here."
     },
     "ShowCounter": {
       "maps_to": "no counterpart",
@@ -70,7 +70,7 @@
     {
       "what": "G1 (DORMANT): C#'s AfterRoomEntered runs strictly BEFORE every BeforeCombatStart listener; the sim's on_combat_start runs interleaved with them in relic-registration order",
       "verdict": "gap",
-      "issue": "MECHANISM: CombatRoom.cs:224-228 calls CombatManager.SetUpCombat and then Hook.AfterRoomEntered; Hook.BeforeCombatStart is only reached later, from CombatManager.StartCombatInternal (CombatManager.cs:403, after IsInProgress is set at :402). So in C# the +2 Strength is on the player before ANY BeforeCombatStart listener runs. The sim registers relics in run order (combat.py:158-159) and dispatches on_combat_start over that flat list, so Ember Tea's Strength lands before some combat-start effects and after others depending on the order the relics were picked up -- the audit/records/seam/hook_dispatch.json G2 listener-order shape at this relic's site. REACHABILITY (DORMANT, executed -- py audit/tools/relic_probes_b05.py ember-order): 23 ported relics implement on_combat_start; 6 mention Strength (ember_tea, girya, philosophers_stone, sling_of_courage, sword_of_jade, vajra) and every one of the six only APPLIES it through PowerCmd.apply / StrengthCmd.apply -- Strength addition commutes, so the totals agree. An AST scan of EVERY on_combat_start body anywhere under sts2_rl/ finds ZERO that read a power at all (no powers.get / get_power), so nothing in the window can observe the difference. Porting a BeforeCombatStart effect that READS the player's Strength -- a 'gain Block equal to your Strength' relic is the obvious shape -- makes it live. Rule 7: CombatRoom.cs, CombatManager.cs, combat.py and the five sibling relic files are unhashed here."
+      "issue": "MECHANISM: CombatRoom.cs:224-228 calls CombatManager.SetUpCombat and then Hook.AfterRoomEntered; Hook.BeforeCombatStart is only reached later, from CombatManager.StartCombatInternal (CombatManager.cs:403, after IsInProgress is set at :402). So in C# the +2 Strength is on the player before ANY BeforeCombatStart listener runs. The sim registers relics in run order (combat.py:272-274, re-pinned 2026-08-04, was :158-159) and dispatches on_combat_start over that flat list, so Ember Tea's Strength lands before some combat-start effects and after others depending on the order the relics were picked up -- the audit/records/seam/hook_dispatch.json G2 listener-order shape at this relic's site. REACHABILITY (DORMANT, executed -- py audit/tools/relic_probes_b05.py ember-order): 23 ported relics implement on_combat_start; 6 mention Strength (ember_tea, girya, philosophers_stone, sling_of_courage, sword_of_jade, vajra) and every one of the six only APPLIES it through PowerCmd.apply / StrengthCmd.apply -- Strength addition commutes, so the totals agree. An AST scan of EVERY on_combat_start body anywhere under sts2_rl/ finds ZERO that read a power at all (no powers.get / get_power), so nothing in the window can observe the difference. Porting a BeforeCombatStart effect that READS the player's Strength -- a 'gain Block equal to your Strength' relic is the obvious shape -- makes it live. Rule 7: CombatRoom.cs, CombatManager.cs, combat.py and the five sibling relic files are unhashed here."
     },
     {
       "what": "N1: `!IsUsedUp && room is CombatRoom` (EmberTea.cs:59) vs the sim's `if self.is_used_up: return` in a combat-only hook (ember_tea.py:29-30)",
@@ -85,7 +85,7 @@
     {
       "what": "N3: PowerCmd.Apply<StrengthPower>(new ThrowingPlayerChoiceContext(), Owner.Creature, 2, null, null) (EmberTea.cs:62) -- applier and cardSource both null -- vs StrengthCmd.apply(hooks, player, 2) (ember_tea.py:33)",
       "verdict": "faithful",
-      "rationale": "StrengthCmd.apply (cmds.py:349-361) runs hooks.modify_strength_given and then PowerCmd.apply with no applier and no card, matching both nulls. Checked deliberately for the same reason relic/belt_buckle's N3 was: an applier-carrying application would be a new relic/unsettling_lamp interaction (its doubling requires `applier is self.player`). Both sides pass none, so no such interaction exists -- and the amount is positive, so the Lamp's Debuff typing excludes it anyway. ThrowingPlayerChoiceContext is multiplayer plumbing (a context that throws if a choice is required), noted in the mapping rather than verdicted as a divergence per the shared contract's scope section. Rule 7: cmds.py is unhashed here."
+      "rationale": "StrengthCmd.apply (cmds.py:1157-1167, re-pinned 2026-08-04, was :349-361) runs hooks.modify_strength_given and then PowerCmd.apply with no applier and no card, matching both nulls. Checked deliberately for the same reason relic/belt_buckle's N3 was: an applier-carrying application would be a new relic/unsettling_lamp interaction (its doubling requires `applier is self.player`). Both sides pass none, so no such interaction exists -- and the amount is positive, so the Lamp's Debuff typing excludes it anyway. ThrowingPlayerChoiceContext is multiplayer plumbing (a context that throws if a choice is required), noted in the mapping rather than verdicted as a divergence per the shared contract's scope section. Rule 7: cmds.py is unhashed here."
     },
     {
       "what": "N4: DynamicVars.Strength.BaseValue (EmberTea.cs:62) vs DisplayAmount's Math.Max(0, CombatsLeft) (EmberTea.cs:27) -- the BaseValue/IntValue asymmetry",

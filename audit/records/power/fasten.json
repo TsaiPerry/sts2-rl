@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -16,29 +16,34 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/valueprops.py",
+      "sha256": "921396859f69d89b0170584da481bf7ed5e88303f328e739666f976b2c74c3b4",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:3553 power_type = PowerType.BUFF",
+      "maps_to": "powers.py:4464 power_type = PowerType.BUFF",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-140 Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:137-140) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "ModifyBlockAdditive": {
-      "maps_to": "powers.py:3555-3560 FastenPower.modify_block_additive (hooks.py:98-109, cmds.py:146)",
+      "maps_to": "powers.py:4466-4474 FastenPower.modify_block_additive (hooks.py:797-, is_powered_card_or_monster_move_block self-gated at powers.py:4470)",
       "verdict": "faithful",
-      "rationale": "+Amount to the owner's block from a Defend-tagged card. All three C# guards are present, one structurally: base.Owner != target (FastenPower.cs:22-25 vs powers.py:3558), !props.IsPoweredCardOrMonsterMoveBlock() (:26-29), which cmds.py:145's is_powered_attack(props) gate supplies -- it is the same Move-and-not-Unpowered rule, which the sim's docstring at powers.py:3548-3549 names -- and `cardSource != null && !cardSource.Tags.Contains(CardTag.Defend)` (:30-33 vs :3558 `'defend' in card.tags`). Note C#'s third guard lets a NULL cardSource through (monster-move block) where the sim requires `card is not None`; that arm is unreachable for a player-owned Fasten, since no monster move grants the player block. Additive only, so no hook_dispatch G9 exposure -- G9 settled by execution that the additive family is exactly equal to C#'s running fold over integers."
+      "rationale": "+Amount to the owner's block from a Defend-tagged card. All three C# guards are present, one structurally: base.Owner != target (FastenPower.cs:22-25 vs powers.py:4472), !props.IsPoweredCardOrMonsterMoveBlock() (:26-29), which the power itself self-gates via `is_powered_card_or_monster_move_block(props)` (powers.py:4470, valueprops.py:52-56 -- REVISED 2026-08-04: the old citation 'cmds.py:146' now resolves to unrelated ShouldDie code and is dropped; the gate is per-listener, not centralised in BlockCmd, same correction as power/dexterity's matching guard) -- and `cardSource != null && !cardSource.Tags.Contains(CardTag.Defend)` (:30-33 vs :4472 `'defend' in card.tags`). Note C#'s third guard lets a NULL cardSource through (monster-move block) where the sim requires `card is not None`; that arm is unreachable for a player-owned Fasten, since no monster move grants the player block. Additive only, so no hook_dispatch G9 exposure -- G9 settled by execution that the additive family is exactly equal to C#'s running fold over integers."
     },
     "AfterModifyingBlockAmount": {
       "maps_to": "no sim counterpart",
@@ -50,7 +55,7 @@
     {
       "what": "CardTag.Defend membership",
       "verdict": "faithful",
-      "rationale": "The sim models card tags as a string set and tests 'defend' (powers.py:3558). Same predicate; the tag data is the cards' own and is audited by the card stream, not here."
+      "rationale": "The sim models card tags as a string set and tests 'defend' (powers.py:4472). Same predicate; the tag data is the cards' own and is audited by the card stream, not here."
     },
     {
       "what": "The applier",
@@ -59,5 +64,5 @@
     }
   ],
   "verdict": "waiver",
-  "audited": "2026-07-26"
+  "audited": "2026-08-04"
 }

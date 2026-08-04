@@ -6,13 +6,13 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\hive\\flail_knight.py",
-    "sha256": "becbe219001dd78582bdba64cbdbf1184546b597a655b3d586caef6b721e32a4"
+    "sha256": "e4de06f5ecdc64df31727e4a7b82c119d68b9f9e51551cd051d9be86c7fff1e9"
   },
   "hooks": {
     "AfterAddedToRoom": {
       "maps_to": "MysteriousKnight.__init__ -> PowerCmd.apply(StrengthPower, 6) then PowerCmd.apply(PlatingPower, 6) (flail_knight.py:82-87)",
       "verdict": "deliberate-divergence",
-      "rationale": "The sim has no add-to-room phase - creature creation *is* construction - so AfterAddedToRoom's effect is applied from __init__ (flail_knight.py:84-87). SHARED-FINDINGS section 2's shared verdict, copied: the game runs these from MonsterModel.AfterAddedToRoom via CombatManager.AfterCreatureAdded (CombatManager.cs:860-867) inside StartCombatInternal (CombatManager.cs:394-398), i.e. after every creature is on the board and before Hook.BeforeCombatStart (CombatManager.cs:403); the sim runs them at create_monsters (combat.py:134), before relics attach (combat.py:157-159), before belt potions register (combat.py:164-166), before the parity Niche HP roll (combat.py:152-153) and before hooks.on_combat_start (combat.py:208). Same observable today on all three of section 2's clauses (listener set / HP-roll inversion / roll ordering); executed for this unit by `py audit/tools/monster_probes_b05.py rocket-ctor`, which prints the listener set at monster-construction time for a two-monster hive encounter: ['CombatHistory','StrikeCard','DefendCard', the previously-created monster's own powers] - no relic, no potion. Rule 7: the rationale leans on sts2_rl/combat.py, sts2_rl/relics/ruined_helmet.py, sts2_rl/relics/unsettling_lamp.py and src/Core/Combat/CombatManager.cs, which this record does NOT hash. Amounts and ORDER match: MysteriousKnight.cs:13-14 applies StrengthPower 6m then PlatingPower 6m, both self-applied; the sim applies them in the same order. The base call at :12 reaches MonsterModel.AfterAddedToRoom, which FlailKnight does not override, so there is no inherited effect to lose."
+      "rationale": "The sim has no add-to-room phase - creature creation *is* construction - so AfterAddedToRoom's effect is applied from __init__ (flail_knight.py:84-87). SHARED-FINDINGS section 2's shared verdict, copied: the game runs these from MonsterModel.AfterAddedToRoom via CombatManager.AfterCreatureAdded (CombatManager.cs:860-867) inside StartCombatInternal (CombatManager.cs:394-398), i.e. after every creature is on the board and before Hook.BeforeCombatStart (CombatManager.cs:403); the sim runs them at create_monsters (combat.py:241, re-verified 2026-08-04, was :134), before relics attach (combat.py:274, was :157-159), before belt potions register (bare filename, was :164-166), before the parity Niche HP roll (combat.py:266-269, was :152-153) and before hooks.on_combat_start (combat.py:356, was :208). Same observable today on all three of section 2's clauses (listener set / HP-roll inversion / roll ordering); executed for this unit by `py audit/tools/monster_probes_b05.py rocket-ctor`, which prints the listener set at monster-construction time for a two-monster hive encounter: ['CombatHistory','StrikeCard','DefendCard', the previously-created monster's own powers] - no relic, no potion. Rule 7: the rationale leans on sts2_rl/combat.py, sts2_rl/relics/ruined_helmet.py, sts2_rl/relics/unsettling_lamp.py and src/Core/Combat/CombatManager.cs, which this record does NOT hash. Amounts and ORDER match: MysteriousKnight.cs:13-14 applies StrengthPower 6m then PlatingPower 6m, both self-applied; the sim applies them in the same order. The base call at :12 reaches MonsterModel.AfterAddedToRoom, which FlailKnight does not override, so there is no inherited effect to lose."
     },
     "MinInitialHp": {
       "maps_to": "inherited FlailKnight.min_hp = 101 (flail_knight.py:34)",
@@ -64,6 +64,26 @@
       "path": "sts2_rl\\events\\the_lantern_key.py",
       "sha256": "29c60d6b668ae35eeab1aa04a606ff574b5a318c63e0bf815c114cc13972a8f5",
       "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\combat.py",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\relics\\ruined_helmet.py",
+      "sha256": "55ff84a9f9bd2ae1fc0430d9c5b18b2720e662458b66c8338fd30b361d9df3c8",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl\\relics\\unsettling_lamp.py",
+      "sha256": "fc3c134fc62f28d8c30b2ac40a1ece7bbd914dd9b2766fbca402a96c939bba82",
+      "side": "sim"
+    },
+    {
+      "path": "src\\Core\\Combat\\CombatManager.cs",
+      "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
+      "side": "game"
     }
   ]
 }

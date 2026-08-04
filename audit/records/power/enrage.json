@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -21,27 +21,27 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:263 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py:426 `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-140 Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:137-140) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
     },
     "AfterCardPlayed": {
-      "maps_to": "powers.py:265-269 EnragePower.on_card_played",
+      "maps_to": "powers.py:428-433 EnragePower.on_card_played",
       "verdict": "faithful"
     }
   },
@@ -49,17 +49,17 @@
     {
       "what": "EnragePower.cs:17 `cardPlay.Card.Type == CardType.Skill` -- and NO ownership test",
       "verdict": "faithful",
-      "rationale": "powers.py:267 tests CardType.SKILL and likewise does not test ownership. The absent owner check is C#'s, not an omission: EnragePower.cs:15-22 reacts to ANY Skill played by anyone, unlike Corruption and Feel No Pain, which both gate on card.Owner.Creature. The sim matches, and in single-player the distinction is unobservable anyway."
+      "rationale": "powers.py:431 tests CardType.SKILL and likewise does not test ownership. The absent owner check is C#'s, not an omission: EnragePower.cs:15-22 reacts to ANY Skill played by anyone, unlike Corruption and Feel No Pain, which both gate on card.Owner.Creature. The sim matches, and in single-player the distinction is unobservable anyway."
     },
     {
       "what": "EnragePower.cs:20 `PowerCmd.Apply<StrengthPower>(Owner, Amount, applier: Owner)`",
       "verdict": "deliberate-divergence",
-      "rationale": "powers.py:268-269 routes through StrengthCmd.apply (cmds.py:349-361), which runs a modify_strength_given chain C# does not have at this site and drops `applier = Owner`. Same shape, same reasoning and same non-observability as the matching guards on power/ritual and power/demon_form; kept as a divergence because PossessStrengthPower (powers.py:3092-3099) is the ported effect that reads a Strength application's applier."
+      "rationale": "powers.py:432-433 routes through StrengthCmd.apply (cmds.py:1155-1167), which runs a modify_strength_given chain C# does not have at this site and drops `applier = Owner`. Same shape, same reasoning and same non-observability as the matching guards on power/ritual and power/demon_form; kept as a divergence because PossessStrengthPower (powers.py:3942-3951) is the ported effect that reads a Strength application's applier."
     },
     {
       "what": "Enrage fires once per CardPlay, not once per Replay iteration",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: combat.py:574-600 now builds the play bracket INSIDE `for play_index in range(play_count)` -- `before_card_played` at :576 and `on_card_played` at :600 both fire once per replay iteration, mirroring CardModel.cs:1904-1965 (Hook.BeforeCardPlayed :1929 and Hook.AfterCardPlayed :1959, both inside the playCount loop). VERIFIED 2026-07-27 by reading `CombatState._resolve_card_play`. WAS: both fired once per logical play, outside the loop, so a Throwing-Axe- or Duplication-doubled card advanced every Before/AfterCardPlayed listener by 1 where the game advances it by 2."
+      "issue": "Closed 2026-07-27: combat.py's `_play_count_loop` (combat.py:1147-1153+) now builds the play bracket INSIDE `for play_index in range(play_count)` -- `before_card_played` at :1155 and `on_card_played` at :1209 both fire once per replay iteration, mirroring CardModel.cs:1904-1965 (Hook.BeforeCardPlayed :1929 and Hook.AfterCardPlayed :1959, both inside the playCount loop). RE-VERIFIED 2026-08-04 (line numbers only) by reading `CombatState._play_count_loop`. WAS: both fired once per logical play, outside the loop, so a Throwing-Axe- or Duplication-doubled card advanced every Before/AfterCardPlayed listener by 1 where the game advances it by 2."
     },
     {
       "what": "EnragePower.cs:19 Cmd.Wait(0.5f)",
@@ -68,5 +68,5 @@
     }
   ],
   "verdict": "deliberate-divergence",
-  "audited": "2026-07-26"
+  "audited": "2026-08-04"
 }

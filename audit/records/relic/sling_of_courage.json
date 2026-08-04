@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -52,9 +52,9 @@
       "rationale": "Matches SlingOfCourage.cs:15. Obtainable: Shop rarity in the transcribed grab bag (relic_pools.py:133, 'RELIC.SLING_OF_COURAGE'). Rule 7: relic_pools.py is not hashed here."
     },
     "AfterRoomEntered": {
-      "maps_to": "on_combat_start (sling_of_courage.py:20-29) -- the sim's BeforeCombatStart pass, gated on `self.combat.room_type != RoomType.ELITE`; the sim's own after_room_entered hook (relics/base.py:194, dispatched at run.py:983) is NOT used because at room-entry time the sim has no CombatState to hold the power",
+      "maps_to": "on_combat_start (sling_of_courage.py:20-29) -- the sim's BeforeCombatStart pass, gated on `self.combat.room_type != RoomType.ELITE`; the sim's own after_room_entered hook (relics/base.py:350, dispatched at run.py:1502) is NOT used because at room-entry time the sim has no CombatState to hold the power",
       "verdict": "gap",
-      "issue": "Rollup of guard N1 per binding rule 4. SlingOfCourage.cs:21-28 applies PowerVar<StrengthPower>(2) from AfterRoomEntered when `room.RoomType == RoomType.Elite`, and for a CombatRoom that hook fires after CombatManager.SetUpCombat and BEFORE Hook.BeforeCombatStart (CombatRoom.cs:225-229) -- so C# guarantees the +2 Strength is on the player before ANY combat-start listener runs. The sim re-hosts the effect one dispatch point later, inside the on_combat_start pass, in relic-registration order. The room-type gate and the constant are faithful (guards N2, N3); the SLOT is a dormant gap (N1), which this entry carries as its rollup. The re-hosting itself is forced -- the sim's own after_room_entered hook (relics/base.py:194, dispatched at run.py:983) runs before any CombatState exists and so cannot hold a power -- and it is the same re-hosting relics/girya.py:22 applies to the identical C# hook; audit/records/relic/girya.json guard G2 verdicts that mechanism a DORMANT gap and binding rule 3 pins this entry to the same verdict rather than letting it soften to a divergence. Rule 7: relics/base.py, relics/girya.py, audit/records/relic/girya.json, run.py and CombatRoom.cs are not hashed here."
+      "issue": "RECONFIRMED 2026-08-04 (stale-sweep, content unchanged -- only line numbers moved). Rollup of guard N1 per binding rule 4. SlingOfCourage.cs:21-28 applies PowerVar<StrengthPower>(2) from AfterRoomEntered when `room.RoomType == RoomType.Elite`, and for a CombatRoom that hook fires after CombatManager.SetUpCombat and BEFORE Hook.BeforeCombatStart (CombatRoom.cs:225-229) -- so C# guarantees the +2 Strength is on the player before ANY combat-start listener runs. The sim re-hosts the effect one dispatch point later, inside the on_combat_start pass, in relic-registration order. The room-type gate and the constant are faithful (guards N2, N3); the SLOT is a dormant gap (N1), which this entry carries as its rollup. The re-hosting itself is forced -- the sim's own after_room_entered hook (relics/base.py:350, dispatched at run.py:1502) runs before any CombatState exists and so cannot hold a power -- and it is the same re-hosting relics/girya.py:22 applies to the identical C# hook; audit/records/relic/girya.json guard G2 verdicts that mechanism a DORMANT gap and binding rule 3 pins this entry to the same verdict rather than letting it soften to a divergence. Rule 7: relics/base.py, relics/girya.py, audit/records/relic/girya.json, run.py and CombatRoom.cs are not hashed here."
     }
   },
   "guards": [
@@ -66,7 +66,7 @@
     {
       "what": "N2: the room-type gate -- `room.RoomType == RoomType.Elite` (SlingOfCourage.cs:23) vs `self.combat.room_type != RoomType.ELITE` (sling_of_courage.py:22)",
       "verdict": "faithful",
-      "rationale": "The sim's CombatState.room_type is the run-layer RoomType the combat happens in, set by RunState.create_combat's caller and None for room-less combats (combat.py:96-101). EXECUTED (relic_probes_b14.py sling): ELITE gives Strength 2 and MONSTER, BOSS and None all give 0 -- so a boss fight grants nothing, matching C# (RoomType.Boss is a distinct value). The two formulations cover the same set: C# fires the hook for every room and filters to Elite; the sim only ever asks in a combat and filters the same way, and a non-combat Elite room does not exist. The pattern is shared with relics/pantograph.py:22, which gates the same field on BOSS. Rule 7: combat.py, run.py and relics/pantograph.py are not hashed here."
+      "rationale": "RECONFIRMED 2026-08-04 (content unchanged, only line numbers moved). The sim's CombatState.room_type is the run-layer RoomType the combat happens in, set by RunState.create_combat's caller and None for room-less combats (combat.py:135,166). EXECUTED (relic_probes_b14.py sling): ELITE gives Strength 2 and MONSTER, BOSS and None all give 0 -- so a boss fight grants nothing, matching C# (RoomType.Boss is a distinct value). The two formulations cover the same set: C# fires the hook for every room and filters to Elite; the sim only ever asks in a combat and filters the same way, and a non-combat Elite room does not exist. The pattern is shared with relics/pantograph.py:22, which gates the same field on BOSS. Rule 7: combat.py, run.py and relics/pantograph.py are not hashed here."
     },
     {
       "what": "N3: PowerVar<StrengthPower>(2m) read as BaseValue (SlingOfCourage.cs:26) vs STRENGTH = 2 (sling_of_courage.py:18), and the applier",

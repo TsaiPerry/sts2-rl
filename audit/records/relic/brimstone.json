@@ -11,7 +11,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -28,9 +28,9 @@
   },
   "guards": [
     {
-      "what": "N1: C# targets `GetOpponentsOf(owner).Where(c => c.IsAlive)` (Brimstone.cs:25-27); the sim uses Relic.living_enemies() (relics/base.py:294-297), which filters on `not e.is_gone`",
+      "what": "N1: C# targets `GetOpponentsOf(owner).Where(c => c.IsAlive)` (Brimstone.cs:25-27); the sim uses Relic.living_enemies() (relics/base.py:486-493, was :294-297), which filters on `not e.is_gone`",
       "verdict": "faithful",
-      "rationale": "`is_gone` is `is_dead or escaped` (creatures.py), so the sim's filter is if anything STRICTER than C#'s IsAlive -- it also excludes an escaped-but-alive creature, which C#'s GetOpponentsOf would have already dropped from the combat's opponent list. Distinct from relic/bag_of_marbles' G2, where the C# side used HittableEnemies (IsAlive AND Hook.ShouldAllowHitting) and the sim's weaker filter let an unhittable enemy be targeted: here C# asks only for IsAlive, so there is no ShouldAllowHitting clause to lose. Worth the entry precisely because the two relics look identical at a glance and only one of them is a gap."
+      "rationale": "`is_gone` is `is_dead or escaped` (creatures.py), so the sim's filter is if anything STRICTER than C#'s IsAlive -- it also excludes an escaped-but-alive creature, which C#'s GetOpponentsOf would have already dropped from the combat's opponent list. Distinct from relic/bag_of_marbles' G2, where the C# side used HittableEnemies (IsAlive AND Hook.ShouldAllowHitting) and the sim's weaker filter let an unhittable enemy be targeted: here C# asks only for IsAlive, so there is no ShouldAllowHitting clause to lose. Worth the entry precisely because the two relics look identical at a glance and only one of them is a gap. Re-verified 2026-08-04: docstring and body unchanged in substance, only shifted lines."
     },
     {
       "what": "N2: the self-Strength is applied BEFORE the enemy Strength on both sides",

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -26,22 +26,22 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:2377 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py:3016 `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-139 Power.on_stack",
       "verdict": "faithful",
       "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "AfterDamageReceived": {
-      "maps_to": "powers.py:2379-2398 on_damage_received",
+      "maps_to": "powers.py:3018-3037 on_damage_received",
       "verdict": "faithful",
       "rationale": "Right hook in the right slot, and the guards match one for one: `target == base.Owner && dealer != null && props.IsPoweredAttack()` (PersonalHivePower.cs:25) vs powers.py:2388-2393's `target is not self.owner or dealer is None or dealer.side != \"player\" or not is_powered_attack(props) -> return` -- the sim adding the `dealer.side == \"player\"` test in place of C#'s implicit `dealer.Player` dereference at PersonalHivePower.cs:34. Note what is deliberately NOT there on either side: an UnblockedDamage check, so the Dazed land even on a fully blocked hit, which is what the sim's docstring says. The killing-blow behaviour is faithful and load-bearing: cmds.py:121 skips the sim's hook when the hit killed the owner and C#'s AfterDamageReceived is skipped by the same CreatureCmd.cs:392 guard -- this exact pair is the SP3 89U act-1 force-win fix (a killing Thrash must NOT fire PersonalHive), so it is pinned by conformance, not just by reading. `base.Amount` Dazed to PileType.Draw at CardPilePosition.Random maps to `CardPileCmd.add_to_draw` x amount. Osty redirection (PersonalHivePower.cs:27-30) is out of Ironclad scope. Third-file citations, not hashed here."
     }

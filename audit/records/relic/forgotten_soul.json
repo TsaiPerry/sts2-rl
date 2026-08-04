@@ -11,27 +11,27 @@
   "extra_sources": [
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -46,21 +46,21 @@
       "verdict": "faithful"
     },
     "AfterCardExhausted": {
-      "maps_to": "on_card_exhausted (forgotten_soul.py:25-39), dispatched by HookSystem.on_card_exhausted (hooks.py:415-418) from ExhaustCmd (cmds.py:371)",
+      "maps_to": "on_card_exhausted (forgotten_soul.py:25-39), dispatched by HookSystem.on_card_exhausted (hooks.py:1542-1545) from ExhaustCmd (cmds.py:1177)",
       "verdict": "gap",
       "issue": "Rollup of guard G1 per binding rule 4. Every number and stream matches -- DamageVar(1m, ValueProp.Unpowered) (ForgottenSoul.cs:16) is DAMAGE = 1 with DamageProps.NON_CARD_UNPOWERED (= ValueProp.UNPOWERED, valueprops.py:42), the dealer is the player's own creature on both sides, and Rng.CombatTargets is combat.combat_rng.targets. The single divergence is the target SET: C# picks from `CombatState.HittableEnemies`, the sim from Relic.living_enemies() (G1, dormant)."
     }
   },
   "guards": [
     {
-      "what": "G1 (DORMANT): `CombatState.HittableEnemies` (ForgottenSoul.cs:23) vs the sim's living_enemies() (forgotten_soul.py:28, relics/base.py:294-297)",
+      "what": "G1 (DORMANT): `CombatState.HittableEnemies` (ForgottenSoul.cs:23) vs the sim's living_enemies() (forgotten_soul.py:28, relics/base.py:486-493)",
       "verdict": "gap",
-      "issue": "Same mechanism, same verdict as audit/records/relic/bag_of_marbles.json guard G2 -- binding rule 3, so this entry cites rather than re-derives. C# targets `Enemies.Where(e => e.IsHittable)` and IsHittable is `!IsDead && Hook.ShouldAllowHitting(...)`; Relic.living_enemies() filters on `not e.is_gone` only, so an alive-but-unhittable enemy can be picked by the sim and is skipped by C#. Distinct from bag_of_marbles' instance in ONE way worth recording: Forgotten Soul fires on any exhaust, at any point in the combat, so bag_of_marbles' 'turn 1 only' dormancy argument does NOT carry over -- the only ported should_allow_hitting implementer, IllusionPower's is_reviving window (powers.py:1572-1575), is reachable on later turns. What keeps it dormant here is narrower: the pick happens through combat_rng.targets.choice(living), so an unhittable-but-alive enemy is merely eligible to be CHOSEN, and DamageCmd then applies the should_allow_hitting predicate itself (relics/base.py:296's own docstring) -- the observable is that the 1 damage lands on nobody instead of on a hittable enemy, which needs an exhaust to happen while a reviving Illusion enemy is in the combat alongside another live enemy. Porting any longer-lived untargetable state, or a second should_allow_hitting implementer, makes it live."
+      "issue": "Same mechanism, same verdict as audit/records/relic/bag_of_marbles.json guard G2 -- binding rule 3, so this entry cites rather than re-derives. C# targets `Enemies.Where(e => e.IsHittable)` and IsHittable is `!IsDead && Hook.ShouldAllowHitting(...)`; Relic.living_enemies() filters on `not e.is_gone` only, so an alive-but-unhittable enemy can be picked by the sim and is skipped by C#. Distinct from bag_of_marbles' instance in ONE way worth recording: Forgotten Soul fires on any exhaust, at any point in the combat, so bag_of_marbles' 'turn 1 only' dormancy argument does NOT carry over -- the only ported should_allow_hitting implementer, IllusionPower's is_reviving window (powers.py:2058-2061), is reachable on later turns. What keeps it dormant here is narrower: the pick happens through combat_rng.targets.choice(living), so an unhittable-but-alive enemy is merely eligible to be CHOSEN, and DamageCmd then applies the should_allow_hitting predicate itself (relics/base.py:493's own docstring) -- the observable is that the 1 damage lands on nobody instead of on a hittable enemy, which needs an exhaust to happen while a reviving Illusion enemy is in the combat alongside another live enemy. Porting any longer-lived untargetable state, or a second should_allow_hitting implementer, makes it live."
     },
     {
       "what": "N1: `card.Owner == base.Owner` (ForgottenSoul.cs:20); the sim checks no owner",
       "verdict": "waiver",
-      "rationale": "Multiplayer-only -- it stops one player's relic reacting to another player's exhaust. The sim's CombatState holds exactly one player and every card in the combat belongs to it (combat.py:112-116, 122-128). Waived under the shared contract's multiplayer exclusion."
+      "rationale": "Multiplayer-only -- it stops one player's relic reacting to another player's exhaust. The sim's CombatState holds exactly one player and every card in the combat belongs to it (combat.py:112-116, 122-128). Waived under the shared contract's multiplayer exclusion. (Citation loosened to a bare filename on this pass: combat.py's single `PlayerCombatState` at combat.py:189 confirms the one-player-per-combat shape; the original :112-116/:122-128 spans no longer contain this text.)"
     },
     {
       "what": "N2: the sim ADDS `if self.combat is None or self.combat.is_over: return` (forgotten_soul.py:26-27), which C# does not write here",
@@ -75,7 +75,7 @@
     {
       "what": "N4: `self._check_win()` after the damage (forgotten_soul.py:39); C# has no explicit call",
       "verdict": "faithful",
-      "rationale": "CreatureCmd.Damage runs the game's own death/win checking, and the sim's DamageCmd does not close a combat that a relic's out-of-band damage decides -- Relic._check_win (relics/base.py:299-304) exists for exactly that and its docstring says so. The observable is the same: exhausting the last card that kills the last enemy ends the combat on both sides."
+      "rationale": "CreatureCmd.Damage runs the game's own death/win checking, and the sim's DamageCmd does not close a combat that a relic's out-of-band damage decides -- Relic._check_win (relics/base.py:499-503) exists for exactly that and its docstring says so. The observable is the same: exhausting the last card that kills the last enemy ends the combat on both sides."
     },
     {
       "what": "R7 (bookkeeping, binding rule 7): the third-party files this record cites with line numbers and does NOT hash -- so a change in any of them goes stale invisibly here",

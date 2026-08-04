@@ -11,7 +11,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     }
   ],
@@ -40,7 +40,7 @@
     {
       "what": "N3: `PlayerCmd.GainEnergy` vs `EnergyCmd.gain` (chandelier.py:21)",
       "verdict": "faithful",
-      "rationale": "Identical to relic/candelabra N3 -- EnergyCmd.gain (cmds.py:547-553) runs modify_energy_gain like PlayerCmd.GainEnergy runs Hook.ModifyEnergyGain; the only dropped leg is the AfterModifyingEnergyGain companion event, which belongs to the hook layer. Contrast relic/booming_conch, whose direct assignment skips the chain entirely and is a recorded gap."
+      "rationale": "Identical to relic/candelabra N3 -- EnergyCmd.gain (cmds.py:1850-, was :547-553) runs modify_energy_gain like PlayerCmd.GainEnergy runs Hook.ModifyEnergyGain; the only dropped leg is the AfterModifyingEnergyGain companion event, which belongs to the hook layer. Contrast relic/booming_conch, whose direct assignment skips the chain entirely and is a recorded gap. Re-verified 2026-08-04 (line-shift only)."
     },
     {
       "what": "N4: `EnergyVar(3)` and the unused `private const int _energyTurn = 3` (Chandelier.cs:15, 19)",

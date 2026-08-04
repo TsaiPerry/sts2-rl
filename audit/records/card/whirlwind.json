@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     }
   ],
@@ -49,7 +49,7 @@
     "OnPlay": {
       "maps_to": "WhirlwindCard.on_play (whirlwind.py:39-49)",
       "verdict": "gap",
-      "issue": "The X-value plumbing, the hit count and the hits-outer/enemies-inner loop order are all faithful: `WithHitCount(ResolveEnergyXValue())` on `TargetingAllOpponents(CombatState)` (Whirlwind.cs:33, 42-45) == `for _ in range(self.captured_x)` with a per-hit living-enemy sweep, where `captured_x` is set by the play pipeline as `hooks.modify_x_value(card, player.energy)` (combat.py:547-549), the sim's ResolveEnergyXValue. AttackCommand re-derives `validTargets` from `where c.IsAlive` at the top of each hit (AttackCommand.cs:544-546), which the sim's per-hit `[e for e in ctx.enemies if not e.is_gone]` matches, and both break when none remain. ALL-ENEMIES FAN-OUT: C# passes the whole valid-target list to ONE `CreatureCmd.Damage(targets: validTargets)` call per hit (AttackCommand.cs:650), computing every DamageResult before any `Kill` (CreatureCmd.cs:372-409); the sim issues a separate `DamageCmd.deal` per enemy, so each death resolves before the next enemy is damaged. Same mechanism and same verdict as card/conflagration's OnPlay entry (rule 3). DORMANT -- no ported Ironclad-reachable monster has an on-death effect that changes a sibling's incoming damage. Presentation, folded in: the whole `if (num > 0)` VFX block (34-41), which draws horizontal lines and a vignette scaled by the FastMode player setting and plays a sound; it touches no state, and note that the sim needs no `num > 0` guard because a zero-iteration loop does nothing."
+      "issue": "The X-value plumbing, the hit count and the hits-outer/enemies-inner loop order are all faithful: `WithHitCount(ResolveEnergyXValue())` on `TargetingAllOpponents(CombatState)` (Whirlwind.cs:33, 42-45) == `for _ in range(self.captured_x)` with a per-hit living-enemy sweep, where `captured_x` is set by the play pipeline as `hooks.modify_x_value(card, player.energy)` (combat.py:970, moved from :547-549 -- the manual-play-path call site, content re-verified current), the sim's ResolveEnergyXValue. AttackCommand re-derives `validTargets` from `where c.IsAlive` at the top of each hit (AttackCommand.cs:544-546), which the sim's per-hit `[e for e in ctx.enemies if not e.is_gone]` matches, and both break when none remain. ALL-ENEMIES FAN-OUT: C# passes the whole valid-target list to ONE `CreatureCmd.Damage(targets: validTargets)` call per hit (AttackCommand.cs:650), computing every DamageResult before any `Kill` (CreatureCmd.cs:372-409); the sim issues a separate `DamageCmd.deal` per enemy, so each death resolves before the next enemy is damaged. Same mechanism and same verdict as card/conflagration's OnPlay entry (rule 3). DORMANT -- no ported Ironclad-reachable monster has an on-death effect that changes a sibling's incoming damage. Presentation, folded in: the whole `if (num > 0)` VFX block (34-41), which draws horizontal lines and a vignette scaled by the FastMode player setting and plays a sound; it touches no state, and note that the sim needs no `num > 0` guard because a zero-iteration loop does nothing."
     },
     "OnUpgrade": {
       "maps_to": "WhirlwindCard._on_upgrade (whirlwind.py:36-37)",

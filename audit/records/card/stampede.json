@@ -11,28 +11,28 @@
   "extra_sources": [
     {
       "path": "sts2_rl/full_env.py",
-      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "sha256": "4ba9a145147eb29e6f42a10acb70986873bf1bb12d47a12ef764a423572f312f",
       "side": "sim"
     }
   ],
   "hooks": {
     "ctor": {
-      "maps_to": "class attrs (stampede.py:55-59) + _init_vars (61-62)",
+      "maps_to": "class attrs (stampede.py:21-25) + _init_vars (27-29)",
       "verdict": "faithful",
       "rationale": "`base(2, CardType.Power, CardRarity.Uncommon, TargetType.Self)` (Stampede.cs:17-20) == cost 2 / POWER / UNCOMMON / SELF."
     },
     "CanonicalVars": {
-      "maps_to": "nothing -- the sim passes the literal 1 (stampede.py:70)",
+      "maps_to": "StampedeCard._power_amount = 1 (stampede.py:29)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-30 (tier-2 campaign): (Task 24.) All 23 cards now store their printed C# var under a `_`-attribute (or, for 3 cards whose C# var is a live/computed value at display time -- guilty, normality, expect_a_fight -- a `magic_number` property override; wither similarly overrides `base_damage`) so `Card.base_damage`/`base_block`/`base_hp_loss`/`magic_number` report the C# value instead of the 0/None default. Two additive base.py changes: `_frail` added to `_MAGIC_ATTRS` (shame) and a new `base_gold` property (debt, spoils_map -- GoldVar had no base property at all). feel_no_pain's `_block` was renamed to `_power_amount` (fixing a WRONG value, not just a missing one -- `base_block` no longer misreports it as block-granting; matches Rage/Corruption/Stampede's DynamicVar('Power', ...) convention). Combat behavior / dealt numbers are byte-identical in every case -- a printed-number / observation-encoder fix only. 3 of the 23 (debt, spoils_map, rolling_boulder's secondary IncrementAmount) have NO obs-vector change despite the API fix (full_env.py has no base_gold read site; magic_number carries one number per card and _power_amount dominates rolling_boulder's scan) -- documented, not closed further. CHECKPOINT NOTE for training: encoded VALUES changed for the other 20 cards in feature slots f[17]/f[18] damage, f[20]/f[21] block, f[22] hp_loss, f[23] magic_number; obs LAYOUT unchanged. Pins: test/test_printed_vars.py (48 tests).  The text it replaced read: `new DynamicVar(\"Power\", 1m)` (Stampede.cs:15) is a printed var with no `_`-attribute in `_init_vars`, so `magic_number` returns None where the game prints 1. Contrast card/rage and card/shockwave, which store the same generic `Power` var in `_power_amount`. Same mechanism and same verdict as card/bad_luck's CanonicalVars entry (rule 3): a printed number the sim's `magic_number` cannot surface, so `full_env.card_features` (full_env.py:455-489) encodes the card without it. DORMANT for game fidelity, LIVE for the observation encoder."
+      "issue": "Closed 2026-07-30 (tier-2 campaign, Task 24; re-confirmed current on this stale-sweep pass, file byte-identical): all 23 cards now store their printed C# var under a `_`-attribute (or, for 3 cards whose C# var is a live/computed value at display time -- guilty, normality, expect_a_fight -- a `magic_number` property override; wither similarly overrides `base_damage`) so `Card.base_damage`/`base_block`/`base_hp_loss`/`magic_number` report the C# value instead of the 0/None default. Stampede stores the printed `DynamicVar(\"Power\", 1m)` (Stampede.cs:15) as `self._power_amount = 1` (stampede.py:29), and `_power_amount` is in `base.py`'s `_MAGIC_ATTRS` (base.py:376), so `Card.magic_number` (base.py:412-419) now returns 1 where it previously returned None. `full_env.card_features` (full_env.py:700-744) reads `card.magic_number` at line 736 into feature slot f[23], so the observation encoder now sees Stampede's Power amount. Two additive base.py changes at the time: `_frail` added to `_MAGIC_ATTRS` and a new `base_gold` property. feel_no_pain's `_block` was renamed to `_power_amount` (matches Rage/Corruption/Stampede's DynamicVar('Power', ...) convention). Combat behavior / dealt numbers are byte-identical -- a printed-number / observation-encoder fix only. CHECKPOINT NOTE for training: encoded VALUES changed for 20 of the 23 cards in feature slots f[17]/f[18] damage, f[20]/f[21] block, f[22] hp_loss, f[23] magic_number; obs LAYOUT unchanged. Pins: test/test_printed_vars.py. Same mechanism as card/bad_luck's CanonicalVars entry (rule 3) -- both now report faithful post-fix. Formerly DORMANT-for-game-fidelity / LIVE-for-observation-encoder gap; CLOSED."
     },
     "OnPlay": {
-      "maps_to": "StampedeCard.on_play (stampede.py:67-70)",
+      "maps_to": "StampedeCard.on_play (stampede.py:34-40)",
       "verdict": "faithful",
-      "rationale": "`PowerCmd.Apply<StampedePower>(choiceContext, Owner.Creature, DynamicVars[\"Power\"].BaseValue, Owner.Creature, this)` (Stampede.cs:24) == `PowerCmd.apply(ctx.hooks, ctx.player, StampedePower, 1, applier=ctx.player)`. No animation on either side. StampedePower's end-of-turn auto-play of a random hand Attack is the power stream's -- and it is the same end-of-turn auto-play slot card/howl_from_beyond uses, which the sim maps to `on_player_turn_end`."
+      "rationale": "`PowerCmd.Apply<StampedePower>(choiceContext, Owner.Creature, DynamicVars[\"Power\"].BaseValue, Owner.Creature, this)` (Stampede.cs:24) == `PowerCmd.apply(ctx.hooks, ctx.player, StampedePower, self._power_amount, applier=ctx.player)`. No animation on either side. StampedePower's end-of-turn auto-play of a random hand Attack is the power stream's -- and it is the same end-of-turn auto-play slot card/howl_from_beyond uses, which the sim maps to `on_player_turn_end`."
     },
     "OnUpgrade": {
-      "maps_to": "StampedeCard._on_upgrade (stampede.py:64-65)",
+      "maps_to": "StampedeCard._on_upgrade (stampede.py:31-32)",
       "verdict": "faithful",
       "rationale": "`EnergyCost.UpgradeBy(-1)` (Stampede.cs:29) == `self._energy_cost = max(0, self._energy_cost - 1)` (2 -> 1). The Power var stays 1 when upgraded on both sides."
     }

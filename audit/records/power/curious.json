@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cards/mad_science.py",
-      "sha256": "2ede1a12f1aa80dfde0f095c34997387210e6856011a40c954199fe33aa37c73",
+      "sha256": "51a3413baaa2dcc8b9bbc49b04e5ca2475d4e1f511bf46230bedd9f1e9c8ca33",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     }
   ],
@@ -65,7 +65,7 @@
     {
       "what": "The reduction amount",
       "verdict": "faithful",
-      "rationale": "The only ported applier is the Mad Science card's Curious rider (cards/mad_science.py:162-176, _CURIOUS_REDUCTION), from the ported Act-3 Glory event Tinker Time. No AscensionHelper call in CuriousPower.cs, so there is no non-ascension branch to pick."
+      "rationale": "The only ported applier is the Mad Science card's Curious rider (cards/mad_science.py:168-182, _CURIOUS_REDUCTION), from the ported Act-3 Glory event Tinker Time. No AscensionHelper call in CuriousPower.cs, so there is no non-ascension branch to pick."
     }
   ],
   "verdict": "gap",

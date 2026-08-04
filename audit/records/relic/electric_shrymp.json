@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369",
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0",
       "side": "sim"
     },
     {
@@ -51,12 +51,32 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/combat.py",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     }
   ],
@@ -68,7 +88,7 @@
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (electric_shrymp.py:14)",
       "verdict": "faithful",
-      "rationale": "Matches ElectricShrymp.cs:15. The flag is not cosmetic: RelicModel.IsTradable returns false for any HasUponPickupEffect relic (RelicModel.cs:176-190) and relics/base.py:126-136 mirrors that, so dropping it would make a spent relic tradable. Rule 7: RelicModel.cs and relics/base.py are unhashed here."
+      "rationale": "Matches ElectricShrymp.cs:15. The flag is not cosmetic: RelicModel.IsTradable returns false for any HasUponPickupEffect relic (RelicModel.cs:176-190) and relics/base.py:189-199, re-pinned 2026-08-04, was :126-136 mirrors that, so dropping it would make a spent relic tradable. Rule 7: RelicModel.cs and relics/base.py are unhashed here."
     },
     "AfterObtained": {
       "maps_to": "after_obtained (electric_shrymp.py:16-21)",
@@ -80,7 +100,7 @@
     {
       "what": "G1 (LIVE): the Imbued enchantment this relic grants auto-plays on turn 1 ALWAYS in C# and only ~47% of the time in the sim",
       "verdict": "faithful",
-      "rationale": "Closed, and closed with real consumers rather than surface (prompt rule 4 checked explicitly). (a) THE HOOK MOVED AND THE EXTRA CLAUSE IS GONE: sts2_rl/enchantments.py:315-332 is now `def after_auto_pre_play_phase_entered(self, player)` whose only executable guards are `if self.card is None or self.combat is None: return` (:328-329) and `if self.combat.turn > 1: return` (:330-331), then `self.combat.auto_play_card(self.card)` (:332). The old `self.card in player.hand` clause is gone. That matches Imbued.cs:20-26's `if (player == base.Card.Owner && player.PlayerCombatState.TurnNumber <= 1) await CardCmd.AutoPlay(choiceContext, base.Card, null);` \u2014 unconditional on pile. (b) THE PHASE IS DISPATCHED: sts2_rl/player.py:219-221 calls `self._hooks.after_auto_pre_play_phase_entered(self)` after the draw and after on_player_turn_started, and sts2_rl/hooks.py:480-486 walks the listeners; enchantments are registered as listeners at combat setup (sts2_rl/combat.py:131-134 `card.enchantment.combat = self; self.hooks.register(card.enchantment)`) and mid-combat at cmds.py:588-591, so the Imbued Defend actually receives it. (c) THE PILE MOVE IS PORTED: sts2_rl/player.py:194-207 sinks every card whose enchantment sets should_start_at_bottom_of_draw_pile to index 0 before the Innate pass, mirroring CombatManager.cs:657-672, and ImbuedEnchantment sets that flag at enchantments.py:307. (d) NO DUAL-MODE SPLIT: neither the sink pass, the phase dispatch, nor combat.auto_play_card (combat.py:621-662) branches on combat_rng.is_parity. EXECUTED today `py audit/tools/relic_probes_b05.py shrymp-imbued`: 'enchanted after add_relic: [(defend, Imbued)]' and '200 seeds: Imbued card auto-played on turn 1 in 200 (100%), still in the opening hand in 0' \u2014 C# is 200/200. The pre-campaign number in the issue was 94/200 (47%).  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: MECHANISM: Imbued.cs:20-26's AfterAutoPrePlayPhaseEntered calls CardCmd.AutoPlay(ctx, base.Card, null) unconditionally while TurnNumber <= 1 -- it does not care which pile the card is in, and Imbued.cs:11's ShouldStartAtBottomOfDrawPile guarantees the card is at the BOTTOM of the draw pile because CombatManager.cs:657-672 runs that pile move before the turn-1 draw. The sim's port fires from on_player_turn_started and requires `self.card in player.hand` (enchantments.py:261-267), and never bottoms the card -- its own docstring calls ShouldStartAtBottomOfDrawPile 'cosmetic' (enchantments.py:249). REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b05.py shrymp-imbued): over 200 seeds, `run.add_relic('electric_shrymp')` then a combat auto-plays the Imbued card on turn 1 in 94 seeds (47%) and leaves it unplayed in the other 106, where C# plays it in all 200. Both sides ported: the relic is granted by the ported Orobas shrine (events/orobas.py:20, OPTION_POOL_1) and the sim's only Skill in the starting deck is Defend, so the enchant target always exists (executed: enchanted card = ('defend', 'Imbued')). The missing pile move is audit/records/seam/turn_structure.json G14, which that record already labels LIVE and whose reachability witness is THIS relic -- one verdict per mechanism, binding rule 3; the seam owns the turn-1 pile pass, the enchantment stream owns Imbued's own hook choice, and this record owns the relic's observable. NOTE per binding rule 7: this rationale leans on Imbued.cs, CombatManager.cs and sts2_rl/enchantments.py, NONE of which this record hashes."
+      "rationale": "Closed, and closed with real consumers rather than surface (prompt rule 4 checked explicitly). (a) THE HOOK MOVED AND THE EXTRA CLAUSE IS GONE: sts2_rl/enchantments.py:399-410, re-pinned 2026-08-04, was :315-332 is now `def after_auto_pre_play_phase_entered(self, player)` whose only executable guards are `if self.card is None or self.combat is None: return` (the None/turn>1 guards, re-pinned 2026-08-04, was :328-329) and `if self.combat.turn > 1: return` (re-pinned 2026-08-04, was :330-331), then `self.combat.auto_play_card(self.card)` (re-pinned 2026-08-04, was :332). The old `self.card in player.hand` clause is gone. That matches Imbued.cs:20-26's `if (player == base.Card.Owner && player.PlayerCombatState.TurnNumber <= 1) await CardCmd.AutoPlay(choiceContext, base.Card, null);` \u2014 unconditional on pile. (b) THE PHASE IS DISPATCHED: sts2_rl/player.py:357, re-pinned 2026-08-04, was :219-221 calls `self._hooks.after_auto_pre_play_phase_entered(self)` after the draw and after on_player_turn_started, and sts2_rl/hooks.py:1244-1249, re-pinned 2026-08-04, was :480-486 walks the listeners; enchantments are registered as listeners at combat setup (sts2_rl/combat.py:215-218, re-pinned 2026-08-04, was :131-134 `card.enchantment.combat = self; self.hooks.register(card.enchantment)`) and mid-combat at cmds.py:1622-1634, re-pinned 2026-08-04, was :588-591, so the Imbued Defend actually receives it. (c) THE PILE MOVE IS PORTED: sts2_rl/player.py:400-408, re-pinned 2026-08-04, was :194-207 sinks every card whose enchantment sets should_start_at_bottom_of_draw_pile to index 0 before the Innate pass, mirroring CombatManager.cs:657-672, and ImbuedEnchantment sets that flag at enchantments.py:391, re-pinned 2026-08-04, was :307. (d) NO DUAL-MODE SPLIT: neither the sink pass, the phase dispatch, nor combat.auto_play_card (combat.py:1403+, re-pinned 2026-08-04, was :621-662) branches on combat_rng.is_parity. EXECUTED today `py audit/tools/relic_probes_b05.py shrymp-imbued`: 'enchanted after add_relic: [(defend, Imbued)]' and '200 seeds: Imbued card auto-played on turn 1 in 200 (100%), still in the opening hand in 0' \u2014 C# is 200/200. The pre-campaign number in the issue was 94/200 (47%).  RECONCILED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): this entry was recorded `gap` against pre-campaign code and the divergence is closed today. The issue it replaced read: MECHANISM: Imbued.cs:20-26's AfterAutoPrePlayPhaseEntered calls CardCmd.AutoPlay(ctx, base.Card, null) unconditionally while TurnNumber <= 1 -- it does not care which pile the card is in, and Imbued.cs:11's ShouldStartAtBottomOfDrawPile guarantees the card is at the BOTTOM of the draw pile because CombatManager.cs:657-672 runs that pile move before the turn-1 draw. The sim's port fires from on_player_turn_started and requires `self.card in player.hand` (enchantments.py:261-267), and never bottoms the card -- its own docstring calls ShouldStartAtBottomOfDrawPile 'cosmetic' (enchantments.py:249). REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b05.py shrymp-imbued): over 200 seeds, `run.add_relic('electric_shrymp')` then a combat auto-plays the Imbued card on turn 1 in 94 seeds (47%) and leaves it unplayed in the other 106, where C# plays it in all 200. Both sides ported: the relic is granted by the ported Orobas shrine (events/orobas.py:20, OPTION_POOL_1) and the sim's only Skill in the starting deck is Defend, so the enchant target always exists (executed: enchanted card = ('defend', 'Imbued')). The missing pile move is audit/records/seam/turn_structure.json G14, which that record already labels LIVE and whose reachability witness is THIS relic -- one verdict per mechanism, binding rule 3; the seam owns the turn-1 pile pass, the enchantment stream owns Imbued's own hook choice, and this record owns the relic's observable. NOTE per binding rule 7: this rationale leans on Imbued.cs, CombatManager.cs and sts2_rl/enchantments.py, NONE of which this record hashes."
     },
     {
       "what": "N1: C# selects through CardSelectCmd.FromDeckForEnchantment (ElectricShrymp.cs:23) and the sim pre-filters the deck with ImbuedEnchantment.can_enchant (electric_shrymp.py:19)",
@@ -90,10 +110,10 @@
     {
       "what": "N2: `if (cards.Count <= prefs.MinSelect) enumerable = cards;` (CardSelectCmd.cs:576-578) -- C# auto-keeps when the candidate list is no bigger than the ask; the sim always routes through run.select_cards",
       "verdict": "faithful",
-      "rationale": "run.select_cards (run.py:371-390) clamps `count = min(count, len(candidates))` and returns [] for an empty candidate list, so with MinSelect 1 the two agree on both edges: 0 candidates -> nothing enchanted, 1 candidate -> that card enchanted. Rule 7: CardSelectCmd.cs and run.py are unhashed here."
+      "rationale": "run.select_cards (run.py:585-641, re-pinned 2026-08-04, was :371-390) clamps `count = min(count, len(candidates))` and returns [] for an empty candidate list, so with MinSelect 1 the two agree on both edges: 0 candidates -> nothing enchanted, 1 candidate -> that card enchanted. Rule 7: CardSelectCmd.cs and run.py are unhashed here."
     },
     {
-      "what": "N3: run.select_cards falls back to `self.rng.sample` when no card_selector is installed (run.py:381-390), where C# opens a player-choice screen and draws no RNG at all",
+      "what": "N3: run.select_cards falls back to `self.rng.sample` when no card_selector is installed (run.py:633-641, re-pinned 2026-08-04, was :381-390), where C# opens a player-choice screen and draws no RNG at all",
       "verdict": "gap",
       "issue": "PROMPT.md bug class 16's second half at an out-of-combat site: C#'s FromDeckForEnchantment consumes no Rng (CardSelectCmd.cs:580-602 is a UI/remote-choice branch), so the sim's default random pick both chooses differently AND advances the shared legacy random.Random, shifting every later draw off it. DORMANT for RL play (a policy is free to pick any eligible card) and dormant for the conformance harness (the runner installs run.card_selector from the replay's SelectGridCard commands, so the fallback is not taken); it goes live for any parity run that reaches this relic with no selector installed. Recorded rather than waived because 'the sim substitutes a random pick for a player choice' is a divergence in shape, not merely in today's content (binding rule 1). Rule 7: run.py is unhashed here."
     },

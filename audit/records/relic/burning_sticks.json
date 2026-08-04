@@ -21,17 +21,17 @@
     },
     {
       "path": "sts2_rl/cards/trash_heap_cards.py",
-      "sha256": "f93265bdcd41fa82dd09ab914501270537ae907e02f97679dd58dd2345183e20",
+      "sha256": "9367e6b7a5549cac19271d1173a73d90f9c9cfd86f83d67bdce7f827f1e24c9d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
@@ -48,6 +48,26 @@
       "path": "sts2_rl/relics/paels_growth.py",
       "sha256": "1e9597d2278c55d09e942119f2df1df00f57c56d5cab173f2f52bc232d6d2871",
       "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cards/base.py",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
+      "side": "sim"
+    },
+    {
+      "path": "src/Core/Entities/Cards/CardEnergyCost.cs",
+      "sha256": "c2b18b52ad44a44acbac01c5df4a209f5534a6ec7138e748ea73d66b2dcedd53",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/EnchantmentModel.cs",
+      "sha256": "f4efb3d8568fedf92c4bd5ec3243d09c5af7a108426c6d3c53fe191b9849efd9",
+      "side": "game"
     }
   ],
   "hooks": {
@@ -58,7 +78,7 @@
     "AfterRoomEntered": {
       "maps_to": "reset_for_combat (sts2_rl/relics/burning_sticks.py:24-28), run by Relic.attach on every new CombatState",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/burning_sticks.py:24-28 clears `_used_this_combat` (BurningSticks.cs:37-45 AfterRoomEntered(CombatRoom), :60-65 AfterCombatEnd -- C# is deliberately redundant and one sim reset covers both). WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:215-228 (was :177-190)) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:247-249 (was :192-195)) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/burning_sticks.py:24-28 clears `_used_this_combat` (BurningSticks.cs:37-45 AfterRoomEntered(CombatRoom), :60-65 AfterCombatEnd -- C# is deliberately redundant and one sim reset covers both). WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
     },
     "AfterCardExhausted": {
       "maps_to": "on_card_exhausted (burning_sticks.py:24-33)",
@@ -68,14 +88,14 @@
     "AfterCombatEnd": {
       "maps_to": "reset_for_combat (sts2_rl/relics/burning_sticks.py:24-28)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/burning_sticks.py:24-28 clears `_used_this_combat`, covering BOTH of C#'s redundant resets (BurningSticks.cs:37-45 and :56-61). WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:215-228 (was :177-190)) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:247-249 (was :192-195)) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/burning_sticks.py:24-28 clears `_used_this_combat`, covering BOTH of C#'s redundant resets (BurningSticks.cs:37-45 and :56-61). WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): `_used_this_combat` is never reset, so Burning Sticks works in the first combat of a run only",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/burning_sticks.py:24-28 clears `_used_this_combat` (BurningSticks.cs:37-45 AfterRoomEntered(CombatRoom), :60-65 AfterCombatEnd). WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:215-228 (was :177-190)) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:247-249 (was :192-195)) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/burning_sticks.py:24-28 clears `_used_this_combat` (BurningSticks.cs:37-45 AfterRoomEntered(CombatRoom), :60-65 AfterCombatEnd). WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
     },
     {
       "what": "G3 (LIVE): the copy is rebuilt from the card id, where C# clones the actual card instance",
@@ -100,7 +120,7 @@
     {
       "what": "N2: C# sets WasUsedThisCombat AFTER AddGeneratedCardToCombat (BurningSticks.cs:50-52); the sim sets it BEFORE (burning_sticks.py:29-33)",
       "verdict": "faithful",
-      "rationale": "The ordering only matters under re-entrancy: if adding the clone could itself exhaust a Skill, C# would recurse once and the sim would not. CardPileCmd.add_to_hand (cmds.py:500-514) appends and fires _enter_combat; no ported on-enter effect exhausts a card, so the two orderings are indistinguishable today -- and the sim's is the safer one. Recorded because the flag is the same field guard G1 is about."
+      "rationale": "The ordering only matters under re-entrancy: if adding the clone could itself exhaust a Skill, C# would recurse once and the sim would not. CardPileCmd.add_to_hand (cmds.py:1779-1796 (was :500-514)) appends and fires _enter_combat; no ported on-enter effect exhausts a card, so the two orderings are indistinguishable today -- and the sim's is the safer one. Recorded because the flag is the same field guard G1 is about."
     },
     {
       "what": "N3: Flash(), base.Status = RelicStatus.Active/Normal and ExtraHoverTips (BurningSticks.cs:31, 40, 48, 51, 59)",

@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     }
   ],
@@ -45,7 +45,7 @@
     {
       "what": "N3: `PlayerCmd.GainEnergy` (Candelabra.cs:28) vs `EnergyCmd.gain(self.hooks, player, 2)` (candelabra.py:21)",
       "verdict": "faithful",
-      "rationale": "Checked deliberately because relic/booming_conch's direct `player.energy = ...` IS a recorded gap for skipping this exact chain. PlayerCmd.GainEnergy (PlayerCmd.cs:29-43) guards amount <= 0 and IsEnding, runs Hook.ModifyEnergyGain, then AfterModifyingEnergyGain, then adds. EnergyCmd.gain (cmds.py:547-553) runs hooks.modify_energy_gain and adds. The only missing leg is AfterModifyingEnergyGain, which is the same missing-companion-event shape as relic/bag_of_preparation's N1 and belongs to the hook layer, not to this relic. The two guards are structurally satisfied (the amount is a constant 2, and a combat hook cannot fire while the combat is ending). Rule 7: PlayerCmd.cs and cmds.py are not hashed here."
+      "rationale": "Checked deliberately because relic/booming_conch's direct `player.energy = ...` IS a recorded gap for skipping this exact chain. PlayerCmd.GainEnergy (PlayerCmd.cs:29-43) guards amount <= 0 and IsEnding, runs Hook.ModifyEnergyGain, then AfterModifyingEnergyGain, then adds. EnergyCmd.gain (cmds.py:1850-, was :547-553) runs hooks.modify_energy_gain and adds. The only missing leg is AfterModifyingEnergyGain, which is the same missing-companion-event shape as relic/bag_of_preparation's N1 and belongs to the hook layer, not to this relic. The two guards are structurally satisfied (the amount is a constant 2, and a combat hook cannot fire while the combat is ending). Rule 7: PlayerCmd.cs and cmds.py are not hashed here."
     },
     {
       "what": "N4: `EnergyVar(2)` read as BaseValue (Candelabra.cs:19, 28) and the unused `private const int _energyTurn = 2` (line 15)",

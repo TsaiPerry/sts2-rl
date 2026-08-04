@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     },
     {
@@ -51,17 +51,27 @@
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "63c0df752ca09e9de59285b0c9bc9be809da18e69b61b65424d75f37ee1ffc6b",
+      "sha256": "416789386ad4af19cb52a3c275a2c39c1708bb90ebc4dc5c8fb4e88a7055d557",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
       "path": "src/Core/Commands/CreatureCmd.cs",
       "sha256": "d0a68f1fa60d3c1d05cc87f9e8585a6f6f6529c7e078a856c032a0c1a94f73e8",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PotionModel.cs",
+      "sha256": "78b161c2e578894935b57bc17a99349aeefd7509a094cc3534b406c40258b8a9",
       "side": "game"
     }
   ],
@@ -83,9 +93,9 @@
       "rationale": "presentation only: colour/dialogue/hover-tip/layout/audio metadata with no game-state reader. Out of scope per the shared contract's 'presentation/animation/SFX' waiver."
     },
     {
-      "what": "EV-1: Plain (ThisOrThat.cs:39) deals DynamicVars.HpLoss = 6 through CreatureCmd.Damage with ValueProp.Unblockable | Unpowered can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:294-302) just subtracts",
+      "what": "EV-1: Plain (ThisOrThat.cs:39) deals DynamicVars.HpLoss = 6 through CreatureCmd.Damage with ValueProp.Unblockable | Unpowered can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:420-432, was :294-302) just subtracts",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-29 (round 6): the run-level death pass is complete. `RunState.lose_hp` already clamped at 0 (Creature.LoseHpInternal, Creature.cs:450) and already ran `_resolve_death` -- CreatureCmd's Kill tail (CreatureCmd.cs:504-570) over the belt, which is the only limb of RunState.IterateHookListeners (RunState.cs:545-596) carrying a ported death listener. What was left was the LAST line of this entry's own fix note: Fairy in a Bottle's `after_preventing_death` opened with `if self.combat is None: return`, so the preventer was found and then did nothing. That early return is now the OUT-OF-COMBAT ARM of OnUseWrapper instead -- RemoveBeforeUse nulls the belt slot and the new `FairyInABottle.use_out_of_combat` heals -- which is what PotionModel.cs:294/:298/:334/:336/:340's null-combat guards reduce the wrapper to, and the same reading RunState.use_potion already recorded. EXECUTED: `py audit/tools/event_probes.py lethal` -- all three legs MATCH (alive, hp 24, Fairy consumed) where all three read DIVERGE. test/test_events.py::TestRunLevelDeathPrevention pins both outcomes, including the no-Fairy run ending dead at exactly 0.  The text it replaced read: NARROWED 2026-07-28 -- STILL A GAP. Two legs closed, the decisive one did not. CLOSED: RunState.lose_hp (run.py:304-316) now clamps at 0 (no more negative HP) and runs the run-level death-prevention pass -- `_resolve_death` (run.py:318-345) walks the potion belt asking `should_die` and calls `after_preventing_death` on the preventer, the port of CreatureCmd.KillWithoutCheckingWinCondition (CreatureCmd.cs:489-571). REMAINS: the belt Fairy's out-of-combat arm. FairyInABottle.should_die (potions.py:1310-1311) answers False so the Fairy IS selected as the preventer, but FairyInABottle.after_preventing_death (potions.py:1313-1316) still returns immediately when `self.combat is None`, so nothing heals, `_resolve_death` re-kills through its 10 recursions, and the player still ends DEAD with the Fairy still in the belt. EXECUTED 2026-07-28 (`py audit/tools/event_probes.py lethal`, plus ad-hoc at the repo root): 5 HP + belt Fairy, lose 15 -> sim hp=0, dead, belt still ['FairyInABottle']; the game ends alive at 24 HP with the Fairy consumed. LIVE exactly as before -- only the negative-HP secondary is fixed."
+      "issue": "Closed 2026-07-29 (round 6): the run-level death pass is complete. `RunState.lose_hp` already clamped at 0 (Creature.LoseHpInternal, Creature.cs:450) and already ran `_resolve_death` -- CreatureCmd's Kill tail (CreatureCmd.cs:504-570) over the belt, which is the only limb of RunState.IterateHookListeners (RunState.cs:545-596) carrying a ported death listener. What was left was the LAST line of this entry's own fix note: Fairy in a Bottle's `after_preventing_death` opened with `if self.combat is None: return`, so the preventer was found and then did nothing. That early return is now the OUT-OF-COMBAT ARM of OnUseWrapper instead -- RemoveBeforeUse nulls the belt slot and the new `FairyInABottle.use_out_of_combat` heals -- which is what PotionModel.cs:294/:298/:334/:336/:340's null-combat guards reduce the wrapper to, and the same reading RunState.use_potion already recorded. EXECUTED: `py audit/tools/event_probes.py lethal` -- all three legs MATCH (alive, hp 24, Fairy consumed) where all three read DIVERGE. test/test_events.py::TestRunLevelDeathPrevention pins both outcomes, including the no-Fairy run ending dead at exactly 0.  The text it replaced read: NARROWED 2026-07-28 -- STILL A GAP. Two legs closed, the decisive one did not. CLOSED: RunState.lose_hp (run.py:420-432, was :304-316) now clamps at 0 (no more negative HP) and runs the run-level death-prevention pass -- `_resolve_death` (run.py:434-461, was :318-345) walks the potion belt asking `should_die` and calls `after_preventing_death` on the preventer, the port of CreatureCmd.KillWithoutCheckingWinCondition (CreatureCmd.cs:489-571). REMAINS: the belt Fairy's out-of-combat arm. FairyInABottle.should_die (potions.py:1394, was :1310-1311) answers False so the Fairy IS selected as the preventer, but FairyInABottle.after_preventing_death (potions.py:1397, was :1313-1316) still returns immediately when `self.combat is None`, so nothing heals, `_resolve_death` re-kills through its 10 recursions, and the player still ends DEAD with the Fairy still in the belt. EXECUTED 2026-07-28 (`py audit/tools/event_probes.py lethal`, plus ad-hoc at the repo root): 5 HP + belt Fairy, lose 15 -> sim hp=0, dead, belt still ['FairyInABottle']; the game ends alive at 24 HP with the Fairy consumed. LIVE exactly as before -- only the negative-HP secondary is fixed."
     },
     {
       "what": "Plain's ordering (ThisOrThat.cs:39-41): damage FIRST, then PlayerCmd.GainGold(Gold.IntValue)",
@@ -94,12 +104,12 @@
     },
     {
       "what": "Ornate (ThisOrThat.cs:46-48): RelicFactory.PullNextRelicFromFront(base.Owner) -> RelicCmd.Obtain, THEN CardPileCmd.AddCurseToDeck<Clumsy>",
-      "maps_to": "events/this_or_that.py:42-46 run.pull_relic_from_front() + run.add_relic(), then run.add_card(make_card('clumsy')). Three checks. (1) STREAM: the one-argument PullNextRelicFromFront(player) rolls its rarity on player.PlayerRng.Rewards (RelicFactory.cs:28, :82), and run.pull_relic_from_front defaults rarity_rng to run.rewards_rng (run.py:588-589), which is player_rng.rewards under a parity rng_set (run.py:271-274) -- the correct stream, so this is NOT an EV-3 site (the batch-3-vs-4 self-correction in the stream report settles this). (2) VERB: CardPileCmd.AddCurseToDeck<T> is a thin wrapper over AddCursesToDeck, which type-asserts Curse and then calls the ordinary `Add(card, PileType.Deck)` (CardPileCmd.cs:1037-1056) -- so run.add_card, which runs the same deck-entry hook, is the right port and no egg relic matches a Curse in either build. (3) ORDER: relic before curse in both, which matters -- Darkstone Periapt gains Max HP on a Curse entering the deck (run.py:349-352 after_card_added_to_deck), so pulling it here and then adding Clumsy triggers it, and the reverse order would not. The sim's `if relic is not None` guard is the empty-grab-bag case, where the C# would dereference null.",
+      "maps_to": "events/this_or_that.py:42-46 run.pull_relic_from_front() + run.add_relic(), then run.add_card(make_card('clumsy')). Three checks. (1) STREAM: the one-argument PullNextRelicFromFront(player) rolls its rarity on player.PlayerRng.Rewards (RelicFactory.cs:28, :82), and run.pull_relic_from_front defaults rarity_rng to run.rewards_rng (run.py:1007, was :588-589), which is player_rng.rewards under a parity rng_set (run.py:368, was :271-274) -- the correct stream, so this is NOT an EV-3 site (the batch-3-vs-4 self-correction in the stream report settles this). (2) VERB: CardPileCmd.AddCurseToDeck<T> is a thin wrapper over AddCursesToDeck, which type-asserts Curse and then calls the ordinary `Add(card, PileType.Deck)` (CardPileCmd.cs:1037-1056) -- so run.add_card, which runs the same deck-entry hook, is the right port and no egg relic matches a Curse in either build. (3) ORDER: relic before curse in both, which matters -- Darkstone Periapt gains Max HP on a Curse entering the deck (run.py:524-537, was :349-352, after_card_added_to_deck), so pulling it here and then adding Clumsy triggers it, and the reverse order would not. The sim's `if relic is not None` guard is the empty-grab-bag case, where the C# would dereference null.",
       "verdict": "faithful"
     },
     {
       "what": "EV-3: ThisOrThat.CalculateVars' NextInt(41, 69) gold roll (events/this_or_that.py:29). EXECUTED (`py audit/tools/event_probes_b.py rng5b`): this_or_that has no event_rng branch at all rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- CalculateVars' gold roll runs on `self.event_rng` (events/this_or_that.py:30-33), matching `base.Rng` (ThisOrThat.cs CalculateVars). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- CalculateVars' gold roll runs on `self.event_rng` (events/this_or_that.py:30-33), matching `base.Rng` (ThisOrThat.cs CalculateVars). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:95-98, was :96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
       "verdict": "faithful"
     }
   ],

@@ -11,22 +11,22 @@
   "extra_sources": [
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
+      "sha256": "a1aecf30215574f9bc62dd01cb7c73346bbc1b9b84dd5dcc8dabd67101f8c345",
       "side": "sim"
     }
   ],
@@ -43,19 +43,19 @@
     "BeforeCombatStart": {
       "maps_to": "on_combat_start (pantograph.py:21-26), dispatched by CombatState at combat setup",
       "verdict": "faithful",
-      "rationale": "Pantograph.cs:27-34: `!base.Owner.Creature.IsDead && base.Owner.RunState.CurrentRoom.RoomType == RoomType.Boss` then `CreatureCmd.Heal(base.Owner.Creature, base.DynamicVars.Heal.BaseValue)`. CanonicalVars is `new HealVar(25m)` (line 14) with no AscensionHelper.GetValueIfAscension anywhere in the file, so HEAL = 25 (pantograph.py:19) is the pinned non-ascension value. The sim reads `self.combat.room_type` instead of RunState.CurrentRoom.RoomType, which the driver sets from the room being entered (see N1). The IsDead guard is structurally satisfied -- the player cannot enter a combat dead, and CreatureCmd.heal bails on a dead target anyway (cmds.py:158-160). Slot: BeforeCombatStart maps to on_combat_start, which `py audit/tools/relic_probes.py turn-order` prints BEFORE the turn-1 block clear, i.e. before anything can read the healed HP."
+      "rationale": "Pantograph.cs:27-34: `!base.Owner.Creature.IsDead && base.Owner.RunState.CurrentRoom.RoomType == RoomType.Boss` then `CreatureCmd.Heal(base.Owner.Creature, base.DynamicVars.Heal.BaseValue)`. CanonicalVars is `new HealVar(25m)` (line 14) with no AscensionHelper.GetValueIfAscension anywhere in the file, so HEAL = 25 (pantograph.py:19) is the pinned non-ascension value. The sim reads `self.combat.room_type` instead of RunState.CurrentRoom.RoomType, which the driver sets from the room being entered (see N1). The IsDead guard is structurally satisfied -- the player cannot enter a combat dead, and CreatureCmd.heal bails on a dead target anyway (cmds.py:532-560, re-verified 2026-08-04 after line drift). Slot: BeforeCombatStart maps to on_combat_start, which `py audit/tools/relic_probes.py turn-order` prints BEFORE the turn-1 block clear, i.e. before anything can read the healed HP."
     }
   },
   "guards": [
     {
       "what": "N1: the room-type gate. `RunState.CurrentRoom.RoomType == RoomType.Boss` (Pantograph.cs:29) vs `self.combat.room_type != RoomType.BOSS` (pantograph.py:23) -- does the sim's driver actually populate room_type?",
       "verdict": "faithful",
-      "rationale": "EXECUTED rather than assumed, because binding rule 5 forbids resting a faithful verdict on an unverified premise and a relic gated on an unset field would be silently inert. `py audit/tools/relic_probes_b11.py pantograph-boss` shows both drivers passing it -- driver.py:331 and conformance/runner.py:210 are each `run.create_combat(encounter, room_type=room_type)` -- and then drives the relic through all four values: room_type None / MONSTER / ELITE leave a 40-HP player at 40, and BOSS takes them to 65 (40 + 25, capped by an 80 max). CombatState stores the value at combat.py:101 with a docstring naming room-gated relics as its consumers. NOTE per binding rule 7: the rationale leans on sts2_rl/driver.py, sts2_rl/conformance/runner.py and sts2_rl/combat.py, none of which this record hashes."
+      "rationale": "EXECUTED rather than assumed, because binding rule 5 forbids resting a faithful verdict on an unverified premise and a relic gated on an unset field would be silently inert. `py audit/tools/relic_probes_b11.py pantograph-boss` shows both drivers passing it -- driver.py:507 and conformance/runner.py:236 are each `run.create_combat(encounter, room_type=room_type)` -- and then drives the relic through all four values: room_type None / MONSTER / ELITE leave a 40-HP player at 40, and BOSS takes them to 65 (40 + 25, capped by an 80 max). CombatState stores the value at combat.py:166 (constructor default at :135) with a docstring naming room-gated relics as its consumers. NOTE per binding rule 7: the rationale leans on sts2_rl/driver.py, sts2_rl/conformance/runner.py and sts2_rl/combat.py, none of which this record hashes. (2026-08-04: all three files had drifted; re-ran the cited probe, output unchanged.)"
     },
     {
       "what": "N2: the heal is capped at max HP on both sides",
       "verdict": "faithful",
-      "rationale": "CreatureCmd.Heal clamps to MaxHp, and the sim's CreatureCmd.heal (cmds.py:156-161) does the same and returns the HP actually restored. So a near-full-HP player gains less than 25 identically on both sides. Checked because a relic that healed past the cap would be observable on the very first boss."
+      "rationale": "CreatureCmd.Heal clamps to MaxHp, and the sim's CreatureCmd.heal (cmds.py:532-560) does the same and returns the HP actually restored. So a near-full-HP player gains less than 25 identically on both sides. Checked because a relic that healed past the cap would be observable on the very first boss."
     },
     {
       "what": "N3: Flash() (Pantograph.cs:31) and the Active/Normal status writes (:23)",

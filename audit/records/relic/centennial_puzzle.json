@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     }
   ],
@@ -38,24 +38,24 @@
     "AfterDamageReceived": {
       "maps_to": "on_damage_received (sts2_rl/relics/centennial_puzzle.py) -- owner, unblocked damage > 0, not-yet-used, draw 3; the flag is cleared by reset_for_combat",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/centennial_puzzle.py:24-26 clears `_used_this_combat`, so the trigger -- every clause of which was already faithful -- is live again from combat 2 onward. WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:215-228, was :177-190) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:247-249, was :192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/centennial_puzzle.py:24-26 clears `_used_this_combat`, so the trigger -- every clause of which was already faithful -- is live again from combat 2 onward. WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
     },
     "AfterCombatEnd": {
       "maps_to": "reset_for_combat (sts2_rl/relics/centennial_puzzle.py:24-26)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/centennial_puzzle.py:24-26 clears `_used_this_combat` (CentennialPuzzle.cs:53-57, whose only purpose is that reset). WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:215-228, was :177-190) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:247-249, was :192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/centennial_puzzle.py:24-26 clears `_used_this_combat` (CentennialPuzzle.cs:53-57, whose only purpose is that reset). WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): `_used_this_combat` is never reset, so the relic draws 3 cards in the first combat of a run and never again",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/centennial_puzzle.py:24-26 clears `_used_this_combat` (CentennialPuzzle.cs:53-57 AfterCombatEnd). WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:215-228, was :177-190) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:247-249, was :192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/centennial_puzzle.py:24-26 clears `_used_this_combat` (CentennialPuzzle.cs:53-57 AfterCombatEnd). WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
     },
     {
       "what": "N1: `CombatManager.Instance.IsInProgress` (CentennialPuzzle.cs:42)",
       "verdict": "faithful",
-      "rationale": "Structurally satisfied: on_damage_received is a combat hook, dispatched only from DamageCmd.deal inside a live CombatState (sts2_rl/cmds.py:121-122). [CITATION CORRECTED 2026-07-26 by the relic fix pass: this entry cited sts2_rl/cmds.py:116, which is a line of the explanatory COMMENT. The killing-blow guard is `if not target.is_dead:` at sts2_rl/cmds.py:121 and the dispatch `hooks.on_damage_received(target, hp_lost, dealer, card, props)` is at sts2_rl/cmds.py:122 -- which is what every other record in the tier cites.]"
+      "rationale": "Structurally satisfied: on_damage_received is a combat hook, dispatched only from DamageCmd.deal inside a live CombatState (sts2_rl/cmds.py:444-445, was :121-122). [CITATION CORRECTED 2026-07-26 by the relic fix pass: this entry originally cited sts2_rl/cmds.py:116, a line of the explanatory COMMENT. The killing-blow guard was then `if not target.is_dead:` at sts2_rl/cmds.py:121 and the dispatch at :122. RE-VERIFIED 2026-08-04 (line-shift + refactor, not a content change): DamageCmd.deal now captures `was_lethal = target.is_dead` earlier (sts2_rl/cmds.py:398/407) and gates the dispatch with `if not was_lethal:` at sts2_rl/cmds.py:444, with `hooks.on_damage_received(...)` at :445 -- the same guard, renamed and hoisted, not removed.]"
     },
     {
       "what": "N2: `target == base.Owner.Creature` vs `target is self.player` (centennial_puzzle.py:32)",
@@ -65,17 +65,17 @@
     {
       "what": "N3: `result.UnblockedDamage > 0` vs `amount > 0` (centennial_puzzle.py:32)",
       "verdict": "faithful",
-      "rationale": "The sim passes `hp_lost` -- the POST-block, post-HP-loss-modifier figure -- as the hook's `amount` (sts2_rl/cmds.py:121-122), which is what DamageResult.UnblockedDamage holds. So a hit fully absorbed by block does not draw on either side, and a Tungsten-Rod-style reduction to 0 does not either. Checked because the sim's parameter is named `amount`, which reads like the pre-block number. [CITATION CORRECTED 2026-07-26 by the relic fix pass: this entry cited sts2_rl/cmds.py:116, which is a line of the explanatory COMMENT. The killing-blow guard is `if not target.is_dead:` at sts2_rl/cmds.py:121 and the dispatch `hooks.on_damage_received(target, hp_lost, dealer, card, props)` is at sts2_rl/cmds.py:122 -- which is what every other record in the tier cites.]"
+      "rationale": "The sim passes `hp_lost` -- the POST-block, post-HP-loss-modifier figure -- as the hook's `amount` (sts2_rl/cmds.py:444-445, was :121-122), which is what DamageResult.UnblockedDamage holds. So a hit fully absorbed by block does not draw on either side, and a Tungsten-Rod-style reduction to 0 does not either. Checked because the sim's parameter is named `amount`, which reads like the pre-block number. Re-verified 2026-08-04 (line-shift only)."
     },
     {
       "what": "N4: the killing-blow guard (PROMPT.md bug class 2)",
       "verdict": "faithful",
-      "rationale": "C# skips the victim's AfterDamageReceived when the hit killed it (`!WasTargetKilled || !originalTarget.IsDead`, CreatureCmd.cs:392); the sim guards the dispatch the same way (`if not target.is_dead:` before hooks.on_damage_received, sts2_rl/cmds.py:121). Confirmed rather than assumed because this relic is exactly the shape that would expose it -- a fatal hit must not draw 3 cards. Rule 7: CreatureCmd.cs and cmds.py are not hashed here. [CITATION CORRECTED 2026-07-26 by the relic fix pass: this entry cited sts2_rl/cmds.py:116, which is a line of the explanatory COMMENT. The killing-blow guard is `if not target.is_dead:` at sts2_rl/cmds.py:121 and the dispatch `hooks.on_damage_received(target, hp_lost, dealer, card, props)` is at sts2_rl/cmds.py:122 -- which is what every other record in the tier cites.]"
+      "rationale": "C# skips the victim's AfterDamageReceived when the hit killed it (`!WasTargetKilled || !originalTarget.IsDead`, CreatureCmd.cs:392); the sim guards the dispatch the same way (`if not was_lethal:` before hooks.on_damage_received, sts2_rl/cmds.py:444, `was_lethal` captured at :398/407 -- was `if not target.is_dead:` at :121, re-verified 2026-08-04: same guard, renamed and hoisted, not removed). Confirmed rather than assumed because this relic is exactly the shape that would expose it -- a fatal hit must not draw 3 cards. Rule 7: CreatureCmd.cs and cmds.py are not hashed here."
     },
     {
       "what": "N5: three separate `CardPileCmd.Draw(choiceContext, base.Owner)` calls (CentennialPuzzle.cs:46-49) vs one `DrawCmd.draw(player, 3)` (centennial_puzzle.py:35)",
       "verdict": "faithful",
-      "rationale": "Equivalent: DrawCmd.draw defers to player._draw (player.py:276-292), which loops once per card and per iteration re-checks the hand cap, consults should_draw, reshuffles the discard pile if the draw pile is empty, and fires on_card_drawn. That is the same per-card granularity as three separate Draw calls, including the mid-sequence reshuffle."
+      "rationale": "Equivalent: DrawCmd.draw defers to player._draw (player.py:634-, was :276-292), which loops once per card and per iteration re-checks the hand cap, consults should_draw, reshuffles the discard pile if the draw pile is empty, and fires on_card_drawn. That is the same per-card granularity as three separate Draw calls, including the mid-sequence reshuffle. Re-verified 2026-08-04 (line-shift only)."
     },
     {
       "what": "N6: `CardsVar(3).BaseValue` (CentennialPuzzle.cs:22, 46) vs the literal 3",

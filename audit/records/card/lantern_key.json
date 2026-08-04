@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\event_cards.py",
-    "sha256": "dfd78fff2c2a36323033d8c74d986f9211a6cff57920b7380b731bb6cf9d3a5a"
+    "sha256": "22675c0e8764e2eb8d0aa28341ccb256084aeb94bf28b17a444409586ca6fc54"
   },
   "extra_sources": [
     {
@@ -21,12 +21,22 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/infested_automaton.py",
-      "sha256": "9f2a892edd9957367fd788a75a09d0e3e50beabfa8302fd4c16557d89084abe5",
+      "sha256": "07e0c7ee92afcdc2df5f4d6d7e2365147513ade98b4b354460cae23ea30be475",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/events/war_historian_repy.py",
+      "sha256": "067e6b497be840f5f30a2f7905a99fadf26b4561897a9ae60ad45e3c16d5c12c",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/run.py",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -42,33 +52,33 @@
       "rationale": "`{ CardKeyword.Unplayable }` (LanternKey.cs:14) == `is_playable = False`."
     },
     "ModifyUnknownMapPointRoomTypes": {
-      "maps_to": "NOT PORTED -- LanternKeyCard does not override the hook, which DOES exist on the sim's Card base (cards/base.py:296-299)",
+      "maps_to": "LanternKeyCard.modify_unknown_map_point_room_types (event_cards.py:402-410, also duplicated verbatim at 427-435 -- see the record-level note on the duplication); the sim's Card base default is cards/base.py:606-609",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-29 (round 7): `LanternKeyCard.modify_unknown_map_point_room_types` is LanternKey.cs:21-28: outside `_gloryActIndex = 2` the set passes through, and inside it the set is REPLACED by {Event} rather than filtered -- so the key beats any other listener's narrowing rather than intersecting with it.  The stub's premise was checked before the code (PROMPT.md bug class 12) and was false, which is the fifth round running that has held. The sim generates a per-act map and `RunState._unknown_allowed_room_types` already chained the hook over every relic AND deck card.  Pinned by test/test_false_premise_stubs.py.  NOT CLOSED: `card/lantern_key/ModifyNextEvent`, the other half, stays a DORMANT gap with the blocker it already names -- the sim has no `modify_next_event` listener category and WarHistorianRepy is unported.  The text it replaced read: `if (2 != Owner.RunState.CurrentActIndex) return roomTypes; return new HashSet<RoomType> { RoomType.Event };` (LanternKey.cs:21-28) forces every \"?\" node in ACT 3 (act index 2, the Glory act) to roll an Event room. The sim's `Card.modify_unknown_map_point_room_types` exists precisely for this shape of hook and `RunState.start_act` runs deck cards through the map pipeline (cards/base.py:277-299 documents it, naming the Spoils Map card as the one card that uses it), but LanternKeyCard overrides nothing, so the hook is a no-op. The sim's docstring justifies this with \"the sim has no map\" -- THAT CLAIM IS FALSE, and it is the third instance of the same false premise after card/debt's \"no gold\" and card/guilty's \"no persistent deck\": the sim generates a per-act map, `card/spoils_map` already rewrites it through this very pipeline, and `modify_unknown_map_point_room_types` is wired. Observable across a run: in the game a kept Lantern Key turns every act-3 unknown node into an event; in the sim act 3's unknown nodes roll normally. LIVE. Note this is a rule-1 case -- \"not modelled\" is a GAP, never a waiver. RATIONALE CITES A THIRD FILE (rule 7): sts2_rl/cards/base.py is not hashed by this record."
+      "rationale": "`if (2 != Owner.RunState.CurrentActIndex) return roomTypes; return new HashSet<RoomType> { RoomType.Event };` (LanternKey.cs:21-28) == the port: outside act 3 (index 2, Glory) the set passes through; inside it, it is REPLACED by {Event}. Re-confirmed current: `run.py`'s map-generation pipeline dispatches `modify_unknown_map_point_room_types` over the deck the same way it dispatches `modify_next_event` (see the sibling entry). Still faithful as of this pass; no change from the 2026-07-29 closure."
     },
     "ModifyNextEvent": {
-      "maps_to": "NOT PORTED, and the sim's Card base has no such hook at all",
-      "verdict": "gap",
-      "issue": "`if (2 != Owner.RunState.CurrentActIndex) return currentEvent; return ModelDb.Event<WarHistorianRepy>();` (LanternKey.cs:30-37) redirects the next act-3 event to War Historian Repy -- the payoff the Lantern Key quest exists for. The sim's `Card` class exposes four map hooks and one rest-site hook (cards/base.py:277-308) but no `modify_next_event`, so unlike the room-types half this one cannot even be overridden without adding the hook. The C# dispatcher is `Hook.ModifyNextEvent` (Hook.cs:1830, in hook_dispatch's chain-family census). DORMANT with a named blocker rather than live: making it live requires porting the `modify_next_event` listener category AND the WarHistorianRepy event, neither of which exists in the sim today. Recorded as a gap, not a waiver, because \"the C# side is unported\" is explicitly a dormant gap per rule 1."
+      "maps_to": "LanternKeyCard.modify_next_event (event_cards.py:412-425, duplicated verbatim at 437-450); sim base default cards/base.py:578-585; dispatched by RunState's map-entry EVENT arm at run.py:1519-1520",
+      "verdict": "faithful",
+      "issue": "REVISED 2026-08-04 (stale-sweep re-audit): this entry was `gap`/dormant as of 2026-07-26, reasoning that the sim had no `modify_next_event` hook and no WarHistorianRepy event. Both premises are now false -- re-read in full. `Card.modify_next_event` exists on the sim's base class (cards/base.py:578-585, default `return event_id`, docstring citing `AbstractModel.ModifyNextEvent`/Hook.cs:1830-1836/ActModel.cs:437-443) and `LanternKeyCard.modify_next_event` overrides it exactly as LanternKey.cs:30-37 does: `if (2 != Owner.RunState.CurrentActIndex) return currentEvent; return ModelDb.Event<WarHistorianRepy>();` == `if run.act_index != self.GLORY_ACT_INDEX: return event_id; return \"war_historian_repy\"`. The dispatch site matches the source shape precisely: `run.py:1509-1524`'s EVENT room-type arm calls `ensure_next_event_is_valid`, then walks `self._map_listeners()` calling `modify_next_event` on each (run.py:1519-1520), then adds the RESULT to `visited_event_ids` -- the same order as `ActModel.PullNextEvent` (EnsureNextEventIsValid -> hook chain -> AddVisitedEvent on the MODIFIED event), so an event whose own `IsAllowed` is False (WarHistorianRepy's is) can still be served, matching the source's documented point. `sts2_rl/events/war_historian_repy.py` is a full port: `is_allowed` returns False (WarHistorianRepy.cs:30-33) with a docstring naming this exact bypass path; the initial UNLOCK_CAGE/UNLOCK_CHEST options, the second-page ShouldGetSecondReward branch (single-player so only the deck-holds-another-key check matters), and both removal helpers are all ported per-line against WarHistorianRepy.cs. Net: the whole mechanism this entry used to call an unfixable, unstaffed dormant gap is shipped and wired correctly. No live/dormant distinction needed any more -- it is faithful on both the RL-training and conformance-replay driver paths, since map generation and event dispatch run identically on both."
     },
     "ctor": {
-      "maps_to": "class attrs (event_cards.py:373-381) + _init_vars (383-384)",
+      "maps_to": "class attrs (event_cards.py:386-394) + _init_vars (399-400)",
       "verdict": "faithful",
       "issue": "Closed 2026-07-30 (tier-2 campaign): `Card.energy_cost` (`sts2_rl/cards/base.py`) now short-circuits on `self._energy_cost < 0` as its first check, returning the raw canonical value before consulting `_free_this_turn` / `_cost_this_turn` / `_cost_this_combat` / `_cost_delta_this_turn` -- mirrors `CardEnergyCost.GetWithModifiers`'s `if (_base < 0) return num;` short-circuit (`CardEnergyCost.cs:101-104`; the record's `:100-103` cite is one line of decompiler drift), which runs before any local or global modifier. All 29 unplayable curse/status/quest cards now set `self._energy_cost = -1` in `_init_vars` (previously 0), each verified individually against its own C# `base(-1, CardType.X, ...)` constructor -- no exceptions, no ascension-gated cost variant. Readers audit (every non-cards/ `energy_cost` hit read in context): combat play/auto-play/valid_actions/action-mask sites gate on `is_playable` first and never see -1; every global-modifier site routes through `hooks.modify_card_energy_cost`, whose dispatcher ends `return max(0, cost)` -- the sim's analogue of C#'s `Math.Max(0, GetWithModifiers(...))` in `GetAmountToSpend`/`GetResolved` (`CardEnergyCost.cs:134-141`) -- so what is SPENT and what the observation encoder reads (`full_env.py` card_features via `previews.py` preview_card_energy_cost) are byte-for-byte unchanged. The three previously-known readers (`relics/mummified_hand.py`, `potions.py` TouchOfInsanity, `cards/event_cards.py` Enlightenment) remain correct, confirmed by unit tests. NOT closed here: `selectors.py`'s `scripted_card_selector` 'to_draw_top' purpose (Headbutt/Thinking Ahead) ranks by raw `card.energy_cost` unclamped -- a sim-only heuristic with no C# analogue; a curse in a Headbutt-eligible discard pile now ranks below-cost instead of tying at 0. No test exercises it; filed in GAP-QUEUE.md's 'Named work with no entry of its own'. New pins: test/test_unplayable_cost.py (15 tests).  The text it replaced read: QUEST / QUEST map exactly, and so does the unusual `TargetType.Self` (LanternKey.cs:17) -- most Quest cards use TargetType.None, and the sim correctly carries SELF here. The canonical energy cost is -1 in C# and 0 in the sim. `CardEnergyCost.GetWithModifiers` returns early on `_base < 0` (CardEnergyCost.cs:100-103), so the game's unplayable card is immune to every cost modifier; the sim runs a base of 0 through the full modifier chain (cards/base.py:222-232). Only what is READ diverges. Same mechanism and same verdict as card/ascenders_bane's ctor entry (rule 3). DORMANT: every ported cost reader filters `> 0` or skips `<= 1`, and events/infested_automaton.py:35 filters pool_card_ids(), which holds no curses, statuses or quests."
     },
     "OnPlay": {
-      "maps_to": "LanternKeyCard.on_play -> pass (event_cards.py:386-387)",
+      "maps_to": "LanternKeyCard.on_play -> pass (event_cards.py:452-453)",
       "verdict": "faithful",
       "rationale": "LanternKey.cs declares no OnPlay and the card is Unplayable."
     }
   },
   "guards": [
     {
-      "what": "the sim adds `can_be_generated_by_modifiers = False` (event_cards.py:381) and `is_unpowered = True` (380), neither of which LanternKey.cs overrides",
+      "what": "the sim adds `can_be_generated_by_modifiers = False` (event_cards.py:394) and `is_unpowered = True` (393), neither of which LanternKey.cs overrides",
       "verdict": "faithful",
       "rationale": "Both inert, for the reasons already established: the modifiers flag gates the random-CURSE pool, which a Quest card of Quest rarity is not in, and `is_unpowered` only steers `DamageCmd.deal`'s prop inference for a card that deals no damage. Same pair of inert extras as card/byrdonis_egg."
     }
   ],
-  "verdict": "gap",
-  "audited": "2026-07-26"
+  "verdict": "faithful",
+  "audited": "2026-08-04"
 }

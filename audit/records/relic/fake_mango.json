@@ -26,17 +26,17 @@
     },
     {
       "path": "sts2_rl/events/fake_merchant.py",
-      "sha256": "b988afdfbe947f93dc619f6a22907d77137bdba4363fc04de23641f5ed6d87d5",
+      "sha256": "2378d7dce03e5f88f7d0daabe8dab60e890e8d25b7df89745b138a797b7f3f9d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -48,17 +48,17 @@
     "MerchantCost": {
       "maps_to": "merchant_cost_override = 50 (fake_mango.py:14)",
       "verdict": "faithful",
-      "rationale": "RelicModel.MerchantCost is virtual and the Fake Merchant's knock-offs all pin 50; relics/base.py:111-117 reads merchant_cost_override first and falls back to _MERCHANT_COST_BY_RARITY (relics/base.py:54-62), whose table is value-for-value the source's switch (RelicModel.cs:304-315, checked: Common 175 / Uncommon 225 / Rare 275 / Shop 200 / Ancient, Starter, Event 999999999). No AscensionHelper branch anywhere, so 50 is the pinned non-ascension price. Rule 7: RelicModel.cs and relics/base.py are not hashed by this record."
+      "rationale": "RelicModel.MerchantCost is virtual and the Fake Merchant's knock-offs all pin 50; relics/base.py:174-180, re-pinned 2026-08-04, was :111-117 reads merchant_cost_override first and falls back to _MERCHANT_COST_BY_RARITY (relics/base.py:71-79, re-pinned 2026-08-04, was :54-62), whose table is value-for-value the source's switch (RelicModel.cs:304-315, checked: Common 175 / Uncommon 225 / Rare 275 / Shop 200 / Ancient, Starter, Event 999999999). No AscensionHelper branch anywhere, so 50 is the pinned non-ascension price. Rule 7: RelicModel.cs and relics/base.py are not hashed by this record."
     },
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (fake_mango.py:15)",
       "verdict": "faithful",
-      "rationale": "Matches FakeMango.cs:13; drives RelicModel.IsTradable (RelicModel.cs:176-190), mirrored at relics/base.py:126-136. Rule 7: those two files are unhashed here."
+      "rationale": "Matches FakeMango.cs:13; drives RelicModel.IsTradable (RelicModel.cs:176-190), mirrored at relics/base.py:189-199, re-pinned 2026-08-04, was :126-136. Rule 7: those two files are unhashed here."
     },
     "AfterObtained": {
       "maps_to": "after_obtained (fake_mango.py:19-20)",
       "verdict": "faithful",
-      "rationale": "FakeMango.cs:19-22 calls CreatureCmd.GainMaxHp(Owner.Creature, MaxHp.BaseValue) with MaxHpVar(3m) (line 17) and no AscensionHelper branch in the file, so 3 is the pinned non-ascension value and matches MAX_HP = 3 (fake_mango.py:17). The load-bearing detail is that GainMaxHp is NOT just a max-HP bump: CreatureCmd.cs:786-799 calls SetMaxHp, captures the actual delta it returned, and then `await Heal(creature, num)` -- so the relic also restores 3 current HP. run.gain_max_hp (run.py:311-314) does exactly that pair, and its own docstring cites it. EXECUTED (py audit/tools/relic_probes_b05.py mango-hp): a run at 40/80 becomes 43/83. Rule 7: CreatureCmd.cs and run.py are unhashed here."
+      "rationale": "FakeMango.cs:19-22 calls CreatureCmd.GainMaxHp(Owner.Creature, MaxHp.BaseValue) with MaxHpVar(3m) (line 17) and no AscensionHelper branch in the file, so 3 is the pinned non-ascension value and matches MAX_HP = 3 (fake_mango.py:17). The load-bearing detail is that GainMaxHp is NOT just a max-HP bump: CreatureCmd.cs:786-799 calls SetMaxHp, captures the actual delta it returned, and then `await Heal(creature, num)` -- so the relic also restores 3 current HP. run.gain_max_hp (run.py:477-480, re-pinned 2026-08-04, was :311-314) does exactly that pair, and its own docstring cites it. EXECUTED (py audit/tools/relic_probes_b05.py mango-hp): a run at 40/80 becomes 43/83. Rule 7: CreatureCmd.cs and run.py are unhashed here."
     }
   },
   "guards": [
@@ -68,9 +68,9 @@
       "rationale": "The distinction matters when the requested amount is fractional or the cap bites -- neither happens here (3 is an integer and no run reaches 999999999 Max HP), so `newMaxHp - oldMaxHp` is exactly 3 and the heal is exactly 3, which is what run.gain_max_hp assumes when it passes the same int to both halves. Checked rather than assumed because the sibling relic/fake_lees_waffle in this batch DOES have a fractional amount and needed an exhaustive rounding probe. Rule 7: Creature.cs, CreatureCmd.cs and run.py are unhashed here."
     },
     {
-      "what": "N2: the sim's Relic.undo_after_obtained is a no-op for this max-HP relic (relics/base.py:142-151)",
+      "what": "N2: the sim's Relic.undo_after_obtained is a no-op for this max-HP relic (relics/base.py:206-213, re-pinned 2026-08-04, was :142-151)",
       "verdict": "faithful",
-      "rationale": "MECHANISM: undo_after_obtained has no C# counterpart at all -- nothing in the game un-picks a relic -- and exists solely for the conformance runner, which grants a node's relic and then swaps it for the one the save says was really picked. relics/base.py:142-151 says in terms that 'only relics whose pickup mutates run state outside run.relics need it', and this relic mutates BOTH max_hp and hp. Without an undo, a discarded Fake Mango leaves +3 Max HP and +3 HP behind. This is the same defect shape relic/big_mushroom's batch-1 record found from the other direction (there the +20 was missing entirely and the record notes 'it also defeats undo_after_obtained, which exists precisely to unwind max-HP relics on a runner swap'). DORMANT, and the concrete unported thing is named: the Fake Merchant event is gated to acts 2-3 and needs 100 gold or a Foul Potion (events/fake_merchant.py:50-58), and neither of the two convergeable Ironclad conformance seeds (89U21BV1TZ, 933T39V18D) reaches it -- so no parity run currently exercises the swap on this relic. Any seed whose replay buys a knock-off and whose runner resyncs relics at that node makes it live, and DETECTOR 3's act-boundary HP assertion is what would report it. Rule 7: relics/base.py and events/fake_merchant.py are unhashed here. RULE-3 RESOLUTION (stream owner, 2026-07-26, after batch 10 flagged the conflict): the ABSENCE of undo_after_obtained is verdicted `faithful` at every site. undo_after_obtained has no C# counterpart -- nothing in the game un-picks a relic -- so a sim that does not implement it is not diverging from the source, which is the only question this audit asks. It is NOT a waiver either: a waiver means in-scope-adjacent and declined (multiplayer, ascension), whereas here there is no source behaviour to be faithful to. Five records had already reached `faithful` and two `gap`; the two are corrected here. The operational concern is REAL and is deliberately left in this entry's text -- a missing undo breaks the conformance runner's relic-swap and its DETECTOR 3 HP assertion -- but it is a tooling defect, not a fidelity gap. Distinct mechanism, still a gap wherever it applies: an undo_after_obtained that EXISTS and clamps instead of subtracting (mango G1, lees_waffle N4, looming_fruit N3) violates its own stated contract and stays `gap`."
+      "rationale": "MECHANISM: undo_after_obtained has no C# counterpart at all -- nothing in the game un-picks a relic -- and exists solely for the conformance runner, which grants a node's relic and then swaps it for the one the save says was really picked. relics/base.py:206-213, re-pinned 2026-08-04, was :142-151 says in terms that 'only relics whose pickup mutates run state outside run.relics need it', and this relic mutates BOTH max_hp and hp. Without an undo, a discarded Fake Mango leaves +3 Max HP and +3 HP behind. This is the same defect shape relic/big_mushroom's batch-1 record found from the other direction (there the +20 was missing entirely and the record notes 'it also defeats undo_after_obtained, which exists precisely to unwind max-HP relics on a runner swap'). DORMANT, and the concrete unported thing is named: the Fake Merchant event is gated to acts 2-3 and needs 100 gold or a Foul Potion (events/fake_merchant.py:54-58, re-pinned 2026-08-04, was :50-58), and neither of the two convergeable Ironclad conformance seeds (89U21BV1TZ, 933T39V18D) reaches it -- so no parity run currently exercises the swap on this relic. Any seed whose replay buys a knock-off and whose runner resyncs relics at that node makes it live, and DETECTOR 3's act-boundary HP assertion is what would report it. Rule 7: relics/base.py and events/fake_merchant.py are unhashed here. RULE-3 RESOLUTION (stream owner, 2026-07-26, after batch 10 flagged the conflict): the ABSENCE of undo_after_obtained is verdicted `faithful` at every site. undo_after_obtained has no C# counterpart -- nothing in the game un-picks a relic -- so a sim that does not implement it is not diverging from the source, which is the only question this audit asks. It is NOT a waiver either: a waiver means in-scope-adjacent and declined (multiplayer, ascension), whereas here there is no source behaviour to be faithful to. Five records had already reached `faithful` and two `gap`; the two are corrected here. The operational concern is REAL and is deliberately left in this entry's text -- a missing undo breaks the conformance runner's relic-swap and its DETECTOR 3 HP assertion -- but it is a tooling defect, not a fidelity gap. Distinct mechanism, still a gap wherever it applies: an undo_after_obtained that EXISTS and clamps instead of subtracting (mango G1, lees_waffle N4, looming_fruit N3) violates its own stated contract and stays `gap`."
     },
     {
       "what": "N3: FakeMango.cs overrides no combat hook at all, so the sim's port correctly has none",

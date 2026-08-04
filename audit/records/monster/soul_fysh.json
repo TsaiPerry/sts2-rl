@@ -59,7 +59,7 @@
     {
       "what": "BECKON / GAZE card placement and pile",
       "verdict": "faithful",
-      "rationale": "SoulFysh.cs:141-147 creates TWO Beckons: the first via AddGeneratedCardToCombat(card, PileType.Draw, null, CardPilePosition.Random) and the second into PileType.Discard, in that order; GAZE (:165-168) adds ONE into Discard after the attack. Sim _beckon (soul_fysh.py:61-65) calls CardPileCmd.add_to_draw then add_to_discard, and add_to_draw (cmds.py:475-497) is documented and implemented as the Random position drawn from the SHUFFLE stream; _gaze (:70-74) attacks then adds one to the discard. Executed (monster_probes_b04.py fysh-beckon): BECKON draw 4->5 with the new card at index 1 of 5 (not top, not bottom) and discard 0->1; GAZE discard 1->2 after the hit lands."
+      "rationale": "SoulFysh.cs:141-147 creates TWO Beckons: the first via AddGeneratedCardToCombat(card, PileType.Draw, null, CardPilePosition.Random) and the second into PileType.Discard, in that order; GAZE (:165-168) adds ONE into Discard after the attack. Sim _beckon (soul_fysh.py:61-65) calls CardPileCmd.add_to_draw then add_to_discard, and add_to_draw (cmds.py) is documented and implemented as the Random position drawn from the SHUFFLE stream; _gaze (:70-74) attacks then adds one to the discard. Executed (monster_probes_b04.py fysh-beckon): BECKON draw 4->5 with the new card at index 1 of 5 (not top, not bottom) and discard 0->1; GAZE discard 1->2 after the hit lands."
     },
     {
       "what": "IsInvisible (set by FADE, cleared by SCREAM)",
@@ -82,7 +82,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     }
   ]

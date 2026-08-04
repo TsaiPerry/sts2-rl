@@ -6,13 +6,33 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\glory\\battle_friend.py",
-    "sha256": "65ebe3c274a31866d9c9d35280b855482773389b30067c099d70a22dff73b4e4"
+    "sha256": "764dc2d421287ebffc25ae4af553d0ee6662db4762577951ff3e5dd7c066cfda"
   },
   "extra_sources": [
     {
       "path": "src/Core/Models/EncounterModel.cs",
       "sha256": "8bdc260afd3ca9cac360ac28f2bc292a00feccf20326e8fef4a226f8fc6ff2db",
       "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/RewardsCmd.cs",
+      "sha256": "027e0e3b3738b355fe0e10bf33a59386c564141de52eb65ba0ea04bbe97b8a72",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/events/battleworn_dummy.py",
+      "sha256": "cc1545e1ac262bafecb6470815af630de426180d215c78e558f250294bf979a4",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/powers.py",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -52,7 +72,7 @@
     {
       "what": "encounter/_entry_slug_mismatch: `Encounter.entry` (monsters/base.py) is documented as `self.id.upper()`, which its own docstring says recovers the game's `ModelId.Entry` (`StringHelper.Slugify(type.Name)`, confirmed via `ModelDb.GetEntry`/`ModelId.cs`) 'for every encounter whose id matches its class-name slug'. All three BATTLEWORN_DUMMY_SETTING_1/2/3 ids do not: the one shared C# class slugifies to `BATTLEWORN_DUMMY_EVENT_ENCOUNTER`, but the three sim ids are `BATTLEWORN_DUMMY_SETTING_1/2/3`. This feeds `rng.make_encounter_rng(seed, floor, entry)` the wrong key in parity mode, so the per-encounter Rng this unit builds (`EncounterModel.Rng`, EncounterModel.cs:42-49's documented run-independent stream) is seeded to a different value than the game's. Executed: `py audit/tools/encounter_probes_e9.py entry-slug-mismatch` -- prints MISMATCH for all three settings.",
       "verdict": "faithful",
-      "rationale": "CLOSED 2026-08-03 (gap-fix pass). `Encounter` gained an explicit `entry_slug` field and `Encounter.entry` returns it when set, so this unit seeds `make_encounter_rng` with the game's real `ModelId.Entry` while keeping its sim id. A mechanical sweep of ALL 87 sim encounters against `src/Core/Models/Encounters/*.cs` (audit/tools/encounter_entry_sweep.py) found two more the unit batches had not checked — `fuzzy_wurm_crawler` (FuzzyWurmCrawlerWeak) and `overgrowth_crawlers_normal` (OvergrowthCrawlers) — and now reports MATCH for every one. Pinned by test/test_encounter_entry_slugs.py.\n\nWHAT THE GAP SAID: The per-encounter Rng this unit constructs is mis-seeded relative to the game in parity mode, but BattlewornDummyEventEncounter.GenerateMonsters draws ZERO values from `base.Rng` (confirmed above, and by `py audit/tools/encounter_probes_e9.py dormant-4-zero-draws`, which rebuilds each setting's monsters under two unrelated seeds and gets byte-identical results both times), so today the wrong seed has no observable consequence for this unit. Contrast `punch_off_event/G1` (the same mechanism, LIVE there) -- see that record."
+      "rationale": "CLOSED 2026-08-03 (gap-fix pass). `Encounter` gained an explicit `entry_slug` field and `Encounter.entry` returns it when set, so this unit seeds `make_encounter_rng` with the game's real `ModelId.Entry` while keeping its sim id. A mechanical sweep of ALL 87 sim encounters against `src/Core/Models/Encounters/*.cs` (audit/tools/encounter_entry_sweep.py) found two more the unit batches had not checked \u2014 `fuzzy_wurm_crawler` (FuzzyWurmCrawlerWeak) and `overgrowth_crawlers_normal` (OvergrowthCrawlers) \u2014 and now reports MATCH for every one. Pinned by test/test_encounter_entry_slugs.py.\n\nWHAT THE GAP SAID: The per-encounter Rng this unit constructs is mis-seeded relative to the game in parity mode, but BattlewornDummyEventEncounter.GenerateMonsters draws ZERO values from `base.Rng` (confirmed above, and by `py audit/tools/encounter_probes_e9.py dormant-4-zero-draws`, which rebuilds each setting's monsters under two unrelated seeds and gets byte-identical results both times), so today the wrong seed has no observable consequence for this unit. Contrast `punch_off_event/G1` (the same mechanism, LIVE there) -- see that record."
     }
   ],
   "verdict": "deliberate-divergence",

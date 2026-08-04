@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
+      "sha256": "a1aecf30215574f9bc62dd01cb7c73346bbc1b9b84dd5dcc8dabd67101f8c345",
       "side": "sim"
     },
     {
@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -57,12 +57,12 @@
       "issue": "Closed 2026-07-27: the port now pins the constant. `RegalPillow.HEAL = 15` (sts2_rl/relics/regal_pillow.py:22) is `new HealVar(15m)` (RegalPillow.cs:17), and modify_rest_site_heal_amount returns `amount + self.HEAL` (regal_pillow.py:24-25) = `amount + DynamicVars.Heal.BaseValue` (RegalPillow.cs:25). No AscensionHelper.GetValueIfAscension appears in the C# file, so 15 is the whole non-ascension value. WAS: the port carried no constant at all because it implemented nothing."
     },
     "ModifyRestSiteHealAmount": {
-      "maps_to": "modify_rest_site_heal_amount (sts2_rl/relics/regal_pillow.py:24-25), declared on the base at sts2_rl/relics/base.py:306-311 and folded over run.relics by RunState.rest_site_heal_amount (sts2_rl/run.py:350-359)",
+      "maps_to": "modify_rest_site_heal_amount (sts2_rl/relics/regal_pillow.py:24-25), declared on the base at sts2_rl/relics/base.py:397-402 and folded over run.relics by RunState.rest_site_heal_amount (sts2_rl/run.py:466-475)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the hook exists and is dispatched. `Relic.modify_rest_site_heal_amount(run, amount)` is declared on the base (sts2_rl/relics/base.py:306-311) and RunState.rest_site_heal_amount (sts2_rl/run.py:350-359) now folds it over every relic in the run on top of the `max_hp * 3 // 10` base, which is Hook.ModifyRestSiteHealAmount over GetBaseHealAmount (HealRestSiteOption.cs:60-63, 90-93) and covers MendRestSiteOption.cs:58 through the same helper. Regal Pillow implements it as `amount + 15` (sts2_rl/relics/regal_pillow.py:22-25 = RegalPillow.cs:19-26). WAS: RunState.rest_site_heal_amount was a bare `max_hp * 3 // 10` with no hook loop and `Relic` declared no modify_rest_site_heal_amount member, so a rest with the relic healed 24 where C# healed 39."
+      "issue": "Closed 2026-07-27: the hook exists and is dispatched. `Relic.modify_rest_site_heal_amount(run, amount)` is declared on the base (sts2_rl/relics/base.py:397-402) and RunState.rest_site_heal_amount (sts2_rl/run.py:466-475) now folds it over every relic in the run on top of the `max_hp * 3 // 10` base, which is Hook.ModifyRestSiteHealAmount over GetBaseHealAmount (HealRestSiteOption.cs:60-63, 90-93) and covers MendRestSiteOption.cs:58 through the same helper. Regal Pillow implements it as `amount + 15` (sts2_rl/relics/regal_pillow.py:22-25 = RegalPillow.cs:19-26). WAS: RunState.rest_site_heal_amount was a bare `max_hp * 3 // 10` with no hook loop and `Relic` declared no modify_rest_site_heal_amount member, so a rest with the relic healed 24 where C# healed 39."
     },
     "AfterRestSiteHeal": {
-      "maps_to": "after_rest_site_heal (relics/base.py) exists and RunState.rest_heal dispatches it (run.py:1094), but the port does not implement it",
+      "maps_to": "after_rest_site_heal (relics/base.py) exists and RunState.rest_heal dispatches it (run.py:1644), but the port does not implement it",
       "verdict": "waiver",
       "rationale": "RegalPillow.cs:28-37's entire body is `Flash()` and `base.Status = RelicStatus.Normal` after the owner check -- pure presentation. Waived under the shared contract's presentation exclusion, NOT as unported content. This matters as a correction: sweep C's work list names `AfterRestSiteHeal` and `AfterRoomEntered` as this relic's dropped hooks with live sim dispatch sites, and both are presentation-only in the source, so implementing either would change nothing. The hook that actually needs porting is ModifyRestSiteHealAmount, which has no sim base method at all -- reported in .superpowers/sdd/relic-batch-13-lessons.md."
     },
@@ -81,17 +81,17 @@
     {
       "what": "G1 (LIVE): the +15 rest-site heal is not merely unimplemented -- there is no sim hook it could live in",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the hook exists and is dispatched. `Relic.modify_rest_site_heal_amount(run, amount)` is declared on the base (sts2_rl/relics/base.py:306-311) and RunState.rest_site_heal_amount (sts2_rl/run.py:350-359) now folds it over every relic in the run on top of the `max_hp * 3 // 10` base, which is Hook.ModifyRestSiteHealAmount over GetBaseHealAmount (HealRestSiteOption.cs:60-63, 90-93) and covers MendRestSiteOption.cs:58 through the same helper. Regal Pillow implements it as `amount + 15` (sts2_rl/relics/regal_pillow.py:22-25 = RegalPillow.cs:19-26). WAS: RunState.rest_site_heal_amount was a bare `max_hp * 3 // 10` with no hook loop and `Relic` declared no modify_rest_site_heal_amount member, so a rest with the relic healed 24 where C# healed 39."
+      "issue": "Closed 2026-07-27: the hook exists and is dispatched. `Relic.modify_rest_site_heal_amount(run, amount)` is declared on the base (sts2_rl/relics/base.py:397-402) and RunState.rest_site_heal_amount (sts2_rl/run.py:466-475) now folds it over every relic in the run on top of the `max_hp * 3 // 10` base, which is Hook.ModifyRestSiteHealAmount over GetBaseHealAmount (HealRestSiteOption.cs:60-63, 90-93) and covers MendRestSiteOption.cs:58 through the same helper. Regal Pillow implements it as `amount + 15` (sts2_rl/relics/regal_pillow.py:22-25 = RegalPillow.cs:19-26). WAS: RunState.rest_site_heal_amount was a bare `max_hp * 3 // 10` with no hook loop and `Relic` declared no modify_rest_site_heal_amount member, so a rest with the relic healed 24 where C# healed 39."
     },
     {
       "what": "N1: the port's stated premise -- 'an out-of-combat rest-site effect, so this is a no-op stub' (regal_pillow.py:8-9)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the stub is gone. sts2_rl/relics/regal_pillow.py now implements modify_rest_site_heal_amount (:24-25) and its docstring (:8-16) cites HealRestSiteOption.cs:60-63/90-93 and MendRestSiteOption.cs:58 instead of claiming the sim has no rest site. The one hook the premise said was absent -- Hook.ModifyRestSiteHealAmount -- is declared at sts2_rl/relics/base.py:306-311 and dispatched by RunState.rest_site_heal_amount (sts2_rl/run.py:350-359)."
+      "issue": "Closed 2026-07-27: the stub is gone. sts2_rl/relics/regal_pillow.py now implements modify_rest_site_heal_amount (:24-25) and its docstring (:8-16) cites HealRestSiteOption.cs:60-63/90-93 and MendRestSiteOption.cs:58 instead of claiming the sim has no rest site. The one hook the premise said was absent -- Hook.ModifyRestSiteHealAmount -- is declared at sts2_rl/relics/base.py:397-402 and dispatched by RunState.rest_site_heal_amount (sts2_rl/run.py:466-475)."
     },
     {
       "what": "N2: `creature.Player != base.Owner && creature.PetOwner != base.Owner` (RegalPillow.cs:21-24) -- the heal hook is per-CREATURE, not per-player",
       "verdict": "waiver",
-      "rationale": "The PetOwner clause exists so a player's PET is healed by its owner's Regal Pillow. The sim has no pet creatures at a rest site at all -- RunState.rest_heal heals the run's single HP pool -- and pets are event-relic content (Relic.adds_pet exists for Pael's Legion's gate, relics/base.py:89-91, but no pet creature is modelled). Waived as a multiplayer/pet-scope omission rather than filed as a gap because the divergent thing is which creatures exist, not what the relic does; a fix for G1 that adds +15 to the run's single heal is complete for the sim's scope. Recorded so a future pet port revisits it."
+      "rationale": "The PetOwner clause exists so a player's PET is healed by its owner's Regal Pillow. The sim has no pet creatures at a rest site at all -- RunState.rest_heal heals the run's single HP pool -- and pets are event-relic content (Relic.adds_pet exists for Pael's Legion's gate, relics/base.py:156, but no pet creature is modelled). Waived as a multiplayer/pet-scope omission rather than filed as a gap because the divergent thing is which creatures exist, not what the relic does; a fix for G1 that adds +15 to the run's single heal is complete for the sim's scope. Recorded so a future pet port revisits it."
     },
     {
       "what": "N3: the relic holds no state and needs no reset",

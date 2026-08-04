@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -39,7 +39,7 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.EVENT (wongo_customer_appreciation_badge.py:19)",
       "verdict": "faithful",
-      "rationale": "WongoCustomerAppreciationBadge.cs:7 -- and that single line is the ENTIRE C# model (the file is 8 lines: usings, namespace, class, one Rarity override). EXECUTED (py audit/tools/relic_probes_b17.py wongo): the port's own members are exactly ['id','name','rarity'], so it drops nothing; rarity EVENT gives merchant_cost 999999999 (never shop-stocked) and is_tradable False via the Starter/Event/Ancient exclusion in Relic.is_tradable (sts2_rl/relics/base.py:126-136), both of which match RelicModel's tables. This is one of the two genuinely complete behaviourless ports .superpowers/sdd/content-relic-sweeps.md sweep C counts ('2 stubs drop no behavioural hook at all'). Rule 7: sts2_rl/relics/base.py and .superpowers/sdd/content-relic-sweeps.md are NOT hashed by this record."
+      "rationale": "WongoCustomerAppreciationBadge.cs:7 -- and that single line is the ENTIRE C# model (the file is 8 lines: usings, namespace, class, one Rarity override). EXECUTED (py audit/tools/relic_probes_b17.py wongo): the port's own members are exactly ['id','name','rarity'], so it drops nothing; rarity EVENT gives merchant_cost 999999999 (never shop-stocked) and is_tradable False via the Starter/Event/Ancient exclusion in Relic.is_tradable (sts2_rl/relics/base.py:189-199), both of which match RelicModel's tables. This is one of the two genuinely complete behaviourless ports .superpowers/sdd/content-relic-sweeps.md sweep C counts ('2 stubs drop no behavioural hook at all'). Rule 7: sts2_rl/relics/base.py and .superpowers/sdd/content-relic-sweeps.md are NOT hashed by this record."
     }
   },
   "guards": [
@@ -60,5 +60,5 @@
     }
   ],
   "verdict": "faithful",
-  "audited": "2026-07-26"
+  "audited": "2026-08-04"
 }

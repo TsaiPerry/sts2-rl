@@ -26,17 +26,17 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
@@ -58,6 +58,16 @@
       "path": "sts2_rl/relics/bone_tea.py",
       "sha256": "67a38777b10d88d6f9caec173abf4b711e6ba59d8221c08f331a74b6986becdf",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Entities/Cards/CardEnergyCost.cs",
+      "sha256": "c2b18b52ad44a44acbac01c5df4a209f5534a6ec7138e748ea73d66b2dcedd53",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/EnchantmentModel.cs",
+      "sha256": "f4efb3d8568fedf92c4bd5ec3243d09c5af7a108426c6d3c53fe191b9849efd9",
+      "side": "game"
     }
   ],
   "hooks": {
@@ -66,7 +76,7 @@
       "verdict": "faithful"
     },
     "BeforeCardPlayed": {
-      "maps_to": "before_card_played (music_box.py:28-38), dispatched at combat.py:466",
+      "maps_to": "before_card_played (music_box.py:28-38), dispatched at combat.py",
       "verdict": "faithful",
       "rationale": "All four C# guards are reproduced except the multiplayer owner test: MusicBox.cs:53 `CardBeingPlayed != null` -> `self._card_being_played is None`; :61 `WasUsedThisTurn` -> `not self.used_this_turn`; :65 `Type != CardType.Attack` -> `card.card_type == CardType.ATTACK`; :57 `cardPlay.Card.Owner != base.Owner` is structurally satisfied in a one-player sim. The latch assignment (MusicBox.cs:69 vs music_box.py:38) is the same."
     },
@@ -90,7 +100,7 @@
     {
       "what": "G1 (LIVE): CardModel.CreateClone() is a full model clone; the sim rebuilds the card from its id, so the copy loses the original's enchantment, affliction, keyword edits and cost modifiers",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-29 (round 7): `create_clone` (cards/base.py) IS a memberwise copy now. `ClonePreservingMutability` is `AbstractModel.MutableClone` (a MemberwiseClone) and only THEN `DeepCloneFields` (CardModel.cs:1193-1216) and `AfterCloned` (:1218-1239), so the sim opens with `clone.__dict__.update(card.__dict__)` and the two override passes only re-point what must not be shared (`combat`, and the enchantment/affliction that DeepCloneFields re-creates). Everything the guard named now rides along: the LIVE KEYWORD SET (`_keywords = GetKeywordsWithSources(KeywordSources.Local)`, :1196-1200 -- Music Box's Ethereal), the cloned `_energyCost` and its `_localModifiers` (:1202 -> CardEnergyCost.cs:411-421 -- SetThisCombat, AddThisTurn, free-this-turn), the cloned `_dynamicVars` (:1201 -- a grown Rampage clones grown) and `BaseReplayCount` (Hidden Gem). `CreateClone`'s own tail, `ExhaustOnNextPlay = false` (:2178), is the last line. ONE MORE FINDING, and it is the reason the fix could not be a one-liner: DeepCloneFields re-attaches with `EnchantInternal` (:1204-1209 -> :1491-1498), which checks NO CanEnchant and does NOT run `ModifyCard` -- EnchantmentModel.cs:350-353 says why in as many words, \"It is NOT called when a card is cloned, because the enchantment's effects will already be reflected in the card's values.\" The sim only had the normal `attach`, and re-running it on a memberwise copy is not merely redundant, it THROWS for Souls, whose CanEnchant demands the Exhaust its own ModifyCard removes. `Enchantment.attach_internal` is that path. EXECUTED, old -> new: keyword False->True, free-this-turn cost 1->0, base_replay_count 0->3, a twice-played Rampage 9->19. Pinned by test/test_create_clone_memberwise.py. TEST MOVED (non-negotiable 5): test_card_clone_enchantment.py's `test_clone_reapplies_a_static_card_modification` is now `test_clone_carries_a_static_card_modification`, with the reason inline; its assertion is unchanged. NOT CLOSED: nothing at this site.  The text it replaced read: NARROWED 2026-07-27, RE-OPENED 2026-07-28: the copy carries MORE per-instance state than it used to, but it is still REBUILT, not cloned. CLOSED: sts2_rl/relics/music_box.py:47 calls `create_clone(card)` (sts2_rl/cards/base.py:57-83) instead of `make_card(card.id)` plus a hand-rolled upgrade replay, and create_clone carries the source's upgrade level, a live copy of its ENCHANTMENT (clone_preserving_mutability) and a live copy of its AFFLICTION -- two of the four components this guard names. STILL OPEN: create_clone's first statement is `clone = type(card)()` (cards/base.py:74), a rebuild from the class, where CardModel.CreateClone -> CardScope.CloneCard -> MutableClone is a MEMBERWISE copy whose DeepCloneFields (CardModel.cs:1193-1216) additionally re-clones `_keywords` (GetKeywordsWithSources(KeywordSources.Local)), `_dynamicVars`, `_energyCost` (`_energyCost?.Clone(this)`) and `_temporaryStarCosts`, and whose AfterCloned (CardModel.cs:1218-1239) resets only CurrentTarget / CurrentPlayIndex / DeckVersion / HasBeenRemovedFromState and the event handlers. So exactly the other two components this guard names -- KEYWORD EDITS and COST MODIFIERS -- are still dropped, along with `base_replay_count` (CardModel.BaseReplayCount). EXECUTED 2026-07-28: `c = make_card('strike'); c.set_cost_this_combat(0); c.base_replay_count = 1; c.is_ethereal = True` gives source (energy_cost 0, replay 1, ethereal True) and `create_clone(c)` gives (1, 0, False). The state exists and is written on live paths -- cards/base.py:149-162 backs _cost_delta_this_turn / _free_this_turn / _cost_this_turn / _cost_this_combat / base_replay_count, and potions.py, powers.py, enchantments.py, cards/stomp.py and relics/mummified_hand.py all write them -- so a Music Box copy of an Attack whose cost was cut this turn/combat arrives at full cost in the sim and at the modified cost in the game. Rule 7: sts2_rl/potions.py, sts2_rl/enchantments.py, sts2_rl/cards/stomp.py and sts2_rl/relics/mummified_hand.py are not hashed by this record."
+      "issue": "Closed 2026-07-29 (round 7): `create_clone` (cards/base.py) IS a memberwise copy now. `ClonePreservingMutability` is `AbstractModel.MutableClone` (a MemberwiseClone) and only THEN `DeepCloneFields` (CardModel.cs:1193-1216) and `AfterCloned` (:1218-1239), so the sim opens with `clone.__dict__.update(card.__dict__)` and the two override passes only re-point what must not be shared (`combat`, and the enchantment/affliction that DeepCloneFields re-creates). Everything the guard named now rides along: the LIVE KEYWORD SET (`_keywords = GetKeywordsWithSources(KeywordSources.Local)`, :1196-1200 -- Music Box's Ethereal), the cloned `_energyCost` and its `_localModifiers` (:1202 -> CardEnergyCost.cs:411-421 -- SetThisCombat, AddThisTurn, free-this-turn), the cloned `_dynamicVars` (:1201 -- a grown Rampage clones grown) and `BaseReplayCount` (Hidden Gem). `CreateClone`'s own tail, `ExhaustOnNextPlay = false` (:2178), is the last line. ONE MORE FINDING, and it is the reason the fix could not be a one-liner: DeepCloneFields re-attaches with `EnchantInternal` (:1204-1209 -> :1491-1498), which checks NO CanEnchant and does NOT run `ModifyCard` -- EnchantmentModel.cs:350-353 says why in as many words, \"It is NOT called when a card is cloned, because the enchantment's effects will already be reflected in the card's values.\" The sim only had the normal `attach`, and re-running it on a memberwise copy is not merely redundant, it THROWS for Souls, whose CanEnchant demands the Exhaust its own ModifyCard removes. `Enchantment.attach_internal` is that path. EXECUTED, old -> new: keyword False->True, free-this-turn cost 1->0, base_replay_count 0->3, a twice-played Rampage 9->19. Pinned by test/test_create_clone_memberwise.py. TEST MOVED (non-negotiable 5): test_card_clone_enchantment.py's `test_clone_reapplies_a_static_card_modification` is now `test_clone_carries_a_static_card_modification`, with the reason inline; its assertion is unchanged. NOT CLOSED: nothing at this site.  The text it replaced read: NARROWED 2026-07-27, RE-OPENED 2026-07-28: the copy carries MORE per-instance state than it used to, but it is still REBUILT, not cloned. CLOSED: sts2_rl/relics/music_box.py:47 calls `create_clone(card)` (sts2_rl/cards/base.py:57-83) instead of `make_card(card.id)` plus a hand-rolled upgrade replay, and create_clone carries the source's upgrade level, a live copy of its ENCHANTMENT (clone_preserving_mutability) and a live copy of its AFFLICTION -- two of the four components this guard names. STILL OPEN: create_clone's first statement is `clone = type(card)()` (cards/base.py:74), a rebuild from the class, where CardModel.CreateClone -> CardScope.CloneCard -> MutableClone is a MEMBERWISE copy whose DeepCloneFields (CardModel.cs:1193-1216) additionally re-clones `_keywords` (GetKeywordsWithSources(KeywordSources.Local)), `_dynamicVars`, `_energyCost` (`_energyCost?.Clone(this)`) and `_temporaryStarCosts`, and whose AfterCloned (CardModel.cs:1218-1239) resets only CurrentTarget / CurrentPlayIndex / DeckVersion / HasBeenRemovedFromState and the event handlers. So exactly the other two components this guard names -- KEYWORD EDITS and COST MODIFIERS -- are still dropped, along with `base_replay_count` (CardModel.BaseReplayCount). EXECUTED 2026-07-28: `c = make_card('strike'); c.set_cost_this_combat(0); c.base_replay_count = 1; c.is_ethereal = True` gives source (energy_cost 0, replay 1, ethereal True) and `create_clone(c)` gives (1, 0, False). The state exists and is written on live paths -- cards/base.py backs _cost_delta_this_turn / _free_this_turn / _cost_this_turn / _cost_this_combat / base_replay_count, and potions.py, powers.py, enchantments.py, cards/stomp.py and relics/mummified_hand.py all write them -- so a Music Box copy of an Attack whose cost was cut this turn/combat arrives at full cost in the sim and at the modified cost in the game. Rule 7: sts2_rl/potions.py, sts2_rl/enchantments.py, sts2_rl/cards/stomp.py and sts2_rl/relics/mummified_hand.py are not hashed by this record."
     },
     {
       "what": "N1: PROMPT.md bug class 14 (an unguarded Card.upgrade()) at this relic's copy site -- the upgrade replay now lives inside cards/base.py's create_clone, not in music_box.py",
@@ -110,7 +120,7 @@
     {
       "what": "N4: `CardPileCmd.AddGeneratedCardToCombat(card, PileType.Hand, base.Owner)` (MusicBox.cs:80) vs `CardPileCmd.add_to_hand` (music_box.py:51)",
       "verdict": "faithful",
-      "rationale": "AddGeneratedCardsToCombat (CardPileCmd.cs:202-249) bails when the combat is not in progress, records a CardGenerated history entry, routes through Add(card, pile) and then fires Hook.AfterCardGeneratedForCombat. cmds.py:500-512 appends to the hand (overflowing to the discard pile at MAX_HAND_SIZE) and calls CardPileCmd._enter_combat; its own docstring names AddGeneratedCardToCombat as the mirror. The history entry is the game's save bookkeeping, which the sim's conformance layer reads rather than writes. Rule 7: CardPileCmd.cs and cmds.py are unhashed here, and the hand-overflow equivalence rests on cmds.py's docstring rather than on a line of CardPileCmd.cs that I read."
+      "rationale": "AddGeneratedCardsToCombat (CardPileCmd.cs:202-249) bails when the combat is not in progress, records a CardGenerated history entry, routes through Add(card, pile) and then fires Hook.AfterCardGeneratedForCombat. cmds.py appends to the hand (overflowing to the discard pile at MAX_HAND_SIZE) and calls CardPileCmd._enter_combat; its own docstring names AddGeneratedCardToCombat as the mirror. The history entry is the game's save bookkeeping, which the sim's conformance layer reads rather than writes. Rule 7: CardPileCmd.cs and cmds.py are unhashed here, and the hand-overflow equivalence rests on cmds.py's docstring rather than on a line of CardPileCmd.cs that I read."
     },
     {
       "what": "N5: ExtraHoverTips (the Ethereal keyword tip, MusicBox.cs:23), Flash() (MusicBox.cs:77) and the AssertMutable property setters (MusicBox.cs:33, :46)",

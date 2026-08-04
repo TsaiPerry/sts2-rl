@@ -15,28 +15,38 @@
       "side": "game"
     },
     {
+      "path": "src/Core/Models/Relics/DelicateFrond.cs",
+      "sha256": "df8797785c515b3392392623a941ecc2cf1e223a4759cc4b870ba96db1da58e5",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/Relics/PetrifiedToad.cs",
+      "sha256": "54ba6448410b752412588b88e03c4304ef980ffedfb30ec6bd0a6c8a9083180e",
+      "side": "game"
+    },
+    {
       "path": "sts2_rl/cards/colorless_skills.py",
-      "sha256": "1cdf31a3bd59e95b239df163b0724e4f99ef299bd67256cc94fcc683e1ed1840",
+      "sha256": "73d875726c8cb8ca6a213dea6f43267d57717f5a1d6b65d34ca2ecea7f4ab66f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "63c0df752ca09e9de59285b0c9bc9be809da18e69b61b65424d75f37ee1ffc6b",
+      "sha256": "416789386ad4af19cb52a3c275a2c39c1708bb90ebc4dc5c8fb4e88a7055d557",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -51,7 +61,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -62,12 +72,12 @@
       "rationale": "Sozu.cs:11 is RelicRarity.Ancient. Executed (b15-pool): absent from the grab bag, granted by the ported Darv shrine (events/darv.py)."
     },
     "ShouldProcurePotion": {
-      "maps_to": "should_procure_potion (sozu.py:26-27), consulted by RunState.add_potion (run.py:480-481) AND by potions.try_to_procure (potions.py:1406-1424), the shared combat-side gated entry point",
+      "maps_to": "should_procure_potion (sozu.py:26-27), consulted by RunState.add_potion (run.py:805-819) AND by potions.try_to_procure (potions.py:1468-1487), the shared combat-side gated entry point",
       "verdict": "faithful",
-      "rationale": "STALE at round 11: the only 'gap' guard this rollup named, G1 (the sim's second, ungated in-combat procure path), was already closed 2026-07-29 (round 7) per this record's own guards[G1] entry (N1 was always a waiver, not a gap). EXECUTED (this pass): all four ported combat-side potion sources now route through the one gated helper -- relics/delicate_frond.py:41 and relics/petrified_toad.py:28 both call `try_to_procure`, as do cards/colorless_skills.py:56 (Alchemize) and potions.py:1295 (Entropic Brew); `try_to_procure` (potions.py:1406-1424) runs the `should_procure_potion` pass before adding, mirroring PotionCmd.TryToProcure's `Hook.ShouldProcurePotion` gate (PotionCmd.cs:31-39). `PlayerCombatState.add_potion` remains an internal primitive with no gate of its own, but nothing combat-side calls it directly anymore -- that mirrors AddPotionInternal, which C# also calls only from inside TryToProcure. The prose describing a second ungated path was never updated when G1 closed."
+      "rationale": "RECONFIRMED 2026-08-04 (stale-sweep): re-executed `py audit/tools/relic_probes_b15.py b15-sozu` against today's code -- `RunState.add_potion` with Sozu still returns kept=False/empty belt, `PlayerCombatState.add_potion` still returns kept=True/filled belt (that primitive is still intentionally ungated, matching AddPotionInternal), and the probe's own live grep of in-combat callers of the ungated path now finds only `potions.py:1487`, which is `try_to_procure`'s OWN internal call after its gate has already run -- i.e. zero leaks. STALE at round 11: the only 'gap' guard this rollup named, G1 (the sim's second, ungated in-combat procure path), was already closed 2026-07-29 (round 7) per this record's own guards[G1] entry (N1 was always a waiver, not a gap). All four ported combat-side potion sources route through the one gated helper -- relics/delicate_frond.py and relics/petrified_toad.py both call `try_to_procure`, as do cards/colorless_skills.py (Alchemize) and potions.py (Entropic Brew); `try_to_procure` (potions.py:1468-1487) runs the `should_procure_potion` pass before adding, mirroring PotionCmd.TryToProcure's `Hook.ShouldProcurePotion` gate (PotionCmd.cs:31-39). `PlayerCombatState.add_potion` remains an internal primitive with no gate of its own, but nothing combat-side calls it directly anymore -- that mirrors AddPotionInternal, which C# also calls only from inside TryToProcure. The prose describing a second ungated path was never updated when G1 closed."
     },
     "ModifyMaxEnergy": {
-      "maps_to": "modify_max_energy (sozu.py:23-24), dispatched by HookSystem.modify_max_energy (hooks.py:203-208) from PlayerCombatState.start_turn (player.py:163)",
+      "maps_to": "modify_max_energy (sozu.py:23-24), dispatched by HookSystem.modify_max_energy (hooks.py:1057) from PlayerCombatState.start_turn (player.py:372)",
       "verdict": "faithful",
       "rationale": "Sozu.cs:22-29 returns `amount + DynamicVars.Energy.IntValue`; CanonicalVars is EnergyVar(1) (Sozu.cs:13) with no AscensionHelper.GetValueIfAscension anywhere in the file, so IntValue is the pinned non-ascension 1 and sozu.py:21's ENERGY = 1 is correct. EXECUTED (b15-sozu): turn-1 energy 3 without the relic, 4 with it. The dropped owner check is verdicted at N1."
     }
@@ -81,7 +91,7 @@
     {
       "what": "N1: `return player != base.Owner;` (Sozu.cs:17-20) vs the sim's unconditional `return False` (sozu.py:27); and the same missing owner check on ModifyMaxEnergy (Sozu.cs:24-27)",
       "verdict": "waiver",
-      "rationale": "Both are multiplayer owner filters. C#'s ShouldProcurePotion is dispatched over every listener in the run including other players' relics, so `player != Owner` means 'only refuse MY potions'; with one player that expression is constantly False, which is exactly what sozu.py:27 returns. The sim's own hook signature has no player parameter at all (relics/base.py:217-220), so the distinction is unrepresentable and unneeded. Waived as multiplayer-only under the shared contract's global scope, not under an unreachability claim about ported content."
+      "rationale": "Both are multiplayer owner filters. C#'s ShouldProcurePotion is dispatched over every listener in the run including other players' relics, so `player != Owner` means 'only refuse MY potions'; with one player that expression is constantly False, which is exactly what sozu.py:27 returns. The sim's own hook signature has no player parameter at all (relics/base.py:384), so the distinction is unrepresentable and unneeded. Waived as multiplayer-only under the shared contract's global scope, not under an unreachability claim about ported content."
     },
     {
       "what": "N2: no per-combat or per-run state, and no reset hook of any kind",

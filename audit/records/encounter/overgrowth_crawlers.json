@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\overgrowth\\overgrowth_crawlers.py",
-    "sha256": "4e6a8987f255e0238e0861aa8475e326c4b3a222c78a703c01040d1083690f13"
+    "sha256": "a2aa7e614f435c8fac3f3e7811fb8d5b8da67d355d5e3b6e71853d21c6669ae5"
   },
   "hooks": {
     "RoomType": {
@@ -16,7 +16,7 @@
     "Tags": {
       "maps_to": "sts2_rl/rooms.py:_overgrowth_rooms tags[\"overgrowth_crawlers\"] = (\"shrinker\", \"crawler\")",
       "verdict": "faithful",
-      "note": "OvergrowthCrawlers.Tags = [EncounterTag.Shrinker, EncounterTag.Crawler]; rooms.py's tuple carries the same two values. Order is not observable — the picker only intersects sets (seam/rooms_and_map owns AddWithoutRepeatingTags)."
+      "note": "OvergrowthCrawlers.Tags = [EncounterTag.Shrinker, EncounterTag.Crawler]; rooms.py's tuple carries the same two values. Order is not observable \u2014 the picker only intersects sets (seam/rooms_and_map owns AddWithoutRepeatingTags)."
     },
     "AllPossibleMonsters": {
       "maps_to": "none -- the sim has no per-encounter monster-preview member",

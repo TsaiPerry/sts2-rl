@@ -16,17 +16,17 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     },
     {
@@ -43,12 +43,12 @@
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (pear.py:14)",
       "verdict": "faithful",
-      "rationale": "Pear.cs:13 `HasUponPickupEffect => true`; the flag feeds RelicModel.IsTradable, mirrored at relics/base.py:126-136, so an Uncommon relic that has already paid out is correctly excluded from the trade events on both sides. Matches."
+      "rationale": "Pear.cs:13 `HasUponPickupEffect => true`; the flag feeds RelicModel.IsTradable, mirrored at relics/base.py:188-199, so an Uncommon relic that has already paid out is correctly excluded from the trade events on both sides. Matches."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained(run) (pear.py:18-19), dispatched by RunState.add_relic (run.py:552)",
+      "maps_to": "after_obtained(run) (pear.py:18-19), dispatched by RunState.add_relic (run.py:957)",
       "verdict": "faithful",
-      "rationale": "Pear.cs:17-20 is `await CreatureCmd.GainMaxHp(base.Owner.Creature, base.DynamicVars.MaxHp.BaseValue)`. CanonicalVars is `new MaxHpVar(10m)` (line 15) with no AscensionHelper.GetValueIfAscension anywhere in the file, so MAX_HP = 10 (pear.py:16) is the pinned non-ascension value. GainMaxHp is SetMaxHp followed by `Heal(num)` for the same amount (CreatureCmd.cs:786-799), and run.gain_max_hp is `self.max_hp += amount; self.heal(amount)` (run.py:311-314) -- so the +10 max HP AND the accompanying +10 heal both land, which is the half a port easily drops. The MapPointHistoryEntry bookkeeping at CreatureCmd.cs:793-797 is a run-history statistic with no sim counterpart and no effect on play. IMPORTANT CONTRAST checked deliberately: audit/records/relic/big_mushroom.json records a LIVE gap for a max-HP relic whose port implements NO after_obtained at all, so the +20 lived only in the event that granted it; Pear does implement it, and `run.add_relic` really does invoke it (run.py:550-552), so the same defect is not present here."
+      "rationale": "Pear.cs:17-20 is `await CreatureCmd.GainMaxHp(base.Owner.Creature, base.DynamicVars.MaxHp.BaseValue)`. CanonicalVars is `new MaxHpVar(10m)` (line 15) with no AscensionHelper.GetValueIfAscension anywhere in the file, so MAX_HP = 10 (pear.py:16) is the pinned non-ascension value. GainMaxHp is SetMaxHp followed by `Heal(num)` for the same amount (CreatureCmd.cs:786-799), and run.gain_max_hp is `self.max_hp += amount; self.heal(amount)` (run.py:477-480, re-verified 2026-08-04 after run.py drift) -- so the +10 max HP AND the accompanying +10 heal both land, which is the half a port easily drops. The MapPointHistoryEntry bookkeeping at CreatureCmd.cs:793-797 is a run-history statistic with no sim counterpart and no effect on play. IMPORTANT CONTRAST checked deliberately: audit/records/relic/big_mushroom.json records a LIVE gap for a max-HP relic whose port implements NO after_obtained at all, so the +20 lived only in the event that granted it; Pear does implement it, and `run.add_relic` really does invoke it, so the same defect is not present here."
     },
     "undo_after_obtained (no C# counterpart)": {
       "maps_to": "undo_after_obtained (sts2_rl/relics/pear.py) -- sim-only, for the conformance runner's relic resync; subtracts the recorded `_healed` then calls run.lose_max_hp(10)",

@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "0e7260041e0b6693c08bf4aa4ddbb8743311d7fd72d6212fdc7c7d358a7c5030",
+      "sha256": "0b6b63592c62386b478927b39f5f758720079c9377ecda32ca94df150369e7e4",
       "side": "sim"
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -71,7 +71,7 @@
       "verdict": "faithful"
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (neows_bones.py:17-40), dispatched by RunState.add_relic (run.py:546-553)",
+      "maps_to": "after_obtained (neows_bones.py:17-40), dispatched by RunState.add_relic (run.py)",
       "verdict": "deliberate-divergence",
       "rationale": "STALE rollup, same failure mode as this batch's relic/burning_sticks/AfterCardExhausted and relic/electric_shrymp/AfterObtained: it aggregates G1 and G2 per binding rule 4, but G1 -- the pool-ORDER bug this rollup was written to describe -- was closed 2026-07-29 (round 6): events/neow.py's `neow_relic_pool` now appends the six singleton relics in Neow.cs's own AllPossibleOptions order, and `py audit/tools/relic_probes_b10.py neows-bones` RE-EXECUTED today prints 'tails equal: True' with 0 divergent seeds (was 24/60). What remains under this rollup is only G2 -- the missing reward-SCREEN wrapper around an otherwise-unconditional grant -- which was never a 'gap' in the first place: its own guard entry below is `deliberate-divergence`, on the basis that `WithSkippingDisallowed` (RewardsSet.cs:115) has exactly one caller in the whole source, this relic, so Neow's Bones is the only non-declinable relic offer in the game and the sim's unconditional grant reaches the identical observable (same two relics, same order, no skip possible). With G1 closed and G2 never a live gap, this hook-level entry has no citable divergence left under 'gap'; re-verdicted to match the worst remaining guard rather than left stale.  The text it replaced: \"Rollup of guards G1 and G2 per binding rule 4. The SHAPE is right -- two relics drawn from Neow's own option pool on the per-player Rewards stream, then one generatable curse on the Niche stream -- and the shuffle algorithm, the curse pool and the curse ordering all match. What does not match is the relic pool's ORDER (G1), which changes which two relics come out.\""
     }
@@ -85,7 +85,7 @@
     {
       "what": "G2: `new RewardsSet(Owner).WithCustomRewards(...).WithSkippingDisallowed().Offer()` (NeowsBones.cs:43) is a reward SCREEN; the port grants both relics unconditionally",
       "verdict": "deliberate-divergence",
-      "rationale": "STILL a deliberate-divergence after the 2026-07-26 fix pass re-verdicted the rest of the auto-keep cluster to gap, and this record is the REASON the cluster is a cluster: `grep -rn WithSkippingDisallowed src/` returns exactly two lines in the whole source -- the definition (RewardsSet.cs:115) and its single caller, NeowsBones.cs:43 -- so Neow's Bones is the ONLY non-declinable relic offer in the game. The player therefore has no choice to make here and the sim's unconditional grant reaches the same observable: the same two relics land in the same order, and no `wasPicked:false` history entry is written because RelicReward.OnSkipped (RelicReward.cs:117-123) can never run. The only thing lost is the screen. (Previously this entry justified itself by citing relic/calling_bell G3's 'house rule for non-choice relic offers'; that rationale is gone -- CallingBell.cs:31 is a plain skippable `RewardsCmd.OfferCustom` and calling_bell G3 is now a gap. The verdict here survives on `WithSkippingDisallowed` alone, which is a stronger basis than the one it replaced.) Residual, and the reason this is not simply faithful: C# runs each relic's `AfterObtained` inside `RelicReward.OnSelect` (RelicReward.cs:109-115) as the player confirms each card, whereas `run.add_relic` (sts2_rl/run.py:546-553) fires it at grant time -- with skipping disallowed both orders end at the same state. Flagged so that whoever fixes G1 does not silently harden the auto-keep. Rule 7: src/Core/Rewards/RewardsSet.cs, src/Core/Rewards/RelicReward.cs and sts2_rl/run.py are cited and not all hashed here."
+      "rationale": "STILL a deliberate-divergence after the 2026-07-26 fix pass re-verdicted the rest of the auto-keep cluster to gap, and this record is the REASON the cluster is a cluster: `grep -rn WithSkippingDisallowed src/` returns exactly two lines in the whole source -- the definition (RewardsSet.cs:115) and its single caller, NeowsBones.cs:43 -- so Neow's Bones is the ONLY non-declinable relic offer in the game. The player therefore has no choice to make here and the sim's unconditional grant reaches the same observable: the same two relics land in the same order, and no `wasPicked:false` history entry is written because RelicReward.OnSkipped (RelicReward.cs:117-123) can never run. The only thing lost is the screen. (Previously this entry justified itself by citing relic/calling_bell G3's 'house rule for non-choice relic offers'; that rationale is gone -- CallingBell.cs:31 is a plain skippable `RewardsCmd.OfferCustom` and calling_bell G3 is now a gap. The verdict here survives on `WithSkippingDisallowed` alone, which is a stronger basis than the one it replaced.) Residual, and the reason this is not simply faithful: C# runs each relic's `AfterObtained` inside `RelicReward.OnSelect` (RelicReward.cs:109-115) as the player confirms each card, whereas `run.add_relic` (sts2_rl/run.py) fires it at grant time -- with skipping disallowed both orders end at the same state. Flagged so that whoever fixes G1 does not silently harden the auto-keep. Rule 7: src/Core/Rewards/RewardsSet.cs, src/Core/Rewards/RelicReward.cs and sts2_rl/run.py are cited and not all hashed here."
     },
     {
       "what": "N1: the shuffle primitive and the Take(2) slice",
@@ -105,7 +105,7 @@
     {
       "what": "N4: the legacy (non-parity) `else` branch (neows_bones.py:35-40) uses the shared run rng and `random_curses(distinct=True)` instead of the ordered Niche draw",
       "verdict": "deliberate-divergence",
-      "rationale": "The repo-wide convention: `run.rng_set is None` means an RL run with no string seed, and every ported unit keeps its pre-SP2 draw sequence byte-for-byte on that path so training/eval numbers do not move (run.py:128-144 states this for the RNG seating; relics/arcane_scroll.py:27-30 is the same if/else shape). The audited path is the parity one. Recorded rather than skipped because a reader diffing only the else-branch would see an unordered curse pick and file it as a gap."
+      "rationale": "The repo-wide convention: `run.rng_set is None` means an RL run with no string seed, and every ported unit keeps its pre-SP2 draw sequence byte-for-byte on that path so training/eval numbers do not move (run.py states this for the RNG seating; relics/arcane_scroll.py:27-30 is the same if/else shape). The audited path is the parity one. Recorded rather than skipped because a reader diffing only the else-branch would see an unordered curse pick and file it as a gap."
     },
     {
       "what": "N5: DynamicVar('Relics', 2) and DynamicVar('Curses', 1) (NeowsBones.cs:25-29) vs RELICS = 2 / CURSES = 1 (neows_bones.py:14-15)",
@@ -120,7 +120,7 @@
     {
       "what": "N7: `RunState.CreateCard(cardModel, Owner)` + `CardPileCmd.Add(card, PileType.Deck)` (NeowsBones.cs:53-54) vs `run.add_card(make_card(cid))` (neows_bones.py:34)",
       "verdict": "faithful",
-      "rationale": "Same mapping relic/calling_bell N1 already verdicted faithful (binding rule 3): run.add_card (run.py:341-354) runs modify_card_being_added_to_deck before the append and after_card_added_to_deck after it, which are the two deck-add hooks the sim models, and the append lands at the end of the deck like CardPileCmd's default CardPilePosition.Bottom. Hook.ShouldAddToDeck, which CardPileCmd.Add also consults, is waived as dead code in the C# source itself -- calling_bell G4 established by grep that the whole game contains zero overrides. Rule 7: run.py, relics/calling_bell.py and CardPileCmd.cs are unhashed here."
+      "rationale": "Same mapping relic/calling_bell N1 already verdicted faithful (binding rule 3): run.add_card (run.py) runs modify_card_being_added_to_deck before the append and after_card_added_to_deck after it, which are the two deck-add hooks the sim models, and the append lands at the end of the deck like CardPileCmd's default CardPilePosition.Bottom. Hook.ShouldAddToDeck, which CardPileCmd.Add also consults, is waived as dead code in the C# source itself -- calling_bell G4 established by grep that the whole game contains zero overrides. Rule 7: run.py, relics/calling_bell.py and CardPileCmd.cs are unhashed here."
     }
   ],
   "verdict": "deliberate-divergence",

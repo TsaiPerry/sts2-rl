@@ -11,17 +11,17 @@
   "extra_sources": [
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -33,12 +33,12 @@
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (lees_waffle.py:14)",
       "verdict": "faithful",
-      "rationale": "Matches LeesWaffle.cs:14. Load-bearing, not decorative: Relic.is_tradable (relics/base.py:126-136) returns False for any relic with an upon-pickup effect, so dropping this flag would make the Waffle offerable to the trade events after its max HP was already banked -- which is the defect audit/records/relic/byrdpip.json records for the same declaration. Shop rarity does NOT exclude it from trading, so unlike the Ancient relics in this batch the flag is the only thing doing the work here. Rule 7: relics/base.py are not hashed by this record."
+      "rationale": "Matches LeesWaffle.cs:14. Load-bearing, not decorative: Relic.is_tradable (relics/base.py:188-199, renumbered since prior pass, content unchanged) returns False for any relic with an upon-pickup effect, so dropping this flag would make the Waffle offerable to the trade events after its max HP was already banked -- which is the defect audit/records/relic/byrdpip.json records for the same declaration. Shop rarity does NOT exclude it from trading, so unlike the Ancient relics in this batch the flag is the only thing doing the work here. Rule 7: relics/base.py are not hashed by this record."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (lees_waffle.py:18-20), dispatched by RunState.add_relic (run.py:552)",
+      "maps_to": "after_obtained (lees_waffle.py:18-20), dispatched by RunState.add_relic (run.py:957-963, renumbered since prior pass, content unchanged)",
       "verdict": "faithful",
-      "rationale": "LeesWaffle.cs:18-23 is `CreatureCmd.GainMaxHp(creature, MaxHpVar(7).BaseValue)` then `CreatureCmd.Heal(creature, creature.MaxHp - creature.CurrentHp)` -- i.e. +7 max HP (which itself heals 7) and then a top-up to full. lees_waffle.py:19-20 is `run.gain_max_hp(self.MAX_HP)` then `run.heal(run.max_hp - run.hp)`, statement for statement. RunState.gain_max_hp (run.py:311-314) raises max HP then heals the same amount, mirroring GainMaxHp's SetMaxHp-then-Heal, and the second heal's argument is re-read AFTER the first, on both sides. EXECUTED (py audit/tools/relic_probes_b08.py b08-maxhp): from 40/80 the relic gives 87/87, and from 80/80 it gives 87/87 -- C#'s numbers in both cases. So the relic is a full heal plus 7 max HP regardless of starting HP. Rule 7: run.py are not hashed by this record."
+      "rationale": "LeesWaffle.cs:18-23 is `CreatureCmd.GainMaxHp(creature, MaxHpVar(7).BaseValue)` then `CreatureCmd.Heal(creature, creature.MaxHp - creature.CurrentHp)` -- i.e. +7 max HP (which itself heals 7) and then a top-up to full. lees_waffle.py:19-20 is `run.gain_max_hp(self.MAX_HP)` then `run.heal(run.max_hp - run.hp)`, statement for statement. RunState.gain_max_hp (run.py:477-480, renumbered since prior pass, content unchanged) raises max HP then heals the same amount, mirroring GainMaxHp's SetMaxHp-then-Heal, and the second heal's argument is re-read AFTER the first, on both sides. EXECUTED (py audit/tools/relic_probes_b08.py b08-maxhp): from 40/80 the relic gives 87/87, and from 80/80 it gives 87/87 -- C#'s numbers in both cases. So the relic is a full heal plus 7 max HP regardless of starting HP. Rule 7: run.py are not hashed by this record."
     }
   },
   "guards": [
@@ -55,7 +55,7 @@
     {
       "what": "N3: `CreatureCmd.Heal` vs RunState.heal -- the cap and the revive branch",
       "verdict": "faithful",
-      "rationale": "Both cap at max HP: SetCurrentHpInternal is `CurrentHp = (int)Math.Min(amount, MaxHp)` and RunState.heal (run.py:288-292) is `max(0, min(int(amount), self.max_hp - self.hp))`. C#'s HealInternal additionally fires a Revived event when the creature was dead, which cannot apply out of combat to a live player taking a shop relic. Truncation direction agrees (both toward zero) and the argument here is an integer difference anyway. Rule 7: run.py are not hashed by this record."
+      "rationale": "Both cap at max HP: SetCurrentHpInternal is `CurrentHp = (int)Math.Min(amount, MaxHp)` and RunState.heal (run.py:414-418, renumbered since prior pass, content unchanged) is `max(0, min(int(amount), self.max_hp - self.hp))`. C#'s HealInternal additionally fires a Revived event when the creature was dead, which cannot apply out of combat to a live player taking a shop relic. Truncation direction agrees (both toward zero) and the argument here is an integer difference anyway. Rule 7: run.py are not hashed by this record."
     },
     {
       "what": "N4: undo_after_obtained (lees_waffle.py:22-26) restores the max HP but not the healed current HP",

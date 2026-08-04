@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\war_historian_repy.py",
-    "sha256": "3d0273c48e42e3a7dd6202808ced621fa1f2b675734b523d3cab21a4b5c5313f"
+    "sha256": "067e6b497be840f5f30a2f7905a99fadf26b4561897a9ae60ad45e3c16d5c12c"
   },
   "extra_sources": [
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/cards/event_cards.py",
-      "sha256": "dfd78fff2c2a36323033d8c74d986f9211a6cff57920b7380b731bb6cf9d3a5a",
+      "sha256": "22675c0e8764e2eb8d0aa28341ccb256084aeb94bf28b17a444409586ca6fc54",
       "side": "sim"
     },
     {
@@ -51,8 +51,38 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Models/AbstractModel.cs",
+      "sha256": "6dae61e75edc2eb867a02d217089a562a7198564bf5f3823a466e132c7a20137",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Hooks/Hook.cs",
+      "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/ActModel.cs",
+      "sha256": "158831cf2c7b7887f2242fa5751fad3ceeb5c8913fbc89d41451645bd822cc9b",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Commands/PlayerCmd.cs",
+      "sha256": "8630f180d829942738c860f96dc6621cae01e7c2402fd33cee871fe21f42f668",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/HoverTips/NMapPointHistoryHoverTip.cs",
+      "sha256": "b7076d2bd9145dc7432117c616da2ec08b3e28b63397f9750f9a9a81cee925ec",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Nodes/Screens/RunHistoryScreen/NMapPointHistoryEntry.cs",
+      "sha256": "a8d36f92dd414a474a3dbc0eed4eed3f13497cf3712615f3c59c5f60ed3ffe5d",
+      "side": "game"
     }
   ],
   "hooks": {
@@ -61,7 +91,7 @@
       "verdict": "faithful"
     },
     "IsAllowed": {
-      "maps_to": "WarHistorianRepy.cs:30-33 `IsAllowed(IRunState) => false` -- a bare `return false` in the SOURCE. WarHistorianRepy.is_allowed (events/war_historian_repy.py:29-32) is the same bare `return False`, so this hook is exact. NOTE this is where this unit differs from its sibling stub event/crystal_sphere, whose record verdicts IsAllowed a gap: CrystalSphere.cs:49-56 is a REAL gate (act 2+, 100 gold) that the sim overrides to False, whereas here the sim reproduces the source exactly. The gap in this unit is not in IsAllowed -- see the two DEFERRED-PORT guards.",
+      "maps_to": "WarHistorianRepy.cs:30-33 `IsAllowed(IRunState) => false` -- a bare `return false` in the SOURCE. WarHistorianRepy.is_allowed (events/war_historian_repy.py:56-60, was :29-32) is the same bare `return False`, so this hook is exact. NOTE this is where this unit differs from its sibling stub event/crystal_sphere, whose record verdicts IsAllowed a gap: CrystalSphere.cs:49-56 is a REAL gate (act 2+, 100 gold) that the sim overrides to False, whereas here the sim reproduces the source exactly. The gap in this unit is not in IsAllowed -- see the two DEFERRED-PORT guards. Re-verified 2026-08-04: the sim module was substantially rewritten since the record's original line numbers (the body is now fully ported, matching the DEFERRED-PORT leg-2 guard's already-closed `issue` text) but `is_allowed` still returns a bare `False`, only moved.",
       "verdict": "faithful"
     }
   },
@@ -72,14 +102,14 @@
       "issue": "Closed 2026-07-29 (round 8): `Hook.ModifyNextEvent` exists and the Lantern Key implements both halves. The hook is `AbstractModel.ModifyNextEvent` (AbstractModel.cs:1892), dispatched by Hook.cs:1830-1836, and its ONE call site is `ActModel.PullNextEvent` (ActModel.cs:437-443): `EnsureNextEventIsValid`, then the chain, then `AddVisitedEvent(eventModel)` -- so the hook sits between the pull and the visited-set add and the event RECORDED as visited is the MODIFIED one. Shipped as `Card.modify_next_event` / `Relic.modify_next_event` no-ops plus a dispatcher at exactly that position in `RunState.enter_point`'s EVENT arm, walking the same `_map_listeners()` (relics + deck) the companion map hook already used. `LanternKeyCard.modify_next_event` returns 'war_historian_repy' when `act_index == 2` (LanternKey.cs:29-36) and passes the incoming event through otherwise. EXECUTED 2026-07-29: walking an act with `act_index = 2` and a Lantern Key in the deck, the first event room serves `war_historian_repy` and the id lands in `visited_event_ids`; without the card the same walk serves an ordinary event. The other half of the deferred port was ALREADY present and is re-pinned so the pair cannot drift: `modify_unknown_map_point_room_types` REPLACES the set with {Event} in act 2 and passes it through elsewhere. That WarHistorianRepy's own `IsAllowed` is False is the POINT, not an obstacle -- IsAllowed gates the random pool and this hook bypasses it. The card's docstring, which justified the omission with 'the sim has no map' and called ModifyNextEvent 'not a listener category the sim has', is corrected: both were false, and rule 1 makes an unported C# side a gap, never a waiver.  Pinned by test/test_tier1_last_five.py.  NOT CLOSED: nothing at this site.  The text it replaced read: EXECUTED (`py audit/tools/event_probes_c.py repy`): the card 'lantern_key' IS ported (cards/event_cards.py:366-387) and the ported event 'the_lantern_key' hands it over as a reward extra (events/the_lantern_key.py:44); the sim has ZERO implementations of the ModifyNextEvent hook anywhere under sts2_rl/ (the hook does not exist), and LanternKeyCard does not override modify_unknown_map_point_room_types even though the sim DOES dispatch that hook over the deck and the relics (run.py:1045-1049; relics/golden_compass.py:42 is a working implementer). LIVE: the trigger is ordinary run state with ported content -- hold a Lantern Key, reach act index 2 -- and the observable is that the game turns a '?' node into this event and the sim cannot. The card's docstring justifies the omission with 'the sim has no map, so it is an inert unplayable card' (cards/event_cards.py:371), which is false in two ways: the sim has a map, and the hook it would need is already dispatched. Under rule 1 an unported C# side is a gap, never a waiver."
     },
     {
-      "what": "DEFERRED PORT, leg 2 -- THE BODY. Nothing below GenerateInitialOptions is ported: events/war_historian_repy.py:34-36 returns []. Unported: the two initial options UNLOCK_CAGE / UNLOCK_CHEST (WarHistorianRepy.cs:35-42); the second-reward page that offers the OTHER option (:44-70); UnlockCage's `RelicCmd.Obtain<HistoryCourse>` and `ExtraFields.FreedRepy = true` (:96-100); UnlockChest's RewardsCmd.OfferCustom of 2 PotionRewards + 2 RelicRewards (:86-94); and the Lantern-Key consumption (PlayerCmd.CompleteQuest + CardPileCmd.RemoveFromDeck, :102-132)",
+      "what": "DEFERRED PORT, leg 2 -- THE BODY (HISTORICAL, pre-fix framing; the current sim module already ports this leg -- see the `issue` below and `initial_options` at events/war_historian_repy.py:64-68). Originally nothing below GenerateInitialOptions was ported: the module's old `initial_options` was a bare `return []`. Was unported: the two initial options UNLOCK_CAGE / UNLOCK_CHEST (WarHistorianRepy.cs:35-42); the second-reward page that offers the OTHER option (:44-70); UnlockCage's `RelicCmd.Obtain<HistoryCourse>` and `ExtraFields.FreedRepy = true` (:96-100); UnlockChest's RewardsCmd.OfferCustom of 2 PotionRewards + 2 RelicRewards (:86-94); and the Lantern-Key consumption (PlayerCmd.CompleteQuest + CardPileCmd.RemoveFromDeck, :102-132)",
       "verdict": "gap",
       "live": false,
       "issue": "Replaces the \"DEFERRED PORT, whole body unported\" reasoning entirely. Ported: initial_options (UNLOCK_CAGE/UNLOCK_CHEST), the second-reward EXTRA page (ShouldGetSecondReward gate + SecondUnlockCage/SecondUnlockChest), UnlockChest (2 potions + 2 relics via run.offer_potion/offer_relic), UnlockCage (grants the new history_course relic), and the Lantern-Key removal helpers (single vs all, via run.remove_cards). The one investigated-and-declined leg is PlayerCmd.CompleteQuest (PlayerCmd.cs:291-294): grepped every CompletedQuests reader in the decompiled tree (NMapPointHistoryHoverTip.cs:304, NMapPointHistoryEntry.cs:186, PlayerMapPointHistoryEntry.cs + its serializer) -- all Run History screen/save bookkeeping, zero gameplay effect, not a gap by this campaign's own \"observable divergence\" bar. ExtraFields.FreedRepy (WarHistorianRepy.cs:98) is the same shape (its only other reader, NQueenRepyBgVfx.cs:20, is a background VFX toggle) and is likewise not ported. No longer a gap; no longer live."
     },
     {
       "what": "no RNG is consumed by the stub, so leaving the id in the 18-event shared pool is free",
-      "maps_to": "events/war_historian_repy.py:29-32 is a bare `return False` with no draw, exactly like the source's own `return false`. This is what makes carrying the id in SHARED_EVENTS (events/__init__.py:134) correct rather than merely harmless -- the game shuffles all 18 ids onto every act's queue and each one's IsAllowed filters it out again, so the UpFront event-shuffle draw count and order match.",
+      "maps_to": "events/war_historian_repy.py:56-60 (was 29-32) is a bare `return False` with no draw, exactly like the source's own `return false`. This is what makes carrying the id in SHARED_EVENTS (events/__init__.py:134) correct rather than merely harmless -- the game shuffles all 18 ids onto every act's queue and each one's IsAllowed filters it out again, so the UpFront event-shuffle draw count and order match. Re-verified 2026-08-04.",
       "verdict": "faithful"
     },
     {

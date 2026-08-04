@@ -21,32 +21,32 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/event_cards.py",
-      "sha256": "dfd78fff2c2a36323033d8c74d986f9211a6cff57920b7380b731bb6cf9d3a5a",
+      "sha256": "22675c0e8764e2eb8d0aa28341ccb256084aeb94bf28b17a444409586ca6fc54",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/infested_automaton.py",
-      "sha256": "9f2a892edd9957367fd788a75a09d0e3e50beabfa8302fd4c16557d89084abe5",
+      "sha256": "07e0c7ee92afcdc2df5f4d6d7e2365147513ade98b4b354460cae23ea30be475",
       "side": "sim"
     },
     {
       "path": "sts2_rl/full_env.py",
-      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8",
+      "sha256": "4ba9a145147eb29e6f42a10acb70986873bf1bb12d47a12ef764a423572f312f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "63c0df752ca09e9de59285b0c9bc9be809da18e69b61b65424d75f37ee1ffc6b",
+      "sha256": "416789386ad4af19cb52a3c275a2c39c1708bb90ebc4dc5c8fb4e88a7055d557",
       "side": "sim"
     },
     {
@@ -84,7 +84,7 @@
     "OnTurnEndInHand": {
       "maps_to": "DoubtCard.on_turn_end_in_hand (doubt.py:39-42)",
       "verdict": "faithful",
-      "rationale": "`PowerCmd.Apply<WeakPower>(choiceContext, Owner.Creature, DynamicVars.Weak.BaseValue, null, this)` (Doubt.cs:32) == `PowerCmd.apply(ctx.hooks, ctx.player, WeakPower, 1)`. The NULL applier is reproduced (the sim leaves `applier` at its None default), which matters for anything keyed on who applied the debuff. The explicit `if (powerModel != null && !alreadyHasWeak) powerModel.SkipNextDurationTick = true` (33-36) needs no counterpart: `PowerCmd.Apply` already sets that flag unconditionally for player-side debuffs on the NEW-power path (PowerCmd.cs:144-147), so Doubt's line is redundant with the engine in the fresh case and correctly absent in the already-Weak case. The sim's own `PowerCmd.apply` sets `skip_next_tick` at cmds.py:331-332. BLAST RADIUS, not re-verdicted here per rule 3: the sim's flag sits AFTER the new-vs-stacking if/else, so it also fires on RE-STACKING where C# does not -- already recorded as power_cmd step 20."
+      "rationale": "`PowerCmd.Apply<WeakPower>(choiceContext, Owner.Creature, DynamicVars.Weak.BaseValue, null, this)` (Doubt.cs:32) == `PowerCmd.apply(ctx.hooks, ctx.player, WeakPower, 1)`. The NULL applier is reproduced (the sim leaves `applier` at its None default), which matters for anything keyed on who applied the debuff. The explicit `if (powerModel != null && !alreadyHasWeak) powerModel.SkipNextDurationTick = true` (33-36) needs no counterpart: `PowerCmd.Apply` already sets that flag unconditionally for player-side debuffs on the NEW-power path (PowerCmd.cs:144-147), so Doubt's line is redundant with the engine in the fresh case and correctly absent in the already-Weak case. The sim's own `PowerCmd.apply` sets `skip_next_tick` at cmds.py:1067-1069 (re-verified 2026-08-04, re-pinned from :331-332). BLAST RADIUS, not re-verdicted here per rule 3: the sim's flag sits AFTER the new-vs-stacking if/else, so it also fires on RE-STACKING where C# does not -- already recorded as power_cmd step 20."
     },
     "OnPlay": {
       "maps_to": "DoubtCard.on_play -> pass (doubt.py:36-37)",

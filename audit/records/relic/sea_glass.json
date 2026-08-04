@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -44,7 +44,7 @@
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (sea_glass.py:17)",
       "verdict": "faithful",
-      "rationale": "Matches SeaGlass.cs:66. Correct even though the port's effect is a no-op: the flag also drives Relic.is_tradable (relics/base.py:132), so a stubbed effect must not silently make the relic tradable. Rule 7: relics/base.py is not hashed here."
+      "rationale": "Matches SeaGlass.cs:66. Correct even though the port's effect is a no-op: the flag also drives Relic.is_tradable (relics/base.py:189-198), so a stubbed effect must not silently make the relic tradable. Rule 7: relics/base.py is not hashed here."
     },
     "AfterObtained": {
       "maps_to": "after_obtained (sea_glass.py:31-38)",
@@ -76,7 +76,7 @@
     {
       "what": "N4: `undo_after_obtained` is not implemented",
       "verdict": "faithful",
-      "rationale": "Vacuous at this site and recorded to say so explicitly: the stub mutates no run state, so there is nothing for an undo to reverse and the conformance-runner consequence the other units in this batch carry does not arise here. Per PROMPT.md v6 binding item 3, the ABSENCE of undo_after_obtained is faithful at every site: the helper has no C# counterpart -- nothing in the game un-picks a relic -- so a sim lacking it is not diverging from the source, which is the only question this audit asks. Flagged for its operational consequence only, which is a tooling defect and not a fidelity gap. Rule 7: relics/base.py:143-150 and conformance/runner.py are not hashed here."
+      "rationale": "Vacuous at this site and recorded to say so explicitly: the stub mutates no run state, so there is nothing for an undo to reverse and the conformance-runner consequence the other units in this batch carry does not arise here. Per PROMPT.md v6 binding item 3, the ABSENCE of undo_after_obtained is faithful at every site: the helper has no C# counterpart -- nothing in the game un-picks a relic -- so a sim lacking it is not diverging from the source, which is the only question this audit asks. Flagged for its operational consequence only, which is a tooling defect and not a fidelity gap. Rule 7: relics/base.py:206-213 and conformance/runner.py are not hashed here."
     }
   ],
   "verdict": "waiver",

@@ -26,17 +26,17 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -47,7 +47,7 @@
       "rationale": "Obtainable: not in the grab bag (Ancient), granted by the ported Neow event -- `py audit/tools/relic_probes_b12.py b12-pool` reports granted_by=['sts2_rl/events/neow.py']."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (pomander.py:14-16), dispatched by RunState.add_relic (run.py:552)",
+      "maps_to": "after_obtained (pomander.py:14-16), dispatched by RunState.add_relic (run.py:957)",
       "verdict": "faithful",
       "rationale": "Pomander.cs:17-24 selects Cards(1) upgradable deck cards and upgrades each; pomander.py:14-16 does the same through run.select_cards('upgrade', run.upgradable_cards(), 1) and card.upgrade(). Both the IsUpgradable filter (guard N1, the bug-class-14 check, cleared by execution) and the auto-select-when-the-list-is-short semantics (guard N2) match, and the select-then-mutate ordering matches (guard N3). Rollup of N1-N5 per binding rule 4: the worst verdict among them is the presentation waiver, so this hook carries no divergence."
     }
@@ -56,17 +56,17 @@
     {
       "what": "N1 (bug class 14, CLEARED by execution): the sim's Card.upgrade() has no IsUpgradable guard, but Pomander's candidate list carries it",
       "verdict": "faithful",
-      "rationale": "C#'s CardCmd.Upgrade skips any card whose IsUpgradable is false (src/Core/Commands/CardCmd.cs:271-276, `if (!card.IsUpgradable) continue;`) and the sim's Card.upgrade() (cards/base.py:146-148) is a bare `upgrade_level += 1` plus _on_upgrade with no guard at all, so every sim caller must supply its own filter -- PROMPT.md bug class 14, which fired as a LIVE gap on relic/astrolabe and relic/bone_tea. Pomander does supply it: run.upgradable_cards() (run.py:368-369) is `[c for c in self.deck if c.is_upgradable]` and Card.is_upgradable (cards/base.py:167-170) is CardModel.IsUpgradable's `CurrentUpgradeLevel < MaxUpgradeLevel`. That mirrors the source, which filters in the same place -- CardSelectCmd.FromDeckForUpgrade takes `PileType.Deck.GetPile(player).Cards.Where(c => c.IsUpgradable)` (src/Core/Commands/CardSelectCmd.cs:442) -- so both sides filter the candidate list and both are safe. EXECUTED (py audit/tools/relic_probes_b12.py b12-cutters): a deck of 10 upgradable cards plus a curse_of_the_bell (max_upgrade_level 0) offers 10 candidates and leaves the curse at upgrade_level 0. This is also the correction .superpowers/sdd/content-relic-sweeps.md sweep D records: its first version over-reported pomander because it looked for the guard in a 3-line window rather than the enclosing function. NOTE per binding rule 7: CardCmd.cs, CardSelectCmd.cs, cards/base.py, run.py and content-relic-sweeps.md are NOT hashed by this record."
+      "rationale": "C#'s CardCmd.Upgrade skips any card whose IsUpgradable is false (src/Core/Commands/CardCmd.cs:271-276, `if (!card.IsUpgradable) continue;`) and the sim's Card.upgrade() (cards/base.py:289-...) is a bare `upgrade_level += 1` plus _on_upgrade with no guard at all, so every sim caller must supply its own filter -- PROMPT.md bug class 14, which fired as a LIVE gap on relic/astrolabe and relic/bone_tea. Pomander does supply it: run.upgradable_cards() (run.py:582-...) is `[c for c in self.deck if c.is_upgradable]` and Card.is_upgradable (cards/base.py:358-...) is CardModel.IsUpgradable's `CurrentUpgradeLevel < MaxUpgradeLevel`. (2026-08-04: cards/base.py and run.py had drifted; re-verified same shape.) That mirrors the source, which filters in the same place -- CardSelectCmd.FromDeckForUpgrade takes `PileType.Deck.GetPile(player).Cards.Where(c => c.IsUpgradable)` (src/Core/Commands/CardSelectCmd.cs:442) -- so both sides filter the candidate list and both are safe. EXECUTED (py audit/tools/relic_probes_b12.py b12-cutters): a deck of 10 upgradable cards plus a curse_of_the_bell (max_upgrade_level 0) offers 10 candidates and leaves the curse at upgrade_level 0. This is also the correction .superpowers/sdd/content-relic-sweeps.md sweep D records: its first version over-reported pomander because it looked for the guard in a 3-line window rather than the enclosing function. NOTE per binding rule 7: CardCmd.cs, CardSelectCmd.cs, cards/base.py, run.py and content-relic-sweeps.md are NOT hashed by this record."
     },
     {
       "what": "N2: `CardSelectorPrefs(UpgradeSelectionPrompt, Cards.IntValue)` (Pomander.cs:19) vs `run.select_cards('upgrade', run.upgradable_cards(), 1)` (pomander.py:15)",
       "verdict": "faithful",
-      "rationale": "The single-argument CardSelectorPrefs constructor sets MinSelect = MaxSelect = selectCount and therefore RequireManualConfirmation = false (src/Core/CardSelection/CardSelectorPrefs.cs:62-77), so FromDeckForUpgrade's `if (list.Count <= prefs.MinSelect && !RequireManualConfirmation) enumerable = list;` (CardSelectCmd.cs:448-451) auto-takes the whole list when the deck has one or fewer upgradable cards. RunState.select_cards clamps identically with `count = min(count, len(candidates))` and returns [] for an empty candidate list (run.py:371-390). CardsVar(1) (Pomander.cs:15) read as IntValue is the pinned non-ascension value -- no AscensionHelper.GetValueIfAscension anywhere in the file -- and the sim's literal 1 matches; checked against the C# rather than the port's docstring per PROMPT.md bug class 19. WHICH card is chosen is a player decision on both sides (the sim delegates to run.card_selector and falls back to a uniform run-RNG sample), so the selection itself is not a fidelity question. NOTE per binding rule 7: CardSelectorPrefs.cs, CardSelectCmd.cs and run.py are not hashed here."
+      "rationale": "The single-argument CardSelectorPrefs constructor sets MinSelect = MaxSelect = selectCount and therefore RequireManualConfirmation = false (src/Core/CardSelection/CardSelectorPrefs.cs:62-77), so FromDeckForUpgrade's `if (list.Count <= prefs.MinSelect && !RequireManualConfirmation) enumerable = list;` (CardSelectCmd.cs:448-451) auto-takes the whole list when the deck has one or fewer upgradable cards. RunState.select_cards clamps identically with `count = min(count, len(candidates))` and returns [] for an empty candidate list (run.py:585-... , re-verified 2026-08-04 after line drift). CardsVar(1) (Pomander.cs:15) read as IntValue is the pinned non-ascension value -- no AscensionHelper.GetValueIfAscension anywhere in the file -- and the sim's literal 1 matches; checked against the C# rather than the port's docstring per PROMPT.md bug class 19. WHICH card is chosen is a player decision on both sides (the sim delegates to run.card_selector and falls back to a uniform run-RNG sample), so the selection itself is not a fidelity question. NOTE per binding rule 7: CardSelectorPrefs.cs, CardSelectCmd.cs and run.py are not hashed here."
     },
     {
       "what": "N5: Pomander.cs overrides no HasUponPickupEffect, so RelicModel.IsTradable treats this consumed one-shot relic as tradable -- and the port copies the omission faithfully",
       "verdict": "faithful",
-      "rationale": "Recorded as an entry rather than a divergence because the port and the source AGREE: Pomander.cs declares Rarity, CanonicalVars and AfterObtained only (25 lines), and pomander.py declares no has_upon_pickup_effect either, so Relic.has_upon_pickup_effect stays at its False default (relics/base.py:96). Both codebases therefore consider a spent Pomander tradable on the has_upon_pickup_effect axis. It cannot matter here because Relic.is_tradable also excludes ANCIENT rarity outright (relics/base.py:134-136, mirroring RelicModel.IsTradable), and Pomander is Ancient -- so the relic is untradable for the other reason on both sides. Worth an entry because the three sibling pickup relics in this same batch (phial_holster, precarious_shears, precise_scissors) DO declare it while pomander and preserved_fog do not, exactly matching which C# files override the property; a reviewer who assumed the four should look alike would 'fix' two correct ports. NOTE per binding rule 7: relics/base.py is not hashed here."
+      "rationale": "Recorded as an entry rather than a divergence because the port and the source AGREE: Pomander.cs declares Rarity, CanonicalVars and AfterObtained only (25 lines), and pomander.py declares no has_upon_pickup_effect either, so Relic.has_upon_pickup_effect stays at its False default (relics/base.py:159). Both codebases therefore consider a spent Pomander tradable on the has_upon_pickup_effect axis. It cannot matter here because Relic.is_tradable also excludes ANCIENT rarity outright (relics/base.py:188-199, mirroring RelicModel.IsTradable), and Pomander is Ancient -- so the relic is untradable for the other reason on both sides. Worth an entry because the three sibling pickup relics in this same batch (phial_holster, precarious_shears, precise_scissors) DO declare it while pomander and preserved_fog do not, exactly matching which C# files override the property; a reviewer who assumed the four should look alike would 'fix' two correct ports. NOTE per binding rule 7: relics/base.py is not hashed here."
     },
     {
       "what": "N3: `CardCmd.Upgrade(item)` is called per selected card in a loop after the whole selection resolves (Pomander.cs:20-23); the sim upgrades inside the comprehension loop (pomander.py:15-16)",

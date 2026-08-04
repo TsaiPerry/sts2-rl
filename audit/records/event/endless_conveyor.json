@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\endless_conveyor.py",
-    "sha256": "f1f3376a63944caa95f66a03937f6f4fff6535a0be0911e15d8bd96868be0bd9"
+    "sha256": "94c8467ffdc814be297161ff03db48d7c9424ec8be69b286b619a5606b1ccc5b"
   },
   "extra_sources": [
     {
@@ -16,17 +16,17 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/brain_leech.py",
-      "sha256": "220a635f96c3938d07bb172ecd05641c9808d471f8a5c32575712e33b0188f30",
+      "sha256": "18ff0492ba63d24b23a7fa21c25c7c832094cbeed9cfa5fffeee0a85f5f830f0",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -68,32 +68,32 @@
     },
     {
       "what": "GrabSomethingOffTheBelt (EndlessConveyor.cs:114-129): pay 40 unless the dish is GOLDEN_FYSH, run the action, THEN re-roll, then present grab/leave",
-      "maps_to": "events/endless_conveyor.py:133-141 in the same order.",
+      "maps_to": "events/endless_conveyor.py in the same order.",
       "verdict": "faithful"
     },
     {
       "what": "GenerateGrabSomethingOffTheBeltOption (EndlessConveyor.cs:131-138): the affordability check is `Owner.Gold >= Gold.IntValue` and is applied even when the current dish is the FREE Golden Fysh",
-      "maps_to": "events/endless_conveyor.py:120-125 reproduces the quirk and says so in a comment. A broke player cannot take the free fish in either engine.",
+      "maps_to": "events/endless_conveyor.py reproduces the quirk and says so in a comment. A broke player cannot take the free fish in either engine.",
       "verdict": "faithful"
     },
     {
       "what": "ClamRoll heal 10, Caviar +4 Max HP, GoldenFysh +75 gold, SeapunkSalad adds Feeding Frenzy (EndlessConveyor.cs:140-148, 174-176, 185-188)",
-      "maps_to": "events/endless_conveyor.py:12-15 constants (_GRAB_COST 40, _GOLDEN_FYSH_GOLD 75, _CLAM_ROLL_HEAL 10, _CAVIAR_MAX_HP 4) and events/endless_conveyor.py:87-116. All four exact.",
+      "maps_to": "events/endless_conveyor.py:12-15 constants (_GRAB_COST 40, _GOLDEN_FYSH_GOLD 75, _CLAM_ROLL_HEAL 10, _CAVIAR_MAX_HP 4) and events/endless_conveyor.py. All four exact.",
       "verdict": "faithful"
     },
     {
       "what": "FriedEel (EndlessConveyor.cs:178-183) draws from the COLORLESS card pool: `ForNonCombatWithDefaultOdds(ModelDb.CardPool<ColorlessCardPool>())` -> CreateForReward(1) -> CardPileCmd.Add(card, Deck)",
-      "maps_to": "Closed 2026-07-28: events/endless_conveyor.py:109-122 draws FRIED_EEL from `COLORLESS_POOL` through rewards.create_reward_cards with RarityOddsType.REGULAR + mutate_pity=False -- the port of `CardFactory.CreateForReward(Owner, 1, ForNonCombatWithDefaultOdds(ColorlessCardPool))` (EndlessConveyor.cs:178-183). That closes both stated observables (the pool is colourless, not the Ironclad character pool; the non-combat default rarity odds are rolled) plus the stream, which is now run.rewards_rng. The false comment claiming 'ColorlessCardPool has no sim equivalent' is gone.",
+      "maps_to": "Closed 2026-07-28: events/endless_conveyor.py draws FRIED_EEL from `COLORLESS_POOL` through rewards.create_reward_cards with RarityOddsType.REGULAR + mutate_pity=False -- the port of `CardFactory.CreateForReward(Owner, 1, ForNonCombatWithDefaultOdds(ColorlessCardPool))` (EndlessConveyor.cs:178-183). That closes both stated observables (the pool is colourless, not the Ironclad character pool; the non-combat default rarity odds are rolled) plus the stream, which is now run.rewards_rng. The false comment claiming 'ColorlessCardPool has no sim equivalent' is gone.",
       "verdict": "faithful"
     },
     {
       "what": "SuspiciousCondiment (EndlessConveyor.cs:150-161) draws `base.Owner.PlayerRng.Rewards.NextItem(character potion pool + SharedPotionPool)` and offers it",
-      "maps_to": "Closed 2026-07-28: SUSPICIOUS_CONDIMENT is now events/endless_conveyor.py:130. `Event.offer_pool_potion` (events/base.py:132-146) is the verbatim source idiom -- ONE `run.rewards_rng.next_item(POTION_POOL)` over the Character.PotionPool + SharedPotionPool transcription, with no rarity tier -- and `run.rewards_rng` (run.py:273-277) is `player_rng.rewards`. Verified 2026-07-28: potion_pools.POTION_POOL and the `in_reward_pool` set are the same 48 ids, so the legacy fallback draws the same population. Was: `run.random_potion()`'s uniform `self.rng.choice` on the shared run rng over a different population.",
+      "maps_to": "Closed 2026-07-28: SUSPICIOUS_CONDIMENT is now events/endless_conveyor.py. `Event.offer_pool_potion` (events/base.py) is the verbatim source idiom -- ONE `run.rewards_rng.next_item(POTION_POOL)` over the Character.PotionPool + SharedPotionPool transcription, with no rarity tier -- and `run.rewards_rng` (run.py) is `player_rng.rewards`. Verified 2026-07-28: potion_pools.POTION_POOL and the `in_reward_pool` set are the same 48 ids, so the legacy fallback draws the same population. Was: `run.random_potion()`'s uniform `self.rng.choice` on the shared run rng over a different population.",
       "verdict": "faithful"
     },
     {
       "what": "EV-4: SuspiciousCondiment's potion (EndlessConveyor.cs:156-159) is wrapped in RewardsCmd.OfferCustom in the source, a TAKE-OR-SKIP screen; the sim grants it unconditionally",
-      "maps_to": "Closed 2026-07-28: the payout is a take-or-skip screen now. events/endless_conveyor.py:130 (`self.offer_potion(self.offer_pool_potion())`) routes through `Event.offer_potion` / `Event.offer_card_reward` (events/base.py:214-230), whose `_accept_offer` (events/base.py:194-212) consults the run's `reward_offer_selector` -- the headless stand-in for RewardsCmd.OfferCustom (RewardsCmd.cs:47-50), the same convention `run.card_selector` is for CardSelectCmd -- and only grants the reward when the screen is taken. Was: an unconditional grant with no decline path at all. Declining is exercised by test/test_event_offer_screens.py.",
+      "maps_to": "Closed 2026-07-28: the payout is a take-or-skip screen now. events/endless_conveyor.py (`self.offer_potion(self.offer_pool_potion())`) routes through `Event.offer_potion` / `Event.offer_card_reward` (events/base.py), whose `_accept_offer` (events/base.py) consults the run's `reward_offer_selector` -- the headless stand-in for RewardsCmd.OfferCustom (RewardsCmd.cs:47-50), the same convention `run.card_selector` is for CardSelectCmd -- and only grants the reward when the screen is taken. Was: an unconditional grant with no decline path at all. Declining is exercised by test/test_event_offer_screens.py.",
       "verdict": "faithful"
     },
     {
@@ -102,13 +102,13 @@
       "verdict": "faithful"
     },
     {
-      "what": "BR-G3 (blast radius): EndlessConveyor's JELLY_LIVER dish (EndlessConveyor.cs:163-170) calls RunState.transform_card (run.py:406-470), which swaps the deck entry without running the deck-entry hooks C#'s CardCmd.Transform fires",
-      "maps_to": "Closed 2026-07-28: RunState.transform_card (run.py:508-584) now runs BOTH deck-entry hooks around the swap -- `relic.modify_card_being_added_to_deck` before the insert and `relic.after_card_added_to_deck` after it -- which is what CardCmd.Transform does for a PileType.Deck transform (Hook.ModifyCardBeingAddedToDeck at CardCmd.cs:430, Hook.AfterCardChangedPiles at CardCmd.cs:447). Was: a bare deck-slot swap, so the egg relics never saw the replacement. This unit is out of seam guard G3's radius on this leg.",
+      "what": "BR-G3 (blast radius): EndlessConveyor's JELLY_LIVER dish (EndlessConveyor.cs:163-170) calls RunState.transform_card (run.py), which swaps the deck entry without running the deck-entry hooks C#'s CardCmd.Transform fires",
+      "maps_to": "Closed 2026-07-28: RunState.transform_card (run.py) now runs BOTH deck-entry hooks around the swap -- `relic.modify_card_being_added_to_deck` before the insert and `relic.after_card_added_to_deck` after it -- which is what CardCmd.Transform does for a PileType.Deck transform (Hook.ModifyCardBeingAddedToDeck at CardCmd.cs:430, Hook.AfterCardChangedPiles at CardCmd.cs:447). Was: a bare deck-slot swap, so the egg relics never saw the replacement. This unit is out of seam guard G3's radius on this leg.",
       "verdict": "faithful"
     },
     {
       "what": "EV-3: RollDish's `base.Rng.NextFloat()` (EndlessConveyor.cs:245), SpicySnappy's and ObserveChef's NextItem (EndlessConveyor.cs:195, 268), JellyLiver's TransformToRandom stream (EndlessConveyor.cs:168) and SuspiciousCondiment's Rewards draw (EndlessConveyor.cs:153) rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- RollDish's next_float (events/endless_conveyor.py:76-77), SpicySnappy's and ObserveChef's next_item (:94-101, :169-176) and JellyLiver's pick_rng (:107) are all on `self.event_rng`, and SuspiciousCondiment's draw is on `run.rewards_rng` via offer_pool_potion (:130), which is the PlayerRng.Rewards stream the source names, matching `base.Rng` (EndlessConveyor.cs:245, 195, 268, 168, 153). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- RollDish's next_float (events/endless_conveyor.py:76-77), SpicySnappy's and ObserveChef's next_item (:94-101, :169-176) and JellyLiver's pick_rng (:107) are all on `self.event_rng`, and SuspiciousCondiment's draw is on `run.rewards_rng` via offer_pool_potion (:130), which is the PlayerRng.Rewards stream the source names, matching `base.Rng` (EndlessConveyor.cs:245, 195, 268, 168, 153). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
       "verdict": "faithful"
     },
     {

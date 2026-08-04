@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
@@ -32,16 +32,16 @@
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:237 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py:361 `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-140 Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:137-140) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236). Third-file citations, not hashed here."
     },
     "AfterCardExhausted": {
-      "maps_to": "powers.py:239-241 FeelNoPainPower.on_card_exhausted",
+      "maps_to": "powers.py:363-372 FeelNoPainPower.on_card_exhausted",
       "verdict": "faithful",
       "issue": "Closed 2026-07-29 (round 7): The block is UNPOWERED. FeelNoPainPower.cs:23 is `CreatureCmd.GainBlock(Owner, Amount, ValueProp.Unpowered, null)`; `BlockCmd.apply` defaults `props` to ValueProp.MOVE, which `is_powered_attack` accepts, so both block-modifier families were running over it -- Feel No Pain 3 with Dexterity 3 gave 6 where the game gives 3, and under Frail gave 2 where the game gives 3. powers.py now passes `props=ValueProp.UNPOWERED`, joining the eight sibling powers that already did. NOT CLOSED: nothing at this site; this was an omission at one call site, not a missing concept.  The text it replaced read: LIVE. The block is dealt as POWERED where C# deals it UNPOWERED, so Dexterity and Frail modify Feel No Pain's block in the sim and not in the game. FeelNoPainPower.cs:23 is `CreatureCmd.GainBlock(Owner, Amount, ValueProp.Unpowered, null)`; powers.py:241 is `BlockCmd.apply(self.hooks, self.owner, self.amount)` with NO props, and BlockCmd.apply defaults props to ValueProp.MOVE (cmds.py:143-144), which is_powered_attack accepts (valueprops.py:47-49 -- Move and not Unpowered), so cmds.py:146-147 runs both block modifier families over it. With Dexterity 3 the sim's Feel No Pain 3 gives 6 block and the game gives 3; under Frail the sim gives 2 and the game 3. Both halves are Ironclad-reachable from the base pool -- Feel No Pain is a ported card (cards/feel_no_pain_card.py) and Frail is applied by ported monsters. Note that eight sibling powers get this right by passing `props=ValueProp.UNPOWERED` explicitly (CrimsonMantle powers.py:648, Rage :1010, Plating :1061, ToricToughness :1218, Skittish :1816-1818, CrabRage :2519, Rampart :3002, BlockNextTurn :3846-3848), so this is an omission at one call site rather than a missing concept. Third-file citations, not hashed here."
     }
@@ -50,19 +50,19 @@
     {
       "what": "FeelNoPainPower.cs:21 `card.Owner.Creature == base.Owner`",
       "verdict": "faithful",
-      "rationale": "`card.Owner.Creature != base.Owner` reduces to a tautology in the sim: there is one player, every Card belongs to it, and this power is only ever applied to the player. Same reading power_cmd's sim-entry note and SurroundedPower's own comment (powers.py:2574-2576) already record."
+      "rationale": "`card.Owner.Creature != base.Owner` reduces to a tautology in the sim: there is one player, every Card belongs to it, and this power is only ever applied to the player. Same reading power_cmd's sim-entry note and SurroundedPower's own comment (powers.py:3168-3178) already record."
     },
     {
       "what": "AfterCardExhausted's `bool _` (causedByEthereal) is ignored by C# here",
       "verdict": "faithful",
-      "rationale": "FeelNoPainPower.cs:19 discards the parameter, so Feel No Pain fires for ethereal and non-ethereal exhausts alike; the sim's on_card_exhausted carries no such parameter (hooks.py:415-419) and likewise fires for both. The parameter's ABSENCE from the sim hook is a real gap, but it belongs to power/dark_embrace, which is the power that reads it."
+      "rationale": "FeelNoPainPower.cs:19 discards the parameter, so Feel No Pain fires for ethereal and non-ethereal exhausts alike; the sim's own on_card_exhausted (powers.py:363-364) does carry `caused_by_ethereal` now (it exists as a real parameter, see power/dark_embrace's revised guard) but this power ignores it too, matching C#'s discard; the dispatcher (hooks.py:1542-1556) fires it either way. REVISED 2026-08-04: the parameter is no longer absent from the sim hook (it was fixed under power/dark_embrace's own re-audit this same pass), so there is nothing left owed to that record from here."
     },
     {
       "what": "No amount guard on the block gain",
       "verdict": "faithful",
-      "rationale": "Neither side tests Amount > 0 before gaining block; BlockCmd.apply's `max(0, amount)` (cmds.py:148) and C#'s GainBlock both floor at 0."
+      "rationale": "Neither side tests Amount > 0 before gaining block; BlockCmd.apply's `max(0, amount)` (cmds.py:494) and C#'s GainBlock both floor at 0."
     }
   ],
   "verdict": "faithful",
-  "audited": "2026-07-26"
+  "audited": "2026-08-04"
 }

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\hive\\kaiser_crab.py",
-    "sha256": "450a8fdc792bfab4bbcdb7bf007f28ce3cadb00001d5b4889795d73e4f67eff3"
+    "sha256": "16dd4fdee244797d139e7ab82f5a0c47e76916d8e5332425d56fdb65f39fef9a"
   },
   "hooks": {
     "DeathSfx": {
@@ -79,7 +79,7 @@
     {
       "what": "creation order of the two arms",
       "verdict": "faithful",
-      "rationale": "KAISER_CRAB_BOSS is monster_classes=[Crusher, Rocket] (kaiser_crab.py:159-162), so Crusher's BackAttackLeftPower is already on the board when Rocket's Surrounded is applied - executed by the rocket-ctor probe, whose listener snapshot contains BackAttackLeftPower and CrabRagePower. That ordering is what makes SurroundedPower's initial facing meaningful, and the probe prints facing='right' (the Rocket side) for a fresh combat."
+      "rationale": "KAISER_CRAB_BOSS is monster_classes=[Crusher, Rocket] (kaiser_crab.py:158-163), so Crusher's BackAttackLeftPower is already on the board when Rocket's Surrounded is applied - executed by the rocket-ctor probe, whose listener snapshot contains BackAttackLeftPower and CrabRagePower. That ordering is what makes SurroundedPower's initial facing meaningful, and the probe prints facing='right' (the Rocket side) for a fresh combat."
     }
   ],
   "verdict": "deliberate-divergence",

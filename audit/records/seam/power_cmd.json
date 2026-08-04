@@ -17,7 +17,7 @@
   "sim_sources": [
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "f655a201de2bdb93464f4e1998f264887a76fc4168a7f868dea641fc5cf2bdc6"
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d"
     },
     {
       "path": "sts2_rl/hooks.py",
@@ -314,7 +314,7 @@
     },
     {
       "path": "sts2_rl/full_env.py",
-      "sha256": "d1496c9e4cfd0bf7dc34658c04354a62da7778892e86125996c0597aaea3cbdf",
+      "sha256": "4ba9a145147eb29e6f42a10acb70986873bf1bb12d47a12ef764a423572f312f",
       "side": "sim"
     }
   ]

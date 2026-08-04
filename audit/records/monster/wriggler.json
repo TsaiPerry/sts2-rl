@@ -34,12 +34,12 @@
     {
       "what": "The StartStunned arm: C# performs a real SPAWNED_MOVE node for one turn; the sim sets `self.stunned = start_stunned` (phrog_parasite.py:33) and lets the combat loop skip the turn",
       "verdict": "faithful",
-      "rationale": "Same observable, established by reading both loops rather than assumed. C#: the machine's initial state is SPAWNED_MOVE, a MoveState, so monster_state_machine step 30's sticky rule makes the AfterCreatureAdded roll a no-op with no draw; the creature telegraphs StunIntent, performs `return Task.CompletedTask`, and the NEXT roll walks SPAWNED_MOVE -> INIT_MOVE -> the slot move. Sim: `combat.py:313-329` skips take_turn and clears the flag, current_intent returns Intent(MoveType.STUN) (phrog_parasite.py:39-40), and _move_key already holds the slot move. Both give: turn 1 a stun intent and no action, turn 2 the slot move, zero MonsterAi draws throughout. Note this is NOT monster_state_machine G4/G5's subject -- no CreatureCmd.stun is involved on either side, the deferral is the graph's own SPAWNED_MOVE node, and Wriggler has no RandomBranchState whose weights a log entry could move."
+      "rationale": "Same observable, established by reading both loops rather than assumed. C#: the machine's initial state is SPAWNED_MOVE, a MoveState, so monster_state_machine step 30's sticky rule makes the AfterCreatureAdded roll a no-op with no draw; the creature telegraphs StunIntent, performs `return Task.CompletedTask`, and the NEXT roll walks SPAWNED_MOVE -> INIT_MOVE -> the slot move. Sim: `combat.py:733-768` skips take_turn and clears the flag, current_intent returns Intent(MoveType.STUN) (phrog_parasite.py:39-40), and _move_key already holds the slot move. Both give: turn 1 a stun intent and no action, turn 2 the slot move, zero MonsterAi draws throughout. Note this is NOT monster_state_machine G4/G5's subject -- no CreatureCmd.stun is involved on either side, the deferral is the graph's own SPAWNED_MOVE node, and Wriggler has no RandomBranchState whose weights a log entry could move."
     },
     {
       "what": "INTRA-MOVE ORDER INVERSION in WRIGGLE: C# adds the Infection card FIRST and applies StrengthPower 2 SECOND (Wriggler.cs:99-100); the port applies Strength first and adds the card second (phrog_parasite.py:56-59)",
       "verdict": "faithful",
-      "rationale": "The only intra-move order inversion in this batch, so it was executed rather than eyeballed. `py audit/tools/monster_probes_b01.py order` runs one WRIGGLE turn twice from the same seed -- shipped order and the C# order -- and diffs 12 observable keys (player HP, block and powers; all four card piles by id and position; the monster's HP, block and powers; the MonsterAi and Shuffle stream counters): differences NONE. The two effects touch disjoint state and neither dispatch reads the other's: add_to_discard appends and fires on_card_entered_combat (cmds.py:464-472), whose ported listeners afflict the card, while PowerCmd.apply fires modify_power_amount / on_power_applied, whose ported listeners (relics/ruined_helmet.py, relics/unsettling_lamp.py) gate on the player. BOUND OF THE EVIDENCE, stated per rule 5: the probe runs with no relics and no player powers, so it proves independence of the two commands, not of every possible future listener. Concrete trigger that would make the order matter: any on_card_entered_combat listener that reads the applier's Strength, or any modify_power_amount listener that reads a pile count."
+      "rationale": "The only intra-move order inversion in this batch, so it was executed rather than eyeballed. `py audit/tools/monster_probes_b01.py order` runs one WRIGGLE turn twice from the same seed -- shipped order and the C# order -- and diffs 12 observable keys (player HP, block and powers; all four card piles by id and position; the monster's HP, block and powers; the MonsterAi and Shuffle stream counters): differences NONE. The two effects touch disjoint state and neither dispatch reads the other's: add_to_discard appends and fires on_card_entered_combat via CardPileCmd._enter_combat (cmds.py:1591-1635), whose ported listeners afflict the card, while PowerCmd.apply fires modify_power_amount / on_power_applied, whose ported listeners (relics/ruined_helmet.py, relics/unsettling_lamp.py) gate on the player. BOUND OF THE EVIDENCE, stated per rule 5: the probe runs with no relics and no player powers, so it proves independence of the two commands, not of every possible future listener. Concrete trigger that would make the order matter: any on_card_entered_combat listener that reads the applier's Strength, or any modify_power_amount listener that reads a pile count."
     },
     {
       "what": "Move numerics: BiteDamage 6, WriggleMove adds 1 Infection and applies StrengthPower 2",
@@ -54,7 +54,7 @@
     {
       "what": "SlotName vs the port's integer `slot`",
       "verdict": "faithful",
-      "rationale": "C# compares `Creature.SlotName` against the four literal strings; the sim has no slot-name concept and passes an int. Equivalent over the only producer: InfestedPower.cs:32 builds the names as \"wriggler\" + (i + 1) via PhrogParasiteElite.GetWrigglerSlotName, and powers.py:1420 passes slot=i + 1, so odd/even matches wriggler1/3 vs wriggler2/4 exactly. PhrogParasiteElite.cs:17 declares exactly five slots, so no fifth Wriggler exists to fall off the end of the conditional (which would THROW in C#: ConditionalBranchState.cs:53)."
+      "rationale": "C# compares `Creature.SlotName` against the four literal strings; the sim has no slot-name concept and passes an int. Equivalent over the only producer: InfestedPower.cs:32 builds the names as \"wriggler\" + (i + 1) via PhrogParasiteElite.GetWrigglerSlotName, and powers.py:1856 passes slot=i + 1, so odd/even matches wriggler1/3 vs wriggler2/4 exactly. PhrogParasiteElite.cs:17 declares exactly five slots, so no fifth Wriggler exists to fall off the end of the conditional (which would THROW in C#: ConditionalBranchState.cs:53)."
     },
     {
       "what": "ShouldShowMoveInBestiary hides NASTY_BITE_MOVE and SPAWNED_MOVE (Wriggler.cs:103-110)",
@@ -69,12 +69,17 @@
     {
       "what": "Range-bound convention on the initial-HP roll: Rng.NextInt(min, max) is max-EXCLUSIVE (Rng.cs:101-109) where Python's random.randint(a, b) INCLUDES b",
       "verdict": "faithful",
-      "rationale": "Checked as a convention, not just as constants. The GAME's range is [MinInitialHp, MaxInitialHp] INCLUSIVE, because Creature.SetUniqueMonsterHpValue compensates for the exclusive bound explicitly: `int num = Monster.MaxInitialHp + 1` (Creature.cs:378) feeds BOTH `Enumerable.Range(minInitialHp, num - minInitialHp)` (Creature.cs:379) and the fallback `rng.NextInt(minInitialHp, num)` (Creature.cs:383). The sim's parity port matches on both arms: `candidates = [v for v in range(lo, hi + 1) ...]` picked with `niche.next_int_range(0, len(candidates))`, fallback `niche.next_int_range(lo, hi + 1)` (combat.py:224-243), and `next_int_range` is itself max-exclusive (rng.py:182-186) -- so the two `+ 1`s land exactly where C# puts them. This unit has a real 5-wide range, so a top-end off-by-one would be silently observable as HP 21 never occurring. Executed (`py audit/tools/monster_probes_b01.py hprange`, 400 seeded combats per unit): declared [17,21], observed [17,21], and the observed set is exactly the full inclusive range, so the top endpoint 21 does occur. All 15 units of this batch pass. NOTE the legacy (non-parity) path is also right by a different route: Monster.__init__'s `rng.randint(self.min_hp, self.max_hp)` (monsters/base.py:78) is inclusive on both ends, matching the game's inclusive range, and in parity mode it is overwritten before anything reads it. Rule 7: Creature.cs, Rng.cs, sts2_rl/combat.py and sts2_rl/rng.py are hashed in extra_sources."
+      "rationale": "Checked as a convention, not just as constants. The GAME's range is [MinInitialHp, MaxInitialHp] INCLUSIVE, because Creature.SetUniqueMonsterHpValue compensates for the exclusive bound explicitly: `int num = Monster.MaxInitialHp + 1` (Creature.cs:378) feeds BOTH `Enumerable.Range(minInitialHp, num - minInitialHp)` (Creature.cs:379) and the fallback `rng.NextInt(minInitialHp, num)` (Creature.cs:383). The sim's parity port matches on both arms: `candidates = [v for v in range(lo, hi + 1) ...]` picked with `niche.next_int_range(0, len(candidates))`, fallback `niche.next_int_range(lo, hi + 1)` (combat.py:423-441), and `next_int_range` is itself max-exclusive (rng.py:182-186) -- so the two `+ 1`s land exactly where C# puts them. This unit has a real 5-wide range, so a top-end off-by-one would be silently observable as HP 21 never occurring. Executed (`py audit/tools/monster_probes_b01.py hprange`, 400 seeded combats per unit): declared [17,21], observed [17,21], and the observed set is exactly the full inclusive range, so the top endpoint 21 does occur. All 15 units of this batch pass. NOTE the legacy (non-parity) path is also right by a different route: Monster.__init__'s `rng.randint(self.min_hp, self.max_hp)` (monsters/base.py:236) is inclusive on both ends, matching the game's inclusive range, and in parity mode it is overwritten before anything reads it. Rule 7: Creature.cs, Rng.cs, sts2_rl/combat.py and sts2_rl/rng.py are hashed in extra_sources."
     }
   ],
   "verdict": "waiver",
   "audited": "2026-07-27",
   "extra_sources": [
+    {
+      "path": "src\\Core\\MonsterMoves\\MonsterMoveStateMachine\\ConditionalBranchState.cs",
+      "sha256": "8c5ef3a0e557fd5fc2c49b0f38c9848fd02a205cd116009aed406b7667b599f3",
+      "side": "game"
+    },
     {
       "path": "src\\Core\\Entities\\Creatures\\Creature.cs",
       "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
@@ -96,13 +101,18 @@
       "side": "game"
     },
     {
+      "path": "sts2_rl\\monsters\\base.py",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
+      "side": "sim"
+    },
+    {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -112,7 +122,7 @@
     },
     {
       "path": "sts2_rl\\powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {

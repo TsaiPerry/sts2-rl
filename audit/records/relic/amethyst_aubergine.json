@@ -16,17 +16,17 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -40,12 +40,12 @@
       "verdict": "faithful"
     },
     "IsAllowed": {
-      "maps_to": "is_allowed (sts2_rl/relics/amethyst_aubergine.py:33) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:82-84), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) before every pool pull",
+      "maps_to": "is_allowed (sts2_rl/relics/amethyst_aubergine.py:33) -> is_before_act3_treasure_chest (sts2_rl/relics/base.py:89), consulted by RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:1080) before every pool pull",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:198, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/amethyst_aubergine.py:33), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:769) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:731), pull_relic_from_back (run.py:752) and the Shop-rarity bag (run.py:783) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:211-222 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
+      "issue": "Closed 2026-07-27: pool eligibility is modelled now. `Relic.is_allowed(run)` exists on the sim's base (sts2_rl/relics/base.py:253, default True) and this relic overrides it with `is_before_act3_treasure_chest(run)` (sts2_rl/relics/amethyst_aubergine.py:33), the `TotalFloor < 41` predicate of RelicModel.IsBeforeAct3TreasureChest (RelicModel.cs:452-456). RunState._drop_disallowed_from_grab_bag (sts2_rl/run.py:1080) applies it before EVERY pull and REMOVES the rejects from the bag -- pull_relic_from_front (run.py:970), pull_relic_from_back (run.py:1023) and the Shop-rarity bag (run.py:1060) are the only three pull paths -- mirroring RelicGrabBag.RemoveDisallowedRelicsFromDeques (RelicGrabBag.cs:218-270), and `Relic.is_allowed_at_neow` now DELEGATES to is_allowed (sts2_rl/relics/base.py:266-277 = RelicModel.cs:443-446) so the Neow pools (sts2_rl/events/neow.py:72) cannot read a stale flag. Verified by execution against today's code: every one of the 17 cluster members returns is_allowed False at total_floor 60 and True at floor 0. WAS: the sim's Relic base declared no is_allowed member at all and populate_relic_grab_bags shuffled the pool once at run init with no per-pull filter, so the relic stayed pullable for the whole run and a late pull also shifted every subsequent pull."
     },
     "TryModifyRewards": {
-      "maps_to": "modify_combat_rewards (sts2_rl/relics/amethyst_aubergine.py) -- the PLAIN TryModifyRewards pass, dispatched at sts2_rl/rewards.py:526-527",
+      "maps_to": "modify_combat_rewards (sts2_rl/relics/amethyst_aubergine.py) -- the PLAIN TryModifyRewards pass, dispatched at sts2_rl/rewards.py:842",
       "verdict": "faithful",
       "issue": "Closed 2026-07-27: the relic is implemented. sts2_rl/relics/amethyst_aubergine.py's `modify_combat_rewards` adds GOLD = 15 to `rewards.gold` AND banks it with `run.gain_gold(15)` on Monster/Elite/Boss screens, skipping the FINAL act's boss (`rewards.room_type == RoomType.BOSS and run.is_final_act`) -- AmethystAubergine.cs:25-45, including its `CurrentActIndex >= Acts.Count - 1` clause. The implementation note the old entry left for the fixer was followed: the hook runs after the screen's own gold is granted, so mutating rewards.gold alone would have displayed the 15 without banking it. WAS: a behaviourless stub whose docstring claimed the sim has no gold."
     },

@@ -197,11 +197,11 @@
   "sim_sources": [
     {
       "path": "sts2_rl/rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb"
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f"
     },
     {
       "path": "sts2_rl/actmap.py",
-      "sha256": "1d4cb7a59c716b79d7b13d8478d0d705b7ea092cb41380fcb241860bd722206a"
+      "sha256": "64c5a16873b1fbd176c515a29bd0f6e0d74182e1f179955b9226719247b3378e"
     },
     {
       "path": "sts2_rl/rest_site.py",
@@ -290,7 +290,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "3caf6a189d109feb62c5ab57f03028277542a8bf12311898e7445be27ce199b2",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -320,12 +320,12 @@
     },
     {
       "path": "sts2_rl/events/_combat_layout.py",
-      "sha256": "46e08c08742756fb9c5370bae20783b875884031376fee3cf09db11a1179802a",
+      "sha256": "a711a837f45f96d8e2d693821e3cd9700b6113896186de5db423ef0d2145eb5a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "b5b14f28e5cff1acfb3d4528d4c34fd1c83ee217173edf0461caab0e4489931d",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     },
     {

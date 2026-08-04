@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -33,7 +33,7 @@
     "MerchantCost": {
       "maps_to": "merchant_cost_override = 50 (fake_anchor.py:20)",
       "verdict": "faithful",
-      "rationale": "RelicModel.MerchantCost is virtual and the Fake Merchant's knock-offs all pin 50; relics/base.py:111-117 reads merchant_cost_override first and falls back to _MERCHANT_COST_BY_RARITY (relics/base.py:54-62), whose table is value-for-value the source's switch (RelicModel.cs:304-315, checked: Common 175 / Uncommon 225 / Rare 275 / Shop 200 / Ancient, Starter, Event 999999999). No AscensionHelper branch anywhere, so 50 is the pinned non-ascension price. Rule 7: RelicModel.cs and relics/base.py are not hashed by this record."
+      "rationale": "RelicModel.MerchantCost is virtual and the Fake Merchant's knock-offs all pin 50; relics/base.py:174-180, re-pinned 2026-08-04, was :111-117 reads merchant_cost_override first and falls back to _MERCHANT_COST_BY_RARITY (relics/base.py:71-79, re-pinned 2026-08-04, was :54-62), whose table is value-for-value the source's switch (RelicModel.cs:304-315, checked: Common 175 / Uncommon 225 / Rare 275 / Shop 200 / Ancient, Starter, Event 999999999). No AscensionHelper branch anywhere, so 50 is the pinned non-ascension price. Rule 7: RelicModel.cs and relics/base.py are not hashed by this record."
     },
     "BeforeCombatStart": {
       "maps_to": "on_block_cleared, gated on `target is self.player and self.turn == 1` (fake_anchor.py:24-29)",
@@ -45,7 +45,7 @@
     {
       "what": "N1: `target is self.player` on the block-clear callback (fake_anchor.py:25)",
       "verdict": "faithful",
-      "rationale": "Identical to relic/anchor's N1 and carried with the same verdict (binding rule 3): the sim's AfterBlockCleared analogue fires per creature (player.py:159 for the player, and per enemy from combat.py), so without the identity check an enemy's clear would grant the player block. C#'s hook is on the relic's owner by construction. Rule 7: player.py is unhashed here."
+      "rationale": "Identical to relic/anchor's N1 and carried with the same verdict (binding rule 3): the sim's AfterBlockCleared analogue fires per creature (player.py:337, re-pinned 2026-08-04, was :159 for the player, and per enemy from combat.py), so without the identity check an enemy's clear would grant the player block. C#'s hook is on the relic's owner by construction. Rule 7: player.py is unhashed here."
     },
     {
       "what": "N2: `self.turn == 1` (fake_anchor.py:25) has no C# counterpart",
@@ -65,7 +65,7 @@
     {
       "what": "N5: FakeAnchor.cs overrides neither HasUponPickupEffect nor IsAllowed nor IsUsedUp",
       "verdict": "faithful",
-      "rationale": "The sim leaves all three at their base defaults (relics/base.py's has_upon_pickup_effect = False, no is_allowed member at all, is_used_up False). Checked per PROMPT.md bug class 16 and because relic/arcane_scroll's N4 established that the pickup flag drives is_tradable; an EVENT-rarity relic is untradable anyway (relics/base.py:126-136), so the flag is inert here either way."
+      "rationale": "The sim leaves all three at their base defaults (relics/base.py's has_upon_pickup_effect = False, no is_allowed member at all, is_used_up False). Checked per PROMPT.md bug class 16 and because relic/arcane_scroll's N4 established that the pickup flag drives is_tradable; an EVENT-rarity relic is untradable anyway (relics/base.py:189-199, re-pinned 2026-08-04, was :126-136), so the flag is inert here either way."
     }
   ],
   "verdict": "gap",

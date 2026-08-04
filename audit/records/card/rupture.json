@@ -11,7 +11,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     }
   ],
@@ -29,7 +29,7 @@
     "OnPlay": {
       "maps_to": "RuptureCard.on_play (rupture_card.py:253-256)",
       "verdict": "faithful",
-      "rationale": "`PowerCmd.Apply<RupturePower>(choiceContext, Owner.Creature, DynamicVars.Strength.BaseValue, Owner.Creature, this)` (Rupture.cs:25) == `PowerCmd.apply(ctx.hooks, ctx.player, RupturePower, self._strength, applier=ctx.player)` -- correctly `PowerCmd.apply` and not `StrengthCmd.apply`, since RupturePower is not Strength. No animation on either side. THIS CARD IS THE WITNESS FOR TWO OTHER FINDINGS: RupturePower gains Strength on any unblocked damage its owner receives (powers.py:272-289), which is what makes card/breakthrough's hand-rolled HP loss and seam gap G6 (lose_max_hp not routing through the damage pipeline, via card/brightest_flame) both LIVE."
+      "rationale": "`PowerCmd.Apply<RupturePower>(choiceContext, Owner.Creature, DynamicVars.Strength.BaseValue, Owner.Creature, this)` (Rupture.cs:25) == `PowerCmd.apply(ctx.hooks, ctx.player, RupturePower, self._strength, applier=ctx.player)` -- correctly `PowerCmd.apply` and not `StrengthCmd.apply`, since RupturePower is not Strength. No animation on either side. THIS CARD IS THE WITNESS FOR TWO OTHER FINDINGS: RupturePower's implementation (powers.py:436-495 currently -- moved since audit, re-verified: still gains Strength on damage its owner receives while it is the owner's own turn, deferred per-card via `before_card_played`/`on_card_played` accumulation) is what makes card/breakthrough's hand-rolled HP loss and seam gap G6 (lose_max_hp not routing through the damage pipeline, via card/brightest_flame) both LIVE. NOTE: the power's own verdict belongs to the power stream, not this record; flagged here only as supporting evidence for Rupture's OnPlay."
     },
     "OnUpgrade": {
       "maps_to": "RuptureCard._on_upgrade (rupture_card.py:250-251)",

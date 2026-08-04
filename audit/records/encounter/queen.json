@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\glory\\queen.py",
-    "sha256": "a478cd25a0473b558e1921abf6f8bf994cfdbfa89ae258ba0774852a7281e4fa"
+    "sha256": "c6b16dfe62025ec3b378de7ecea2525c320934b0b5b5cd957d0810f5d741051e"
   },
   "hooks": {
     "RoomType": {

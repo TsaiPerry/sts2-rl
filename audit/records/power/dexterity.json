@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
@@ -57,34 +57,34 @@
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:126 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py:237 `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-140 Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch anywhere in it). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Both are third-file citations not hashed by this record."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:137-140) adds unconditionally, which is exactly what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch anywhere in it). StackType's only non-presentation readers are GetTypeForAmount (PowerModel.cs:462) and InvokePowerModified's VFX split (Creature.cs:628). Both are third-file citations not hashed by this record."
     },
     "AllowNegative": {
-      "maps_to": "powers.py:127 `allow_negative = True`",
+      "maps_to": "powers.py:238 `allow_negative = True`",
       "verdict": "faithful"
     },
     "ModifyBlockAdditive": {
-      "maps_to": "powers.py:129-137 DexterityPower.modify_block_additive",
+      "maps_to": "powers.py:240-251 DexterityPower.modify_block_additive",
       "verdict": "gap",
-      "issue": "The sim keys the ownership test on the BLOCK TARGET where C# keys it on the CARD's owner. DexterityPower.cs:16-26: when cardSource != null the test is `cardSource.Owner.Creature != base.Owner -> 0m` and the target is not consulted at all; only for cardSource == null (a monster move) does it fall back to `base.Owner != target`. powers.py:135 tests `target is self.owner` in both cases. Divergent whenever a card played by the Dexterity holder grants block to somebody else: C# adds the holder's Dexterity, the sim adds nothing. DORMANT -- an executed grep for cross-creature block grants in the sim finds only RampartPower (powers.py:2994-3002), which is a power and so passes card=None, taking C#'s identical fallback branch. Named trigger: porting any card that grants block to an ally or an enemy."
+      "issue": "The sim keys the ownership test on the BLOCK TARGET where C# keys it on the CARD's owner. DexterityPower.cs:16-26: when cardSource != null the test is `cardSource.Owner.Creature != base.Owner -> 0m` and the target is not consulted at all; only for cardSource == null (a monster move) does it fall back to `base.Owner != target`. powers.py:249 tests `target is self.owner` in both cases. Divergent whenever a card played by the Dexterity holder grants block to somebody else: C# adds the holder's Dexterity, the sim adds nothing. DORMANT -- an executed grep for cross-creature block grants in the sim finds only RampartPower (powers.py:3795-3807+), which is a power and so passes card=None, taking C#'s identical fallback branch. Named trigger: porting any card that grants block to an ally or an enemy."
     }
   },
   "guards": [
     {
       "what": "DexterityPower.cs:27-30 `!props.IsPoweredCardOrMonsterMoveBlock()`",
       "verdict": "faithful",
-      "rationale": "Enforced by the caller: BlockCmd.apply gates both block-modifier families on is_powered_attack(props) (cmds.py:145-147), and C#'s IsPoweredAttack and IsPoweredCardOrMonsterMoveBlock have identical bodies (ValuePropExtensions.cs:5-21, `Move && !Unpowered` both), so the sim's single helper is exact. Third-file citations, not hashed here."
+      "rationale": "REVISED 2026-08-04: the old citation (cmds.py:145-147) now resolves to unrelated death/ShouldDie code -- stale. Re-read current cmds.py: `BlockCmd.apply` (cmds.py:458) does NOT centrally gate this; each listener self-gates on props instead (its own docstring at cmds.py:467-470 says so), and DexterityPower.modify_block_additive (powers.py:240-251) does exactly that via `is_powered_card_or_monster_move_block(props)` (powers.py:247, defined valueprops.py:52-56). C#'s IsPoweredAttack and IsPoweredCardOrMonsterMoveBlock have identical bodies (ValuePropExtensions.cs:5-21, `Move && !Unpowered` both) and the sim's helper (valueprops.py:52-56) matches both, so the verdict is unchanged -- only the mechanism description (self-gated per-listener, not caller-enforced) and the citation were wrong. Third-file citations, not hashed here."
     },
     {
       "what": "Sign-aware power typing on a negative Dexterity application",
       "verdict": "gap",
-      "issue": "SIGN-AWARE TYPING (PROMPT.md bug class 3). GetTypeForAmount (PowerModel.cs:460-471, a third file not hashed by this record) returns PowerType.Debuff for this power at any NEGATIVE amount, because StackType == Counter && AllowNegative. The sim has no get_type_for_amount at all and tests the static class attribute, so a negative-amount application is a Buff to the sim and a Debuff to the game. Same mechanism as audit/records/seam/power_cmd.json gaps G1 (Artifact interception) and G2 (Unsettling Lamp's doubling gate); per binding rule 3 it carries the identical verdict and the identical named trigger -- DORMANT until Malaise.cs:39 or Resonance.cs:33 is ported, the only two C# sites where a PLAYER applies a negative-amount stat power to an enemy. Re-checked for a new route and found none: the sim's negative applications of this power are all monsters targeting the player (the_lost_and_forgotten.py:54,99, lagavulin_matriarch.py:106-107), TenderPower self-applying (powers.py:2115-2116), or the TemporaryStrength/Dexterity revert (powers.py:863,937) -- Artifact needs a player-side source that exists nowhere in the game and Lamp needs `applier is player`, which none of those is. Reproduce the census with `py audit/tools/power_census.py typing`: of 134 ported powers only strength and dexterity actually flip."
+      "issue": "SIGN-AWARE TYPING (PROMPT.md bug class 3). GetTypeForAmount (PowerModel.cs:460-471, a third file not hashed by this record) returns PowerType.Debuff for this power at any NEGATIVE amount, because StackType == Counter && AllowNegative. The sim has no get_type_for_amount at all and tests the static class attribute, so a negative-amount application is a Buff to the sim and a Debuff to the game. Same mechanism as audit/records/seam/power_cmd.json gaps G1 (Artifact interception) and G2 (Unsettling Lamp's doubling gate); per binding rule 3 it carries the identical verdict and the identical named trigger -- DORMANT until Malaise.cs:39 or Resonance.cs:33 is ported, the only two C# sites where a PLAYER applies a negative-amount stat power to an enemy. Re-checked for a new route and found none: the sim's negative applications of this power are all monsters targeting the player (the_lost_and_forgotten.py:99, lagavulin_matriarch.py:115-116), TenderPower self-applying (powers.py:2662-2663), or the TemporaryStrength/Dexterity revert (powers.py:1213, :1293) -- Artifact needs a player-side source that exists nowhere in the game and Lamp needs `applier is player`, which none of those is. Reproduce the census with `py audit/tools/power_census.py typing`: of 134 ported powers only strength and dexterity actually flip."
     },
     {
       "what": "ExtraHoverTips (Block static tip)",
@@ -93,5 +93,5 @@
     }
   ],
   "verdict": "gap",
-  "audited": "2026-07-26"
+  "audited": "2026-08-04"
 }

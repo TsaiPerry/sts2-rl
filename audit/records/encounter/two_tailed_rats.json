@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\underdocks\\two_tailed_rat.py",
-    "sha256": "0a7574ce54f7643bd788be49487ec18f43936cc10d3dc7cce7cea447ddcef24c"
+    "sha256": "0c3c7f99c153687606afd0c2ff15d77524f1cb23dce4825ff5f50e3bd11219d6"
   },
   "extra_sources": [
     {
@@ -16,17 +16,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "f655a201de2bdb93464f4e1998f264887a76fc4168a7f868dea641fc5cf2bdc6",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "3caf6a189d109feb62c5ab57f03028277542a8bf12311898e7445be27ce199b2",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -61,7 +61,7 @@
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "424336cf4fb7be8026278b7a34af428082d8487fb57f25c3565311fe5c993388",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     },
     {
@@ -71,7 +71,7 @@
     },
     {
       "path": "sts2_rl/rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     }
   ],
@@ -82,12 +82,12 @@
       "rationale": "Scene selection has no headless equivalent and no gameplay consequence -- the sim has no Godot scene system at all."
     },
     "Slots": {
-      "maps_to": "TwoTailedRatsNormal.cs:12: ['first','second','third','fourth','fifth']. Sim: Encounter.slots defaults to the empty tuple (monsters/base.py:371) and TwoTailedRatsEncounter (two_tailed_rat.py:140-158) never overrides it, so TWO_TAILED_RATS_NORMAL.slots == () at runtime.",
+      "maps_to": "TwoTailedRatsNormal.cs:12: ['first','second','third','fourth','fifth']. Sim: TWO_TAILED_RATS_NORMAL now declares slots=('first','second','third','fourth','fifth'), monster_slots=('third','fourth','fifth') (two_tailed_rat.py:172-181), and TwoTailedRat._call_for_backup passes slot_name=next_slot -- computed via Encounter.last_free_slot, the sim's LastOrDefault-style read of the same row (two_tailed_rat.py:131-143) -- to CreatureCmd.add, which re-sorts on it (cmds.py). Matches C#.",
       "verdict": "faithful",
       "rationale": "CLOSED 2026-08-03 (gap-fix pass). The `Encounter` dataclass already had `slots`/`monster_slots` and `CreatureCmd.add(slot_name=)` re-sorts on them (shipped round 7 for Fabricator/Ovicopter); this unit simply never declared its row. It does now, transcribed from the C# `Slots` override and `GenerateMonsters`' `(model, slot)` pairs, and `CombatState.__init__` routes every roster through `Encounter.seat_in_slots` so the seventeen `create_monsters` overrides are seated too. Regression tests: test/test_encounter_slots.py.\n\nWHAT THE GAP SAID: encounter/_slot_order (G1, proposed shared mechanism id -- see report). Executed witness: `py audit/tools/encounter_probes_e8.py rat-slot-order`. The empty `slots` is harmless for the INITIAL roster: the 3 starting rats are just appended in GenerateMonsters' return order (two_tailed_rat.py:147-158), which already equals their C# slot order (Slots[2..4] = third/fourth/fifth, TwoTailedRatsNormal.cs:33-41) since nothing else occupies the row yet. It is NOT harmless for CALL_FOR_BACKUP: `TwoTailedRat._call_for_backup` (two_tailed_rat.py:129-137) calls `CreatureCmd.add(ctx.hooks, TwoTailedRat(...))` with no `slot_name`, so `cmds.py`'s `if slot_name is not None: ... combat.sort_enemies_by_slot_name()` (cmds.py:839-841) never runs and the summon is simply appended to the END of `combat.enemies`. The probe shows the sim's post-summon order is [rat(1), rat(2), rat(3), NEW(4)] by net_id, all with slot_name=None. C# (TwoTailedRat.cs:180-185) resolves `Encounter.Slots.LastOrDefault(s => no enemy has s)` (= 'second', the only two unoccupied slots being 'first'/'second') and `CreatureCmd.Add(combatState, 'second')` triggers `CombatManager.AddCreature`'s `SortEnemiesBySlotName`, which re-sorts the WHOLE `Enemies` list by `Slots.IndexOf(SlotName)` (CombatState.cs:495-501) -- the summon lands AHEAD of all three starting rats ('second' < 'third'/'fourth'/'fifth'). Net_id/CombatId is assigned in attach order regardless (cmds.py:828-834, so replay targeting by CombatId still resolves), but the `combat.enemies` INDEX order -- what the observation encoder positions enemies by and what `CombatCtx.resolve_target(target_idx)` (combat.py:109-113) reads for index-based targeting -- disagrees with the game from the first successful CALL_FOR_BACKUP onward. This is not a corner case: CALL_FOR_BACKUP is gated on `turns_until_summonable<=0` (2 acted turns) + a 75% per-eligible-turn roll + a free slot + no sibling already telegraphing one, which ordinary Underdocks fights reach by turn 3-4."
     },
     "RoomType": {
-      "maps_to": "RoomType.Monster (TwoTailedRatsNormal.cs:14). Sim: 'two_tailed_rats' is in ActRooms.normal_keys for underdocks (rooms.py:136) -- drives the (10,20) gold ladder (see guards).",
+      "maps_to": "RoomType.Monster (TwoTailedRatsNormal.cs:14). Sim: 'two_tailed_rats' is in ActRooms.normal_keys for underdocks (rooms.py:199-203) -- drives the (10,20) gold ladder (see guards).",
       "verdict": "faithful"
     },
     "AllPossibleMonsters": {
@@ -106,12 +106,12 @@
       "rationale": "Camera framing has no headless equivalent and no gameplay consequence."
     },
     "GenerateMonsters": {
-      "maps_to": "TwoTailedRatsNormal.cs:28-42: draws exactly ONE value off the per-encounter Rng (`base.Rng.NextInt(3)`, :33) and builds 3 TwoTailedRat with StarterMoveIndex = start, start+1, start+2 (mod 3), paired with Slots[2]/Slots[3]/Slots[4]. Sim: two_tailed_rat.py:147-158, TwoTailedRatsEncounter.create_monsters draws ONE value (`selection_rng.next_int(3)` when selection_rng is given, matching the C# call 1:1) and builds 3 TwoTailedRat with starter_move_idx = start, start+1, start+2 (mod 3) -- ROSTER (3x TwoTailedRat), ORDER, and DRAW COUNT (1) all match element-for-element. The SLOT half of the returned pairs does not (see the Slots hook, same mechanism, encounter/_slot_order G1) -- the constructed rats carry no slot assignment at all.",
+      "maps_to": "TwoTailedRatsNormal.cs:28-42: draws exactly ONE value off the per-encounter Rng (`base.Rng.NextInt(3)`, :33) and builds 3 TwoTailedRat with StarterMoveIndex = start, start+1, start+2 (mod 3), paired with Slots[2]/Slots[3]/Slots[4]. Sim: two_tailed_rat.py:158-169, TwoTailedRatsEncounter.create_monsters draws ONE value (`selection_rng.next_int(3)` when selection_rng is given, matching the C# call 1:1) and builds 3 TwoTailedRat with starter_move_idx = start, start+1, start+2 (mod 3) -- ROSTER (3x TwoTailedRat), ORDER, and DRAW COUNT (1) all match element-for-element. The initial roster's slot pairing is now carried by Encounter.monster_slots=('third','fourth','fifth') (two_tailed_rat.py:180) rather than per-instance, applied by seat_in_slots at combat setup -- same net effect as C#'s (model, slot) pairs.",
       "verdict": "faithful",
       "rationale": "CLOSED 2026-08-03 (gap-fix pass). The `Encounter` dataclass already had `slots`/`monster_slots` and `CreatureCmd.add(slot_name=)` re-sorts on them (shipped round 7 for Fabricator/Ovicopter); this unit simply never declared its row. It does now, transcribed from the C# `Slots` override and `GenerateMonsters`' `(model, slot)` pairs, and `CombatState.__init__` routes every roster through `Encounter.seat_in_slots` so the seventeen `create_monsters` overrides are seated too. Regression tests: test/test_encounter_slots.py.\n\nWHAT THE GAP SAID: Same mechanism as the Slots hook's G1 (encounter/_slot_order): the roster/order/draw-count sub-facts of GenerateMonsters are faithful, but the (MonsterModel, slot) pair's slot half is dropped entirely on the sim side. See the Slots hook entry for the executed witness and the reachable consequence."
     },
     "ShouldReceiveCombatHooks": {
-      "maps_to": "EncounterModel.cs:39, `=> false`. Sim: Encounter is never registered with HookSystem (combat.py:170-232 registers only the player, cards, and Monsters, monsters/base.py:296-297).",
+      "maps_to": "EncounterModel.cs:39, `=> false`. Sim: Encounter is never registered with HookSystem (combat.py:171-282 registers the player's cards/afflictions/enchantments, monsters via monsters/base.py:296-297, relics, and belt potions; self.encounter at combat.py:239 is never passed to hooks.register).",
       "verdict": "faithful"
     }
   },
@@ -124,12 +124,12 @@
     {
       "what": "N2: Tags -- TwoTailedRatsNormal does not override EncounterModel.Tags (defaults Array.Empty<EncounterTag>(), EncounterModel.cs:114)",
       "verdict": "faithful",
-      "rationale": "'two_tailed_rats' has no entry in ActRooms.tags for underdocks (rooms.py:140-145) -- consistent absence."
+      "rationale": "'two_tailed_rats' has no entry in ActRooms.tags for underdocks (rooms.py:210-215) -- consistent absence."
     },
     {
       "what": "encounter/_selection_rng_fallback (G2, proposed shared mechanism id -- see report): EncounterModel.Rng's documented per-encounter independence (EncounterModel.cs:42-48, 'independently of the run's centralized RNG... safe... because we don't need to keep track of a given encounter's RNG state once it's over') vs TwoTailedRatsEncounter.create_monsters' selection_rng fallback (two_tailed_rat.py:151-154)",
       "verdict": "faithful",
-      "rationale": "CLOSED 2026-08-03 (gap-fix pass). `RunState.create_combat` now builds the per-encounter Rng on BOTH paths: with a string seed from `rng_set.seed` as before, and without one from a run seed derived at construction (`run.derive_encounter_seed`, a hash of the shared generator's STATE, so it consumes no draw and shifts no other legacy stream). `create_monsters`' `selection_rng=None` arm is therefore unreachable from any production call site, and the composition no longer moves when the shared stream does — executed in test/test_encounter_selection_rng.py (test_the_composition_does_not_move_with_the_shared_stream) and by audit/tools/encounter_probes_e2.py legacy-shared-stream.\n\nWHAT THE GAP SAID: Executed witness: `py audit/tools/encounter_probes_e8.py rat-selection-rng`. `RunState.create_combat` (run.py:1605-1619) only builds an independent `encounter_selection_rng` (via `make_encounter_rng`, seeded off `rng_set.seed + total_floor + entry`) when `self.rng_set is not None`, which itself requires a `string_seed` at `RunState.__init__` (run.py:170-176). The RL training path (`run_env.py:747`, inside `STS2RunEnv`) constructs `RunState(rng=self._rng, character=self._character)` with NO `string_seed`, so `rng_set` is None for every training episode, `encounter_selection_rng` is None, and `TwoTailedRatsEncounter.create_monsters` falls back to `rng.randrange(3)` on the SAME shared per-combat `random.Random` that every other unseeded draw in the fight consumes (two_tailed_rat.py:151-154). This is the 'stream named in C# but not honoured' shape (PROMPT.md bug class 16): EncounterModel.Rng's own doc comment says the independence is what makes the draw safe to leave untracked, but that is true only if the draw is actually off an independent stream -- in the trained configuration it is not, so this draw shifts every later unseeded draw in the same combat by one call relative to a hypothetical independent-Rng sim, in every two_tailed_rats_normal fight (the only encounter among these 10 units whose GenerateMonsters draws anything at all, but the same `selection_rng is None -> shared rng` fallback shape recurs at every other draw-consuming encounter in the kind -- see report for the cross-batch list)."
+      "rationale": "CLOSED 2026-08-03 (gap-fix pass). `RunState.create_combat` now builds the per-encounter Rng on BOTH paths: with a string seed from `rng_set.seed` as before, and without one from a run seed derived at construction (`run.derive_encounter_seed`, a hash of the shared generator's STATE, so it consumes no draw and shifts no other legacy stream). `create_monsters`' `selection_rng=None` arm is therefore unreachable from any production call site, and the composition no longer moves when the shared stream does \u2014 executed in test/test_encounter_selection_rng.py (test_the_composition_does_not_move_with_the_shared_stream) and by audit/tools/encounter_probes_e2.py legacy-shared-stream.\n\nWHAT THE GAP SAID: Executed witness: `py audit/tools/encounter_probes_e8.py rat-selection-rng`. `RunState.create_combat` (run.py:1680-1706, current line numbers -- was 1605-1619 at time of the original finding) only built an independent `encounter_selection_rng` (via `make_encounter_rng`, seeded off `rng_set.seed + total_floor + entry`) when `self.rng_set is not None`, which itself required a `string_seed` at `RunState.__init__` (run.py:164-191, current; was 170-176). The RL training path (`run_env.py:747`, inside `STS2RunEnv`) constructs `RunState(rng=self._rng, character=self._character)` with NO `string_seed`, so `rng_set` is None for every training episode, `encounter_selection_rng` is None, and `TwoTailedRatsEncounter.create_monsters` falls back to `rng.randrange(3)` on the SAME shared per-combat `random.Random` that every other unseeded draw in the fight consumes (two_tailed_rat.py:151-154). This is the 'stream named in C# but not honoured' shape (PROMPT.md bug class 16): EncounterModel.Rng's own doc comment says the independence is what makes the draw safe to leave untracked, but that is true only if the draw is actually off an independent stream -- in the trained configuration it is not, so this draw shifts every later unseeded draw in the same combat by one call relative to a hypothetical independent-Rng sim, in every two_tailed_rats_normal fight (the only encounter among these 10 units whose GenerateMonsters draws anything at all, but the same `selection_rng is None -> shared rng` fallback shape recurs at every other draw-consuming encounter in the kind -- see report for the cross-batch list)."
     }
   ],
   "verdict": "waiver",

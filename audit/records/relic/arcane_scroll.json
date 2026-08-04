@@ -11,12 +11,12 @@
   "extra_sources": [
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -31,9 +31,9 @@
       "verdict": "faithful"
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (sts2_rl/relics/arcane_scroll.py:14-31) -> run.add_card (sts2_rl/run.py:341-354)",
+      "maps_to": "after_obtained (sts2_rl/relics/arcane_scroll.py:14-31) -> run.add_card (sts2_rl/run.py:524-537)",
       "verdict": "faithful",
-      "rationale": "SETTLED by the 2026-07-26 relic fix pass; this entry previously filed a gap because the auditor could not see whether `RunState.add_card` appends. It does, and both sides append at the same end. C#: ArcaneScroll.cs:27 is `CardPileCmd.Add(card, PileType.Deck)`, the no-index overload, which reaches `CardPile.AddInternal(card, index = -1)` (src/Core/Entities/Cards/CardPile.cs:83-97) whose own parameter doc at CardPile.cs:80 says '-1 will cause it to be added to the end (\"bottom\")' and whose `else` arm is `_cards.Add(card)` (CardPile.cs:96). Sim: sts2_rl/relics/arcane_scroll.py:31 calls `run.add_card(make_card(pick))`, and sts2_rl/run.py:349 is `self.deck.append(card)` -- the END of the deck. Same placement. The sim ALSO runs the two deck-add hooks the source runs around it: `modify_card_being_added_to_deck` before the append (sts2_rl/run.py:345-348, the Hook.ModifyCardBeingAddedToDeck analogue the egg relics use) and the deck arm of AfterCardChangedPiles after it (sts2_rl/run.py:351-353). Six other relic records already verdict this exact mechanism faithful -- relic/storybook N1, relic/tanxs_whistle N1, relic/sere_talon N5, relic/neows_bones N7, relic/dusty_tome N1 and relic/hefty_tablet N3 -- and storybook N1 names arcane_scroll's open question explicitly; leaving this one a gap was a rule-3 disagreement, not a finding. The old entry's 'LIVE as a documentation gap' framing is withdrawn: a record being under-cited is not something a player or a replay can see, so it was never a gap under the README's definition. Guard N5 below now carries the placement citation the entry was missing. Rule 7: src/Core/Entities/Cards/CardPile.cs and src/Core/Commands/CardPileCmd.cs are cited here; sts2_rl/run.py is already hashed by this record."
+      "rationale": "SETTLED by the 2026-07-26 relic fix pass; this entry previously filed a gap because the auditor could not see whether `RunState.add_card` appends. It does, and both sides append at the same end. C#: ArcaneScroll.cs:27 is `CardPileCmd.Add(card, PileType.Deck)`, the no-index overload, which reaches `CardPile.AddInternal(card, index = -1)` (src/Core/Entities/Cards/CardPile.cs:83-97) whose own parameter doc at CardPile.cs:80 says '-1 will cause it to be added to the end (\"bottom\")' and whose `else` arm is `_cards.Add(card)` (CardPile.cs:96). Sim: sts2_rl/relics/arcane_scroll.py:31 calls `run.add_card(make_card(pick))`, and sts2_rl/run.py:532 is `self.deck.append(card)` -- the END of the deck. Same placement. The sim ALSO runs the two deck-add hooks the source runs around it: `modify_card_being_added_to_deck` before the append (sts2_rl/run.py:528-531, the Hook.ModifyCardBeingAddedToDeck analogue the egg relics use) and the deck arm of AfterCardChangedPiles after it (sts2_rl/run.py:535-536). Six other relic records already verdict this exact mechanism faithful -- relic/storybook N1, relic/tanxs_whistle N1, relic/sere_talon N5, relic/neows_bones N7, relic/dusty_tome N1 and relic/hefty_tablet N3 -- and storybook N1 names arcane_scroll's open question explicitly; leaving this one a gap was a rule-3 disagreement, not a finding. The old entry's 'LIVE as a documentation gap' framing is withdrawn: a record being under-cited is not something a player or a replay can see, so it was never a gap under the README's definition. Guard N5 below now carries the placement citation the entry was missing. Rule 7: src/Core/Entities/Cards/CardPile.cs and src/Core/Commands/CardPileCmd.cs are cited here; sts2_rl/run.py is already hashed by this record."
     }
   },
   "guards": [
@@ -55,12 +55,12 @@
     {
       "what": "N4: HasUponPickupEffect is NOT overridden by ArcaneScroll.cs, and the sim correspondingly leaves has_upon_pickup_effect at its False default",
       "verdict": "faithful",
-      "rationale": "Checked explicitly because three other relics in this batch (alchemical_coffer, astrolabe, big_mushroom) DO override it and the flag drives Relic.is_tradable (relics/base.py:132), so getting it wrong changes which relics the trade events offer. ArcaneScroll.cs declares only Rarity, CanonicalVars and AfterObtained."
+      "rationale": "Checked explicitly because three other relics in this batch (alchemical_coffer, astrolabe, big_mushroom) DO override it and the flag drives Relic.is_tradable (relics/base.py:189-197), so getting it wrong changes which relics the trade events offer. ArcaneScroll.cs declares only Rarity, CanonicalVars and AfterObtained."
     },
     {
       "what": "N5 (added by the 2026-07-26 fix pass): the deck INSERTION POSITION, which the original AfterObtained entry could not settle from this record's two files",
       "verdict": "faithful",
-      "rationale": "Recorded as its own guard so the placement claim is pinned rather than buried in a hook rationale, and because it is the parity-critical half: audit/records/seam/creature_card_cmds.json pins END placement for out-of-combat pile adds, and run.transform_card's docstring (sts2_rl/run.py:419-427) calls deck order out as parity-critical because the combat-start UnstableShuffle is order-dependent. Both sides append: C# `CardPileCmd.Add(card, PileType.Deck)` -> `CardPile.AddInternal(card, index = -1)` -> `_cards.Add(card)` (src/Core/Entities/Cards/CardPile.cs:90-97, doc at CardPile.cs:80); sim `run.add_card` -> `self.deck.append(card)` (sts2_rl/run.py:349). No divergence."
+      "rationale": "Recorded as its own guard so the placement claim is pinned rather than buried in a hook rationale, and because it is the parity-critical half: audit/records/seam/creature_card_cmds.json pins END placement for out-of-combat pile adds, and run.transform_card's docstring (sts2_rl/run.py:725-738) calls deck order out as parity-critical because the combat-start UnstableShuffle is order-dependent. Both sides append: C# `CardPileCmd.Add(card, PileType.Deck)` -> `CardPile.AddInternal(card, index = -1)` -> `_cards.Add(card)` (src/Core/Entities/Cards/CardPile.cs:90-97, doc at CardPile.cs:80); sim `run.add_card` -> `self.deck.append(card)` (sts2_rl/run.py:532). No divergence."
     }
   ],
   "verdict": "faithful",

@@ -11,23 +11,33 @@
   "extra_sources": [
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
       "path": "src/Core/Hooks/Hook.cs",
       "sha256": "c75c8e9d5c5015b9e3b230af72e47c585e8d42bde412633e910cc68cc0be6588",
       "side": "game"
+    },
+    {
+      "path": "sts2_rl/player.py",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/hooks.py",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -37,7 +47,7 @@
       "rationale": "WarHammer.cs:15. Not bag-pullable (Ancient); granted by the ported Tanx shrine (py audit/tools/relic_probes_b17.py pool -> granted_by sts2_rl/events/tanx.py)."
     },
     "AfterCombatVictory": {
-      "maps_to": "after_combat_end (sts2_rl/relics/war_hammer.py:17-37), gated on RoomType.ELITE and `not run.is_dead`; run-level plain pass, dispatched at sts2_rl/run.py:1380-1381 after the Early pass",
+      "maps_to": "after_combat_end (sts2_rl/relics/war_hammer.py:17-37), gated on RoomType.ELITE and `not run.is_dead`; run-level plain pass, dispatched at sts2_rl/run.py:1810-1813 after the Early pass",
       "verdict": "faithful",
       "issue": "Closed 2026-07-27: both halves of the rollup are fixed. The QUANTITY is now CardsVar(4) (`count = min(self.CARDS, len(upgradable))`, sts2_rl/relics/war_hammer.py:22-23) and the choice runs through `stable_shuffle(..., run.rng_set.niche, key=_compare_to_key)` (war_hammer.py:28-33), which is StableShuffle(Rng.Niche).Take(4) (WarHammer.cs:26-27). WAS: every upgradable deck card was upgraded and the Niche stream was never touched."
     }
@@ -51,7 +61,7 @@
     {
       "what": "N1: `c.IsUpgradable` (WarHammer.cs:26) vs `card.is_upgradable` (war_hammer.py:21)",
       "verdict": "faithful",
-      "rationale": "Checked against PROMPT.md bug class 14 (an unguarded Card.upgrade() marks curses and statuses as upgraded, because sts2_rl/cards/base.py:146-147 is a bare `upgrade_level += 1`). This port DOES filter, so the class does not fire here -- the 35 ported cards with max_upgrade_level 0 are skipped on both sides. Recorded because the sibling relics war_paint and whetstone in this same batch carry the identical C# filter and implement nothing at all, so the filter's presence here is the one thing this port gets right about upgrading."
+      "rationale": "Checked against PROMPT.md bug class 14 (an unguarded Card.upgrade() marks curses and statuses as upgraded, because sts2_rl/cards/base.py:289-290 is a bare `upgrade_level += 1`). This port DOES filter, so the class does not fire here -- the 35 ported cards with max_upgrade_level 0 are skipped on both sides. Recorded because the sibling relics war_paint and whetstone in this same batch carry the identical C# filter and implement nothing at all, so the filter's presence here is the one thing this port gets right about upgrading."
     },
     {
       "what": "N2 (LIVE for RNG parity, dormant for RL): `StableShuffle(base.Owner.RunState.Rng.Niche)` names an explicit stream and the sim consumes none",
@@ -59,14 +69,14 @@
       "issue": "Closed 2026-07-27: sts2_rl/relics/war_hammer.py:22-37 now takes `count = min(4, len(upgradable))` and, on the parity path, `stable_shuffle(list(upgradable), run.rng_set.niche, key=_compare_to_key)[:count]` -- ListExtensions.StableShuffle's CompareTo sort (the UPPERCASE ModelId then the upgrade level, sts2_rl/player.py:23-34) followed by the UnstableShuffle over Rng.Niche, then Take(CardsVar(4)) (WarHammer.cs:26-27). WAS: no shuffle was performed at all, so the Rng.Niche stream the game consumes for the choice stayed at its old position for the rest of the run."
     },
     {
-      "what": "N3: C#'s hook is AfterCombatVictory; the sim's run-level after_combat_end is dispatched only on a non-fatal combat (run.py:1206-1208), and the port re-checks run.is_dead",
+      "what": "N3: C#'s hook is AfterCombatVictory; the sim's run-level after_combat_end is dispatched only on a non-fatal combat (run.py:1803), and the port re-checks run.is_dead",
       "verdict": "faithful",
       "rationale": "A naming trap worth pinning, because RelicModel.AfterCombatEnd and RelicModel.AfterCombatVictory are DIFFERENT C# hooks (relic/vambrace in this same batch uses the first, which fires on defeat too) and the sim exposes only one run-level method for both. RunState.finish_combat guards its dispatch with `if room_type is not None and not self.is_dead`, so the sim's run-level after_combat_end is in practice an AfterCombatVictory analogue -- the only way a combat ends without victory is the player dying, which sets run.is_dead. war_hammer.py:18 then re-checks `run.is_dead` redundantly. Equivalent observable, so faithful; flagged because a future relic implementing the real AfterCombatEnd through this same method would silently lose its defeat leg. Rule 7: run.py is NOT hashed here."
     },
     {
       "what": "N4 (DORMANT): the ordering of the upgrades against the reward screen, and the flattened AfterCombatVictoryEarly / AfterCombatVictory two-pass dispatch",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the two AfterCombatVictory passes are real now. `Relic.after_combat_end_early` exists on the base (sts2_rl/relics/base.py:334-341) and RunState.finish_combat runs a COMPLETE early pass over run.relics before the plain one (sts2_rl/run.py:1378-1381), mirroring Hook.AfterCombatVictory's two passes (Hook.cs:340-352); the combat-level side is covered by HookSystem._each's phase walk (sts2_rl/hooks.py:153-180, phases very_early/early/plain/late), which relic/meat_on_the_bone now uses via `on_combat_end_early`. War Hammer implements the PLAIN pass and is therefore guaranteed to run after every Early listener, as in C#. WAS: the sim had one flat after_combat_end walk in RunState.relics order."
+      "issue": "Closed 2026-07-27: the two AfterCombatVictory passes are real now. `Relic.after_combat_end_early` exists on the base (sts2_rl/relics/base.py:334-341) and RunState.finish_combat runs a COMPLETE early pass over run.relics before the plain one (sts2_rl/run.py:1803-1813), mirroring Hook.AfterCombatVictory's two passes (Hook.cs:340-352); the combat-level side is covered by HookSystem._each's phase walk (sts2_rl/hooks.py:605-...(_each), phases very_early/early/plain/late), which relic/meat_on_the_bone now uses via `on_combat_end_early`. War Hammer implements the PLAIN pass and is therefore guaranteed to run after every Early listener, as in C#. WAS: the sim had one flat after_combat_end walk in RunState.relics order."
     },
     {
       "what": "N5: Flash() and CanonicalVars (WarHammer.cs:17, 25)",

@@ -113,23 +113,23 @@
   "sim_sources": [
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92"
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e"
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c"
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa"
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
     },
     {
       "path": "sts2_rl/history.py",
@@ -137,15 +137,15 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f"
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770"
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f"
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1"
     },
     {
       "path": "sts2_rl/afflictions.py",
-      "sha256": "f8c53bb835784d1241ad8ae24cf38827ae1677784874664914e02427de68abd1"
+      "sha256": "0bf0219fa3a2c37393c5091497f87360b5e530297f6fd117d2fee78918f3cf81"
     },
     {
       "path": "sts2_rl/relics/spiked_gauntlets.py",
@@ -157,7 +157,7 @@
     },
     {
       "path": "sts2_rl/relics/pen_nib.py",
-      "sha256": "155157f36c78fc82e57cd38c6285f3d083d4d0e81b09f6ff8975826f6f2ea1e1"
+      "sha256": "95cb4ff18c6abd9bfb29766c55cb0071a0331ded73709b978605d945c50f91be"
     },
     {
       "path": "sts2_rl/relics/throwing_axe.py",
@@ -173,7 +173,7 @@
     },
     {
       "path": "sts2_rl/cards/mad_science.py",
-      "sha256": "2ede1a12f1aa80dfde0f095c34997387210e6856011a40c954199fe33aa37c73"
+      "sha256": "51a3413baaa2dcc8b9bbc49b04e5ca2475d4e1f511bf46230bedd9f1e9c8ca33"
     },
     {
       "path": "sts2_rl/events/tanx.py",
@@ -185,7 +185,7 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681"
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2"
     },
     {
       "path": "sts2_rl/previews.py",
@@ -197,7 +197,7 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf"
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8"
     },
     {
       "path": "sts2_rl/relics/paels_eye.py",
@@ -205,7 +205,7 @@
     },
     {
       "path": "sts2_rl/enchantments.py",
-      "sha256": "044485116b3b5da76128dff3179154c664c899a8e4e49a0c5b62e208fd0c4369"
+      "sha256": "5be5a8643bc36318de3c5371f2acfdd433bed1396e5c2759401ea78931d06df0"
     },
     {
       "path": "sts2_rl/events/tinker_time.py",
@@ -225,7 +225,7 @@
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "63c0df752ca09e9de59285b0c9bc9be809da18e69b61b65424d75f37ee1ffc6b"
+      "sha256": "416789386ad4af19cb52a3c275a2c39c1708bb90ebc4dc5c8fb4e88a7055d557"
     },
     {
       "path": "sts2_rl/cards/whirlwind.py",
@@ -233,7 +233,7 @@
     },
     {
       "path": "sts2_rl/full_env.py",
-      "sha256": "e58ad6d137eb72e99eae66e885d5ca6818e03d1f7517715a7eceef928051a4a8"
+      "sha256": "4ba9a145147eb29e6f42a10acb70986873bf1bb12d47a12ef764a423572f312f"
     }
   ],
   "steps": [
@@ -523,7 +523,7 @@
     {
       "what": "F3-R13 (found 2026-08-01, round 13, R1): HookSystem.combat_is_over tests `phase == COMBAT_OVER` where C# gates on IsOverOrEnding",
       "verdict": "faithful",
-      "issue": "FIXED 2026-08-01 (round 14, R1). HookSystem.combat_is_over (sts2_rl/hooks.py) delegated only C#'s !IsInProgress half (phase == Phase.COMBAT_OVER); it now delegates to CombatState. is_over_or_ending, which already carries the full IsEnding || !IsInProgress shape (Hook.cs:53-63, CombatManager.cs:180-220). Replaces the F3-R13 reasoning's open item (\"a dedicated sweep is warranted\") with: the sweep is unnecessary because the fix is centralized at the one site _each() reads (hooks.py:663) -- all 55 mapped _COMBAT_GATED_HOOKS names inherit the corrected predicate through that single call, not through 56 separate is_over/COMBAT_OVER reads. Confirmed NOT the same defect as creature_card_cmds/step19 (see that entry) -- round 13's open question is now closed with a citation, not a guess. Blast radius re-checked directly against Hook.cs:2131 (ShouldAllowHitting is genuinely gated) rather than assumed; the widened gate is correct for every realistic (companion- present) case tested. See Findings §1 for the one unrealistic case it newly (and correctly) breaks."
+      "issue": "FIXED 2026-08-01 (round 14, R1). HookSystem.combat_is_over (sts2_rl/hooks.py) delegated only C#'s !IsInProgress half (phase == Phase.COMBAT_OVER); it now delegates to CombatState. is_over_or_ending, which already carries the full IsEnding || !IsInProgress shape (Hook.cs:53-63, CombatManager.cs:180-220). Replaces the F3-R13 reasoning's open item (\"a dedicated sweep is warranted\") with: the sweep is unnecessary because the fix is centralized at the one site _each() reads (hooks.py:663) -- all 55 mapped _COMBAT_GATED_HOOKS names inherit the corrected predicate through that single call, not through 56 separate is_over/COMBAT_OVER reads. Confirmed NOT the same defect as creature_card_cmds/step19 (see that entry) -- round 13's open question is now closed with a citation, not a guess. Blast radius re-checked directly against Hook.cs:2131 (ShouldAllowHitting is genuinely gated) rather than assumed; the widened gate is correct for every realistic (companion- present) case tested. See Findings \u00a71 for the one unrealistic case it newly (and correctly) breaks."
     },
     {
       "what": "F-R13b (found 2026-08-01, round 13, R1; deferred deliberately): can_receive_powers and _combat_contains_creature read the eager removal PREDICTION",

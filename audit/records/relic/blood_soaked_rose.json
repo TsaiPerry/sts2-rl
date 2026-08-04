@@ -11,7 +11,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -21,7 +21,7 @@
       "verdict": "faithful"
     },
     "HasUponPickupEffect": {
-      "maps_to": "has_upon_pickup_effect = True (blood_soaked_rose.py:19), read by Relic.is_tradable (relics/base.py:132)",
+      "maps_to": "has_upon_pickup_effect = True (blood_soaked_rose.py:19), read by Relic.is_tradable (relics/base.py:189-197)",
       "verdict": "faithful"
     },
     "AfterObtained": {

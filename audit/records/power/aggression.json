@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -21,13 +21,13 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:502 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py:805 `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
@@ -38,7 +38,7 @@
     "BeforeSideTurnStart": {
       "maps_to": "powers.py:504-519 AggressionPower.on_player_turn_start",
       "verdict": "faithful",
-      "issue": "FIXED, not just re-recorded. Replaced `combat._rng.sample(...) (shared unseeded rng, reservoir algorithm) with `combat.combat_rng.card_selection` + an in-place `.shuffle()` + slice — the named `CombatCardSelection` stream in parity mode, algorithmically matching `UnstableShuffle(...).Take(...)`. The record's reasoning was correct; only the verdict needed to move from open gap to fixed. Pinned by `test/test_r14_powers.py::TestAggression` (3 tests)."
+      "issue": "FIXED, not just re-recorded. Replaced `combat._rng.sample(...) (shared unseeded rng, reservoir algorithm) with `combat.combat_rng.card_selection` + an in-place `.shuffle()` + slice \u2014 the named `CombatCardSelection` stream in parity mode, algorithmically matching `UnstableShuffle(...).Take(...)`. The record's reasoning was correct; only the verdict needed to move from open gap to fixed. Pinned by `test/test_r14_powers.py::TestAggression` (3 tests)."
     }
   },
   "guards": [

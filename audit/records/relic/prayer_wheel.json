@@ -11,13 +11,18 @@
   "extra_sources": [
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Rewards/RewardsSet.cs",
+      "sha256": "9b19a53f2c623ea7d439d6a37cabc03dd4315cd15287f261a1163fa0bdab8ebb",
+      "side": "game"
     }
   ],
   "hooks": {
@@ -37,12 +42,12 @@
       "what": "G1 (LIVE): normal-enemy combats offer ONE card choice instead of two, and the stub's stated premise ('an out-of-combat reward modifier, so this is a no-op stub') is false",
       "verdict": "faithful",
       "maps_to": "PrayerWheel.modify_combat_rewards (sts2_rl/relics/prayer_wheel.py) -- appends an unpopulated CardRewardGroup on Monster rooms",
-      "rationale": "CLOSED 2026-07-28 by the gap-queue continuation's section-A fix pass (this is a CODE change, not a re-reading of the old code). The structural blocker is gone: CombatRewards models a LIST of CardRewards (`card_rewards`), so the relic's second pick-one-of-3 has somewhere to live and the driver offers it as its own decision. The group is appended UNPOPULATED and drawn by apply_reward_modifiers after both hook passes, mirroring RewardsSet.cs:137-143 (`foreach (Reward item in Rewards.Except(second)) if (!item.IsPopulated) item.Populate()`), so its three Rewards-stream draws land behind everything TryModifyRewardsLate did. The room gate reads the new `rewards.room` (RewardsSet.Room), which is None on a custom set -- `room == null || room.RoomType != Monster` (PrayerWheel.cs:20-23). EXECUTED: four tests in test/test_relic_tier1_gaps.py (two groups on Monster, one on Elite/Boss, two separate decisions, and the populate-after-the-late-pass order).  The gap it replaced read: NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. The premise half is settled: rewards.py:526-527 dispatches `modify_combat_rewards` over every relic and five other relics use it. WHAT REMAINS is the structural blocker the port now names -- a second pick-one-of-THREE reward group that rewards.CombatRewards cannot express -- plus the note that the second CardReward must go through create_reward_cards so it consumes the same Rewards-stream draws."
+      "rationale": "CLOSED 2026-07-28 by the gap-queue continuation's section-A fix pass (this is a CODE change, not a re-reading of the old code). The structural blocker is gone: CombatRewards models a LIST of CardRewards (`card_rewards`), so the relic's second pick-one-of-3 has somewhere to live and the driver offers it as its own decision. The group is appended UNPOPULATED and drawn by apply_reward_modifiers after both hook passes, mirroring RewardsSet.cs:137-143 (`foreach (Reward item in Rewards.Except(second)) if (!item.IsPopulated) item.Populate()`), so its three Rewards-stream draws land behind everything TryModifyRewardsLate did. The room gate reads the new `rewards.room` (RewardsSet.Room), which is None on a custom set -- `room == null || room.RoomType != Monster` (PrayerWheel.cs:20-23). EXECUTED: four tests in test/test_relic_tier1_gaps.py (two groups on Monster, one on Elite/Boss, two separate decisions, and the populate-after-the-late-pass order).  The gap it replaced read: NARROWED 2026-07-27. The stub PREMISE finding is discharged -- the docstring no longer rests on a false claim -- but the relic is STILL a no-op, and the reason is now written into the port. The premise half is settled: rewards.py:842 dispatches `modify_combat_rewards` over every relic and five other relics use it. WHAT REMAINS is the structural blocker the port now names -- a second pick-one-of-THREE reward group that rewards.CombatRewards cannot express -- plus the note that the second CardReward must go through create_reward_cards so it consumes the same Rewards-stream draws."
     },
     {
       "what": "N1: `if (player != base.Owner) return false;` (PrayerWheel.cs:16-19) and the bool return",
       "verdict": "faithful",
-      "rationale": "The owner test is multiplayer scoping: the sim has one player and rewards.py dispatches modify_combat_rewards over run.relics for that player, so it is structurally satisfied. The `bool` return is TryModifyRewards' 'did I change anything' signal, which the game uses to decide whether to re-render; the sim's hook returns None and mutates in place (relics/base.py:168-170), which is the house shape for this hook family and carries no observable. Recorded so the fix does not try to reproduce the return value."
+      "rationale": "The owner test is multiplayer scoping: the sim has one player and rewards.py dispatches modify_combat_rewards over run.relics for that player, so it is structurally satisfied. The `bool` return is TryModifyRewards' 'did I change anything' signal, which the game uses to decide whether to re-render; the sim's hook returns None and mutates in place (relics/base.py:168-170), which is the house shape for this hook family and carries no observable. Recorded so the fix does not try to reproduce the return value. [line refresh: relics/base.py:286-290 declares the hook (was :168-170); rewards.py:842 dispatches it (was :526-527)]"
     },
     {
       "what": "N2: `new CardReward(CardCreationOptions.ForRoom(player, RoomType.Monster), 3, player)` -- the count is a literal 3 and there is no CanonicalVars block",

@@ -32,7 +32,7 @@
     "AfterAddedToRoom": {
       "maps_to": "inklets.py:32-34",
       "verdict": "deliberate-divergence",
-      "rationale": "SHARED-FINDINGS section 2's pool-wide verdict, copied not re-derived. The sim has no add-to-room phase -- creature creation IS construction -- so AfterAddedToRoom's effect (SlipperyPower 1 on itself, Inklet.cs:57-61) is applied from `__init__` (inklets.py:32-34). The game applies it from MonsterModel.AfterAddedToRoom (MonsterModel.cs:313-316 is a no-op base, so the override is the whole effect), awaited by CombatManager.AfterCreatureAdded inside StartCombatInternal, i.e. after every creature is on the board and before Hook.BeforeCombatStart. Same observable today on all three clauses SHARED-FINDINGS establishes by execution: (a) listener set -- the only ported listeners on the reachable hooks (relics/ruined_helmet.py:23-38, relics/unsettling_lamp.py:44-53, relics/vambrace.py:26-40, relics/paels_legion.py:36-43) all gate on the player and a monster's starting power/block is self-applied with no card; (b) HP-roll inversion -- of the 35 constructor-applied power classes only IllusionPower mentions max_hp and only inside revive() (powers.py:1581), never at apply time; (c) roll ordering -- all 29 machine sites are sticky-no-ops (monster_probes.py roll-order).  Rule 7: the four relic files and sts2_rl/powers.py named above are NOT hashed by this record (powers.py is hashed only where this record cites it with line numbers)."
+      "rationale": "SHARED-FINDINGS section 2's pool-wide verdict, copied not re-derived. The sim has no add-to-room phase -- creature creation IS construction -- so AfterAddedToRoom's effect (SlipperyPower 1 on itself, Inklet.cs:57-61) is applied from `__init__` (inklets.py:32-34). The game applies it from MonsterModel.AfterAddedToRoom (MonsterModel.cs:313-316 is a no-op base, so the override is the whole effect), awaited by CombatManager.AfterCreatureAdded inside StartCombatInternal, i.e. after every creature is on the board and before Hook.BeforeCombatStart. Same observable today on all three clauses SHARED-FINDINGS establishes by execution: (a) listener set -- the only ported listeners on the reachable hooks (relics/ruined_helmet.py:23-38, relics/unsettling_lamp.py:44-53, relics/vambrace.py:26-40, relics/paels_legion.py:36-43) all gate on the player and a monster's starting power/block is self-applied with no card; (b) HP-roll inversion -- of the 35 constructor-applied power classes only IllusionPower mentions max_hp and only inside revive() (powers.py:2063, re-verified 2026-08-04, was :1581, logic unchanged), never at apply time; (c) roll ordering -- all 29 machine sites are sticky-no-ops (monster_probes.py roll-order).  Rule 7: the four relic files and sts2_rl/powers.py named above are NOT hashed by this record (powers.py is hashed only where this record cites it with line numbers)."
     },
     "GenerateAnimator": {
       "maps_to": "no sim counterpart (the sim has no renderer, audio bus or Bestiary)",
@@ -84,7 +84,7 @@
     {
       "what": "Range-bound convention on the initial-HP roll: Rng.NextInt(min, max) is max-EXCLUSIVE (Rng.cs:101-109) where Python's random.randint(a, b) INCLUDES b",
       "verdict": "faithful",
-      "rationale": "Checked as a convention, not just as constants. The GAME's range is [MinInitialHp, MaxInitialHp] INCLUSIVE, because Creature.SetUniqueMonsterHpValue compensates for the exclusive bound explicitly: `int num = Monster.MaxInitialHp + 1` (Creature.cs:378) feeds BOTH `Enumerable.Range(minInitialHp, num - minInitialHp)` (Creature.cs:379) and the fallback `rng.NextInt(minInitialHp, num)` (Creature.cs:383). The sim's parity port matches on both arms: `candidates = [v for v in range(lo, hi + 1) ...]` picked with `niche.next_int_range(0, len(candidates))`, fallback `niche.next_int_range(lo, hi + 1)` (combat.py:224-243), and `next_int_range` is itself max-exclusive (rng.py:182-186) -- so the two `+ 1`s land exactly where C# puts them. This unit has a real 7-wide range, so a top-end off-by-one would be silently observable as HP 17 never occurring. Executed (`py audit/tools/monster_probes_b01.py hprange`, 400 seeded combats per unit): declared [11,17], observed [11,17], and the observed set is exactly the full inclusive range, so the top endpoint 17 does occur. All 15 units of this batch pass. NOTE the legacy (non-parity) path is also right by a different route: Monster.__init__'s `rng.randint(self.min_hp, self.max_hp)` (monsters/base.py:78) is inclusive on both ends, matching the game's inclusive range, and in parity mode it is overwritten before anything reads it. Rule 7: Creature.cs, Rng.cs, sts2_rl/combat.py and sts2_rl/rng.py are hashed in extra_sources."
+      "rationale": "Checked as a convention, not just as constants. The GAME's range is [MinInitialHp, MaxInitialHp] INCLUSIVE, because Creature.SetUniqueMonsterHpValue compensates for the exclusive bound explicitly: `int num = Monster.MaxInitialHp + 1` (Creature.cs:378) feeds BOTH `Enumerable.Range(minInitialHp, num - minInitialHp)` (Creature.cs:379) and the fallback `rng.NextInt(minInitialHp, num)` (Creature.cs:383). The sim's parity port matches on both arms: `candidates = [v for v in range(lo, hi + 1) ...]` picked with `niche.next_int_range(0, len(candidates))`, fallback `niche.next_int_range(lo, hi + 1)` (combat.py:423-451, re-verified 2026-08-04, was :224-243, same logic moved into _roll_parity_hp/_assign_parity_monster_hp), and `next_int_range` is itself max-exclusive (rng.py:182-186) -- so the two `+ 1`s land exactly where C# puts them. This unit has a real 7-wide range, so a top-end off-by-one would be silently observable as HP 17 never occurring. Executed (`py audit/tools/monster_probes_b01.py hprange`, 400 seeded combats per unit): declared [11,17], observed [11,17], and the observed set is exactly the full inclusive range, so the top endpoint 17 does occur. All 15 units of this batch pass. NOTE the legacy (non-parity) path is also right by a different route: Monster.__init__'s `rng.randint(self.min_hp, self.max_hp)` (monsters/base.py:78) is inclusive on both ends, matching the game's inclusive range, and in parity mode it is overwritten before anything reads it. Rule 7: Creature.cs, Rng.cs, sts2_rl/combat.py and sts2_rl/rng.py are hashed in extra_sources."
     }
   ],
   "verdict": "deliberate-divergence",
@@ -112,7 +112,7 @@
     },
     {
       "path": "sts2_rl\\combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -122,7 +122,7 @@
     },
     {
       "path": "sts2_rl\\powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
@@ -132,7 +132,7 @@
     },
     {
       "path": "sts2_rl\\rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     }
   ]

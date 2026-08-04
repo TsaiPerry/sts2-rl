@@ -11,7 +11,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     }
   ],
@@ -56,7 +56,7 @@
     {
       "what": "N2: `CardPileCmd.AddGeneratedCardsToCombat(list, PileType.Hand, Owner)` -- one BATCHED add of the whole list (RadiantPearl.cs:41) -- vs the sim's per-card add_to_hand loop (radiant_pearl.py:28-29)",
       "verdict": "faithful",
-      "rationale": "With CardsVar(1) the list has exactly one element, so batched and per-card are the same operation and no hook can observe an intermediate state. Recorded rather than skipped because the collapse WOULD matter at CardsVar(2)+ (a hand-size clamp or an on-add listener would see the cards one at a time), which is a constraint on any future ascension/upgrade of this relic. The overflow rule also matches: CardPileCmd.add_to_hand (cmds.py:500-512) sends the card to the discard pile once MAX_HAND_SIZE is reached."
+      "rationale": "With CardsVar(1) the list has exactly one element, so batched and per-card are the same operation and no hook can observe an intermediate state. Recorded rather than skipped because the collapse WOULD matter at CardsVar(2)+ (a hand-size clamp or an on-add listener would see the cards one at a time), which is a constraint on any future ascension/upgrade of this relic. The overflow rule also matches: CardPileCmd.add_to_hand (cmds.py:1779-1794) sends the card to the discard pile once MAX_HAND_SIZE is reached."
     },
     {
       "what": "N3: `combatState.CreateCard<Luminesce>(Owner)` (RadiantPearl.cs:39) vs `make_card('luminesce')` (radiant_pearl.py:29)",
@@ -66,7 +66,7 @@
     {
       "what": "N4: `player == base.Owner` (RadiantPearl.cs:34) and the PlayerChoiceContext / ICombatState parameters",
       "verdict": "faithful",
-      "rationale": "Structurally satisfied: the sim has one player and hooks.on_player_turn_start is dispatched only for it (player.py:169). PlayerChoiceContext is multiplayer plumbing and is noted in the mapping rather than verdicted as a divergence, per the shared contract's scope section."
+      "rationale": "Structurally satisfied: the sim has one player and hooks.on_player_turn_start is dispatched only for it (player.py:378). PlayerChoiceContext is multiplayer plumbing and is noted in the mapping rather than verdicted as a divergence, per the shared contract's scope section."
     }
   ],
   "verdict": "waiver",

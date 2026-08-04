@@ -16,37 +16,37 @@
     },
     {
       "path": "sts2_rl/cards/breakthrough.py",
-      "sha256": "5dcda8546a221d075c89ce0b0de38e2ce3f849e0d2c7e51aa11cec85e26e4297",
+      "sha256": "610988e8732357056913d6aa02a182a49d8883d977bab0f613d847fbf1afd0c9",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cards/colorless_skills.py",
-      "sha256": "1cdf31a3bd59e95b239df163b0724e4f99ef299bd67256cc94fcc683e1ed1840",
+      "sha256": "73d875726c8cb8ca6a213dea6f43267d57717f5a1d6b65d34ca2ecea7f4ab66f",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "63c0df752ca09e9de59285b0c9bc9be809da18e69b61b65424d75f37ee1ffc6b",
+      "sha256": "416789386ad4af19cb52a3c275a2c39c1708bb90ebc4dc5c8fb4e88a7055d557",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -58,10 +58,10 @@
     "IsUsedUp": {
       "maps_to": "is_used_up property (lizard_tail.py:31-33)",
       "verdict": "faithful",
-      "rationale": "LizardTail.cs:18 is `IsUsedUp => _wasUsed`; lizard_tail.py:31-33 is `return self._used`. Correct and load-bearing: Relic.is_tradable (relics/base.py:126-136) refuses a used-up relic, so a spent Lizard Tail stops being offerable to the trade events on both sides, and Rare rarity does not otherwise exclude it. The Status = RelicStatus.Disabled the C# setter also performs (LizardTail.cs:33-37) is presentation (N4). The LIFETIME is per-RUN, not per-combat, on both sides -- [SavedProperty] on WasUsed (LizardTail.cs:22) means it survives a save, and `self._used` is set in __init__ and never reset. `py audit/tools/relic_probes.py sweep-reset` lists lizard_tail among the never-reset candidates whose C# relic has NO combat-boundary reset, which is exactly the evidence that per-run is intended; the sim's own docstring (lizard_tail.py:15) says 'once per combat' and is WRONG, but the code is right. Note that means the port's docstring is the only thing to fix in this member. Rule 7: relics/base.py are not hashed by this record."
+      "rationale": "LizardTail.cs:18 is `IsUsedUp => _wasUsed`; lizard_tail.py:31-33 is `return self._used`. Correct and load-bearing: Relic.is_tradable (relics/base.py:188-199, renumbered since prior pass, content unchanged) refuses a used-up relic, so a spent Lizard Tail stops being offerable to the trade events on both sides, and Rare rarity does not otherwise exclude it. The Status = RelicStatus.Disabled the C# setter also performs (LizardTail.cs:33-37) is presentation (N4). The LIFETIME is per-RUN, not per-combat, on both sides -- [SavedProperty] on WasUsed (LizardTail.cs:22) means it survives a save, and `self._used` is set in __init__ and never reset. `py audit/tools/relic_probes.py sweep-reset` lists lizard_tail among the never-reset candidates whose C# relic has NO combat-boundary reset, which is exactly the evidence that per-run is intended; the sim's own docstring (lizard_tail.py:15) says 'once per combat' and is WRONG, but the code is right. Note that means the port's docstring is the only thing to fix in this member. Rule 7: relics/base.py are not hashed by this record."
     },
     "ShouldDieLate": {
-      "maps_to": "should_die (lizard_tail.py:35-40), dispatched by HookSystem.should_die (hooks.py:582-594) from DamageCmd.deal (cmds.py:90-113) and CreatureCmd.kill (cmds.py:192-207)",
+      "maps_to": "should_die (lizard_tail.py:35-40), dispatched by HookSystem.should_die (hooks.py:1872-1883, renumbered since prior pass, content unchanged) from DamageCmd.deal's `_resolve_death` (cmds.py:126-.., renumbered since prior pass, content re-verified this pass) and CreatureCmd.kill (cmds.py:714-721, renumbered since prior pass, content unchanged)",
       "verdict": "faithful",
       "issue": "Closed 2026-08-01 (tier-2 round 13): STALE. The hook-level issue text's 'WHAT REMAINS is guard G3' is obsolete: G3 -- and G1, G2, G4, N1 -- already read faithful/closed in this same record (G3: 'Closed 2026-07-29 (round 8)'), and the current sim code is a pure predicate. No reasoning survives here that the guards do not already state; this entry is a pointer to them. The reasoning replaced: a residue that had already been closed elsewhere in the same file.  The text it replaced read: NARROWED 2026-07-27. Guards G1, G2, G4 and N1 are CLOSED -- see those guards: the port now uses `should_die_late` and `after_preventing_death` (sts2_rl/relics/lizard_tail.py), HookSystem runs the ShouldDie/ShouldDieLate passes separately (sts2_rl/hooks.py:153-180, 843-854), CreatureCmd.kill routes through _resolve_death (sts2_rl/cmds.py:285-292) and the prevented death is no longer floored at 1 HP (sts2_rl/cmds.py:51-64). WHAT REMAINS is guard G3: the port still sets `self._used = True` and `self._heal_pending = True` INSIDE `should_die_late`, where LizardTail.ShouldDieLate (LizardTail.cs:40-51) is pure and WasUsed is written in AfterPreventingDeath (:56). Any caller that uses should_die as a bare predicate -- cards/breakthrough.py's `if p.hp <= 0 and ctx.hooks.should_die(p)` -- still burns the relic for nothing."
     },
@@ -75,12 +75,12 @@
     {
       "what": "G1 (LIVE): the heal is ONE HP too high -- the sim heals BY 50% of Max HP from the death-prevention floor of 1, where C# heals from 0",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the port moved onto the hooks C# uses. sts2_rl/relics/lizard_tail.py now overrides `should_die_late` (the Late pass of HookSystem's should_die walk -- HookSystem._each runs very_early/early/plain/late as complete separate passes, sts2_rl/hooks.py:36-38, 153-180, 843-854) and heals from `after_preventing_death`, which DamageCmd's `_resolve_death` dispatches to the vetoing listener on the prevented-death arm (sts2_rl/cmds.py:51-64). The heal is exact now: the else-arm of _resolve_death no longer floors the corpse at 1 HP (sts2_rl/cmds.py:51-64, mirroring CreatureCmd.cs:565-570), so healing `max(1, max_hp * 50 // 100)` from 0 lands on exactly 50% of Max HP as LizardTail.cs:53-59 does. WAS: the sim floored the prevented death at 1 and healed on top, one HP too high."
+      "issue": "Closed 2026-07-27: the port moved onto the hooks C# uses. sts2_rl/relics/lizard_tail.py now overrides `should_die_late` (the Late pass of HookSystem's should_die walk -- HookSystem._each runs very_early/early/plain/late as complete separate passes, sts2_rl/hooks.py:605-639+ and :1872-1883, renumbered since prior pass, content unchanged) and heals from `after_preventing_death`, which DamageCmd's `_resolve_death` dispatches to the vetoing listener on the prevented-death arm (sts2_rl/cmds.py:126-.., renumbered since prior pass, content re-verified this pass). The heal is exact now: the else-arm of _resolve_death no longer floors the corpse at 1 HP (sts2_rl/cmds.py:51-64, mirroring CreatureCmd.cs:565-570), so healing `max(1, max_hp * 50 // 100)` from 0 lands on exactly 50% of Max HP as LizardTail.cs:53-59 does. WAS: the sim floored the prevented death at 1 and healed on top, one HP too high."
     },
     {
       "what": "G2 (LIVE): on the CreatureCmd.kill path the heal never happens -- the relic is spent, the player is left at 1 HP, and the pending heal fires on the NEXT damage instead",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the port moved onto the hooks C# uses. sts2_rl/relics/lizard_tail.py now overrides `should_die_late` (the Late pass of HookSystem's should_die walk -- HookSystem._each runs very_early/early/plain/late as complete separate passes, sts2_rl/hooks.py:36-38, 153-180, 843-854) and heals from `after_preventing_death`, which DamageCmd's `_resolve_death` dispatches to the vetoing listener on the prevented-death arm (sts2_rl/cmds.py:51-64). The CreatureCmd.kill path is covered: `CreatureCmd.kill` (sts2_rl/cmds.py:285-292) now runs `_resolve_death`, i.e. should_die (+ the Late pass) and then after_preventing_death, so the heal fires there too. WAS: kill set `target.hp = 1` with no preventer list and no after_preventing_death, so the relic was spent, the player left at 1 HP, and the stale pending heal fired on the next damage instead."
+      "issue": "Closed 2026-07-27: the port moved onto the hooks C# uses. sts2_rl/relics/lizard_tail.py now overrides `should_die_late` (the Late pass of HookSystem's should_die walk -- HookSystem._each runs very_early/early/plain/late as complete separate passes, sts2_rl/hooks.py:605-639+ and :1872-1883, renumbered since prior pass, content unchanged) and heals from `after_preventing_death`, which DamageCmd's `_resolve_death` dispatches to the vetoing listener on the prevented-death arm (sts2_rl/cmds.py:126-.., renumbered since prior pass, content re-verified this pass). The CreatureCmd.kill path is covered: `CreatureCmd.kill` (sts2_rl/cmds.py:714-721, renumbered since prior pass, content unchanged) now runs `_resolve_death`, i.e. should_die (+ the Late pass) and then after_preventing_death, so the heal fires there too. WAS: kill set `target.hp = 1` with no preventer list and no after_preventing_death, so the relic was spent, the player left at 1 HP, and the stale pending heal fired on the next damage instead."
     },
     {
       "what": "G3 (LIVE): the port sets `_used` inside should_die, where C# sets WasUsed in AfterPreventingDeath -- so a should_die call that is only a PREDICATE burns the relic",
@@ -90,12 +90,12 @@
     {
       "what": "G4 (LIVE): C#'s ShouldDie/ShouldDieLate two-pass priority is collapsed to one flat pass, so the sim can spend Lizard Tail while Fairy in a Bottle is held -- correcting audit/records/seam/damage_pipeline.json guard N4's 'currently inert'",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the port moved onto the hooks C# uses. sts2_rl/relics/lizard_tail.py now overrides `should_die_late` (the Late pass of HookSystem's should_die walk -- HookSystem._each runs very_early/early/plain/late as complete separate passes, sts2_rl/hooks.py:36-38, 153-180, 843-854) and heals from `after_preventing_death`, which DamageCmd's `_resolve_death` dispatches to the vetoing listener on the prevented-death arm (sts2_rl/cmds.py:51-64). Lizard Tail is the source's only ShouldDieLate implementer and Fairy in a Bottle the only plain ShouldDie one, so the Fairy is now always spent first, whatever order the two registered in. WAS: one flat should_die loop that returned on the first veto, so registration order decided which was spent."
+      "issue": "Closed 2026-07-27: the port moved onto the hooks C# uses. sts2_rl/relics/lizard_tail.py now overrides `should_die_late` (the Late pass of HookSystem's should_die walk -- HookSystem._each runs very_early/early/plain/late as complete separate passes, sts2_rl/hooks.py:605-639+ and :1872-1883, renumbered since prior pass, content unchanged) and heals from `after_preventing_death`, which DamageCmd's `_resolve_death` dispatches to the vetoing listener on the prevented-death arm (sts2_rl/cmds.py:126-.., renumbered since prior pass, content re-verified this pass). Lizard Tail is the source's only ShouldDieLate implementer and Fairy in a Bottle the only plain ShouldDie one, so the Fairy is now always spent first, whatever order the two registered in. WAS: one flat should_die loop that returned on the first veto, so registration order decided which was spent."
     },
     {
       "what": "N1 (DORMANT): the port fires its heal from on_damage_received, which C# does NOT fire on a hit that was arithmetically lethal",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the port moved onto the hooks C# uses. sts2_rl/relics/lizard_tail.py now overrides `should_die_late` (the Late pass of HookSystem's should_die walk -- HookSystem._each runs very_early/early/plain/late as complete separate passes, sts2_rl/hooks.py:36-38, 153-180, 843-854) and heals from `after_preventing_death`, which DamageCmd's `_resolve_death` dispatches to the vetoing listener on the prevented-death arm (sts2_rl/cmds.py:51-64). The heal no longer depends on AfterDamageReceived at all: it runs from `after_preventing_death`, so C#'s rule that a hit which was arithmetically lethal permanently skips AfterDamageReceived (`!WasTargetKilled || !IsDead`) costs the relic nothing. WAS: the port fired its heal from on_damage_received and was BUILT ON the divergence damage_pipeline G4 records."
+      "issue": "Closed 2026-07-27: the port moved onto the hooks C# uses. sts2_rl/relics/lizard_tail.py now overrides `should_die_late` (the Late pass of HookSystem's should_die walk -- HookSystem._each runs very_early/early/plain/late as complete separate passes, sts2_rl/hooks.py:605-639+ and :1872-1883, renumbered since prior pass, content unchanged) and heals from `after_preventing_death`, which DamageCmd's `_resolve_death` dispatches to the vetoing listener on the prevented-death arm (sts2_rl/cmds.py:126-.., renumbered since prior pass, content re-verified this pass). The heal no longer depends on AfterDamageReceived at all: it runs from `after_preventing_death`, so C#'s rule that a hit which was arithmetically lethal permanently skips AfterDamageReceived (`!WasTargetKilled || !IsDead`) costs the relic nothing. WAS: the port fired its heal from on_damage_received and was BUILT ON the divergence damage_pipeline G4 records."
     },
     {
       "what": "N2: the heal ARITHMETIC -- `Math.Max(1m, (decimal)MaxHp * (HealVar(50).BaseValue / 100m))` (LizardTail.cs:57) vs `max(1, self.player.max_hp * self.HEAL_PCT // 100)` (lizard_tail.py:53)",

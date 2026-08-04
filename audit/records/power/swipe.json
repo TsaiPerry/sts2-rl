@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "f655a201de2bdb93464f4e1998f264887a76fc4168a7f868dea641fc5cf2bdc6",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "58cf2c3c830b6ab2d3ed0b04f05558660a1d52a5dff9839bcdae018565ac8579",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],

@@ -62,7 +62,7 @@
     {
       "what": "The port carries no `name` class attribute",
       "verdict": "waiver",
-      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: Every other unit in this batch pins `name` (e.g. 'Fossil Stalker'); Seapunk does not. The conformance driver falls back to the class name (combat_driver.py:37-45, `getattr(monster, 'name', None) or type(monster).__name__`), which yields 'Seapunk' - the same single word the game displays - so no replay diverges today. Display-name only, and a tooling note rather than a fidelity finding, but flagged because the memory of this project records two multi-word names (Spiny Toad, Tough Egg) that DID break conformance for exactly this reason."
+      "rationale": "Presentation surface, waived per SHARED-FINDINGS section 4 (monster_state_machine N2/N5 and the KinPriest N6 precedent). Read to the end before waiving: Every other unit in this batch pins `name` (e.g. 'Fossil Stalker'); Seapunk does not. The conformance driver falls back to the class name (combat_driver.py:60-69, `getattr(monster, 'name', None) or type(monster).__name__`), which yields 'Seapunk' - the same single word the game displays - so no replay diverges today. Display-name only, and a tooling note rather than a fidelity finding, but flagged because the memory of this project records two multi-word names (Spiny Toad, Tough Egg) that DID break conformance for exactly this reason."
     },
     {
       "what": "PROMPT.md bug-class sweep",
@@ -80,7 +80,7 @@
     },
     {
       "path": "sts2_rl\\conformance\\combat_driver.py",
-      "sha256": "85d79b1e7a4a23eed96bdbcce77acfa17284166f14f13eacaa91ff6d1675845e",
+      "sha256": "83678aea44785d20f84cfa7e87691a40e3b22bdac2a5bdb412a902573f065eea",
       "side": "sim"
     }
   ]

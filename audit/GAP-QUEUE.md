@@ -30,13 +30,23 @@ to the next round until it is filed as an entry and named here.
 
 | | |
 |---|---|
-| gap entries | **347** |
+| gap entries | **324** |
 | — labelled LIVE | 0 |
-| — labelled DORMANT | 347 |
+| — labelled DORMANT | 324 |
 | — unlabelled | 0 |
-| **distinct mechanisms** | **322** |
+| **distinct mechanisms** | **299** |
 | — with at least one live entry | **0** |
 | mechanisms pinned by a `strict=True` xfail | 0 |
+
+**2026-08-04 (stale-record sweep).** All 843 records the previous round left
+STALE were re-audited (re-read against current code, not re-hashed): 954/0
+invalid, 0 stale. Several verdicts flipped from `gap` to `faithful`/`waiver`
+(their mechanisms are CLOSED and deleted below, per this file's own rule), and
+one entry was promoted from dormant to **LIVE**: `card/mad_science/GainsBlock`
+— fixed the same day, so it is closed too (see [Live gaps](#live-gaps) for the
+closure record). Net: 347 → 324 entries, 322 → 299 mechanisms.
+Re-derive with `py audit/tools/gap_queue.py counts` rather than trusting this
+sentence.
 
 No entry is unlabelled — but note the label usually lives in the entry's prose
 tokens, not the typed `live:` key: only a minority of gap guards carry the typed
@@ -98,11 +108,11 @@ Per kind (records / gap entries / mechanisms anchored / live entries):
 | kind | records | entries | mechanisms | live |
 |---|---|---|---|---|
 | `seam` | 12 | 34 | 29 | 0 |
-| `power` | 138 | 94 | 93 | 0 |
-| `card` | 202 | 29 | 29 | 0 |
+| `power` | 138 | 90 | 89 | 0 |
+| `card` | 202 | 24 | 24 | 0 |
 | `event` | 65 | 7 | 7 | 0 |
 | `enchantment` | 20 | 0 | 0 | 0 |
-| `relic` | 260 | 151 | 146 | 0 |
+| `relic` | 260 | 137 | 132 | 0 |
 | `monster` | 109 | 2 | 1 | 0 |
 | `potion` | 51 | 15 | 12 | 0 |
 | `encounter` | 85 | 14 | 4 | 0 |
@@ -131,9 +141,9 @@ joins the moment it files a `verdict: "gap"`.
 
 ## Where to start
 
-1. **[Live gaps](#live-gaps) is EMPTY** — every entry with an executed witness
-   of a present-day divergence has been fixed. What that section now holds is
-   the closing summary and the two findings from it worth carrying forward.
+1. **[Live gaps](#live-gaps)** — currently one entry, `card/mad_science/GainsBlock`
+   (found 2026-08-04). The section also holds the 2026-08-03 closing summary
+   and the two findings from it worth carrying forward.
 2. **[Tier 1](#tier-1--the-largest-multi-site-families)** — the multi-site
    dormant families, one fix each clearing many sites.
 3. **[Tier 2](#tier-2--dormant-gaps)**, then
@@ -380,37 +390,71 @@ grep for it should find it filed rather than rediscover it.
   the bug survived every unit test. Any other port of a C# `.Sort()` in this
   sim has the same latent split; `dotnet_sort.dotnet_list_sort` is the fix for
   all of them.
-- **`resync_floors` now DEGRADES a converged replay, and the reason is
-  structural.** With 933T39V18D's unresynced baseline exact, the resynced arm
-  is the one carrying counter divergences (Shuffle 892 vs 909 and two
-  off-by-ones). It is not a regression: `_check_floor_state` pins each stream
-  to the FLOOR-ENTRY snapshot under `sts2-run-backups/.../floor_N/run.save`,
-  while the whole-run counter check compares against
-  `RunReplays/.../floor_49/run.save`, a different capture taken at run END. So
-  on the last floor the resynced arm is pinned to the earlier snapshot and
-  cannot win. `test_resync_does_not_degrade_replay_vs_no_floor_saves_baseline`
-  now compares `forced_combats` and PER-COMMAND divergences only (the shape the
-  stale-save cascade actually took: 1 -> 8 and 10 -> 126). Whether resync
-  should pin to a run-end snapshot on the final floor, or be skipped there, is
-  unresolved — nobody has needed it since the seeds converged.
-- **The triage tool prints act-boundary and per-floor HP with opposite
-  expected/got senses.** For 933T at `stop_after_act=2`, DETECTOR 3 reports
-  "act 2 player_hp: expected 67 got 80" while DETECTOR 4 reports "floor 49:
-  floor_hp: expected 80 got 67" in the same run
-  (`tools/converge_triage.py`). At least one of the two is inverted, and a
-  reader trusting the wrong one chases the divergence in the wrong direction.
-  Not diagnosed here; both numbers came from a run whose unresynced gate is
-  green, so neither is currently load-bearing.
-- **Per-room state oracles are unbuilt.** `SaveOracle.map_history` already
-  parses `map_point_history`, whose `player_stats` carry per map point:
-  `current_hp`, `max_hp`, `damage_taken`, `hp_healed`, `gold_gained`,
-  `gold_spent`, `gold_lost`, `gold_stolen`, `max_hp_gained`/`_lost`, plus that
-  point's `relic_choices` and `event_choices`. Only the relic choices are
-  read. A DETECTOR that walks these against the sim room by room would localize
-  every remaining HP/gold divergence to a single room the way it just did for
-  `rng_streams/G7` by hand. Both Ironclad seeds are now green through act 2, so
-  its first users would be act 3 and the four un-ported characters. Still the
-  highest-leverage tooling left in this pipeline; not built here.
+- **RESOLVED 2026-08-04 (Task 3, revised after code review): `resync_floors`'s
+  degradation was two separate capture-semantics bugs, both fixed in
+  `_check_floor_state`.** `tools/oracle_semantics_probe.py` reconciled all 49
+  of 933T39V18D's per-floor backup saves against the run-end save's
+  `map_point_history`: 46 of 49 line up exactly with a room-ENTRY capture
+  (matching the previous room's exit hp, directly or via the
+  `damage_taken`/`hp_healed` arithmetic). Floor 47's backup (hp 74) matches
+  NEITHER that entry value (66, confirmed twice — from history directly and
+  from arithmetic) NOR the post-room value (80) NOR anything else reachable
+  — a mid-room/wrong-moment capture artifact, while the live sim's own hp
+  there (66) agrees with history. Floor 48's backup is a byte-duplicate of
+  47's, already caught by `_is_stale_floor_save`. Fixes: (a)
+  `_is_inconsistent_floor_save` excludes floor 47 the same way a stale save
+  is excluded — diff and resync both suppressed — but ONLY when the LIVE SIM
+  also agrees with the history-consistent reference (`run.hp` must equal one
+  of the reachable values); if a future floor's backup were inconsistent AND
+  the sim disagreed too, the diff is recorded normally rather than silently
+  dropped (first version of this guard was oracle-only and could have
+  masked a real bug — tightened after code review); (b) the final
+  checkpointed floor (its backup is an entry-style capture, structurally
+  incomparable to the run-END oracle DETECTORS 2/3 already check) now skips
+  BOTH the diff and the resync — recording an unwinnable diff there made a
+  fully-converged replay print DIVERGENCES REMAIN forever (also tightened
+  after code review; the first version recorded the diff and only skipped
+  the resync). Together these took 933T's DETECTOR 2 (3 stream-counter
+  diffs), DETECTOR 3 (act-2 boundary +13), and DETECTOR 4 (floors 47 and 49)
+  to zero — **both installed seeds now print FULLY CONVERGED**, reproduced
+  twice each. Tests: `test_resync_skips_the_final_checkpointed_floor`,
+  `test_floor_47_backup_save_is_excluded_as_an_inconsistent_capture`,
+  `test_is_inconsistent_floor_save_requires_sim_agreement_with_history`
+  (`test/test_conformance_floor_state.py`).
+- **DETECTOR 3 and DETECTOR 4 compare different captures, and used to look
+  inverted.** Both always print `expected` = oracle, `got` = sim
+  (`runner.py` `_check_player_state` / `_check_floor_state` both construct
+  `Divergence(stream, idx, expected=oracle, actual=sim)`). The 933T
+  "expected 67 got 80" vs "expected 80 got 67" pair was two *oracles*
+  disagreeing — the act-boundary check reads the run-END truncation save
+  while the per-floor check reads the floor-N backup save, and the run-end
+  save's own `map_point_history` is a third oracle that disagrees with the
+  backup at floor 47 (66 vs 74). Detector headers now name their capture,
+  `test/test_converge_triage_format.py` pins the printed sense, and
+  `tools/oracle_semantics_probe.py` reconciles the three oracles per floor.
+- **RESOLVED — per-room state oracles are built: DETECTOR 5.**
+  `SaveOracle.room_stats_by_act` parses `map_point_history`'s `player_stats`
+  per map point (`current_hp`, `max_hp`, `damage_taken`, `hp_healed`, the four
+  gold deltas, `max_hp_gained`/`_lost`); `runner.py`'s `_check_room_stats`
+  (report-only, never resyncs) diffs the sim's post-room hp/max_hp/gold
+  against it every room, streamed as `room_hp`/`room_max_hp`/`room_gold` with
+  `command_index = run.total_floor`. It localized 933T's residual act-2 HP
+  story to a single room (act 2 room 12, the elite fight) before Task 3's fix
+  landed. Task 3 added one more guard: the run's terminal point (the final
+  act's boss room) captures an internally-inconsistent all-zero
+  `player_stats` block (current_hp=max_hp=current_gold=0) in every installed
+  recording — a run-end capture artifact, not a real 0-HP moment — so
+  `_check_room_stats` keeps an unconditional all-zero fast path plus a
+  general reachability guard (unreachable from the previous point via
+  `current_hp + damage_taken - hp_healed`) that ALSO requires the live sim's
+  hp to agree with that previous point before skipping (tightened after code
+  review — a sim-blind version could mask a real divergence on some future
+  recording), closing the last standing divergence and taking both
+  installed Ironclad seeds to FULLY CONVERGED end-to-end. Tests:
+  `test_detector5_skips_the_zeroed_terminal_boss_point`,
+  `test_room_stats_reachability_guard_reports_when_sim_also_disagrees`
+  (`test/test_conformance_room_stats.py`). Act 3 and the four un-ported
+  characters are its next users.
 - **`SelectCardFromScreen` may be mis-resolved elsewhere.** The fix routes it
   through `_grid_selector` only when no deferred screen is pending. Every
   other `CardSelectCmd.FromChooseACardScreen` call the game resolves MID-MOVE
@@ -568,7 +612,7 @@ Convergence impact is graded:
 The document runs live gaps first, then three tiers:
 
 1. **[Live gaps](#live-gaps)** — every mechanism with a `live: true` entry.
-   Currently EMPTY; the section holds the record of what was closed there.
+   Currently none; the section holds the record of what was closed.
 2. **[Tier 1 — the largest multi-site families](#tier-1--the-largest-multi-site-families)**,
    written out in full. One fix each clearing many sites.
 3. **[Tier 2 — dormant gaps](#tier-2--dormant-gaps)**, written out in full,
@@ -582,9 +626,22 @@ The document runs live gaps first, then three tiers:
 
 # Live gaps
 
-**None. Zero entries, zero mechanisms** — first time the queue has been empty
-of live work since the label existed. Re-derive rather than trusting this
-sentence: `py audit/tools/gap_queue.py counts`, the `with a live entry` row.
+**No live entry. Zero mechanisms carry one** — re-derive rather than
+trusting this sentence: `py audit/tools/gap_queue.py counts`, the `with a
+live entry` row. The section stays because it is the first thing a fixer
+reads, and it holds the record of what was closed.
+
+`card/mad_science/GainsBlock` — filed LIVE by the 2026-08-04 stale-record
+sweep and **CLOSED the same day**. `MadScienceCard` left `gains_block` at
+the `Card` base-class `False` default, so Nimble's `CanEnchant` (which
+gates on exactly that flag) refused a Skill-configured Mad Science the
+game accepts. Fixed with a `gains_block` property returning
+`self.tinker_type == CardType.SKILL` (`mad_science.py:101-105`), mirroring
+the sibling `base_block` property that already carried the same
+type-dependence; pinned by
+`test/test_shared_enchantments.py::test_nimble_accepts_a_skill_mad_science_only`,
+which asserts the flag and Nimble's verdict for all three tinker types and
+failed before the fix.
 
 The 20 entries / 10 mechanisms the systems-tier campaign filed on 2026-08-03
 (the queue's first-ever live entries) were all CLOSED the same day by the
@@ -1423,9 +1480,8 @@ re-validation of record excerpts.
 - `turn_structure/G7` — DORMANT (sites: `turn_structure/step63`) — `await Hook.AfterFlush(state, player, ctx, cardsToFlush, cardsToRetain)` -- UNCONDITIONAL, fired even when nothing was flushed -- then PlayerCombatState.EndOfTurnCleanup(), also unconditional and the SECOND of its two per-round sites (CombatManager.cs; Hook.cs) — What remains…
 - `turn_structure/guard23` — DORMANT — `Relic._check_win()` (relics/base.py) has the win/loss tie-break BACKWARDS -- the FIFTH site of the class G13's close note says it eliminated at four. — DIVERGENCE: the helper goes straight to `_all_enemies_dead() -> _end_combat(player_won=True)` without testing the pending LOSS first.
 
-## `power` — 92 mechanisms
+## `power` — 89 mechanisms
 
-- `power/artifact/TryModifyPowerAmountReceived` — DORMANT — The interception is reimplemented outside the hook system entirely, and the debuff test is the wrong one. C# (ArtifactPower.cs) is a TryModifyPowerAmountReceived listener whose three guards are `target != Owner`, `canonicalPower.GetTypeForAmount(amount) != Debuff`, and…
 - `power/buffer/ModifyHpLostAfterOstyLate` — DORMANT — The arithmetic is exact -- 0 for the owner, unchanged otherwise (BufferPower.cs vs powers.py) -- and the AFTER-Osty position is right, since cmds.py runs after block absorption .
 - `power/burrowed/AfterRemoved` — DORMANT — C#'s AfterRemoved is `CreatureCmd.LoseBlock(oldOwner, 999999999m)` -- dump ALL the block -- and it runs on EVERY removal path, including the automatic strip when the owner dies (CreatureCmd.cs then each power's AfterRemoved).
 - `power/calamity/BeforeCardPlayed` — DORMANT — C# uses a TWO-HOOK LATCH the sim collapses into one. CalamityPower.cs records amountsForPlayedCards[card] = base.Amount at BeforeCardPlayed and removes it at AfterCardPlayed, so (a) the Amount is SNAPSHOTTED at the start of the play and (b) the after-hook only fires for a card the…
@@ -1438,14 +1494,11 @@ re-validation of record excerpts.
 - `power/curious/g2` — DORMANT — CuriousPower.cs,32 the TryModify predicate protocol — C#'s Try* hooks are a predicate chain: the listener returns bool to say 'I changed it' and writes the new value to an out-param, and Hook.ModifyEnergyCostInCombat (Hook.cs) uses that to decide who to notify afterwards and, in…
 - `power/curl_up/AfterCardPlayed` — DORMANT — EXECUTED: test/test_powers.py TestCurlUp (`test_gains_block_once_the_card_play_finishes`, `test_a_multi_hit_attack_is_not_absorbed_mid_card`) passes today.
 - `power/dampen/AfterApplied` — DORMANT — (1) MECHANISM, the same substitution as illusion's: C#'s AfterApplied runs after PowerCmd registers the power; the sim does the work in __init__, i.e. inside `power_cls(...)` at cmds.py and therefore BEFORE hooks.register and hooks.on_power_applied.
-- `power/dampen/AfterDeath` — DORMANT — C# tracks a SET of casters (`Data.casters`, added through the public non-override `AddCaster`, DampenPower.cs/73-76) and removes the power only when the LAST caster dies (`casters.Remove(creature); if (casters.Count == 0) PowerCmd.Remove(this)`, DampenPower.cs).
-- `power/dampen/g3` — DORMANT — DampenPower.cs public void AddCaster(Creature) — A public non-override method, so the harness does not enumerate it -- recorded so a reader does not think it was skipped (the same courtesy the main report gives CrueltyPower.ModifyVulnerableMultiplier).
 - `power/dark_shackles/g4` — DORMANT — TemporaryStrengthPower.cs IgnoreNextInstance — ITemporaryPower.IgnoreNextInstance / _shouldIgnoreNextInstance (TemporaryStrengthPower.cs, , consumed at and) has NO sim counterpart at all.
 - `power/dark_shackles/g5` — DORMANT — ITemporaryPower as a marker interface — The ITemporaryPower MARKER ITSELF is absent from the sim -- there is no is_temporary attribute, no InternallyAppliedPower, and no should_power_be_removed_on_death hook among hooks.py's 66 dispatchers.
 - `power/dexterity/ModifyBlockAdditive` — DORMANT — The sim keys the ownership test on the BLOCK TARGET where C# keys it on the CARD's owner. DexterityPower.cs: when cardSource != null the test is `cardSource.Owner.Creature != base.Owner -> 0m` and the target is not consulted at all; only for cardSource == null (a monster move) does it fall…
 - `power/dexterity/g2` — DORMANT — Sign-aware power typing on a negative Dexterity application — SIGN-AWARE TYPING (PROMPT.md bug class 3). GetTypeForAmount (PowerModel.cs, a third file not hashed by this record) returns PowerType.Debuff for this power at any NEGATIVE amount, because StackType == Counter && AllowNegative.
 - `power/disintegration/AfterSideTurnEndLate` — DORMANT — Wrong slot AND lost phase, and it is the only power in this group with both. (a) PHASE: this is `AfterSideTurnEndLate`, the second complete pass Hook.AfterTurnEnd runs (Hook.cs), so in the game Disintegration's damage lands after EVERY plain AfterSideTurnEnd listener has finished…
-- `power/draw_cards_next_turn/ModifyHandDraw` — DORMANT — The count is right (count + Amount, DrawCardsNextTurnPower.cs vs powers.py -- and correctly NOT the flat +1 that its sibling power/clarity uses; the two classes exist precisely to differ here, ClarityPower.cs).
 - `power/feeding_frenzy/g4` — DORMANT — TemporaryStrengthPower.cs IgnoreNextInstance — ITemporaryPower.IgnoreNextInstance / _shouldIgnoreNextInstance (TemporaryStrengthPower.cs, , consumed at and) has NO sim counterpart at all.
 - `power/feeding_frenzy/g5` — DORMANT — ITemporaryPower as a marker interface — The ITemporaryPower MARKER ITSELF is absent from the sim -- there is no is_temporary attribute, no InternallyAppliedPower, and no should_power_be_removed_on_death hook among hooks.py's 66 dispatchers.
 - `power/flame_barrier/AfterSideTurnEnd` — DORMANT — The removal condition is inverted from a side comparison into a hard-coded side. FlameBarrierPower.cs removes the power whenever `base.Owner.Side != side` -- i.e.
@@ -1518,24 +1571,19 @@ re-validation of record excerpts.
 - `power/weak/ModifyDamageMultiplicative` — DORMANT — The sim returns the bare literal 0.75 and has no modifier chain at all, where WeakPower.cs threads DamageDecrease = 0.75m through PaperKrane (the TARGET's relic, -0.15m) and then DebilitatePower.
 - `power/withering_presence/AfterCardPlayed` — DORMANT — The mechanism is right -- count the target player's card plays down from 6, add a Wither to HAND at 0, reset to 6 -- and the Wither's upgrade matching is preserved (`aeonglass.MatchWitherToUpgradeCount(wither)` at WitheringPresencePower.cs vs powers.py's `for _ in…
 
-## `card` — 29 mechanisms
+## `card` — 25 mechanisms
 
 - `card/anointed/g2` — DORMANT — cards are moved to the hand with CardPileCmd.Add(cards, PileType.Hand) (Anointed.cs) vs direct list mutation — The sim pops each card out of `player.draw_pile` and appends to `player.hand` in place (colorless_skills.py) instead of routing through a pile-add verb, so nothing fires for…
 - `card/apotheosis/g1` — DORMANT — the `allCard != this` self-exclusion, and whether the two AllCards sets are the same set (Apotheosis.cs) — C# `PlayerCombatState.AllCards` is `AllPiles.SelectMany(p => p.Cards)` (PlayerCombatState.cs) over Hand, Draw, Discard, Exhaust AND Play (PlayerCombatState.cs, quoted by…
 - `card/breakthrough/g1` — DORMANT — the enemy loop skips on `enemy.is_dead`, not `enemy.is_gone` (breakthrough.py) — Every other AoE card in the sim filters on `not e.is_gone` (conflagration, shockwave, omnislice, sword_boomerang, rip_and_tear -- see `py audit/tools/card_probes.py dead-target-guards`), and `is_gone` is `is_dead…
 - `card/brightest_flame/g1` — DORMANT — CROSS-RECORD DISAGREEMENT (rule 3): CreatureCmd.LoseMaxHp(..., isFromCard: true) is seam gap G6, which labels itself DORMANT; this card makes it LIVE — The seam's VERDICT (`gap`) is not disputed and is not re-verdicted here -- only its liveness label is.
 - `card/conflagration/OnPlay` — DORMANT — Damage per hit, hit count, target set and the OUTER loop order are all faithful: `DamageCmd.Attack(2).WithHitCount(4).FromCard(this).TargetingAllOpponents(CombatState)` (Conflagration.cs) runs `for (i = 0; i < attackCount; i++)` with the target list re-derived per hit…
-- `card/crimson_mantle/g1` — DORMANT — C# skips IncrementSelfDamage when Apply returns NULL; the sim increments whenever the power is present (CrimsonMantle.cs vs crimson_mantle.py) — `PowerCmd.Apply<T>` returns null in three documented cases (PowerCmd.cs, 68-87): combat is ending, `!target.CanReceivePowers`, or the…
 - `card/dramatic_entrance/OnPlay` — DORMANT — The damage, the target set and the single hit are all faithful: `DamageCmd.Attack(11).FromCard(this).TargetingAllOpponents(CombatState)` (DramaticEntrance.cs) hits every living opponent once, and the sim's framework routing calls `on_play` once per living enemy because…
 - `card/enlightenment/g1` — DORMANT — `reduceOnly` is evaluated LAZILY at cost-calculation time, so C# registers the modifier on EVERY hand card including those already at cost 0 or 1; the sim `continue`s past them (Enlightenment.cs vs event_cards.py) — `LocalCostModifier.IsReduceOnly` is documented as "should this…
 - `card/expect_a_fight/g1` — DORMANT — the sim skips the gain entirely when there are no Attacks in hand (`if attacks > 0`, expect_a_fight.py); C# calls GainEnergy(0) — `PlayerCmd.GainEnergy(0, ...)` (ExpectAFight.cs) adds nothing but still runs the engine's gain path; the sim skips the call outright (`if attacks > 0`…
 - `card/exterminate/OnPlay` — DORMANT — Damage per hit, hit count, target set and the hits-outer/enemies-inner loop order are all faithful against `DamageCmd.Attack(3).WithHitCount(4).FromCard(this).TargetingAllOpponents(CombatState)` (Exterminate.cs) -- AttackCommand runs `for (i = 0; i < attackCount; i++)` with the target list…
 - `card/havoc/g2` — DORMANT — `forceExhaust: true` is reproduced by appending to the exhaust pile directly (havoc.py) — C# sets `item.ExhaustOnNextPlay = forceExhaust` (CardPileCmd.cs) and lets the play pipeline route the card to the exhaust pile, which means the card passes through PileType.Play first and lands in…
 - `card/howl_from_beyond/OnPlay` — DORMANT — The damage and the single hit per enemy are faithful against `DamageCmd.Attack(16).FromCard(this).TargetingAllOpponents(CombatState)` (HowlFromBeyond.cs), and leaving `handles_own_routing` False is correct for a one-hit AoE -- the framework filters on `is_gone` (combat.py), the…
-- `card/inferno/g1` — DORMANT — C# skips IncrementSelfDamage when Apply returns NULL; the sim increments whenever the power is present (Inferno.cs vs inferno.py) — Identical to card/crimson_mantle's guard and carrying the same verdict (rule 3): `PowerCmd.Apply<T>` returns null when combat is ending, when…
-- `card/lantern_key/ModifyNextEvent` — DORMANT — `if (2 != Owner.RunState.CurrentActIndex) return currentEvent; return ModelDb.Event<WarHistorianRepy>();` (LanternKey.cs) redirects the next act-3 event to War Historian Repy -- the payoff the Lantern Key quest exists for.
-- `card/mad_science/GainsBlock` — DORMANT — `public override bool GainsBlock => TinkerTimeType == CardType.Skill` (MadScience.cs) is TYPE-DEPENDENT, and the sim never sets `gains_block` at all -- not in the class body and not in `configure` (mad_science.py, which sets `card_type`, `target_type` and `rider` but not this).
-- `card/neows_fury/OnPlay` — DORMANT — Attack first, then the hand-size-capped selection: `Math.Min(Cards.IntValue, CardPile.MaxCardsInHand - Hand.Cards.Count)` (NeowsFury.cs) == `min(self._cards, PlayerCombatState.MAX_HAND_SIZE - len(ctx.player.hand))`, with both skipping everything when the result is <= 0 (37 == 399-400), and…
 - `card/neows_fury/g1` — DORMANT — the chosen cards are moved with `CardPileCmd.Add(list, PileType.Hand)` in C# (NeowsFury.cs) and by direct list mutation in the sim (neows_fury.py) — The sim pops the chosen cards out of `player.discard_pile` and appends them to `player.hand` in place (neows_fury.py) instead of…
 - `card/omnislice/g1` — DORMANT — the sim returns early when nothing got through (`if dealt <= 0: return`, colorless_attacks.py); C# proceeds whenever the DamageResult is non-null (Omnislice.cs) — C# proceeds whenever the DamageResult is non-null (Omnislice.cs) and would splash a value of 0, which damages…
 - `card/pacts_end/OnPlay` — DORMANT — The gate and the damage are faithful: `CanDealDamage` is `CardPile.GetCards(Owner, PileType.Exhaust).Count() >= Cards.IntValue` (PactsEnd.cs) == `if len(ctx.player.exhaust_pile) < self._required_exhausted: return`, and the whole play is a no-op below the threshold on both sides.
@@ -1559,16 +1607,13 @@ re-validation of record excerpts.
 - `event/war_historian_repy/g2` — DORMANT — DEFERRED PORT, leg 2 -- THE BODY. Nothing below GenerateInitialOptions is ported: events/war_historian_repy.py returns []. Unported: the two initial options UNLOCK_CAGE / UNLOCK_CHEST (WarHistorianRepy.cs); the second-reward page that offers the OTHER option ; UnlockCage's…
 - `event/welcome_to_wongos/g8` — DORMANT — CheckObtainWongoBadge (WelcomeToWongos.cs) is not ported: the sim never grants WongoCustomerAppreciationBadge, and it tracks points on an ad-hoc attribute instead of run state — The badge is awarded when `SaveManager.Instance.Progress.WongoPoints % 2000 + pointsEarned >= 2000`…
 
-## `relic` — 143 mechanisms
+## `relic` — 132 mechanisms
 
 - `relic/_auto_keep` — DORMANT (sites: `relic/gambling_chip/AfterPlayerTurnStart`) — G1 (Sly auto-play) FLIPS from dormant-gap to faithful: gambling_chip.py no longer open-codes a discard loop -- it now calls the shared CardCmd.discard_and_draw (cmds.py), which implements the Sly-collect-and-auto-play tail in full.
 - `relic/anchor/g3` — DORMANT — ordering against other BeforeCombatStart listeners — C# grants Anchor's block at step 3 (Hook.BeforeCombatStart, before StartTurn); the sim grants it at step 14's equivalent (the AfterBlockCleared loop, well inside turn-1 setup).
 - `relic/archaic_tooth/AfterObtained` — DORMANT — Reasoning re-derived, verdict unchanged. G1 (upgrade-carry): Bash's max_upgrade_level is confirmed still 1 (default, unoverridden), so the sim's upgrade loop and C#'s single-call Upgrade agree for every reachable input.
 - `relic/archaic_tooth/g1` — DORMANT — C# carries the upgrade with a single `if (starterCard.IsUpgraded) CardCmd.Upgrade(cardModel)` (ArchaicTooth.cs); the sim loops `for _ in range(original.upgrade_level)` (archaic_tooth.py) — C# grants exactly ONE upgrade level regardless of how many the original had; the sim grants…
 - `relic/archaic_tooth/g2` — DORMANT — the sim adds a `can_enchant(transformed)` condition C# does not have, and MOVES the enchantment instead of cloning it (archaic_tooth.py vs ArchaicTooth.cs) — C# clones the enchantment (`(EnchantmentModel)starterCard.Enchantment.MutableClone()`) and enchants unconditionally; the sim…
-- `relic/bag_of_marbles/BeforeSideTurnStart` — DORMANT — Same fix. `PowerCmd.apply`'s own `can_receive_powers` backstop, already documented in R6-report.md) was the reason this was unobservable via power state even before this fix; the candidate-set swap is now also C#-literal at the loop-membership level, verified via…
-- `relic/bag_of_marbles/g2` — DORMANT — `combatState.HittableEnemies` (BagOfMarbles.cs) vs the sim's living_enemies() (bag_of_marbles.py) — C# targets `Enemies.Where(e => e.IsHittable)` (CombatState.cs), and IsHittable is `!IsDead && Hook.ShouldAllowHitting(CombatState, this)` (Creature.cs).
-- `relic/bag_of_preparation/g1` — DORMANT — the chain's out-parameter `modifiers` and the AfterModifyingHandDraw companion event (CombatManager.cs, turn_structure step 20) — C# collects which listeners changed the draw count and fires Hook.AfterModifyingHandDraw over them; the sim's modify_hand_draw returns a bare int with no companion…
 - `relic/belt_buckle/AfterObtained` — DORMANT — BeltBuckle.cs applies the Dexterity immediately if the relic is picked up DURING a combat with no potions held. The sim's port defines only on_combat_start and on_potion_used, so a Belt Buckle obtained mid-combat grants nothing until the next combat -- and, per guard G2, not even then.
 - `relic/belt_buckle/AfterPotionDiscarded` — DORMANT — The mirror of AfterPotionProcured: BeltBuckle.cs RE-APPLIES the Dexterity when discarding leaves the player potionless mid-combat. The sim implements on_potion_used but not a discard analogue, so the two ways of emptying the belt behave differently in the sim and identically in C#.
 - `relic/bing_bong/AfterCardChangedPiles` — DORMANT — Rollup of guard G1 per binding rule 4. The core is right -- the deck-pile filter, the anti-recursion skip set, and the bottom-of-deck placement all match -- but C#'s `clonedBy == null` clause has no sim counterpart.
@@ -1588,7 +1633,6 @@ re-validation of record excerpts.
 - `relic/claws/g2` — DORMANT — C# removes every original first and then appends the replacements in DECK-INDEX order; the sim removes and appends one card at a time in SELECTION order — MECHANISM: CardCmd.Transform(IEnumerable<CardTransformation>, rng) collects each original's pile and index, calls…
 - `relic/darkstone_periapt/AfterCardChangedPiles` — DORMANT — Rollup of guard G2 (DORMANT) per binding rule 4; Executed (py audit/tools/relic_probes_b04.py darkstone): a curse transformed into another curse now takes Max HP 86 -> 92, and the probe prints 'DIVERGENCE: sim +6, C# +6'.
 - `relic/darkstone_periapt/g2` — DORMANT — C# fires AfterCardChangedPiles for a card entering PileType.Deck at ANY time, including mid-combat; the sim's after_card_added_to_deck exists only on the out-of-combat RunState.add_card path — MECHANISM: CardPileCmd.cs and dispatch the hook from the general Add path, and PileType.Deck…
-- `relic/daughter_of_the_wind/g2` — DORMANT — C# yields no listeners to a combat hook dispatched after the combat has started ending; the sim has no such gate, so a LETHAL Attack still grants its 1 Block — MECHANISM: Hook.IterateCombatHookListeners (Hook.cs) yields nothing once IsOverOrEnding is set, and 73 of the game's 147…
 - `relic/demon_tongue/g2` — DORMANT — C# heals `result.UnblockedDamage`, which EXCLUDES OverkillDamage; the sim heals the raw `hp_lost`, which includes it — MECHANISM: DamageResult.cs documents UnblockedDamage as the damage the target received after blocking and OverkillDamage as the excess past 0 HP, and they are separate fields…
 - `relic/dusty_tome/AfterObtained` — DORMANT — Rollup of guards G1 (the unguarded Card.upgrade, dormant), G2 (the lazy re-roll, LIVE on the runner path) and N2 (the added HasUponPickupEffect declaration) per binding rule 4.
 - `relic/dusty_tome/g1` — DORMANT — `CardCmd.Upgrade(card)` skips a card whose IsUpgradable is false (DustyTome.cs); dusty_tome.py's `card.upgrade()` is a bare `upgrade_level += 1` with no guard (PROMPT.md class 14) — MECHANISM: CardCmd.Upgrade filters on IsUpgradable == `CurrentUpgradeLevel < MaxUpgradeLevel`…
@@ -1599,7 +1643,6 @@ re-validation of record excerpts.
 - `relic/empty_cage/g2` — DORMANT — run.select_cards falls back to `self.rng.sample` when no card_selector is installed (run.py), where the game opens a removal screen and draws no RNG — Same mechanism and same verdict as relic/electric_shrymp guard N3 in this batch (binding rule 3): C#'s FromDeckGeneric…
 - `relic/fake_anchor/g3` — DORMANT — the ordering window -- C# grants the block at turn_structure step 3, the sim at the step-14 AfterBlockCleared loop, and anything between the two that reads player Block sees 4 in C# and 0 in the sim — Same mechanism as relic/anchor's guard N3 and carried with the same gap verdict per binding…
 - `relic/fake_snecko_eye/AfterObtained` — DORMANT — MECHANISM: FakeSneckoEye.cs applies the Confused power immediately when the relic is picked up if `CombatManager.Instance.IsInProgress`, so a Fake Snecko Eye obtained mid-combat confuses you for the rest of that fight.
-- `relic/fake_strike_dummy/g2` — DORMANT — C#'s fourth clause is `if (dealer != Owner.Creature && cardSource.Owner != Owner) return 0;` -- an AND of two negatives, i.e. fire when EITHER holds; the sim requires `dealer is self.player` alone (fake_strike_dummy.py) — MECHANISM: FakeStrikeDummy.cs declines only when the dealer is…
 - `relic/festive_popper/g2` — DORMANT — `combatState.HittableEnemies` (FestivePopper.cs) vs the sim's living_enemies() (festive_popper.py) — Identical mechanism to relic/bag_of_marbles guard G2 and carried with the same gap verdict per binding rule 3, at another turn-1 all-enemies effect.
 - `relic/forgotten_soul/AfterCardExhausted` — DORMANT — Rollup of guard G1 per binding rule 4. Every number and stream matches -- DamageVar(1m, ValueProp.Unpowered) (ForgottenSoul.cs) is DAMAGE = 1 with DamageProps.NON_CARD_UNPOWERED (= ValueProp.UNPOWERED, valueprops.py), the dealer is the player's own creature on both sides, and…
 - `relic/fragrant_mushroom/AfterObtained` — DORMANT — WHAT REMAINS is guard G2, DORMANT: FragrantMushroom.cs routes the 15 through `CreatureCmd.Damage(..., Unblockable|Unpowered, ...)`, i.e. the full damage command with its run-level Hook pipeline and death check, while the port still calls `run.lose_hp(15)` (sts2_rl/run.py), which runs…
@@ -1617,15 +1660,11 @@ re-validation of record excerpts.
 - `relic/girya/AfterRoomEntered` — DORMANT — See guard G2. Girya.cs applies StrengthPower equal to TimesLifted when `TimesLifted > 0 && room is CombatRoom`; girya.py does the same at combat start, two dispatch points later (C#'s AfterRoomEntered for a combat room fires at CombatRoom.cs, before StartCombatInternal's…
 - `relic/girya/g2` — DORMANT — the Strength lands at BeforeCombatStart in the sim and at AfterRoomEntered in C#, two dispatch points earlier -- and the sim's slot is interleaved with other relics' on_combat_start by registration order where C#'s always precedes every BeforeCombatStart listener — MECHANISM…
 - `relic/glitter/g1` — DORMANT — `base.Owner.RunState.CloneCard(card)` then `CardCmd.Enchant<Glam>(card2, 1m)` then `cardReward.ModifyCard(card2, this)` (Glitter.cs) vs `GlamEnchantment().attach(card)` in place (glitter.py) — PROMPT.md bug class 17.
-- `relic/golden_pearl/g2` — DORMANT — PlayerCmd.GainGold's `Hook.AfterGoldGained(runState, player)` tail (PlayerCmd.cs) has no sim counterpart at all -- neither this relic nor the sim's Relic base declares an after_gold_gained hook — MECHANISM: every gold gain in the game ends with a full listener pass over AfterGoldGained…
-- `relic/gorget/g4` — DORMANT — PlatingPower's own port diverges on WHERE it decays -- the sim decays from on_player_turn_start (pre-draw) where PlatingPower.cs decays from AfterSideTurnStart (post-draw) — MECHANISM: PlatingPower.cs decrements in AfterSideTurnStart with a `TurnNumber != 1` guard for a player owner…
 - `relic/gremlin_horn/AfterDeath` — DORMANT — REASONING REPLACED at the hooks-level rollup. Re-confirmed directly: neither IllusionPower nor AdaptablePower defines should_die; both define should_remove_from_combat_after_death, and an executed two-enemy kill confirms the payout lands on a real Illusion death.
 - `relic/gremlin_horn/g2` — DORMANT — the sim resolves death INSIDE the damage pipeline, before the dealer's post-damage event; C# defers Kill() until after AfterDamageGiven and AfterDamageReceived have run for every target of the batch — MECHANISM: CreatureCmd.cs runs AfterDamageGiven, then the killing-blow-guarded…
 - `relic/hand_drill/g1` — DORMANT — C# orders AfterBlockBroken listeners BEFORE AfterDamageGiven listeners for the same damage result; the sim puts Hand Drill on the same event as the AfterBlockBroken listener and lets registration order decide — MECHANISM: CreatureCmd.cs runs `Hook.AfterBlockBroken` and then…
 - `relic/hand_drill/g2` — DORMANT — the C# guard is `dealer == base.Owner.Creature || dealer?.PetOwner == base.Owner` -- the port drops the PET arm entirely (hand_drill.py is `dealer is not self.player`) — MECHANISM: HandDrill.cs credits the owner's PET's damage to the owner, so an Osty (or any relic-granted pet) that breaks…
 - `relic/happy_flower/g3` — DORMANT — PlayerCmd.GainEnergy's `Hook.AfterModifyingEnergyGain` companion event and its `finalAmount > 0` gate (PlayerCmd.cs) have no counterpart in the sim's EnergyCmd.gain (cmds.py) — MECHANISM: C# folds Hook.ModifyEnergyGain, then fires AfterModifyingEnergyGain over the listeners that…
-- `relic/hefty_tablet/g2` — DORMANT — CardFactory.CreateForReward runs Hook.TryModifyCardRewardOptions on the three cards unless CardCreationFlags.NoModifyHooks is set, and HeftyTablet sets only NoUpgradeRoll -- the port calls no such hook — MECHANISM: CardFactory.cs folds `Hook.TryModifyCardRewardOptions(player.RunState…
-- `relic/ice_cream/g2` — DORMANT — the sim calls modify_max_energy BEFORE should_reset_energy; C# evaluates ShouldPlayerResetEnergy first and only then reads MaxEnergy inside the chosen branch — MECHANISM: player.py folds modify_max_energy, then asks should_reset_energy, then assigns or accumulates…
 - `relic/intimidating_helmet/g3` — DORMANT — the SLOT -- C# fires BeforeCardPlayed after the card has been added to the Play pile and after GeneratePlayCount; the sim fires on_energy_spent immediately after deducting the energy, before the card leaves the hand — MECHANISM: CardModel.OnPlayWrapper does CardPileCmd.AddDuringManualCardPlay ->…
 - `relic/jeweled_mask/g3` — DORMANT — SetToFreeThisTurn is `EndOfTurn | WhenPlayed` in C#; the sim's _free_this_turn expires only at the next turn start — MECHANISM: CardModel.SetToFreeThisTurn (CardModel.cs) adds a LocalCostModifier with `LocalCostModifierExpiration.EndOfTurn | LocalCostModifierExpiration.WhenPlayed`…
 - `relic/jeweled_mask/g4` — DORMANT — the port moves the card with two list operations (`draw_pile.remove` / `hand.append`, jeweled_mask.py) instead of the sim's CardPileCmd, so it bypasses the hand cap — MECHANISM: C# calls `CardPileCmd.Add(cardModel, PileType.Hand)` (JeweledMask.cs), which goes through the pile machinery…
@@ -1654,7 +1693,6 @@ re-validation of record excerpts.
 - `relic/paper_phrog/ModifyVulnerableMultiplier` — DORMANT — The rollup's G1 dispatch-set text is confirmed accurate and unchanged. NEW: found and enumerated a second, previously unrecorded DORMANT divergence — `PaperPhrog.cs`'s `target == Owner.Creature` self-damage bail has no sim analogue because `modify_vulnerable_multiplier`'s signature carries…
 - `relic/paper_phrog/g1` — DORMANT — C# consults the dealer's phrog ONCE by direct lookup; the sim runs a hook chain over every combat listener, so N copies of the relic would each add 0.25 — MECHANISM: VulnerablePower.cs does `dealer.Player?.GetRelic<PaperPhrog>()` and calls the method on that single instance, so the bonus…
 - `relic/paper_phrog/g3` — DORMANT — `if (target == base.Owner.Creature) return amount;` (PaperPhrog.cs) -- no bonus when the phrog's own owner is the Vulnerable creature; the sim checks only the dealer — MECHANISM: paper_phrog.py is `if dealer is self.player`, with no target check.
-- `relic/parrying_shield/AfterSideTurnEnd` — DORMANT — `py audit/tools/relic_probes_b11.py eye-turnend` shows on_player_turn_end, the flush and after_player_turn_end all firing with Pael's Eye held. STILL OPEN, DORMANT (G1, the candidate set): parrying_shield.py still calls Relic.living_enemies(), which is `[e for e in self.combat.enemies if not…
 - `relic/pen_nib/g3` — DORMANT — C# skips Hook.AfterCardPlayed entirely when the play ended the combat (CardModel.cs gates on CombatManager.IsInProgress) while combat.py always fires it, so a game-side 10th Attack that lands the killing blow stays MARKED and the sim's does not — MECHANISM: the mark (AttackToDouble /…
 - `relic/philosophers_stone/AfterCreatureAddedToCombat` — DORMANT — Re-executed rather than re-derived. No change: the sim's CombatState models no player-side creature other than the player, so the side-vs-identity substitution in the skip clause cannot currently misclassify anything.
 - `relic/philosophers_stone/g1` — DORMANT — C# skips any creature on the OWNER's SIDE (PhilosophersStone.cs); the sim skips only the player OBJECT (philosophers_stone.py), so a player-side creature that is not the player would be strengthened in the sim and not in the game — MECHANISM: `if (creature.Side == base.Owner.Creature.Side)…
@@ -1703,7 +1741,6 @@ re-validation of record excerpts.
 - `relic/vexing_puzzlebox/g4` — DORMANT — `cardModel.SetToFreeThisTurn()` (VexingPuzzlebox.cs) vs `card.set_free_this_turn()` (vexing_puzzlebox.py) — C#'s SetToFreeThisTurn is `EnergyCost.SetThisTurnOrUntilPlayed(0)` plus SetStarCostThisTurn(0) (CardModel.cs).
 - `relic/wing_charm/g3` — DORMANT — `base.Owner.RunState.CloneCard(...)` is a full model clone and the sim has no clone helper — The dormancy premise has changed: the port is no longer empty -- sts2_rl/relics/wing_charm.py implements the hook -- but it takes the SIBLING's shape rather than the source's, attaching…
 - `relic/winged_boots/g3` — DORMANT — the sim charges only the FIRST relic whose should_allow_free_travel() is True and then `break`s (run.py); C# charges every AfterRoomEntered implementer independently — MECHANISM: in C# the charge is each relic's own business, so two free-travel sources both react to the same non-child…
-- `relic/wongos_mystery_ticket/g7` — DORMANT — an exhausted relic grab bag makes the sim hand out FEWER than three relics and still spend the ticket, where C# substitutes RelicFactory.FallbackRelic and always resolves three — MECHANISM: C#'s `PullNextRelicFromFront` is `TestRngInjector.ConsumeRelicOverride() ??…
 
 ## `potion` — 13 mechanisms
 

@@ -26,22 +26,22 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -51,7 +51,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -62,31 +62,31 @@
       "rationale": "Obtainable: Uncommon in the transcribed shared grab bag (py audit/tools/relic_probes_b12.py b12-pool reports bag=Uncommon)."
     },
     "AfterRoomEntered": {
-      "maps_to": "reset_for_combat (sts2_rl/relics/permafrost.py:27-29), run by Relic.attach on every new CombatState (sts2_rl/relics/base.py:192-195)",
+      "maps_to": "reset_for_combat (sts2_rl/relics/permafrost.py:27-29), run by Relic.attach on every new CombatState (sts2_rl/relics/base.py:247-250)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the reset has a home. Permafrost.cs:35-43's whole body is `if (!(room is CombatRoom)) return; ActivatedThisCombat = false;`, and sts2_rl/relics/permafrost.py:27-29 performs it in `reset_for_combat`, which `Relic.attach` runs on every new CombatState (sts2_rl/relics/base.py:192-195) -- the sim's single per-combat boundary. WAS: the sim dropped the reset and provided no substitute, so `_activated` latched True for the rest of the run."
+      "issue": "Closed 2026-07-27: the reset has a home. Permafrost.cs:35-43's whole body is `if (!(room is CombatRoom)) return; ActivatedThisCombat = false;`, and sts2_rl/relics/permafrost.py:27-29 performs it in `reset_for_combat`, which `Relic.attach` runs on every new CombatState (sts2_rl/relics/base.py:247-250) -- the sim's single per-combat boundary. WAS: the sim dropped the reset and provided no substitute, so `_activated` latched True for the rest of the run."
     },
     "AfterCardPlayed": {
       "maps_to": "on_card_played (sts2_rl/relics/permafrost.py:31-...), Power-type test plus the once-per-combat `_activated` flag that reset_for_combat clears",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the once-per-combat flag is now cleared at the combat boundary by `reset_for_combat` (sts2_rl/relics/permafrost.py:27-29, run from Relic.attach at sts2_rl/relics/base.py:192-195), so this handler no longer returns immediately from combat 2 onward. The rest of the condition set was already faithful. WAS: `_activated` latched True after the first Power card of the first combat and the relic granted nothing thereafter."
+      "issue": "Closed 2026-07-27: the once-per-combat flag is now cleared at the combat boundary by `reset_for_combat` (sts2_rl/relics/permafrost.py:27-29, run from Relic.attach at sts2_rl/relics/base.py:247-250), so this handler no longer returns immediately from combat 2 onward. The rest of the condition set was already faithful. WAS: `_activated` latched True after the first Power card of the first combat and the relic granted nothing thereafter."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): `_activated` is reset NOWHERE in the sim, so Permafrost grants its 7 Block in the FIRST combat of a run only -- the relic/belt_buckle shape",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/permafrost.py:27-29 clears `_activated` (Permafrost.cs:36-44 AfterRoomEntered(CombatRoom)). WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:215-228) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:247-250) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/permafrost.py:27-29 clears `_activated` (Permafrost.cs:36-44 AfterRoomEntered(CombatRoom)). WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
     },
     {
       "what": "N1: the two conditions permafrost.py:28 drops from Permafrost.cs:47 -- `CombatManager.Instance.IsInProgress` and `cardPlay.Card.Owner == base.Owner`",
       "verdict": "faithful",
-      "rationale": "Both are structurally satisfied. on_card_played is a combat hook dispatched only by a live CombatState, and combat.py:493-494 breaks the play loop once the fight is decided, so the IsInProgress test cannot fail at the sim's dispatch site (the residual difference -- that C# refuses the whole dispatch once the combat is ending -- is audit/records/seam/hook_dispatch.json guard G8's mechanism, labelled DORMANT there, and is not re-derived here per binding rule 3). The card-owner test is multiplayer scoping: the sim has one player and dispatches card hooks only for that player's plays. NOTE per binding rule 7: combat.py and hook_dispatch.json are not hashed here."
+      "rationale": "Both are structurally satisfied. on_card_played is a combat hook dispatched only by a live CombatState, and combat.py's `_resolve_card_play`/end-of-play checks (combat.py:1054, :1900 `is_over_or_ending`) break the play resolution once the fight is decided, so the IsInProgress test cannot fail at the sim's dispatch site (the residual difference -- that C# refuses the whole dispatch once the combat is ending -- is audit/records/seam/hook_dispatch.json guard G8's mechanism, labelled DORMANT there, and is not re-derived here per binding rule 3). (2026-08-04: combat.py had drifted from the cited :493-494; re-verified the same gating exists at the new lines.) The card-owner test is multiplayer scoping: the sim has one player and dispatches card hooks only for that player's plays. NOTE per binding rule 7: combat.py and hook_dispatch.json are not hashed here."
     },
     {
       "what": "N2: `BlockVar(7m, ValueProp.Unpowered)` (Permafrost.cs:33) read through `base.DynamicVars.Block` at the single call site (Permafrost.cs:50) vs `BLOCK = 7` and `props=ValueProp.UNPOWERED` (permafrost.py:21, 31)",
       "verdict": "faithful",
-      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in the file, so 7 is the pinned non-ascension value, and the port carries the Unpowered flag explicitly rather than letting BlockCmd infer it -- which matters because cmds.py:145 gates the block additive/multiplicative stage on the same is_powered_attack rule as damage, so an Unpowered block is deliberately not scaled by Dexterity-adjacent modifiers on either side. Checked per PROMPT.md bug class 19 (a constant protected by a citation that looks verified): the docstring's '7 Block' and the C# BlockVar agree. NOTE per binding rule 7: cmds.py is not hashed here."
+      "rationale": "No AscensionHelper.GetValueIfAscension anywhere in the file, so 7 is the pinned non-ascension value, and the port carries the Unpowered flag explicitly rather than letting BlockCmd infer it. STALE-CORRECTED 2026-08-04: this rationale previously claimed cmds.py hoisted an `is_powered_attack` gate in front of the block modifier chain; that is no longer (and per paels_legion.json guard G2's history, was never meant to be) how the pipeline works -- BlockCmd.apply (cmds.py:456-503) runs BOTH modifier chains unconditionally for every block gain and each LISTENER self-gates on `props` (e.g. `is_powered_attack`/`is_card_or_monster_move`), matching Hook.ModifyBlock's shape (Hook.cs:1310-1340). So the mechanism is: permafrost.py explicitly passing `props=ValueProp.UNPOWERED` (matching Permafrost.cs:33's BlockVar declaration) still correctly signals to the Dexterity-adjacent listeners (which gate on `is_powered_attack`, e.g. sts2_rl/valueprops.py:47) that this gain should NOT be scaled -- the conclusion is unchanged, only the described pipeline shape. Checked per PROMPT.md bug class 19 (a constant protected by a citation that looks verified): the docstring's '7 Block' and the C# BlockVar agree."
     },
     {
       "what": "N3: C# sets `ActivatedThisCombat = true` AFTER awaiting CreatureCmd.GainBlock (Permafrost.cs:50-51); the sim sets `_activated = True` BEFORE calling BlockCmd.apply (permafrost.py:29-31)",

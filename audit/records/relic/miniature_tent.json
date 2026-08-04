@@ -21,17 +21,17 @@
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
+      "sha256": "a1aecf30215574f9bc62dd01cb7c73346bbc1b9b84dd5dcc8dabd67101f8c345",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -41,16 +41,16 @@
       "verdict": "faithful"
     },
     "ShouldDisableRemainingRestSiteOptions": {
-      "maps_to": "should_disable_remaining_rest_site_options (miniature_tent.py:17-18), aggregated by RunState.should_disable_remaining_rest_site_options (run.py:1075-1082) and consumed by the rest-site loop (driver.py:530-531)",
+      "maps_to": "should_disable_remaining_rest_site_options (miniature_tent.py:17-18), aggregated by RunState.should_disable_remaining_rest_site_options (run.py) and consumed by the rest-site loop (driver.py)",
       "verdict": "faithful",
-      "rationale": "MiniatureTent.cs:10-18 returns false for its owner (after a Flash) and true for anyone else; the port returns False unconditionally, which is the same thing in single-player. The AGGREGATION matches exactly and non-trivially -- Hook.cs:2254-2264 returns false as soon as ANY listener returns false and true otherwise, which is `all(...)`, and run.py:1079-1082 is `all(relic.should_disable_remaining_rest_site_options(self) for relic in self.relics)`. EXECUTED (py audit/tools/relic_probes_b09.py b09-simple): True without the relic, False with it. The listener SET is guard G1's subject."
+      "rationale": "MiniatureTent.cs:10-18 returns false for its owner (after a Flash) and true for anyone else; the port returns False unconditionally, which is the same thing in single-player. The AGGREGATION matches exactly and non-trivially -- Hook.cs:2254-2264 returns false as soon as ANY listener returns false and true otherwise, which is `all(...)`, and run.py is `all(relic.should_disable_remaining_rest_site_options(self) for relic in self.relics)`. EXECUTED (py audit/tools/relic_probes_b09.py b09-simple): True without the relic, False with it. The listener SET is guard G1's subject."
     }
   },
   "guards": [
     {
       "what": "G1 (DORMANT): C# aggregates this hook over `runState.IterateHookListeners(null)` -- deck cards, powers and modifiers as well as relics -- and the sim iterates `self.relics` only",
       "verdict": "gap",
-      "issue": "MECHANISM: Hook.ShouldDisableRemainingRestSiteOptions (Hook.cs:2254-2264) walks every hook listener; RunState.should_disable_remaining_rest_site_options (run.py:1075-1082) walks only the relic list, so a non-relic listener could never keep a rest-site visit open. REACHABILITY (DORMANT, executed): `grep -rn ShouldDisableRemainingRestSiteOptions src/` over the whole game returns four lines -- the Hook dispatcher, the AbstractModel default, MiniatureTent's override and the single caller RestSiteSynchronizer.cs:142 -- so MiniatureTent is the ONLY implementer in the source and the omitted listener classes have nothing to contribute. Porting or authoring any card, power or modifier that implements it makes it live. Filed as a dormant gap rather than waived because the divergence is in the sim's dispatch breadth, which is today's content and not the divergence's shape (binding rule 1); NOT waived on the 'dead code in C# too' basis used for relic/unsettling_lamp N1 and relic/calling_bell G4, because unlike those two this hook DOES have a live override -- just only a relic one. Rule 7: leans on run.py and Hook.cs, neither hashed here."
+      "issue": "MECHANISM: Hook.ShouldDisableRemainingRestSiteOptions (Hook.cs:2254-2264) walks every hook listener; RunState.should_disable_remaining_rest_site_options (run.py) walks only the relic list, so a non-relic listener could never keep a rest-site visit open. REACHABILITY (DORMANT, executed): `grep -rn ShouldDisableRemainingRestSiteOptions src/` over the whole game returns four lines -- the Hook dispatcher, the AbstractModel default, MiniatureTent's override and the single caller RestSiteSynchronizer.cs:142 -- so MiniatureTent is the ONLY implementer in the source and the omitted listener classes have nothing to contribute. Porting or authoring any card, power or modifier that implements it makes it live. Filed as a dormant gap rather than waived because the divergence is in the sim's dispatch breadth, which is today's content and not the divergence's shape (binding rule 1); NOT waived on the 'dead code in C# too' basis used for relic/unsettling_lamp N1 and relic/calling_bell G4, because unlike those two this hook DOES have a live override -- just only a relic one. Rule 7: leans on run.py and Hook.cs, neither hashed here."
     },
     {
       "what": "N1: `if (player != base.Owner) return true` (MiniatureTent.cs:12-15)",
@@ -60,7 +60,7 @@
     {
       "what": "N2: the relic holds no state and the port has no __init__",
       "verdict": "faithful",
-      "rationale": "Checked against sweep A's buckets, including the new FROZEN CONSTRUCTOR STATE bucket batch 5 added (a field only an unpassed constructor argument could set, frozen because make_relic passes none, relics/base.py:73-74): miniature_tent has no fields at all on either side, C# has no combat-boundary override, and the relic appears in no sweep-A bucket. Nothing to reset, nothing frozen."
+      "rationale": "Checked against sweep A's buckets, including the new FROZEN CONSTRUCTOR STATE bucket batch 5 added (a field only an unpassed constructor argument could set, frozen because make_relic passes none, relics/base.py): miniature_tent has no fields at all on either side, C# has no combat-boundary override, and the relic appears in no sweep-A bucket. Nothing to reset, nothing frozen."
     },
     {
       "what": "N3: Flash() (MiniatureTent.cs:16), which C# fires as a SIDE EFFECT of the predicate",

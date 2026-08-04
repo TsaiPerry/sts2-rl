@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\glory\\battle_friend.py",
-    "sha256": "65ebe3c274a31866d9c9d35280b855482773389b30067c099d70a22dff73b4e4"
+    "sha256": "764dc2d421287ebffc25ae4af553d0ee6662db4762577951ff3e5dd7c066cfda"
   },
   "extra_sources": [
     {
@@ -36,12 +36,12 @@
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     }
   ],
@@ -64,7 +64,7 @@
     "AfterAddedToRoom": {
       "maps_to": "battle_friend.py:25-29 _BattleFriend.__init__",
       "verdict": "deliberate-divergence",
-      "rationale": "SHARED-FINDINGS section 2's shared verdict, copied not re-derived. The sim has no add-to-room phase -- creature creation *is* construction -- so AfterAddedToRoom's effect is applied from __init__ (battle_friend.py:25-29, `PowerCmd.apply(hooks, self, BattlewornDummyTimeLimitPower, 3)`). Same observable today on all three clauses: (a) listener set -- the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38, relics/unsettling_lamp.py:44-53, relics/vambrace.py:26-40 and relics/paels_legion.py:36-43, and all four gate on `target is self.player` / `applier is self.player` / `card is not None`, which a self-applied cardless starting power cannot satisfy; (b) HP-roll inversion -- only IllusionPower mentions max_hp and only inside revive() (powers.py:1581); (c) roll ordering -- `py audit/tools/monster_probes.py roll-order` shows all 29 machine sites are sticky-no-op. Rule 7: that rationale cites four relic files and powers.py which this record does NOT hash. Concrete trigger that would make it a gap: any relic/potion/power listening on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. Escalation check per SHARED-FINDINGS section 2: self-applied, reads nothing from hooks.combat -- shared verdict fits. Note the applier is NULL on BOTH sides here (BattleFriendV2.cs:35 passes null; battle_friend.py:29 omits it), so this is the one unit family in the batch with no applier divergence. **CORRECTION TO A TOOL, REPORTED NOT FIXED:** `py audit/tools/monster_probes.py ctor-order` flags `__battle_friend` as 'C# model has NO AfterAddedToRoom override'. That is an artifact of the roster mis-resolution (SHARED-FINDINGS section 5) -- the probe resolves `__battle_friend` to a nonexistent BattleFriend.cs and therefore finds no overrides at all. All three real C# files DO override AfterAddedToRoom, at BattleFriendV1.cs:33-36, BattleFriendV2.cs:33-36 and BattleFriendV3.cs:33-36, each applying BattlewornDummyTimeLimitPower 3m. Section 2's shared verdict therefore applies unchanged and no escalation is needed."
+      "rationale": "SHARED-FINDINGS section 2's shared verdict, copied not re-derived. The sim has no add-to-room phase -- creature creation *is* construction -- so AfterAddedToRoom's effect is applied from __init__ (battle_friend.py:25-29, `PowerCmd.apply(hooks, self, BattlewornDummyTimeLimitPower, 3)`). Same observable today on all three clauses: (a) listener set -- the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38, relics/unsettling_lamp.py:44-53, relics/vambrace.py:26-40 and relics/paels_legion.py:36-43, and all four gate on `target is self.player` / `applier is self.player` / `card is not None`, which a self-applied cardless starting power cannot satisfy; (b) HP-roll inversion -- only IllusionPower mentions max_hp and only inside revive() (powers.py:2067); (c) roll ordering -- `py audit/tools/monster_probes.py roll-order` shows all 29 machine sites are sticky-no-op. Rule 7: that rationale cites four relic files and powers.py which this record does NOT hash. Concrete trigger that would make it a gap: any relic/potion/power listening on modify_power_amount / on_power_applied / modify_block_* without gating on the player, or a starting power whose amount reads owner.max_hp. Escalation check per SHARED-FINDINGS section 2: self-applied, reads nothing from hooks.combat -- shared verdict fits. Note the applier is NULL on BOTH sides here (BattleFriendV2.cs:35 passes null; battle_friend.py:29 omits it), so this is the one unit family in the batch with no applier divergence. **CORRECTION TO A TOOL, REPORTED NOT FIXED:** `py audit/tools/monster_probes.py ctor-order` flags `__battle_friend` as 'C# model has NO AfterAddedToRoom override'. That is an artifact of the roster mis-resolution (SHARED-FINDINGS section 5) -- the probe resolves `__battle_friend` to a nonexistent BattleFriend.cs and therefore finds no overrides at all. All three real C# files DO override AfterAddedToRoom, at BattleFriendV1.cs:33-36, BattleFriendV2.cs:33-36 and BattleFriendV3.cs:33-36, each applying BattlewornDummyTimeLimitPower 3m. Section 2's shared verdict therefore applies unchanged and no escalation is needed."
     },
     "GenerateAnimator": {
       "maps_to": "no sim counterpart",
@@ -96,7 +96,7 @@
     {
       "what": "Reachability",
       "verdict": "faithful",
-      "rationale": "The Battleworn Dummy event is ported: `battleworn_dummy` is the first entry in GLORY_EVENTS (events/__init__.py:100-108) and the three difficulty settings export BATTLEWORN_DUMMY_SETTING_1/2/3 (battle_friend.py:67-78, re-exported at events/__init__.py:166). `should_give_rewards=False` mirrors the encounter's own ShouldGiveRewards. Both sides reachable with ported content."
+      "rationale": "The Battleworn Dummy event is ported: `battleworn_dummy` is the first entry in GLORY_EVENTS (events/__init__.py:100-108) and the three difficulty settings export BATTLEWORN_DUMMY_SETTING_1/2/3 (battle_friend.py:77-88, re-exported at events/__init__.py:166). `should_give_rewards=False` mirrors the encounter's own ShouldGiveRewards. Both sides reachable with ported content."
     }
   ],
   "verdict": "deliberate-divergence",

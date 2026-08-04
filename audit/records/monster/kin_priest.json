@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     },
     {
@@ -57,7 +57,7 @@
       "rationale": "Presentation surface (SHARED-FINDINGS section 4, matching monster_state_machine N2/N5 and the KinPriest N6 precedent): animation / skin / SFX only, no mechanical effect. The sim models no audio, animation or spine skins at all. Source: KinPriest.cs:66."
     },
     "AfterDeath": {
-      "maps_to": "no sim counterpart (the sim has no MonsterModel listener category - hook_dispatch G5, dormant, monsters/base.py:78-81 - and nothing is open-coded for this one)",
+      "maps_to": "no sim counterpart (the sim has no MonsterModel listener category - hook_dispatch G5, dormant, monsters/base.py:186 (was :78-81, re-verified 2026-08-04, same hook_dispatch/G5 comment, moved) - and nothing is open-coded for this one)",
       "verdict": "waiver",
       "rationale": "This override is monster_state_machine guard N6 and is NOT this record's to re-verdict (rule 3, SHARED-FINDINGS section 6). Verdict copied, not re-derived: waiver, presentation. Cross-checked only for a conflict and none exists - reading KinPriest.cs:81-108 to the end, every arm ends in either NRunMusicController.UpdateMusicParameter or AllFollowerDeathResponse (:197-200), whose whole body is a TalkCmd barks line. hook_dispatch G5 is likewise not re-verdicted here."
     },

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\trash_heap_cards.py",
-    "sha256": "f93265bdcd41fa82dd09ab914501270537ae907e02f97679dd58dd2345183e20"
+    "sha256": "9367e6b7a5549cac19271d1173a73d90f9c9cfd86f83d67bdce7f827f1e24c9d"
   },
   "extra_sources": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -47,22 +47,22 @@
       "rationale": "`=> ModelDb.CardPool<DefectCardPool>()` (RipAndTear.cs:18) selects the card's ART pool. Presentation."
     },
     "ctor": {
-      "maps_to": "class attrs (trash_heap_cards.py:268-272) + _init_vars (274-277)",
+      "maps_to": "class attrs (trash_heap_cards.py:281-285) + _init_vars (287-290)",
       "verdict": "faithful",
-      "rationale": "`base(1, CardType.Attack, CardRarity.Event, TargetType.RandomEnemy)` (RipAndTear.cs:20-23) == cost 1 / ATTACK / EVENT / RANDOM_ENEMY. The RANDOM_ENEMY target type is what keeps the framework from resolving a single target up front (combat.py:463-468 only resolves ANY_ENEMY), leaving the per-hit roll to the card."
+      "rationale": "`base(1, CardType.Attack, CardRarity.Event, TargetType.RandomEnemy)` (RipAndTear.cs:20-23) == cost 1 / ATTACK / EVENT / RANDOM_ENEMY. The RANDOM_ENEMY target type is what keeps the framework from resolving a single target up front (sts2_rl/combat.py, only resolves ANY_ENEMY -- re-verify current line before re-citing), leaving the per-hit roll to the card."
     },
     "CanonicalVars": {
-      "maps_to": "_damage = 7, _hits = 2 (trash_heap_cards.py:276-277)",
+      "maps_to": "_damage = 7, _hits = 2 (trash_heap_cards.py:289-290)",
       "verdict": "faithful",
       "rationale": "`new DamageVar(7m, ValueProp.Move)` (RipAndTear.cs:16) == `_damage = 7`; the hit count of 2 is a literal `WithHitCount(2)` in C# (27) rather than a RepeatVar, and the sim stores it as `_hits = 2` so `base_hits` reports it -- the same small improvement card/maul makes."
     },
     "OnPlay": {
-      "maps_to": "RipAndTearCard.on_play (trash_heap_cards.py:282-297)",
+      "maps_to": "RipAndTearCard.on_play (trash_heap_cards.py:295-310)",
       "verdict": "faithful",
-      "rationale": "Closed 2026-07-27: the per-hit target roll now runs on the named stream. `trash_heap_cards.py:288-296` takes `crng = ctx.combat.combat_rng` and, when `crng.is_parity`, picks with `crng.targets.choice(living)` -- `targets` maps to `combat_targets` (combat_rng.py:22,52) -- keeping the shared `random.Random` only on the legacy RL arm, which is the two-branch shape card/sword_boomerang already used and this entry named as the fix. VERIFIED AGAINST THE SOURCE, NOT THE COMMENT: src/Core/Commands/Builders/AttackCommand.cs:601-602 reads `Rng combatTargets = (Attacker.Player ?? Attacker.PetOwner).RunState.Rng.CombatTargets; singleTarget = combatTargets.NextItem(validTargets);` -- one draw on CombatTargets per hit, inside the per-hit loop, which is exactly one `crng.targets.choice` per iteration of `for _ in range(self._hits)`. The halves that were already faithful are unchanged: the per-hit re-derivation of `living` from `is_gone`, the duplicates-allowed policy, and the break when no target remains. Legacy mode is byte-identical to before, because `CombatRng.legacy` hands every accessor the same `random.Random` the else-arm uses (combat_rng.py:37-39, wired at combat.py:94-97). HISTORY -- WHAT THE DIVERGENCE WAS: The per-hit re-roll, the duplicate policy and the living-target filter are all faithful. C#'s `TargetingRandomOpponents(CombatState)` defaults `allowDuplicates: true` (AttackCommand.cs:309, 325) and `_doesRandomTargetingAllowDuplicates` is initialised true (72), so both hits MAY land on the same enemy -- which the sim's independent `choice` per hit reproduces -- and AttackCommand re-derives `validTargets` from `where c.IsAlive` at the top of each hit (544-546) == the sim's per-hit `[e for e in ctx.combat.enemies if not e.is_gone]`, with both breaking when none remain. WRONG RNG STREAM: C# rolls `(Attacker.Player ?? Attacker.PetOwner).RunState.Rng.CombatTargets.NextItem(validTargets)` (AttackCommand.cs:601-602); the sim calls `ctx.combat._rng.choice(living)` (trash_heap_cards.py:288) on the unseeded shared `random.Random`, even though `ctx.combat.combat_rng.targets` maps to `combat_targets` (combat_rng.py:22,54) and `CombatState.auto_play_card` already uses it correctly with the CardCmd.cs:77 citation in-line (combat.py:540-546). LIVE -- Rip and Tear is a ported Event Attack from the Trash Heap, the targets parity stream is wired, and under a string-seeded run the two hits land on different enemies than the recorded run. Same mechanism and same verdict as the other shared-rng cards (rule 3); this is the 10th of the 21 the probe lists. Presentation, folded in: the NScratchVfx hit node. REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
+      "rationale": "Closed 2026-07-27: the per-hit target roll now runs on the named stream. `trash_heap_cards.py:301-309` takes `crng = ctx.combat.combat_rng` and, when `crng.is_parity`, picks with `crng.targets.choice(living)` -- `targets` maps to `combat_targets` (combat_rng.py) -- keeping the shared `random.Random` only on the legacy RL arm, which is the two-branch shape card/sword_boomerang already used and this entry named as the fix. Re-verified current: the `is_parity` branch structure is unchanged. VERIFIED AGAINST THE SOURCE, NOT THE COMMENT: src/Core/Commands/Builders/AttackCommand.cs:601-602 reads `Rng combatTargets = (Attacker.Player ?? Attacker.PetOwner).RunState.Rng.CombatTargets; singleTarget = combatTargets.NextItem(validTargets);` -- one draw on CombatTargets per hit, inside the per-hit loop, which is exactly one `crng.targets.choice` per iteration of `for _ in range(self._hits)`. The per-hit re-derivation of `living` from `is_gone`, the duplicates-allowed policy, and the break when no target remains are all faithful. Legacy mode is byte-identical to before, because `CombatRng.legacy` hands every accessor the same `random.Random` the else-arm uses (combat_rng.py, wired at run.py:1709/combat.py:153). REGRESSION TEST: `test/test_rng_tripwire.py` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs, re-verify presence before citing a line) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1709, combat.py:153). The gate is green today."
     },
     "OnUpgrade": {
-      "maps_to": "RipAndTearCard._on_upgrade (trash_heap_cards.py:279-280)",
+      "maps_to": "RipAndTearCard._on_upgrade (trash_heap_cards.py:292-293)",
       "verdict": "faithful",
       "rationale": "`DynamicVars.Damage.UpgradeValueBy(2m)` (RipAndTear.cs:35) == `self._damage += 2` (7 -> 9). The hit count stays 2 when upgraded on both sides."
     }

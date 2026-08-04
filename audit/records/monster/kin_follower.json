@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
@@ -56,7 +56,7 @@
     },
     {
       "path": "sts2_rl/relics/vambrace.py",
-      "sha256": "ab4842b0b0e85a4a7dfc36e3862d9fd4c2472643bac06541425555cda0662c13",
+      "sha256": "3f4d5d4857301e75e94419023238c8c8b76caa390e23a33e56b540eb5443132e",
       "side": "sim"
     }
   ],
@@ -99,7 +99,7 @@
     "AfterAddedToRoom": {
       "maps_to": "the_kin.py:39-42 (PowerCmd.apply(hooks, self, MinionPower, 1) inside __init__)",
       "verdict": "deliberate-divergence",
-      "rationale": "SHARED-FINDINGS section 2, copied not re-derived. The sim has no add-to-room phase - creature creation IS construction - so AfterAddedToRoom's effect is applied from __init__ (the_kin.py:39-42). Same observable today on all three clauses: (a) listener set - the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:26-40 / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on `target is self.player` / `applier is self.player` / `card is not None`, and a monster's starting power is self-applied with no card, so none can fire, and sts2_rl/potions.py implements none of the four hooks; (b) HP-roll inversion - the sim applies the power before the parity Niche roll (combat.py:152-153) and the game after it, but of the constructor-applied power classes only IllusionPower reads max_hp and only inside revive() (powers.py:1581), never at apply time, and MinionPower 1 (KinFollower.cs:101, a 1m literal with no ascension branch) is a flat constant; (c) roll ordering - KinFollower is a hand-rolled port with no state machine and no MonsterAi draw at all, so there is no first roll to order against the power (executed: `monster_probes_b02.py seq` shows 0 MonsterAi draws over 40 turns for both the plain and the StartsWithDance configuration). All cited files are carried in this record's extra_sources. NOTE (tooling defect this batch found): `py audit/tools/monster_probes.py ctor-order` does NOT list this unit. Its `_CTOR` regex (the `_CTOR` regex in audit/tools/monster_probes.py, which this pipeline deliberately never hashes) is `def __init__\\(self`, which cannot match a port whose signature wraps as `def __init__(<newline> self,`. Reproduce with `py audit/tools/monster_probes_b02.py ctor-regex`: the real population is 46, not the 35 SHARED-FINDINGS section 2 reports, and 11 units are missing from that list."
+      "rationale": "SHARED-FINDINGS section 2, copied not re-derived. The sim has no add-to-room phase - creature creation IS construction - so AfterAddedToRoom's effect is applied from __init__ (the_kin.py:39-42). Same observable today on all three clauses: (a) listener set - the only ported listeners on the hooks a starting power can reach are relics/ruined_helmet.py:23-38 and relics/unsettling_lamp.py:44-53 (modify_power_amount) and relics/vambrace.py:55-71 (re-verified 2026-08-04, was :26-40, same target-is-player/props gates, moved) / relics/paels_legion.py:36-43 (modify_block_multiplicative); all four gate on `target is self.player` / `applier is self.player` / `card is not None`, and a monster's starting power is self-applied with no card, so none can fire, and sts2_rl/potions.py implements none of the four hooks; (b) HP-roll inversion - the sim applies the power before the parity Niche roll (combat.py:266-269, re-verified 2026-08-04, was :152-153, same _assign_parity_monster_hp call after enemies are constructed) and the game after it, but of the constructor-applied power classes only IllusionPower reads max_hp and only inside revive() (powers.py:1581), never at apply time, and MinionPower 1 (KinFollower.cs:101, a 1m literal with no ascension branch) is a flat constant; (c) roll ordering - KinFollower is a hand-rolled port with no state machine and no MonsterAi draw at all, so there is no first roll to order against the power (executed: `monster_probes_b02.py seq` shows 0 MonsterAi draws over 40 turns for both the plain and the StartsWithDance configuration). All cited files are carried in this record's extra_sources. NOTE (tooling defect this batch found): `py audit/tools/monster_probes.py ctor-order` does NOT list this unit. Its `_CTOR` regex (the `_CTOR` regex in audit/tools/monster_probes.py, which this pipeline deliberately never hashes) is `def __init__\\(self`, which cannot match a port whose signature wraps as `def __init__(<newline> self,`. Reproduce with `py audit/tools/monster_probes_b02.py ctor-regex`: the real population is 46, not the 35 SHARED-FINDINGS section 2 reports, and 11 units are missing from that list."
     },
     "GenerateAnimator": {
       "maps_to": "no counterpart (the sim models no presentation)",

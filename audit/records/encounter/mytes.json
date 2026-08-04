@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\hive\\myte.py",
-    "sha256": "bc6ef4c204d408d2df040defecd1139441a2dc87b165c3b6c0f5456016f2190f"
+    "sha256": "8217e2d8750af4e2d7b8ee780858714fb8e311699ac944381c2f77d459495ef9"
   },
   "hooks": {
     "Slots": {

@@ -21,17 +21,17 @@
     },
     {
       "path": "sts2_rl/events/fake_merchant.py",
-      "sha256": "b988afdfbe947f93dc619f6a22907d77137bdba4363fc04de23641f5ed6d87d5",
+      "sha256": "2378d7dce03e5f88f7d0daabe8dab60e890e8d25b7df89745b138a797b7f3f9d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -53,7 +53,7 @@
     "MerchantCost": {
       "maps_to": "merchant_cost_override = 50 (fake_venerable_tea_set.py:21)",
       "verdict": "faithful",
-      "rationale": "RelicModel.MerchantCost is virtual and the Fake Merchant's knock-offs all pin 50; relics/base.py:111-117 reads merchant_cost_override first and falls back to _MERCHANT_COST_BY_RARITY (relics/base.py:54-62), whose table is value-for-value the source's switch (RelicModel.cs:304-315, checked: Common 175 / Uncommon 225 / Rare 275 / Shop 200 / Ancient, Starter, Event 999999999). No AscensionHelper branch anywhere, so 50 is the pinned non-ascension price. Rule 7: RelicModel.cs and relics/base.py are not hashed by this record."
+      "rationale": "RelicModel.MerchantCost is virtual and the Fake Merchant's knock-offs all pin 50; relics/base.py:174-180, re-pinned 2026-08-04, was :111-117 reads merchant_cost_override first and falls back to _MERCHANT_COST_BY_RARITY (relics/base.py:71-79, re-pinned 2026-08-04, was :54-62), whose table is value-for-value the source's switch (RelicModel.cs:304-315, checked: Common 175 / Uncommon 225 / Rare 275 / Shop 200 / Ancient, Starter, Event 999999999). No AscensionHelper branch anywhere, so 50 is the pinned non-ascension price. Rule 7: RelicModel.cs and relics/base.py are not hashed by this record."
     },
     "AfterRoomEntered": {
       "maps_to": "NO COUNTERPART -- the sim's port has no after_room_entered, and takes the flag as a constructor argument instead (fake_venerable_tea_set.py:25-27)",
@@ -63,14 +63,14 @@
     "AfterEnergyReset": {
       "maps_to": "on_energy_reset (fake_venerable_tea_set.py:29-34)",
       "verdict": "faithful",
-      "rationale": "FakeVenerableTeaSet.cs:53-61: if the relic's own player and GainEnergyInNextCombat, gain Energy.BaseValue (EnergyVar(1), line 21, no AscensionHelper branch in the file) and clear the flag. fake_venerable_tea_set.py:30-34 does the same three steps in the same order with ENERGY = 1, and the hook slot matches: turn_structure step 18 is `await Hook.AfterEnergyReset(state, player)` immediately after the reset itself (CombatManager.cs:641-650), and the sim's on_energy_reset sits in that same slot -- executed order (py audit/tools/relic_probes.py turn-order) is on_block_cleared -> on_energy_reset -> on_player_turn_start, and player.py:163-168 shows the reset then the hook. Because the flag is cleared on the first firing, both sides fire on turn 1 only even though the hook runs every turn. EXECUTED with the flag forced true (py audit/tools/relic_probes_b05.py tea-set-rest): turn-1 energy 4 instead of 3. The `base.Owner == player` clause is structurally satisfied (one player). Rule 7: CombatManager.cs and player.py are unhashed here."
+      "rationale": "FakeVenerableTeaSet.cs:53-61: if the relic's own player and GainEnergyInNextCombat, gain Energy.BaseValue (EnergyVar(1), line 21, no AscensionHelper branch in the file) and clear the flag. fake_venerable_tea_set.py:30-34 does the same three steps in the same order with ENERGY = 1, and the hook slot matches: turn_structure step 18 is `await Hook.AfterEnergyReset(state, player)` immediately after the reset itself (CombatManager.cs:641-650), and the sim's on_energy_reset sits in that same slot -- executed order (py audit/tools/relic_probes.py turn-order) is on_block_cleared -> on_energy_reset -> on_player_turn_start, and player.py:360-377, re-pinned 2026-08-04, was :163-168 shows the reset then the hook. Because the flag is cleared on the first firing, both sides fire on turn 1 only even though the hook runs every turn. EXECUTED with the flag forced true (py audit/tools/relic_probes_b05.py tea-set-rest): turn-1 energy 4 instead of 3. The `base.Owner == player` clause is structurally satisfied (one player). Rule 7: CombatManager.cs and player.py are unhashed here."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): nothing in the sim ever sets `_pending`, so the relic does nothing in every run that buys it",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-29 (round 7): `after_room_entered` latches the relic on `RoomType.REST_SITE`, which is FakeVenerableTeaSet.cs:43-51's AfterRoomEntered / `room is RestSiteRoom`. The constructor argument survives only so a test can pre-arm the relic; `make_relic(id)` still passes none, and that no longer matters because the latch is written by the room dispatch `run.py` already made to every relic. Copied from the sibling relics/eternal_feather.py, which read the same hook with the same room test all along -- so the constructor-injection premise ('whether you rested is out-of-combat state') was false, PROMPT.md bug class 12. EXECUTED: enter a rest site, then start a combat -- turn-1 energy is 4 where it was 3, and `_pending` is back to False.  Pinned by test/test_false_premise_stubs.py.  NOT CLOSED: relic/fake_venerable_tea_set G2's THIRD relic, relic/girya, is untouched -- its lifts come from a rest-site OPTION the relic itself appends, a different path, and it is not this entry's line.  The text it replaced read: MECHANISM: FakeVenerableTeaSet.cs:43-51 latches GainEnergyInNextCombat from AfterRoomEntered when `room is RestSiteRoom`. The sim's port implements ONLY the spend half and expects the latch as a constructor argument, `__init__(self, rested: bool = False)` (fake_venerable_tea_set.py:25-27). RunState.add_relic constructs relics through make_relic(id) with no arguments (run.py:546-548), so _pending is False for the whole run. The sim is NOT missing the pipeline the port needs: Relic.after_room_entered is a real base hook (relics/base.py:194) and run.py:982-983 dispatches it to every relic on entering EVERY room, with the room type in hand -- and the sibling relic/eternal_feather in this same batch uses exactly that hook for exactly the same RoomType.REST_SITE test. PROMPT.md bug class 12's rule applied: the premise implied by the constructor-injection design ('whether you rested is out-of-combat state, injected via the constructor') is false today. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b05.py tea-set-rest): make_relic gives _pending=False; the port has no after_room_entered override; firing the exact dispatch run.py:983 performs with RoomType.REST_SITE leaves _pending=False; and the next combat's turn-1 energy is 3 where C# gives 4. Forcing _pending=True gives 4, which proves the spend half works and isolates the defect to the missing latch. Both sides ported: the relic is bought for 50 gold from the ported Fake Merchant event (events/fake_merchant.py:18-22), rest sites are a ported room type that dispatches after_room_entered, and every act has them. The fix is one method, copied from relics/eternal_feather.py:19-22's room filter. Rule 7: relics/base.py, run.py, relics/eternal_feather.py and events/fake_merchant.py are unhashed here."
+      "issue": "Closed 2026-07-29 (round 7): `after_room_entered` latches the relic on `RoomType.REST_SITE`, which is FakeVenerableTeaSet.cs:43-51's AfterRoomEntered / `room is RestSiteRoom`. The constructor argument survives only so a test can pre-arm the relic; `make_relic(id)` still passes none, and that no longer matters because the latch is written by the room dispatch `run.py` already made to every relic. Copied from the sibling relics/eternal_feather.py, which read the same hook with the same room test all along -- so the constructor-injection premise ('whether you rested is out-of-combat state') was false, PROMPT.md bug class 12. EXECUTED: enter a rest site, then start a combat -- turn-1 energy is 4 where it was 3, and `_pending` is back to False.  Pinned by test/test_false_premise_stubs.py.  NOT CLOSED: relic/fake_venerable_tea_set G2's THIRD relic, relic/girya, is untouched -- its lifts come from a rest-site OPTION the relic itself appends, a different path, and it is not this entry's line.  The text it replaced read: MECHANISM: FakeVenerableTeaSet.cs:43-51 latches GainEnergyInNextCombat from AfterRoomEntered when `room is RestSiteRoom`. The sim's port implements ONLY the spend half and expects the latch as a constructor argument, `__init__(self, rested: bool = False)` (fake_venerable_tea_set.py:25-27). RunState.add_relic constructs relics through make_relic(id) with no arguments (run.py:957-960, re-pinned 2026-08-04, was :546-548), so _pending is False for the whole run. The sim is NOT missing the pipeline the port needs: Relic.after_room_entered is a real base hook (relics/base.py:350, re-pinned 2026-08-04, was :194) and run.py:1501-1502, re-pinned 2026-08-04, was :982-983 dispatches it to every relic on entering EVERY room, with the room type in hand -- and the sibling relic/eternal_feather in this same batch uses exactly that hook for exactly the same RoomType.REST_SITE test. PROMPT.md bug class 12's rule applied: the premise implied by the constructor-injection design ('whether you rested is out-of-combat state, injected via the constructor') is false today. REACHABILITY (LIVE, executed -- py audit/tools/relic_probes_b05.py tea-set-rest): make_relic gives _pending=False; the port has no after_room_entered override; firing the exact dispatch run.py:983 performs with RoomType.REST_SITE leaves _pending=False; and the next combat's turn-1 energy is 3 where C# gives 4. Forcing _pending=True gives 4, which proves the spend half works and isolates the defect to the missing latch. Both sides ported: the relic is bought for 50 gold from the ported Fake Merchant event (events/fake_merchant.py:18-22), rest sites are a ported room type that dispatches after_room_entered, and every act has them. The fix is one method, copied from relics/eternal_feather.py:19-22's room filter. Rule 7: relics/base.py, run.py, relics/eternal_feather.py and events/fake_merchant.py are unhashed here."
     },
     {
       "what": "G2 (POOL-WIDE): the same constructor-injection shape across the whole relic roster",

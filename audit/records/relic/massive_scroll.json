@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -36,9 +36,9 @@
       "verdict": "faithful"
     },
     "IsAllowed": {
-      "maps_to": "is_allowed_at_neow = False (massive_scroll.py:14) -- a DIFFERENT C# member (RelicModel.IsAllowedAtNeow), which happens to reach the same answer here; see guard N2",
+      "maps_to": "is_allowed classmethod returning False (massive_scroll.py:15-20) -- now the SAME C# member (RelicModel.IsAllowed); the port was rewritten since this record's prior pass, see guard N2",
       "verdict": "waiver",
-      "rationale": "MassiveScroll.cs:19-22 is `runState.Players.Count > 1` -- the relic is MULTIPLAYER-ONLY and is never allowed in a single-player run at all. Multiplayer is out of scope by name under the shared contract's rule 1, so this is a genuine waiver and not a dormant gap: the divergence's SHAPE, not merely today's content, is multiplayer. The sim reaching the same exclusion through a different member is guard N2's subject, and the executed unreachability proof is guard N1's."
+      "rationale": "MassiveScroll.cs:19-22 is `runState.Players.Count > 1` -- the relic is MULTIPLAYER-ONLY and is never allowed in a single-player run at all. Multiplayer is out of scope by name under the shared contract's rule 1, so this is a genuine waiver and not a dormant gap: the divergence's SHAPE, not merely today's content, is multiplayer. The sim now expresses this directly on `is_allowed` (not a separate `is_allowed_at_neow` flag as before), matching C#'s member; see guard N2. The executed unreachability proof is guard N1's."
     },
     "AfterObtained": {
       "maps_to": "no counterpart (documented stub, massive_scroll.py:8-9)",
@@ -50,17 +50,17 @@
     {
       "what": "N1 (EXECUTED, binding rule 5): the relic is unreachable in the sim -- the waivers above rest on this and nothing else",
       "verdict": "faithful",
-      "rationale": "py audit/tools/relic_probes_b09.py b09-pool: (a) it is NOT in either transcribed grab bag, structurally -- its rarity is Ancient and RelicGrabBag takes only Common/Uncommon/Rare/Shop (relic_pools.py:38); (b) it IS listed in Neow.PositiveOptions and the sim's neow_relic_pool filter removes it, so it survives 0 of 400 seeds' initial Neow options; (c) its merchant_cost is the Ancient sentinel 999999999 and the sim's shop relic stock is pulled from the grab bag, which excludes it; (d) the only literal occurrence of the id anywhere under sts2_rl/ outside its own file is events/neow.py:39 (the pool it is filtered out of) and vocab.json. No ported event, shrine or reward path grants it. Rule 7: leans on relic_pools.py, events/neow.py and run.py, none hashed here."
+      "rationale": "Re-checked 2026-08-04 against the current port: (a) its rarity is Ancient and `RelicGrabBag` still takes only Common/Uncommon/Rare/Shop (relic_pools.py:38), so it is structurally absent there; (b) `Relic.is_allowed` now defaults `True` and this relic overrides it to `False` unconditionally (massive_scroll.py:15-20), and `run.py:1086` filters `self.relic_grab_bag` on `.is_allowed(self)` -- a second, explicit gate that landed since this record's prior pass and did not exist as a live filter before; (c) `is_allowed_at_neow` now DELEGATES to `is_allowed` (relics/base.py:265-277, see N2) so Neow's pool (`events/neow.py:84/100/115`) also excludes it via the same override; (d) its merchant_cost is the Ancient sentinel 999999999 and the sim's shop relic stock is pulled from the grab bag, which excludes it. No ported event, shrine or reward path grants it. Rule 7: leans on relic_pools.py, events/neow.py and run.py, none hashed here (extra_sources already lists relic_pools.py and events/neow.py; run.py is not hashed -- reported as a rule-7 debt, not fixed here since it is a large file shared by every relic record)."
     },
     {
-      "what": "N2: the sim models `IsAllowed` and `IsAllowedAtNeow` as INDEPENDENT members, where C# makes the second DELEGATE to the first",
-      "verdict": "deliberate-divergence",
-      "rationale": "RelicModel.IsAllowedAtNeow(player) is `=> IsAllowed(player.RunState)` (RelicModel.cs:443-446) -- one member with an override point, not two independent gates. The sim has `Relic.is_allowed_at_neow` (relics/base.py:159) and NO is_allowed at all, so this relic's port hard-codes the Neow flag to False to express a gate that C# expresses on IsAllowed. Same observable HERE, which is why this is a divergence and not a gap: both codebases refuse the relic at Neow and everywhere else. But the divergence is a FIX-ORDERING CONSTRAINT worth recording, because it is not obviously safe pool-wide: when the 17-relic `Relic.is_allowed(run)` fix lands (sweep B / relic/lucky_fysh G2 / relic/meal_ticket G2 / relic/molten_egg G1), is_allowed_at_neow must be made to DELEGATE to it, or Neow's filter silently keeps using a stale independent flag. Checked and no relic bites today: the 17 floor-gated relics are all allowed at Neow anyway (TotalFloor is 1 there), silver_crucible and winged_boots gate on `Players.Count == 1` which is true in single-player, and kaleidoscope and scroll_boxes override IsAllowedAtNeow itself. Rule 7: leans on relics/base.py and RelicModel.cs, neither hashed here."
-    },
-    {
-      "what": "N3: `is_allowed_at_neow = False` is a CLASS attribute in the port, so it also survives make_relic's no-argument construction",
+      "what": "N2: whether the sim models `IsAllowed`/`IsAllowedAtNeow` as independent members or delegates as C# does",
       "verdict": "faithful",
-      "rationale": "Checked against sweep A's FROZEN CONSTRUCTOR STATE bucket -- `make_relic` (relics/base.py:73-74) passes no arguments, so a field that only an unused constructor parameter could set is frozen for the whole run (the defect batch 5 found). This flag is a class attribute, not a constructor field, so it is correct on every instance. massive_scroll holds no mutable state at all and is absent from every sweep-A bucket."
+      "rationale": "REVISED 2026-08-04: the fix-ordering constraint this guard used to flag has LANDED. `RelicModel.IsAllowedAtNeow(player)` is still `=> IsAllowed(player.RunState)` (RelicModel.cs:443-446), and the sim now mirrors that exactly -- `Relic.is_allowed` is a real classmethod (defaults `True`, relics/base.py:252-263) and `Relic.is_allowed_at_neow` DELEGATES to it (`return cls.is_allowed(run)`, relics/base.py:265-277), matching C#'s member relationship rather than expressing an independent flag. `MassiveScroll` now overrides only `is_allowed` (massive_scroll.py:15-20) and relies on the base delegation for Neow, exactly as C# relies on the one override point. No divergence remains at this site. Rule 7: leans on relics/base.py, already an extra_source; RelicModel.cs likewise already an extra_source."
+    },
+    {
+      "what": "N3: the `is_allowed` override is a classmethod (no per-instance state), so it also survives make_relic's no-argument construction",
+      "verdict": "faithful",
+      "rationale": "REVISED 2026-08-04: the port no longer expresses this as a class-attribute flag (that shape is gone, see N2) -- `is_allowed` is a `@classmethod` (massive_scroll.py:15-16) evaluated fresh on every call, so there is no frozen-constructor-state risk at all (sweep A's FROZEN CONSTRUCTOR STATE bucket does not apply; `make_relic`, relics/base.py:102-103, passes no arguments, but nothing here reads instance state). massive_scroll holds no mutable state and is absent from every sweep-A bucket."
     },
     {
       "what": "N4: the port declares no `after_obtained`, so the run grants it silently if it is ever reachable",

@@ -26,12 +26,12 @@
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -43,19 +43,19 @@
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (pandoras_box.py:15)",
       "verdict": "faithful",
-      "rationale": "PandorasBox.cs:19 `HasUponPickupEffect => true`; the flag feeds RelicModel.IsTradable, mirrored at relics/base.py:126-136. Matches."
+      "rationale": "PandorasBox.cs:19 `HasUponPickupEffect => true`; the flag feeds RelicModel.IsTradable, mirrored at relics/base.py:188-199. Matches."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained(run) (pandoras_box.py:17-32), dispatched by RunState.add_relic (run.py:552)",
+      "maps_to": "after_obtained(run) (pandoras_box.py:17-32), dispatched by RunState.add_relic (run.py:957)",
       "verdict": "faithful",
-      "rationale": "PandorasBox.cs:21-30. TARGET SET: `c != null && c.IsBasicStrikeOrDefend && c.IsRemovable`. IsBasicStrikeOrDefend is `Rarity == CardRarity.Basic && (Tags.Contains(Strike) || Tags.Contains(Defend))` (CardModel.cs:677-694) and it is `virtual` with ZERO overrides anywhere in the game (executed grep), so pandoras_box.py:22-26's `c.rarity == CardRarity.BASIC and (\"strike\" in c.tags or \"defend\" in c.tags)` over `run.removable_cards()` (IsRemovable = not Eternal, run.py:360-362) is the same set. REPLACEMENTS: `CardFactory.CreateRandomCardForTransform(c, isInCombat: false, base.Owner.RunState.Rng.Niche)` per card, and run.transform_card(card, pick_rng=niche) is the sim's equivalent with the same stream (see N1). ORDER: C#'s `Select` is lazy but `CardCmd.Transform` forces it with `transformations.ToArray()` (CardCmd.cs:375) before removing anything, then sorts the appends by the originals' pile index (PileIndexSort, CardCmd.cs:353-360, :405) -- for a single Deck pile that is ascending deck order, which is also the order the sim's loop rolls and appends in. The rolls are order-independent anyway: GetFilteredTransformationOptions depends only on the ORIGINAL card's rarity and id (CardFactory.cs:189-212), never on the current deck, so rolling all five up front and rolling them one at a time consume the Niche stream identically. Line 26-28's NSimpleCardsViewScreen is presentation."
+      "rationale": "PandorasBox.cs:21-30. TARGET SET: `c != null && c.IsBasicStrikeOrDefend && c.IsRemovable`. IsBasicStrikeOrDefend is `Rarity == CardRarity.Basic && (Tags.Contains(Strike) || Tags.Contains(Defend))` (CardModel.cs:677-694) and it is `virtual` with ZERO overrides anywhere in the game (executed grep), so pandoras_box.py:22-26's `c.rarity == CardRarity.BASIC and (\"strike\" in c.tags or \"defend\" in c.tags)` over `run.removable_cards()` (IsRemovable = not Eternal, run.py:564-566) is the same set. REPLACEMENTS: `CardFactory.CreateRandomCardForTransform(c, isInCombat: false, base.Owner.RunState.Rng.Niche)` per card, and run.transform_card(card, pick_rng=niche) is the sim's equivalent with the same stream (see N1). ORDER: C#'s `Select` is lazy but `CardCmd.Transform` forces it with `transformations.ToArray()` (CardCmd.cs:375) before removing anything, then sorts the appends by the originals' pile index (PileIndexSort, CardCmd.cs:353-360, :405) -- for a single Deck pile that is ascending deck order, which is also the order the sim's loop rolls and appends in. The rolls are order-independent anyway: GetFilteredTransformationOptions depends only on the ORIGINAL card's rarity and id (CardFactory.cs:189-212), never on the current deck, so rolling all five up front and rolling them one at a time consume the Niche stream identically. Line 26-28's NSimpleCardsViewScreen is presentation."
     }
   },
   "guards": [
     {
       "what": "N1 (PROMPT.md bug class 16): C# names `RunState.Rng.Niche` explicitly (PandorasBox.cs:24) and the sim DOES pass it",
       "verdict": "faithful",
-      "rationale": "pandoras_box.py:30 is `niche = run.rng_set.niche if run.rng_set is not None else None`, and run.transform_card's `pick_rng` parameter is documented as exactly this argument, naming Pandora's Box as the caller (run.py:430-435). Checked because this is the failure mode class 16 warns about and audit/records/relic/astrolabe.json N1 filed as a live gap for the same helper: there the port left pick_rng at its None default and silently fell back to the legacy shared random.Random. Here it does not. The stream is genuinely CONSUMED rather than merely named -- CreateRandomCardForTransform calls `rng.NextItem(...)` directly (CardFactory.cs:177-181), unlike the `claws` case class 16 cites where an explicit Replacement means GetReplacement never touches the Rng. The `else None` branch is the legacy RL path, the repo-wide convention for runs with no rng_set."
+      "rationale": "pandoras_box.py:30 is `niche = run.rng_set.niche if run.rng_set is not None else None`, and run.transform_card's `pick_rng` parameter is documented as exactly this argument, naming Pandora's Box as the caller (run.py:725-738, re-verified 2026-08-04 after run.py drift). Checked because this is the failure mode class 16 warns about and audit/records/relic/astrolabe.json N1 filed as a live gap for the same helper: there the port left pick_rng at its None default and silently fell back to the legacy shared random.Random. Here it does not. The stream is genuinely CONSUMED rather than merely named -- CreateRandomCardForTransform calls `rng.NextItem(...)` directly (CardFactory.cs:177-181), unlike the `claws` case class 16 cites where an explicit Replacement means GetReplacement never touches the Rng. The `else None` branch is the legacy RL path, the repo-wide convention for runs with no rng_set."
     },
     {
       "what": "N2 (PROMPT.md bug class 8): deck placement -- an out-of-combat transform APPENDS at the deck's end rather than replacing in place",

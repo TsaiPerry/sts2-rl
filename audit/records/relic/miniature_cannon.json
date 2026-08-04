@@ -51,12 +51,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
@@ -76,9 +76,9 @@
       "verdict": "faithful"
     },
     "ModifyDamageAdditive": {
-      "maps_to": "modify_damage_additive (miniature_cannon.py:22-33), summed by HookSystem.modify_damage_additive (hooks.py:52-63) and consumed at three sites -- cmds.py:57 (the real pipeline), previews.py:56 (intent display) and cards/thrash.py:46 (Thrash's absorb)",
+      "maps_to": "modify_damage_additive (miniature_cannon.py:22-33), summed by HookSystem.modify_damage_additive (hooks.py) and consumed at three sites -- cmds.py:57 (the real pipeline), previews.py:56 (intent display) and cards/thrash.py:46 (Thrash's absorb)",
       "verdict": "gap",
-      "issue": "Confirmed against `MiniatureCannon.cs` 2026-08-01: the recorded narrowing (AND-of-two-disjuncts collapsed to one disjunct) is accurate and is a multiplayer-only-reachable gap given the sim's one-player-creature model. Round 13's retraction referenced in the brief was not found to have left any stale prose on THIS record — text matches current code exactly. No action taken.",
+      "issue": "Confirmed against `MiniatureCannon.cs` 2026-08-01: the recorded narrowing (AND-of-two-disjuncts collapsed to one disjunct) is accurate and is a multiplayer-only-reachable gap given the sim's one-player-creature model. Round 13's retraction referenced in the brief was not found to have left any stale prose on THIS record \u2014 text matches current code exactly. No action taken.",
       "live": false
     }
   },

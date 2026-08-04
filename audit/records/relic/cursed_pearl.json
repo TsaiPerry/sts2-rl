@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -33,7 +33,7 @@
     "AfterObtained": {
       "maps_to": "after_obtained (cursed_pearl.py:15-19)",
       "verdict": "faithful",
-      "rationale": "CursedPearl.cs:19-23 does exactly two things in order -- CardPileCmd.AddCurseToDeck<Greed> then PlayerCmd.GainGold(333) -- and cursed_pearl.py:18-19 does the same two in the same order. run.add_card (run.py:341-354) runs Hook.ModifyCardBeingAddedToDeck before the append and the deck-entry hook after it, which is what CardPileCmd.Add(card, PileType.Deck) does; run.gain_gold (run.py:325-333) runs Hook.ModifyGoldGained then truncates toward zero and no-ops on a non-positive amount, matching PlayerCmd.cs:141-169. The one C# step the sim has no analogue for is Hook.AfterGoldGained (PlayerCmd.cs:169) -- that omission is a base-class gap recorded on its only ported implementer, relic/dragon_fruit, and is not double-counted here (binding rule 3)."
+      "rationale": "CursedPearl.cs:19-23 does exactly two things in order -- CardPileCmd.AddCurseToDeck<Greed> then PlayerCmd.GainGold(333) -- and cursed_pearl.py:18-19 does the same two in the same order. run.add_card (run.py:524-537, was :341-354) runs Hook.ModifyCardBeingAddedToDeck before the append and the deck-entry hook after it, which is what CardPileCmd.Add(card, PileType.Deck) does; run.gain_gold (run.py:500-514, was :325-333) runs Hook.ModifyGoldGained then truncates toward zero and no-ops on a non-positive amount, matching PlayerCmd.cs:141-169. The one C# step the sim has no analogue for is Hook.AfterGoldGained (PlayerCmd.cs:169) -- that omission is a base-class gap recorded on its only ported implementer, relic/dragon_fruit, and is not double-counted here (binding rule 3)."
     }
   },
   "guards": [

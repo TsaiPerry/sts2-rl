@@ -16,43 +16,43 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     }
   ],
   "hooks": {
     "CanonicalKeywords": {
-      "maps_to": "WhistleCard.exhausts = True (whistle.py:70)",
+      "maps_to": "WhistleCard.exhausts = True (whistle.py:21)",
       "verdict": "faithful",
       "rationale": "`{ CardKeyword.Exhaust }` (Whistle.cs:20) == `exhausts = True`."
     },
     "ctor": {
-      "maps_to": "class attrs (whistle.py:65-70) + _init_vars (72-74)",
+      "maps_to": "class attrs (whistle.py:16-21) + _init_vars (23-25)",
       "verdict": "faithful",
       "rationale": "`base(3, CardType.Attack, CardRarity.Ancient, TargetType.AnyEnemy)` (Whistle.cs:22-25) == cost 3 / ATTACK / ANCIENT / ANY_ENEMY."
     },
     "CanonicalVars": {
-      "maps_to": "WhistleCard._damage = 33 (whistle.py:74)",
+      "maps_to": "WhistleCard._damage = 33 (whistle.py:25)",
       "verdict": "faithful",
       "rationale": "`new DamageVar(33m, ValueProp.Move)` (Whistle.cs:18) == `_damage = 33`, powered on both sides -- the largest single-hit damage number in the pool after card/bludgeon's 32 upgrades to 42."
     },
     "OnPlay": {
-      "maps_to": "WhistleCard.on_play (whistle.py:79-87)",
+      "maps_to": "WhistleCard.on_play (whistle.py:30-41)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-29 (round 7): The guard is deleted; whistle.py calls `CreatureCmd.stun(ctx.hooks, target)` unconditionally, as Whistle.cs:33 does. `CreatureCmd.Stun` has NO liveness test in either overload (CreatureCmd.cs:870-903) -- not even a CombatState null-check -- and the sim's `CreatureCmd.stun` (cmds.py) matches: a MachineMonster transition test and nothing else. Pinned by test_can_receive_powers.py::test_whistle_stuns_a_retained_corpse, where a removal-vetoed corpse ends the play with `stunned` True, which really does cost it the turn it would otherwise take (CombatManager.cs:1072-1090 iterates every creature still in the combat). This one needs no CanReceivePowers gate at all, which is why it is the member of the family whose fix is a pure deletion.  The text it replaced read: The damage is faithful and the STUN is the right verb. The divergence is the sim's extra `if not target.is_gone:` before it (whistle.py:86-87). C# calls `CreatureCmd.Stun(cardPlay.Target)` UNCONDITIONALLY (Whistle.cs:33), and `Stun` has NO liveness guard at all -- it is a bare `creature.StunInternal(Wrapper, nextMoveId)` plus a VFX wrapper (CreatureCmd.cs:870-903), with no `IsAlive`, `IsHittable` or `CombatState != null` test anywhere in either overload. So this is the card/bash family with a different verb: for an ordinary kill the two agree (`CreatureCmd.Damage` runs `Kill` before returning, CreatureCmd.cs:409, and removal at 523-525 detaches the creature), but for a corpse whose removal was VETOED (`Hook.ShouldCreatureBeRemovedFromCombatAfterDeath`, CreatureCmd.cs:508; the sim's `retained_after_death`, cmds.py:100-104) the game STUNS it and the sim does not -- and a retained corpse still takes turns, so being stunned actually skips one. LIVE: the retained-corpse path is ported (ReattachPower, powers.py:2360-2365; `combat.py:292,306`) and Whistle is a ported Ancient from Tanx's Whistle. Same family and same verdict as card/bash's OnPlay entry (rule 3), and the only member of it whose payload is a STUN rather than a power -- so the observable is the corpse's skipped turn rather than a Vicious draw. Presentation, folded in: WithHitFx and the StunIntent hover tip (16)."
+      "issue": "Closed 2026-07-29 (round 7): The guard is deleted; whistle.py calls `CreatureCmd.stun(ctx.hooks, target)` unconditionally, as Whistle.cs:33 does. `CreatureCmd.Stun` has NO liveness test in either overload (CreatureCmd.cs:870-903) -- not even a CombatState null-check -- and the sim's `CreatureCmd.stun` (cmds.py) matches: a MachineMonster transition test and nothing else. Pinned by test_can_receive_powers.py::test_whistle_stuns_a_retained_corpse, where a removal-vetoed corpse ends the play with `stunned` True, which really does cost it the turn it would otherwise take (CombatManager.cs:1072-1090 iterates every creature still in the combat). This one needs no CanReceivePowers gate at all, which is why it is the member of the family whose fix is a pure deletion. Re-verified current on this stale-sweep pass: whistle.py:41 still calls `CreatureCmd.stun(ctx.hooks, target)` with no guard.  The text it replaced read: The damage is faithful and the STUN is the right verb. The divergence is the sim's extra `if not target.is_gone:` before it. C# calls `CreatureCmd.Stun(cardPlay.Target)` UNCONDITIONALLY (Whistle.cs:33), and `Stun` has NO liveness guard at all -- it is a bare `creature.StunInternal(Wrapper, nextMoveId)` plus a VFX wrapper (CreatureCmd.cs:870-903), with no `IsAlive`, `IsHittable` or `CombatState != null` test anywhere in either overload. So this is the card/bash family with a different verb: for an ordinary kill the two agree (`CreatureCmd.Damage` runs `Kill` before returning, CreatureCmd.cs:409, and removal at 523-525 detaches the creature), but for a corpse whose removal was VETOED (`Hook.ShouldCreatureBeRemovedFromCombatAfterDeath`, CreatureCmd.cs:508; the sim's `retained_after_death`, cmds.py:159-161, moved from :100-104) the game STUNS it and the sim does not -- and a retained corpse still takes turns, so being stunned actually skips one. LIVE: the retained-corpse path is ported (ReattachPower, powers.py:2933-2938, moved from :2360-2365 -- content re-verified current, same withered/reattach shape; `combat.py:649,653,655` for `is_performing_move`/`combat_removal_committed`, moved from the historical :292,306 citation) and Whistle is a ported Ancient from Tanx's Whistle. Same family and same verdict as card/bash's OnPlay entry (rule 3), and the only member of it whose payload is a STUN rather than a power -- so the observable is the corpse's skipped turn rather than a Vicious draw. Presentation, folded in: WithHitFx and the StunIntent hover tip (16)."
     },
     "OnUpgrade": {
-      "maps_to": "WhistleCard._on_upgrade (whistle.py:76-77)",
+      "maps_to": "WhistleCard._on_upgrade (whistle.py:27-28)",
       "verdict": "faithful",
       "rationale": "`DynamicVars.Damage.UpgradeValueBy(11m)` (Whistle.cs:38) == `self._damage += 11` (33 -> 44)."
     }

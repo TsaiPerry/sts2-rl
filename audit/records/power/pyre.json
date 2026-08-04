@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -26,36 +26,36 @@
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:989 power_type = PowerType.BUFF",
+      "maps_to": "powers.py:1347 power_type = PowerType.BUFF",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-139 Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:137-139) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "ModifyMaxEnergy": {
-      "maps_to": "powers.py:991-994 PyrePower.modify_max_energy (hooks.py:203-208, player.py:163)",
+      "maps_to": "powers.py:1349-1352 PyrePower.modify_max_energy (hooks.py:1057-1060, player.py:371-376)",
       "verdict": "faithful",
-      "rationale": "amount + base.Amount with an owner guard on both sides (PyrePower.cs:16-23 vs powers.py:991-994), and the sim consumes it in the right place: player.py:163 runs modify_max_energy BEFORE should_reset_energy (:164) and uses the modified value on BOTH arms (:165 reset, :167 add-to-current), which is C#'s ResetEnergy/AddMaxEnergyToCurrent pair at CombatManager.cs:641-648. So Pyre works under a Barricade-style reset veto too. The power is never removed on either side, so it is a permanent +N max energy for the combat. Third-file citations, not hashed here."
+      "rationale": "amount + base.Amount with an owner guard on both sides (PyrePower.cs:16-23 vs powers.py:1349-1352), and the sim consumes it in the right place: player.py:371 now evaluates should_reset_energy FIRST and :372 modify_max_energy SECOND (the order was flipped by tier-2 Task 11 item E, per the comment at player.py:358-360, to match C#'s own order -- CombatManager.cs:641-649 evaluates ShouldPlayerResetEnergy first too), and uses the modified value on BOTH arms (:373 reset, :375 add-to-current), which is C#'s ResetEnergy/AddMaxEnergyToCurrent pair. So Pyre works under a Barricade-style reset veto too. The power is never removed on either side, so it is a permanent +N max energy for the combat. Third-file citations, not hashed here."
     }
   },
   "guards": [
     {
       "what": "PyrePower.cs:18-21 player != base.Owner.Player -> unchanged",
       "verdict": "faithful",
-      "rationale": "powers.py:992-994. Identical."
+      "rationale": "powers.py:1350-1352. Identical."
     },
     {
       "what": "Pyre has no CanonicalVars and no AscensionHelper call",
@@ -65,7 +65,7 @@
     {
       "what": "Additive-vs-running aggregation on ModifyMaxEnergy",
       "verdict": "faithful",
-      "rationale": "hooks.py:203-208 sums every listener's delta and player.py:163 applies the sum once. hook_dispatch's G9 settled by execution that the additive family is EXACTLY equal to C#'s running fold over integers (0 mismatches in an exhaustive sweep) and that no C# or sim implementation reads the value it is handed. Not re-verdicted here per binding rule 3. Pyre is additive-only, so it does not widen G9's multiplicative half."
+      "rationale": "hooks.py:1057-1060 sums every listener's delta and player.py:372 applies the sum once. hook_dispatch's G9 settled by execution that the additive family is EXACTLY equal to C#'s running fold over integers (0 mismatches in an exhaustive sweep) and that no C# or sim implementation reads the value it is handed. Not re-verdicted here per binding rule 3. Pyre is additive-only, so it does not widen G9's multiplicative half."
     }
   ],
   "verdict": "faithful",

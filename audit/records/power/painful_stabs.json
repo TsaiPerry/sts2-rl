@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -26,22 +26,22 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:3389 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py Power.on_stack",
       "verdict": "faithful",
       "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
@@ -51,22 +51,22 @@
       "rationale": "`=> false`. C# strips a dead creature's powers at CreatureCmd.cs:533; the sim never removes powers on death, so `false` is its universal behaviour and this override is satisfied for free. The inverse -- the C# default is `true` and the sim strips nothing -- is the engine-wide absence reported in content-power-report-b.md section 3c. ENGINE-LEVEL SIBLING (added 2026-07-26): the INVERSE finding -- that C#'s DEFAULT is `true` so every power WITHOUT this override should be stripped on its owner's death and in the sim none is -- now carries a verdict of its own at audit/records/seam/creature_card_cmds.json step 8b (`gap`, LIVE, executed on the Decimillipede). It used to exist only as prose in content-power-report-b.md section 3c. This entry stays `faithful` because the override asks for exactly the behaviour the sim gives for free; the engine-wide absence is step 8b's, not this unit's."
     },
     "ShouldCreatureBeRemovedFromCombatAfterDeath": {
-      "maps_to": "hooks.py:603 -- NOT implemented by this power",
+      "maps_to": "hooks.py -- NOT implemented by this power",
       "verdict": "gap",
-      "issue": "Was a genuine unimplemented hook (`PainfulStabsPower.cs:29-32` had no sim counterpart), dormant under current content only because the power's one consumer (Test Subject) always pairs it with `AdaptablePower`'s equivalent OR-veto (`hooks.py:1893-1900`). Ported the missing override (`powers.py`, `PainfulStabsPower`) rather than leaving it as a documented single-point-of-failure, since the fix is a trivial 6-line addition matching the existing Adaptable/Illusion pattern. Verified live-isolated (Painful Stabs applied without Adaptable now retains the corpse; previously it would have been removed).",
+      "issue": "Was a genuine unimplemented hook (`PainfulStabsPower.cs:29-32` had no sim counterpart), dormant under current content only because the power's one consumer (Test Subject) always pairs it with `AdaptablePower`'s equivalent OR-veto (`hooks.py`). Ported the missing override (`powers.py`, `PainfulStabsPower`) rather than leaving it as a documented single-point-of-failure, since the fix is a trivial 6-line addition matching the existing Adaptable/Illusion pattern. Verified live-isolated (Painful Stabs applied without Adaptable now retains the corpse; previously it would have been removed).",
       "live": false
     },
     "AfterAttack": {
-      "maps_to": "powers.py:3391-3409 on_damage_received",
+      "maps_to": "powers.py on_damage_received",
       "verdict": "faithful",
-      "issue": "**re-executes the record's own two claims rather than trusting its prose.** (1) The hook fix the round-13 NARROWED note describes is confirmed still in the tree exactly as claimed: `PainfulStabsPower.after_attack` (powers.py:4260-4279) groups `command.Results` by player receiver, counts each receiver's unblocked-damage hits, and adds `Amount * hits` Wounds once — matching `PainfulStabsPower.cs:34-68`. Pinned by `test_painful_stabs_after_attack_fixed_shape_still_holds`. (2) The residual — `PainfulStabsPower.cs:36`'s third early-return disjunct, `!command.DamageProps.IsPoweredAttack()`, not expressed in the port — is re-confirmed DORMANT, not merely re-asserted: grepped every `DamageCmd.deal(` call under `sts2_rl/monsters/` with an explicit `props=` argument (one hit, `monsters/glory/fabricator.py`, and it is a `BlockCmd.apply` call, not damage — no monster damage call anywhere sets Unpowered), and then EXECUTED `Monster._execute_attack` (`monsters/base.py:264-275`, the sole shared attack entry point every hand-rolled and machine monster funnels through) with a `DamageCmd.deal` spy that records the actually-inferred `props` for each hit — all Move, none Unpowered (`test_no_ported_monster_attack_deals_unpowered_move_damage`). So today's owner (an enemy) can never reach an Unpowered attack, and the guard has no witness."
+      "issue": "**re-executes the record's own two claims rather than trusting its prose.** (1) The hook fix the round-13 NARROWED note describes is confirmed still in the tree exactly as claimed: `PainfulStabsPower.after_attack` (powers.py) groups `command.Results` by player receiver, counts each receiver's unblocked-damage hits, and adds `Amount * hits` Wounds once \u2014 matching `PainfulStabsPower.cs:34-68`. Pinned by `test_painful_stabs_after_attack_fixed_shape_still_holds`. (2) The residual \u2014 `PainfulStabsPower.cs:36`'s third early-return disjunct, `!command.DamageProps.IsPoweredAttack()`, not expressed in the port \u2014 is re-confirmed DORMANT, not merely re-asserted: grepped every `DamageCmd.deal(` call under `sts2_rl/monsters/` with an explicit `props=` argument (one hit, `monsters/glory/fabricator.py`, and it is a `BlockCmd.apply` call, not damage \u2014 no monster damage call anywhere sets Unpowered), and then EXECUTED `Monster._execute_attack` (`monsters/base.py`, the sole shared attack entry point every hand-rolled and machine monster funnels through) with a `DamageCmd.deal` spy that records the actually-inferred `props` for each hit \u2014 all Move, none Unpowered (`test_no_ported_monster_attack_deals_unpowered_move_damage`). So today's owner (an enemy) can never reach an Unpowered attack, and the guard has no witness."
     }
   },
   "guards": [
     {
       "what": "PainfulStabsPower.cs:36 the three AfterAttack guards",
       "verdict": "gap",
-      "issue": "RE-OPENED 2026-07-28. Two of the three early-return conditions map; the THIRD does not, and the AfterAttack hook entry in this record already says so (\"NOTE this record's guard on 'the three AfterAttack early-return conditions' still reads `faithful`, which is no longer true of the third one\") -- the re-derivation pass wrote that sentence and left this entry at `faithful` anyway. PainfulStabsPower.cs:36 is `command.Attacker != base.Owner || command.TargetSide == base.Owner.Side || !command.DamageProps.IsPoweredAttack()`. The sim's after_attack bracket carries no props at all -- `def after_attack(self, dealer, card=None)` (hooks.py:555), which passes only (dealer, card, results) to listeners (hooks.py:566-567) -- and powers.py:3582-3594 tests only `dealer is not self.owner` and, per result, `receiver.side != \"player\"`. So the IsPoweredAttack test has no expression anywhere on this path. DORMANT today (Monster._execute_attack, monsters/base.py:117-128, always brackets powered MOVE damage), and folded with the AfterAttack entry's residual: one mechanism, one verdict. CITATION FIX: the old rationale cited powers.py:3400-3405 for the props test; after the powers.py reshuffle those lines are inside HexPower, and the code they described no longer exists at that location. The two conditions that DO map: `command.Attacker != base.Owner` -> `dealer is not self.owner`, and `command.TargetSide == base.Owner.Side` -> the per-receiver `receiver.side != \"player\"` filter, which is equivalent for a single-player enemy owner."
+      "issue": "RE-OPENED 2026-07-28. Two of the three early-return conditions map; the THIRD does not, and the AfterAttack hook entry in this record already says so (\"NOTE this record's guard on 'the three AfterAttack early-return conditions' still reads `faithful`, which is no longer true of the third one\") -- the re-derivation pass wrote that sentence and left this entry at `faithful` anyway. PainfulStabsPower.cs:36 is `command.Attacker != base.Owner || command.TargetSide == base.Owner.Side || !command.DamageProps.IsPoweredAttack()`. The sim's after_attack bracket carries no props at all -- `def after_attack(self, dealer, card=None)` (hooks.py), which passes only (dealer, card, results) to listeners (hooks.py) -- and powers.py tests only `dealer is not self.owner` and, per result, `receiver.side != \"player\"`. So the IsPoweredAttack test has no expression anywhere on this path. DORMANT today (Monster._execute_attack, monsters/base.py, always brackets powered MOVE damage), and folded with the AfterAttack entry's residual: one mechanism, one verdict. CITATION FIX: the old rationale cited powers.py for the props test; after the powers.py reshuffle those lines are inside HexPower, and the code they described no longer exists at that location. The two conditions that DO map: `command.Attacker != base.Owner` -> `dealer is not self.owner`, and `command.TargetSide == base.Owner.Side` -> the per-receiver `receiver.side != \"player\"` filter, which is equivalent for a single-player enemy owner."
     },
     {
       "what": "PainfulStabsPower.cs:41 `!list.Any(r => r.UnblockedDamage > 0)` -> return",

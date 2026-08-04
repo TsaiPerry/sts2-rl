@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\events\\trial.py",
-    "sha256": "8f46160beb6bafaeba5f3881cf62af0b6ad2ac435db461cf5770d7ea23145d31"
+    "sha256": "3e5ddc7548d78145997988b5aa274ad08bd4947c170e93eed084ed23f30beadf"
   },
   "extra_sources": [
     {
@@ -66,12 +66,12 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     },
     {
       "path": "sts2_rl/events/brain_leech.py",
-      "sha256": "220a635f96c3938d07bb172ecd05641c9808d471f8a5c32575712e33b0188f30",
+      "sha256": "18ff0492ba63d24b23a7fa21c25c7c832094cbeed9cfa5fffeee0a85f5f830f0",
       "side": "sim"
     },
     {
@@ -81,7 +81,7 @@
     },
     {
       "path": "sts2_rl/events/endless_conveyor.py",
-      "sha256": "f1f3376a63944caa95f66a03937f6f4fff6535a0be0911e15d8bd96868be0bd9",
+      "sha256": "94c8467ffdc814be297161ff03db48d7c9424ec8be69b286b619a5606b1ccc5b",
       "side": "sim"
     },
     {
@@ -126,12 +126,12 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -155,37 +155,37 @@
   "guards": [
     {
       "what": "GenerateInitialOptions (Trial.cs:44-51): ACCEPT / REJECT",
-      "maps_to": "events/trial.py:31-35, same two keys.",
+      "maps_to": "events/trial.py:65-69 (was 31-35), same two keys.",
       "verdict": "faithful"
     },
     {
       "what": "Accept's three trial pages (Trial.cs:64-114): switch on base.Rng.NextInt(3) -> case 0 MERCHANT (GUILTY / INNOCENT), case 1 NOBLE, case 2 NONDESCRIPT",
-      "maps_to": "events/trial.py:39-55: `roll = self.rng.randrange(3)` with the same 0/1/2 -> MERCHANT/NOBLE/NONDESCRIPT mapping, each page carrying GUILTY then INNOCENT in that order. Rng.NextInt(3) is [0,3) (Rng.cs:89-93) and randrange(3) is the same. Note Reject's ACCEPT option re-enters the SAME Accept() method (Trial.cs:120), so choosing REJECT then ACCEPT takes a SECOND draw off the stream -- the sim reuses self._accept the same way (trial.py:59), so the draw counts match on both paths.",
+      "maps_to": "events/trial.py:73-90 (was 39-55): `roll = er.next_int(3) if er is not None else self.rng.randrange(3)` with the same 0/1/2 -> MERCHANT/NOBLE/NONDESCRIPT mapping, each page carrying GUILTY then INNOCENT in that order. Rng.NextInt(3) is [0,3) (Rng.cs:89-93) and randrange(3) is the same. Note Reject's ACCEPT option re-enters the SAME Accept() method (Trial.cs:120), so choosing REJECT then ACCEPT takes a SECOND draw off the stream -- the sim reuses self._accept the same way (trial.py:94, was :59), so the draw counts match on both paths. Re-verified 2026-08-04 against current trial.py: logic unchanged, only line numbers shifted (a new `_NonCombatCardRewardGroup` class was inserted above `Trial`).",
       "verdict": "faithful"
     },
     {
-      "what": "EV-3: Accept's NextInt(3) trial roll (events/trial.py:40) AND NondescriptInnocent's `CardCmd.TransformToRandom(item, base.Rng, ...)` (Trial.cs:195), whose replacement pick events/trial.py:99 leaves on the shared rng by passing no `pick_rng` (run.py:455-459). EXECUTED (`py audit/tools/event_probes_b.py rng5b`): trial has no event_rng branch at all rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
-      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- Accept's NextInt(3) runs on `self.event_rng` (events/trial.py:40-41) and NondescriptInnocent passes `pick_rng=self.event_rng` into run.transform_card (events/trial.py:101), matching `base.Rng` (Trial.cs:73, 195). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:96-99; legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them.",
+      "what": "EV-3: Accept's NextInt(3) trial roll (events/trial.py:74-75, was :40) AND NondescriptInnocent's `CardCmd.TransformToRandom(item, base.Rng, ...)` (Trial.cs:195), whose replacement pick events/trial.py:186 (was :99) leaves on the shared rng by passing no `pick_rng` (run.py:774-777, was 455-459). EXECUTED (`py audit/tools/event_probes_b.py rng5b`): trial has no event_rng branch at all rolls on the sim's shared run RNG (`self.rng`) where C# rolls on the per-event `base.Rng`",
+      "maps_to": "Closed 2026-07-28: the per-event Rng is threaded at this site -- Accept's NextInt(3) runs on `self.event_rng` (events/trial.py:74-75, was 40-41) and NondescriptInnocent passes `pick_rng=self.event_rng` into run.transform_card (events/trial.py:186, was :101), matching `base.Rng` (Trial.cs:73, 195). `Event.event_rng` is built by make_event_rng(seed, ID) in events/base.py:93-96 (was 96-99); legacy (RL) runs keep the documented shared-rng fallback. Was: the draw came off the shared run rng. Re-run of `py audit/tools/event_probes.py eventrng` on 2026-07-28: 25 modules now carry a parity branch and only 4 roll shared-only (dense_vegetation, potion_courier, punch_off, wood_carvings) -- this unit is not one of them. Re-verified 2026-08-04: both threading sites confirmed present at the new line numbers, only line numbers moved.",
       "verdict": "faithful"
     },
     {
       "what": "MerchantGuilty (Trial.cs:144-152): AddCurseToDeck<Regret>, then TWO RelicFactory.PullNextRelicFromFront(base.Owner) -> RelicCmd.Obtain",
-      "maps_to": "events/trial.py:69-73: add_card(regret) then two run.obtain_relic_from_grab_bag() (run.py:631). Curse first in both. The one-argument PullNextRelicFromFront rolls its rarity on player.PlayerRng.Rewards (RelicFactory.cs:28, :82) and the sim's default rarity_rng is run.rewards_rng (run.py:588-589) -- the correct per-player Rewards stream, so these two pulls are NOT EV-3 sites.",
+      "maps_to": "events/trial.py:104-108 (was 69-73): add_card(regret) then two run.obtain_relic_from_grab_bag() (run.py:1100-1105, was 631). Curse first in both. The one-argument PullNextRelicFromFront rolls its rarity on player.PlayerRng.Rewards (RelicFactory.cs:28, :82) and the sim's default rarity_rng is run.rewards_rng (run.py:368-371, was 588-589) -- the correct per-player Rewards stream, so these two pulls are NOT EV-3 sites. Re-verified 2026-08-04: content unchanged at new line numbers.",
       "verdict": "faithful"
     },
     {
       "what": "MerchantInnocent (Trial.cs:154-162): AddCurseToDeck<Shame>, then CardSelectCmd.FromDeckForUpgrade with CardSelectorPrefs(UpgradeSelectionPrompt, 2), upgrading each result",
-      "maps_to": "events/trial.py:75-79: add_card(shame) then select_cards('upgrade', run.upgradable_cards(), 2) with card.upgrade() on each. The filter matches exactly -- FromDeckForUpgrade takes `Deck.Cards.Where(c => c.IsUpgradable)` (CardSelectCmd.cs:442) and upgradable_cards() is `[c for c in deck if c.is_upgradable]` (run.py:368-369). The count semantics match too: CardSelectorPrefs(prompt, 2) sets MinSelect = MaxSelect = 2 and therefore RequireManualConfirmation = false (CardSelectorPrefs.cs:62-78), so a deck with <= 2 upgradables auto-selects all of them (CardSelectCmd.cs:448-451) -- which is what select_cards' `count = min(count, len(candidates))` does (run.py:386). Curse-before-selection order is preserved, and Shame is not upgradable so it cannot be one of the two.",
+      "maps_to": "events/trial.py:110-114 (was 75-79): add_card(shame) then select_cards('upgrade', run.upgradable_cards(), 2) with card.upgrade() on each. The filter matches exactly -- FromDeckForUpgrade takes `Deck.Cards.Where(c => c.IsUpgradable)` (CardSelectCmd.cs:442) and upgradable_cards() is `[c for c in deck if c.is_upgradable]` (run.py:582-583, was 368-369). The count semantics match too: CardSelectorPrefs(prompt, 2) sets MinSelect = MaxSelect = 2 and therefore RequireManualConfirmation = false (CardSelectorPrefs.cs:62-78), so a deck with <= 2 upgradables auto-selects all of them (CardSelectCmd.cs:448-451) -- which is what select_cards' `count = min(count, len(candidates))` does (run.py:634, was 386). Curse-before-selection order is preserved, and Shame is not upgradable so it cannot be one of the two. Re-verified 2026-08-04: content unchanged at new line numbers.",
       "verdict": "faithful"
     },
     {
       "what": "NobleGuilty (Trial.cs:164-168): CreatureCmd.Heal(base.Owner.Creature, 10m)",
-      "maps_to": "events/trial.py:81-83 run.heal(10). This is the PLAIN heal verb, not HealRestSiteOption.ExecuteRestSiteHeal, and CreatureCmd.Heal (CreatureCmd.cs:691-703) dispatches no hooks in C# either -- so trial is NOT in turn_structure step 38a's blast radius, matching the stream report's plain-heal list.",
+      "maps_to": "events/trial.py:116-118 (was 81-83) run.heal(10). This is the PLAIN heal verb, not HealRestSiteOption.ExecuteRestSiteHeal, and CreatureCmd.Heal (CreatureCmd.cs:691-703) dispatches no hooks in C# either -- so trial is NOT in turn_structure step 38a's blast radius, matching the stream report's plain-heal list. Re-verified 2026-08-04: unchanged at new line numbers.",
       "verdict": "faithful"
     },
     {
       "what": "NobleInnocent (Trial.cs:170-175): AddCurseToDeck<Regret> then PlayerCmd.GainGold(300m)",
-      "maps_to": "events/trial.py:85-88 add_card(regret) then gain_gold(300); `_NOBLE_GOLD = 300` (trial.py:7). Same order.",
+      "maps_to": "events/trial.py:120-123 (was 85-88) add_card(regret) then gain_gold(300); `_NOBLE_GOLD = 300` (trial.py:8, was :7). Same order. Re-verified 2026-08-04.",
       "verdict": "faithful"
     },
     {
@@ -195,21 +195,21 @@
     },
     {
       "what": "NondescriptInnocent (Trial.cs:189-198): AddCurseToDeck<Doubt>, CardSelectCmd.FromDeckForTransformation with CardSelectorPrefs(TransformSelectionPrompt, 2), then CardCmd.TransformToRandom on each",
-      "maps_to": "events/trial.py:95-100: add_card(doubt), select_cards('transform', run.transformable_cards(), 2), run.transform_card on each. Curse first in both, and Doubt is itself transformable in both (Curses go through the curse pool without the rarity filter -- run.py:441-443 -- which is GetDefaultTransformationOptions' Curse arm). The count semantics are the CardSelectorPrefs(prompt, 2) auto-select-all case described on MERCHANT_INNOCENT. The candidate FILTER and the transform verb are separately recorded below.",
+      "maps_to": "events/trial.py:181-187 (was 95-100): add_card(doubt), select_cards('transform', run.transformable_cards(), 2), run.transform_card on each. Curse first in both, and Doubt is itself transformable in both (Curses go through the curse pool without the rarity filter -- run.py:759-760, was 441-443 -- which is GetDefaultTransformationOptions' Curse arm). The count semantics are the CardSelectorPrefs(prompt, 2) auto-select-all case described on MERCHANT_INNOCENT. The candidate FILTER and the transform verb are separately recorded below. Re-verified 2026-08-04: unchanged at new line numbers.",
       "verdict": "faithful"
     },
     {
-      "what": "EV-10: events/trial.py:97's NONDESCRIPT_INNOCENT transform screen (Trial.cs:192) builds its candidate list from RunState.transformable_cards (run.py:364-366), which returns removable_cards() -- 'not Eternal'. CardSelectCmd.FromDeckForTransformation filters `c.Type != CardType.Quest && c.IsTransformable` (CardSelectCmd.cs:485-489); the sim drops the QUEST clause",
-      "maps_to": "Closed 2026-07-28 at THIS site: RunState.transformable_cards (run.py:423-435) now filters `card_type != CardType.QUEST` on top of `not eternal`, which is CardSelectCmd.FromDeckForTransformation's `c.Type != CardType.Quest && c.IsTransformable` (CardSelectCmd.cs:485-489). EXECUTED 2026-07-28: a deck of [strike, spoils_map] returns transformable_cards() == ['strike'] where removable_cards() still returns both, so events/trial.py:98's NONDESCRIPT_INNOCENT screen offers what the game offers and the three ported Quest cards can no longer be destroyed. WARNING for this mechanism's readers: the fix introduced a NEW divergence at the one site that must NOT use this helper -- events/morphic_grove.py:30's IsAllowed gate counts IsTransformable, which has no Quest clause. That is re-narrowed on event/morphic_grove and is still a gap.",
+      "what": "EV-10: events/trial.py:183's NONDESCRIPT_INNOCENT transform screen (Trial.cs:192) builds its candidate list from RunState.transformable_cards (run.py:568-580, was 364-366), which returns removable_cards() -- 'not Eternal'. CardSelectCmd.FromDeckForTransformation filters `c.Type != CardType.Quest && c.IsTransformable` (CardSelectCmd.cs:485-489); the sim drops the QUEST clause",
+      "maps_to": "Closed 2026-07-28 at THIS site: RunState.transformable_cards (run.py:568-580, was 423-435) now filters `card_type != CardType.QUEST` on top of `not eternal`, which is CardSelectCmd.FromDeckForTransformation's `c.Type != CardType.Quest && c.IsTransformable` (CardSelectCmd.cs:485-489). EXECUTED 2026-07-28: a deck of [strike, spoils_map] returns transformable_cards() == ['strike'] where removable_cards() still returns both, so events/trial.py:183 (was :98)'s NONDESCRIPT_INNOCENT screen offers what the game offers and the three ported Quest cards can no longer be destroyed. WARNING for this mechanism's readers: the fix introduced a NEW divergence at the one site that must NOT use this helper -- events/morphic_grove.py's IsAllowed gate counts IsTransformable, which has no Quest clause. That is re-narrowed on event/morphic_grove and is still a gap. Re-verified 2026-08-04: `transformable_cards` body unchanged (still filters QUEST + eternal), only line numbers moved.",
       "verdict": "faithful"
     },
     {
-      "what": "BR-G3 (blast radius): NondescriptInnocent (events/trial.py:99) calls RunState.transform_card (run.py:406-470), which swaps the deck entry without running the deck-entry hooks C#'s CardCmd.Transform fires",
-      "maps_to": "Closed 2026-07-28: RunState.transform_card (run.py:508-584) now runs BOTH deck-entry hooks around the swap -- `relic.modify_card_being_added_to_deck` before the insert and `relic.after_card_added_to_deck` after it -- which is what CardCmd.Transform does for a PileType.Deck transform (Hook.ModifyCardBeingAddedToDeck at CardCmd.cs:430, Hook.AfterCardChangedPiles at CardCmd.cs:447). Was: a bare deck-slot swap, so the egg relics never saw the replacement. This unit is out of seam guard G3's radius on this leg.",
+      "what": "BR-G3 (blast radius): NondescriptInnocent (events/trial.py:186, was :99) calls RunState.transform_card (run.py:725-801, was 406-470), which swaps the deck entry without running the deck-entry hooks C#'s CardCmd.Transform fires",
+      "maps_to": "Closed 2026-07-28: RunState.transform_card (run.py:784-800, was 508-584) now runs BOTH deck-entry hooks around the swap -- `relic.modify_card_being_added_to_deck` before the insert and `relic.after_card_added_to_deck` after it -- which is what CardCmd.Transform does for a PileType.Deck transform (Hook.ModifyCardBeingAddedToDeck at CardCmd.cs:430, Hook.AfterCardChangedPiles at CardCmd.cs:447). Was: a bare deck-slot swap, so the egg relics never saw the replacement. This unit is out of seam guard G3's radius on this leg. Re-verified 2026-08-04: both hook calls still present around the swap at the new line numbers.",
       "verdict": "faithful"
     },
     {
-      "what": "DoubleDown (Trial.cs:128-132) opens NAbandonRunConfirmPopup, whose Yes button calls RunManager.Instance.Abandon() (NAbandonRunConfirmPopup.cs:69-74); events/trial.py:63-65 calls run.kill() -- hp = 0 -- immediately and unconditionally",
+      "what": "DoubleDown (Trial.cs:128-132) opens NAbandonRunConfirmPopup, whose Yes button calls RunManager.Instance.Abandon() (NAbandonRunConfirmPopup.cs:69-74); events/trial.py:98-100 (was 63-65) calls run.kill() -- hp = 0 -- immediately and unconditionally",
       "verdict": "deliberate-divergence",
       "rationale": "Same observable outcome, different shape: the run is over either way, and for a headless sim 'abandoned' and 'dead' are the same terminal state. CRITICALLY, this is NOT an EV-1 site and must not be recorded as one (rule 3): EV-1's second verb is about run.kill standing in for `CreatureCmd.Kill(creature, force: false)`, whose Hook.ShouldDie / AfterPreventingDeath pass a belt Fairy in a Bottle answers. Abandon() is not CreatureCmd.Kill at all -- it is the meta run-teardown path the main menu and pause menu also use (NMainMenu / NPauseMenu / NAbandonRunButton are the other three callers), and CreatureCmd.cs:436 names 'abandoning a run' as precisely the `force: true` case that BYPASSES the pass. So no death-prevention listener would fire in the game either, and the sim loses nothing by not running one. Recorded here so a future reader does not add this to EV-1's site list by pattern-matching on run.kill."
     },
@@ -235,7 +235,7 @@
       "issue": "G-new (found and FIXED 2026-07-31, tier-2 campaign, Task 32): the mid-event reward screen skipped the reward-modifier dispatch. C# calls Hook.ModifyRewards from RewardsSet.GenerateWithoutOffering (RewardsSet.cs:136), which EVERY RewardsSet passes through, so a reward-modifying relic applies on any screen. This event built a CombatRewards directly and handed it to driver.py._run_event's mid-event pending_rewards channel, which offers it without calling apply_reward_modifiers -- so a player holding Driftwood got a non-rerollable CardReward where the game offers a reroll. LIVE, not dormant: both this event and Driftwood are fully ported and reachable. Found by unit work on relic/_reward_late_pass (Task 31), confirmed live by that task's reviewer, fixed by dispatching apply_reward_modifiers at the construction site. Per-site rather than central: driver.py's _offer_rewards has three other callers that already dispatch at construction time (rewards.py:698,761; run.py:1419; glass_eye.py:78), so a central call would DOUBLE-dispatch and duplicate AmethystAubergine/BlackStar/LavaRock gold and relics -- verified by the task reviewer. R10 (2026-08-01) closed this tension: `CombatRewards.generated` (rewards.py) plus a backstop `apply_reward_modifiers` call in `driver._offer_rewards` and `RunState.offer_rewards` mirror the two dispatch entry points C# actually has -- generate-time for room-end sets (`RewardsCmd.cs:55-60`, `GenerateForRoomEnd`) and offer-time for every `RewardsCmd.OfferCustom` set (`RewardsCmd.cs:47-50`, which has NO generate-time call -- `Offer()`'s call at `RewardsSet.cs:159` is that set's first and only dispatch), both funnelled through the `_isGenerated`-guarded `GenerateWithoutOffering` (`RewardsSet.cs:127-130/146`, re-called at `:159`) -- so a future event built this same way is dispatched exactly once even if it forgets the explicit call. Pinned: test/test_reward_dispatch_choke_point.py. The reasoning this replaces: the per-site fix was structurally fragile going forward; that fragility is now closed, not patched."
     },
     {
-      "what": "F-R13a (round 13): the reroll redraws from the CHARACTER pool, not the screen's own options (trial.py:109-110) -- identical to event/brain_leech",
+      "what": "F-R13a (round 13): the reroll redraws from the CHARACTER pool, not the screen's own options (trial.py, line number stale/pre-fix -- the fix replaced this code path with `_NonCombatCardRewardGroup`, see trial.py:15-45) -- identical to event/brain_leech",
       "verdict": "faithful",
       "issue": "LIVE but for a DIFFERENT reason than recorded. The record's text is event/brain_leech/g6's wording copied verbatim (\"becomes an Ironclad screen on reroll\") -- that does not apply here: Nondescript Guilty's pool was already the un-overridden character pool before any reroll, so a reroll draws from the same pool either way (pinned by test_trial_ nondescript_guilty_reroll_pool_stays_the_character_pool -- this assertion holds even against the OLD code). The REAL defect, found by re-deriving both draws against Trial.cs:183 (ForNonCombatWithDefaultOdds, Source= Other): mutate_pity defaulted True (mutating pity) on the FIRST draw already, not just reroll -- worse than filed, since it corrupts the pity state on every visit regardless of Driftwood. Also found: is_card_reward was never set on the first draw either (same shape as g7, unfiled). FIXED via a new file-local `_NonCombatCardRewardGroup(CardRewardGroup)` subclass (trial.py) that hardcodes mutate_pity=False, since the base class's `pool is None` heuristic gives the wrong answer for a screen whose pool is un-overridden but still Source=Other. Pinned by test_trial_ nondescript_guilty_does_not_mutate_pity_on_first_draw_or_reroll and test_trial_nondescript_guilty_silken_tress_fires_on_first_draw. Replaced reasoning: the record's \"wrong pool\" mechanism does not hold for this event; the actual mechanism is \"wrong Source/mutate_pity\", present from the first draw onward."
     }

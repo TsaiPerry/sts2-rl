@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -46,17 +46,17 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
     },
     {
@@ -66,7 +66,7 @@
     },
     {
       "path": "sts2_rl/monsters/hive/flail_knight.py",
-      "sha256": "becbe219001dd78582bdba64cbdbf1184546b597a655b3d586caef6b721e32a4",
+      "sha256": "e4de06f5ecdc64df31727e4a7b82c119d68b9f9e51551cd051d9be86c7fff1e9",
       "side": "sim"
     },
     {
@@ -91,29 +91,44 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "63c0df752ca09e9de59285b0c9bc9be809da18e69b61b65424d75f37ee1ffc6b",
+      "sha256": "416789386ad4af19cb52a3c275a2c39c1708bb90ebc4dc5c8fb4e88a7055d557",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/gorget.py",
       "sha256": "954fa94fb849502652b517ef8ddb633c2cad627508065c6f9a6cf916f63a3f4c",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Models/Relics/FakeOrichalcum.cs",
+      "sha256": "1010bc68903e6cc43716a628162a44add0ebebcabe50c67ac548198779ccd506",
+      "side": "game"
+    },
+    {
+      "path": "sts2_rl/relics/orichalcum.py",
+      "sha256": "e58715b053b65a089aff4f658fa16eb2c450175ab920b2fa0aa5226b8752f32b",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/paels_eye.py",
+      "sha256": "404484e5433027a2742642c9bae296d7ac6533fe9567f2e38bc571ac9db8956b",
+      "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:1052 power_type = PowerType.BUFF",
+      "maps_to": "powers.py:1417 power_type = PowerType.BUFF",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-139 Power.on_stack",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:64-66) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
+      "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack (powers.py:137-139) adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "ShouldScaleInMultiplayer": {
       "maps_to": "no sim counterpart",
@@ -128,20 +143,20 @@
     "AfterApplied": {
       "maps_to": "no sim counterpart",
       "verdict": "waiver",
-      "rationale": "PlatingPower.cs:29-36 sets the Decrement DynamicVar to RunState.Players.Count when the owner is an enemy -- i.e. an enemy's Plating decays once per player per round. At one player that is 1, which is what the sim's _tick (powers.py:1066) does. Multiplayer-only; the CanonicalVars default is 1m (PlatingPower.cs:27) and the sim matches it."
+      "rationale": "PlatingPower.cs:29-36 sets the Decrement DynamicVar to RunState.Players.Count when the owner is an enemy -- i.e. an enemy's Plating decays once per player per round. At one player that is 1, which is what the sim's _tick (powers.py:1439) does. Multiplayer-only; the CanonicalVars default is 1m (PlatingPower.cs:27) and the sim matches it."
     },
     "BeforeSideTurnStart": {
-      "maps_to": "powers.py:1054-1056 PlatingPower.on_combat_start (hooks.py:265-269, combat.py:208)",
+      "maps_to": "powers.py:1419-1429 PlatingPower.before_side_turn_start",
       "verdict": "faithful",
       "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. PlatingPower's round-1 arm now lives on the real hook. `before_side_turn_start` is `Hook.BeforeSideTurnStart` (CombatManager.cs:458) -- fired at the top of PlayerCombatState.start_turn, after the per-turn card-cost reset and before the block clear -- and PlatingPower.cs:41-56's guards are reproduced there (owner not a player, RoundNumber <= 1). The sim's `on_combat_start` implementation is gone, so a combat-start listener that reads an enemy's block now sees it bare, as the game shows it. EXECUTED: test/test_turn_start_split.py::test_plating_grants_its_round_one_block_at_the_turn_start_not_combat_start.  The gap it replaced read: SLOT. C# uses the ROUND-1 arm of a turn-start hook as a stand-in for combat start -- PlatingPower.cs:41-56 fires only when side == Player, the owner is NOT a player, and combatState.RoundNumber <= 1, and its own comment says 'We want enemies that start with Plating to also start combat with block'. Dispatched at CombatManager.cs:458, i.e. AFTER Creature.BeforeTurnStart (:453) and BEFORE the block clear at :496. The sim instead uses the real combat-start hook, on_combat_start (combat.py:208, immediately before start_turn at :209). DORMANT: the two points are adjacent, the enemy's block is not cleared at the player's turn start on either side, and the round-1-only condition is enforced on both (C# by RoundNumber, the sim by on_combat_start firing once). What differs is the sim grants the block one dispatch EARLIER, so any on_combat_start listener registered after this power sees the enemy already blocked where the game shows it unblocked. Named trigger: a combat-start relic or power that reads an enemy's block -- none is ported. Reachable owners are plentiful (monsters/underdocks/sewer_clam.py:30, monsters/underdocks/lagavulin_matriarch.py:43, monsters/hive/slumbering_beetle.py:41, monsters/hive/flail_knight.py:87, monsters/glory/frog_knight.py:42)."
     },
     "BeforeSideTurnEndEarly": {
-      "maps_to": "powers.py:1068-1070 on_player_turn_end / :1076-1078 on_enemy_turn_end -> _gain_block (combat.py:654 / combat.py:~330)",
+      "maps_to": "powers.py:1441-1447 on_player_turn_end_early / :1457-1462 before_enemy_side_end_early -> _gain_block",
       "verdict": "faithful",
       "issue": "CLOSED. PlatingPower moved onto the `_early` pass on BOTH sides: `on_player_turn_end_early` and `before_enemy_side_end_early`, matching PlatingPower.cs:61 and the reason its own comment gives ('so that it triggers before end-of-turn damage effects'). Two orderings become guaranteed rather than lucky: AsleepPower's `_very_early` Plating-drop now always precedes this grant, and Fake Orichalcum's `_very_early` `Block > 0` snapshot always precedes it too, which is the ordering FakeOrichalcum.cs:40-45 spells out in prose. EXECUTED: test_fake_merchant.py::test_fake_orichalcum_is_suppressed_by_platings_earlier_grant and test_enemy_side_per_side.py::TestSideEndListeners.  FIXED 2026-07-28 (round 4). The text it replaced read: NARROWED 2026-07-27. THE SIM NOW HAS PHASE PASSES -- `_PHASES` = very_early/early/plain/late (hooks.py:36), resolved per dispatch by `_each`, and relics really use them (relics/orichalcum.py:30 `on_player_turn_end_very_early`, relics/paels_eye.py:61 `on_player_turn_end_early`). PlatingPower did NOT move: powers.py:1138 is still the plain `on_player_turn_end`, where PlatingPower.cs:58-60 is BeforeSideTurnEndEarly and says why in as many words ('so that it triggers before end-of-turn damage effects'). The executed Constrict witness this entry carried is GONE -- ConstrictPower moved to `after_player_turn_end` (powers.py:1531), strictly after the whole BeforeTurnEnd pass -- so what remains is the phase itself, and any plain-pass turn-end damage effect still races this block on registration order. Both halves verified against today's code."
     },
     "AfterSideTurnStart": {
-      "maps_to": "powers.py:1072-1074 on_player_turn_start / :1080-1082 on_enemy_turn_start -> _decay (player.py:169 / combat.py:~300)",
+      "maps_to": "powers.py:1449-1455 after_side_turn_start / :1464-1466 after_enemy_side_start -> _decay",
       "verdict": "faithful",
       "rationale": "CLOSED 2026-07-28 (round 3) by the gap-queue continuation's post-section-A pass -- the turn-start split, the combat-over hook gate, Glass Eye's reward set, the out-of-combat potion action and the choose-a-card selector arm. This is a CODE change, not a re-reading of the old code. The player leg is on the real hook: PlatingPower.cs:70's AfterSideTurnStart maps to the new `after_side_turn_start` dispatcher (CombatManager.cs:522, post-draw), and `participants.Contains(Owner)` is what the surviving `player is self.owner` test reproduces. The ENEMY leg is unchanged and stays where this entry always put it -- turn_structure's G5, which owns the per-enemy-vs-per-side mechanism.  The gap it replaced read: WRONG SLOT on the player leg. C#'s AfterSideTurnStart is CombatManager.cs:522, POST-draw; the sim's on_player_turn_start is player.py:169, PRE-draw (before modify_hand_draw at :171 and _draw at :183). The sim's post-draw slot, on_player_turn_started (player.py:186), is available and unused -- the same one-line fix as the other misplaced-slot units, and the population is reproducible with `py audit/tools/power_census.py slots`. DORMANT on its own: the decay is pure bookkeeping and nothing between the two points reads Plating's Amount (the block was already gained last turn end). Named trigger: any draw-time or BeforeHandDraw effect that reads the stack count -- power/hello_world shares this pre-draw slot. The ENEMY leg is turn_structure's G5 again."
     }
@@ -150,27 +165,27 @@
     {
       "what": "PlatingPower.cs:55 / :66 CreatureCmd.GainBlock(..., ValueProp.Unpowered, null)",
       "verdict": "faithful",
-      "rationale": "powers.py:1058-1061 passes props=ValueProp.UNPOWERED explicitly. Correct, and worth recording: this is the exact call shape whose OMITTED props made power/feel_no_pain and power/curl_up live gaps (the main report's section 4 item 4 names Plating as one of the eight siblings that get it right), and BlockCmd.apply's gate (cmds.py:145) then skips both the additive and the multiplicative block families -- so Plating's block ignores Dexterity/Frail AND ignores power/no_block and power/unmovable, matching C#, whose NoBlockPower.cs:36-39 and UnmovablePower.cs:27-30 both bail on Unpowered / non-card-or-move props."
+      "rationale": "powers.py:1431-1434 passes props=ValueProp.UNPOWERED explicitly. Correct, and worth recording: this is the exact call shape whose OMITTED props made power/feel_no_pain and power/curl_up live gaps (the main report's section 4 item 4 names Plating as one of the eight siblings that get it right), and BlockCmd.apply's gate (cmds.py:145) then skips both the additive and the multiplicative block families -- so Plating's block ignores Dexterity/Frail AND ignores power/no_block and power/unmovable, matching C#, whose NoBlockPower.cs:36-39 and UnmovablePower.cs:27-30 both bail on Unpowered / non-card-or-move props."
     },
     {
       "what": "PlatingPower.cs:63 participants.Contains(base.Owner)",
       "verdict": "faithful",
-      "rationale": "powers.py:1069 / :1077 self-filter on the owner instead. Equivalent for the player side; for the enemy side it is the same per-creature-vs-per-side question turn_structure G5 owns."
+      "rationale": "powers.py:1454 / :1465 self-filter on the owner instead. Equivalent for the player side; for the enemy side it is the same per-creature-vs-per-side question turn_structure G5 owns."
     },
     {
       "what": "PlatingPower.cs:72 the turn-1 / round-1 decay exclusion",
       "verdict": "faithful",
-      "rationale": "C# skips the decay when the owner is a player on PlayerCombatState.TurnNumber == 1 or an enemy on combatState.RoundNumber == 1 -- so the stack the player just applied is not immediately eaten. powers.py:1063-1066 uses one test, combat.turn > 1, for both legs. Equivalent for the ported content: the sim's combat.turn is the round counter and starts at 1, and the player and the enemies share it."
+      "rationale": "C# skips the decay when the owner is a player on PlayerCombatState.TurnNumber == 1 or an enemy on combatState.RoundNumber == 1 -- so the stack the player just applied is not immediately eaten. powers.py:1436-1439 uses one test, combat.turn > 1, for both legs. Equivalent for the ported content: the sim's combat.turn is the round counter and starts at 1, and the player and the enemies share it."
     },
     {
       "what": "PlatingPower.cs:76 vs :80 -- ModifyAmount(-Decrement) for enemies, plain Decrement for players",
       "verdict": "faithful",
-      "rationale": "Two code paths that differ only by the multiplayer Decrement var, which is 1 at one player (PlatingPower.cs:27's CanonicalVars default, and :33 only raises it for enemies by Players.Count == 1). The sim's single _tick (powers.py:1066) is both. See also The sim's Power._tick (powers.py:70-75) decrements the field and _expires at <= 0 where C# routes through PowerCmd.Decrement -> ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:215-250); PowerCmd.Decrement, NOT TickDownDuration, so neither side honours SkipNextDurationTick. Observationally identical -- ModifyAmount's only unconditional modifier leg is Hook.ModifyPowerAmountReceived (PowerCmd.cs:234), whose ported listeners are ArtifactPower (Debuff-only) and RuinedHelmet (StrengthPower-only). Same mechanism and same verdict as audit/records/power/colossus.json's AfterSideTurnEnd guard, per binding rule 3."
+      "rationale": "Two code paths that differ only by the multiplayer Decrement var, which is 1 at one player (PlatingPower.cs:27's CanonicalVars default, and :33 only raises it for enemies by Players.Count == 1). The sim's single _tick (powers.py:1439) is both. See also The sim's Power._tick (powers.py:170-176) decrements the field and _expires at <= 0 where C# routes through PowerCmd.Decrement -> ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:215-250); PowerCmd.Decrement, NOT TickDownDuration, so neither side honours SkipNextDurationTick. Observationally identical -- ModifyAmount's only unconditional modifier leg is Hook.ModifyPowerAmountReceived (PowerCmd.cs:234), whose ported listeners are ArtifactPower (Debuff-only) and RuinedHelmet (StrengthPower-only). Same mechanism and same verdict as audit/records/power/colossus.json's AfterSideTurnEnd guard, per binding rule 3."
     },
     {
       "what": "The sim ADDS `not self.owner.is_dead` to the enemy block gain",
       "verdict": "faithful",
-      "rationale": "powers.py:1077. C# has no such test, but a dead creature has already had its powers stripped by Creature.RemoveAllPowersAfterDeath (Creature.cs:668-671), so the hook is unreachable on a dead owner in the game too. Defensive, not divergent. Note the PLAYER leg (:1069) does NOT carry the same guard, which is an internal inconsistency rather than a divergence."
+      "rationale": "powers.py:1461. C# has no such test, but a dead creature has already had its powers stripped by Creature.RemoveAllPowersAfterDeath (Creature.cs:668-671), so the hook is unreachable on a dead owner in the game too. Defensive, not divergent. Note the PLAYER leg (:1454) does NOT carry the same guard, which is an internal inconsistency rather than a divergence."
     }
   ],
   "verdict": "waiver",

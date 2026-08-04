@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\cards\\colorless_skills.py",
-    "sha256": "1cdf31a3bd59e95b239df163b0724e4f99ef299bd67256cc94fcc683e1ed1840"
+    "sha256": "73d875726c8cb8ca6a213dea6f43267d57717f5a1d6b65d34ca2ecea7f4ab66f"
   },
   "extra_sources": [
     {
@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/cards/pool.py",
-      "sha256": "0e7260041e0b6693c08bf4aa4ddbb8743311d7fd72d6212fdc7c7d358a7c5030",
+      "sha256": "0b6b63592c62386b478927b39f5f758720079c9377ecda32ca94df150369e7e4",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     },
     {
@@ -42,17 +42,17 @@
   ],
   "hooks": {
     "ctor": {
-      "maps_to": "class attrs (colorless_skills.py:691-695) + _init_vars (697-698)",
+      "maps_to": "class attrs (colorless_skills.py:756-760) + _init_vars (762-763)",
       "verdict": "faithful",
       "rationale": "`base(1, CardType.Skill, CardRarity.Uncommon, TargetType.Self)` (Splash.cs:15-18) == cost 1 / SKILL / UNCOMMON / SELF. No keywords, no CanonicalVars -- the three-option count is a literal on both sides."
     },
     "OnPlay": {
-      "maps_to": "SplashCard.on_play (colorless_skills.py:700-714)",
+      "maps_to": "SplashCard.on_play (colorless_skills.py:765-782)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-29 (round 7): `cards.pool.take_random` is `IEnumerableExtensions.TakeRandom` (IEnumerableExtensions.cs:17-20) -- `collection.ToList().UnstableShuffle(rng).Take(count)` -- and it encodes all three things `random.sample` got wrong: a FULL Fisher-Yates whatever `count` is (so the stream lands where the game's does), over a COPY (`.ToList()`), with no clamp on `count` (`Take(n)` on a shorter sequence yields the whole thing). Splash.cs:30-33 names `Rng.CombatCardGeneration`, so the site calls `get_distinct_for_combat_parity(<rng>.card_gen, ...)` -- the ready-made port of `CardFactory.GetDistinctForCombat`, whose body IS shuffle-then-take over `FilterForCombat`'s id list. The `is_parity` branch is gone rather than added to: the ALGORITHM was wrong in legacy mode too, and 'original means game source' says fix the engine rather than preserve the old sim sequence.  Pinned by test/test_take_random_streams.py, which gives every named accessor its own Random and asserts the site advanced the one its C# names and did NOT touch the shared `combat._rng`.  The pool membership was already faithful and is untouched (with a single unlocked character C# keeps the owner's own pool, Splash.cs:25-29). NOT CLOSED: `canSkip: true` (Splash.cs:41), the same dormant residue as card/discovery's.  The text it replaced read: The three-options / upgrade-the-options / choose-one / free-this-turn / add-to-hand sequence is faithful, including that the upgrade is applied to the OPTIONS before the choice (Splash.cs:34-40 == colorless_skills.py:706-709) so the player sees upgraded cards, and that `SetToFreeThisTurn` precedes the pile add (53-54 == 712-714). THE POOL AND THE STREAM. C# builds its candidate list from `Owner.UnlockState.CharacterCardPools`, REMOVING the owner's own pool only when more than one character pool is unlocked (Splash.cs:25-29), then filters to Attacks. With a single unlocked character the own pool is kept, which is exactly the sim's situation -- so `random_pool_cards(..., CardType.ATTACK, ...)` over IRONCLAD_POOL is the CORRECT membership for the sim's Ironclad-only scope, and the sim's docstring says so. That half is faithful. WRONG RNG STREAM: C# names `Owner.RunState.Rng.CombatCardGeneration`; the sim draws on the unseeded shared `combat._rng` even though `ctx.combat.combat_rng.card_gen` maps to `combat_card_generation` (combat_rng.py:20,52), and `random_pool_cards` uses `rng.sample` (pool.py:157-161) rather than GetDistinctForCombat's draw sequence. Same mechanism and same verdict as card/discovery's OnPlay entry (rule 3). LIVE, and this card is one of the 21 the `shared-rng` probe lists; card/infernal_blade and card/mad_science's Chaos rider show the correct shape. Also `canSkip: true` (Splash.cs:41) is not modelled: `CombatState.select_cards` always returns a card when candidates exist (combat.py:575-581), so the sim cannot decline -- dormant, the same residue as card/discovery's. REGRESSION TEST: `test/test_rng_tripwire.py:33` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1146-1148, combat.py:88), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate -- verified by playing this family's shape under a `Tripwire` and getting a hit at the `card.on_play` frame (combat.py:490). The gate is green today, so these 20 seeds never reach this card's draw; routing the site to the named `combat_rng` accessor is verified by keeping it green."
+      "issue": "Closed 2026-07-29 (round 7): `cards.pool.take_random` is `IEnumerableExtensions.TakeRandom` (IEnumerableExtensions.cs:17-20) -- `collection.ToList().UnstableShuffle(rng).Take(count)` -- and it encodes all three things `random.sample` got wrong: a FULL Fisher-Yates whatever `count` is (so the stream lands where the game's does), over a COPY (`.ToList()`), with no clamp on `count` (`Take(n)` on a shorter sequence yields the whole thing). Splash.cs:30-33 names `Rng.CombatCardGeneration`, so the site calls `get_distinct_for_combat_parity(<rng>.card_gen, ...)` -- the ready-made port of `CardFactory.GetDistinctForCombat`, whose body IS shuffle-then-take over `FilterForCombat`'s id list. The `is_parity` branch is gone rather than added to: the ALGORITHM was wrong in legacy mode too, and 'original means game source' says fix the engine rather than preserve the old sim sequence.  Pinned by test/test_take_random_streams.py, which gives every named accessor its own Random and asserts the site advanced the one its C# names and did NOT touch the shared `combat._rng`.  The pool membership was already faithful and is untouched (with a single unlocked character C# keeps the owner's own pool, Splash.cs:25-29). NOT CLOSED: `canSkip: true` (Splash.cs:41), the same dormant residue as card/discovery's.  The text it replaced read: The three-options / upgrade-the-options / choose-one / free-this-turn / add-to-hand sequence is faithful, including that the upgrade is applied to the OPTIONS before the choice (Splash.cs:34-40 == colorless_skills.py:773-776) so the player sees upgraded cards, and that `SetToFreeThisTurn` precedes the pile add (53-54 == 780-782). THE POOL AND THE STREAM. C# builds its candidate list from `Owner.UnlockState.CharacterCardPools`, REMOVING the owner's own pool only when more than one character pool is unlocked (Splash.cs:25-29), then filters to Attacks. With a single unlocked character the own pool is kept, which is exactly the sim's situation -- so `random_pool_cards(..., CardType.ATTACK, ...)` over IRONCLAD_POOL is the CORRECT membership for the sim's Ironclad-only scope, and the sim's docstring says so. That half is faithful. WRONG RNG STREAM (as it stood; now closed per the OnPlay verdict above, kept for history): C# names `Owner.RunState.Rng.CombatCardGeneration`; the sim used to draw on the unseeded shared `combat._rng` even though `ctx.combat.combat_rng.card_gen` maps to `combat_card_generation`, and `random_pool_cards` used `rng.sample` (sts2_rl/cards/pool.py) rather than GetDistinctForCombat's draw sequence. Same mechanism and same verdict as card/discovery's OnPlay entry (rule 3). Also `canSkip: true` (Splash.cs:41) is not modelled: `CombatState.select_cards` always returns a card when candidates exist (sts2_rl/combat.py:1475), so the sim cannot decline -- dormant, the same residue as card/discovery's. REGRESSION TEST: `test/test_rng_tripwire.py` (`test_no_wrong_stream_draws_in_random_run`, 20 seeded full runs, re-verified present) is the standing gate for this whole family. It wraps `RunState.rng` and asserts ZERO in-combat draws on it; `CombatState` receives that same object as `self._rng` (run.py:1709, combat.py:153), so a `ctx.combat._rng` draw taken from inside a card's `on_play` is recorded and fails the gate. The gate is green today; routing the site to the named `combat_rng` accessor is verified by keeping it green."
     },
     "OnUpgrade": {
-      "maps_to": "handled inline as `if self.upgrade_level > 0` (colorless_skills.py:706)",
+      "maps_to": "handled inline as `if self.upgrade_level > 0` (colorless_skills.py:773)",
       "verdict": "faithful",
       "rationale": "Splash.cs declares NO OnUpgrade override -- the upgrade changes no printed number, it upgrades the generated options, read from `IsUpgraded` inside OnPlay. The sim mirrors that exactly, including having no `_on_upgrade`. Same shape as card/armaments, card/cascade and card/primal_force. The sim's extra `if card.is_upgradable` test matches C#'s `CardCmd.Upgrade`, which self-checks IsUpgradable (CardCmd.cs:270-273)."
     }

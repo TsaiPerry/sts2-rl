@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -69,7 +69,7 @@
     },
     {
       "what": "Ransack's ONE `Owner.PlayerRng.Rewards.NextItem(items)` draw and its `if (potionModel != null)` guard (PotionCourier.cs:52-59)",
-      "maps_to": "events/potion_courier.py:55-57 `self.run.rewards_rng.next_item(options)` with an `if pid is not None` guard. run.rewards_rng IS the per-player Rewards stream in parity runs (run.py:271-274) -- the very stream the source names -- so EV-3 does NOT apply to this event. EXECUTED (`py audit/tools/event_probes_a.py ransack`): choosing RANSACK advances the Rewards counter by exactly 1. Rng.next_item (rng.py:248-252) is NextInt(0, len) over the list and returns None for an empty one, the same null NextItem returns.",
+      "maps_to": "events/potion_courier.py:55-57 `self.run.rewards_rng.next_item(options)` with an `if pid is not None` guard. run.rewards_rng IS the per-player Rewards stream in parity runs (run.py:367-371) -- the very stream the source names -- so EV-3 does NOT apply to this event. EXECUTED (`py audit/tools/event_probes_a.py ransack`): choosing RANSACK advances the Rewards counter by exactly 1. Rng.next_item (rng.py:248-252) is NextInt(0, len) over the list and returns None for an empty one, the same null NextItem returns.",
       "verdict": "faithful"
     },
     {
@@ -78,8 +78,8 @@
       "verdict": "faithful"
     },
     {
-      "what": "EV-4: GrabPotions' three PotionRewards (PotionCourier.cs:38-43) and Ransack's one (PotionCourier.cs:55-58) is wrapped in RewardsCmd.OfferCustom in the source (RewardsCmd.cs:47-50 -> new RewardsSet(player).WithCustomRewards(rewards).Offer()), a TAKE-OR-SKIP screen; events/potion_courier.py:47-48 and :57 call run.add_potion directly. Two observables beyond the missing decline: (a) the sim cannot leave a Foul Potion on the screen to keep a belt slot free, and (b) run.add_potion silently returns False when the belt is full (run.py:474-486), so the 3rd Foul Potion is DROPPED where the game leaves it unclaimed on a screen the player can still work through. EXECUTED (`py audit/tools/event_probes_a.py ransack`): GRAB_POTIONS on a default run fills all three belt slots with FoulPotion with no choice offered.",
-      "maps_to": "Closed 2026-07-28: the payout is a take-or-skip screen now. events/potion_courier.py:49 (each of the three Foul Potions) and :60/:67 (Ransack) routes through `Event.offer_potion` / `Event.offer_card_reward` (events/base.py:214-230), whose `_accept_offer` (events/base.py:194-212) consults the run's `reward_offer_selector` -- the headless stand-in for RewardsCmd.OfferCustom (RewardsCmd.cs:47-50), the same convention `run.card_selector` is for CardSelectCmd -- and only grants the reward when the screen is taken. Was: an unconditional grant with no decline path at all. Declining is exercised by test/test_event_offer_screens.py.",
+      "what": "EV-4: GrabPotions' three PotionRewards (PotionCourier.cs:38-43) and Ransack's one (PotionCourier.cs:55-58) is wrapped in RewardsCmd.OfferCustom in the source (RewardsCmd.cs:47-50 -> new RewardsSet(player).WithCustomRewards(rewards).Offer()), a TAKE-OR-SKIP screen; events/potion_courier.py:47-48 and :57 call run.add_potion directly. Two observables beyond the missing decline: (a) the sim cannot leave a Foul Potion on the screen to keep a belt slot free, and (b) run.add_potion silently returns False when the belt is full (run.py:805-830), so the 3rd Foul Potion is DROPPED where the game leaves it unclaimed on a screen the player can still work through. EXECUTED (`py audit/tools/event_probes_a.py ransack`): GRAB_POTIONS on a default run fills all three belt slots with FoulPotion with no choice offered.",
+      "maps_to": "Closed 2026-07-28: the payout is a take-or-skip screen now. events/potion_courier.py:49 (each of the three Foul Potions) and :60/:67 (Ransack) routes through `Event.offer_potion` (events/base.py:263-268 as of the 2026-08-01 R6 rework), whose `_accept_offer` (events/base.py:203-261) consults the run's `reward_offer_selector` -- the headless stand-in for RewardsCmd.OfferCustom (RewardsCmd.cs:47-50), the same convention `run.card_selector` is for CardSelectCmd -- and only grants the reward when the screen is taken. `Event.offer_card_reward` (cited by the original 2026-07-28 audit) was removed 2026-08-01 (R2, round 13) as dead code; PotionCourier never called it, only `offer_potion`, so the verdict is unaffected. Was: an unconditional grant with no decline path at all. Declining is exercised by test/test_event_offer_screens.py.",
       "verdict": "faithful"
     },
     {

@@ -30,13 +30,18 @@
       "side": "sim"
     },
     {
+      "path": "sts2_rl/cmds.py",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
+      "side": "sim"
+    },
+    {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     },
     {
@@ -64,7 +69,7 @@
     "AfterShuffle": {
       "maps_to": "on_shuffle (the_abacus.py:22-25)",
       "verdict": "faithful",
-      "rationale": "STALE at round 11: the only guard this rollup named, N4 (the missing over-or-ending gate), is closed in today's code. EXECUTED (this pass): both call sites that dispatch `on_shuffle` -- `reshuffle_discard_into_draw` (player.py:341-373) and `shuffle_draw_and_discard` (player.py:375-396) -- now open with `if _is_over_or_ending(self._hooks): return` (player.py:344, :385), which cmds.py:30-40 documents as `CombatManager.Instance.IsOverOrEnding` for a command, matching CardPileCmd.Shuffle's own early return (CardPileCmd.cs:866-869). Both paths bail out before reaching the reshuffle and before `self._hooks.on_shuffle(self)` at :373/:396, so a shuffle triggered after the combat is decided can no longer grant the Abacus's block. The effect, the owner guard (N1), the constant (N2) and the trigger set (N3) were already faithful."
+      "rationale": "STALE at round 11: the only guard this rollup named, N4 (the missing over-or-ending gate), is closed in today's code. EXECUTED (this pass): both call sites that dispatch `on_shuffle` -- `reshuffle_discard_into_draw` (player.py:486-520) and `shuffle_draw_and_discard` (player.py:522-556) -- now open with `if _is_over_or_ending(self._hooks): return` (player.py:489, :532 -- RECONFIRMED 2026-08-04, only line numbers moved), which cmds.py:30-40 documents as `CombatManager.Instance.IsOverOrEnding` for a command, matching CardPileCmd.Shuffle's own early return (CardPileCmd.cs:866-869). Both paths bail out before reaching the reshuffle and before `self._hooks.on_shuffle(self)` at :520/:556, so a shuffle triggered after the combat is decided can no longer grant the Abacus's block. The effect, the owner guard (N1), the constant (N2) and the trigger set (N3) were already faithful."
     }
   },
   "guards": [
@@ -81,12 +86,12 @@
     {
       "what": "N3 (EXECUTED -- settles the trigger set, which is the only interesting question this relic has): which shuffles fire AfterShuffle",
       "verdict": "faithful",
-      "rationale": "Hook.AfterShuffle has exactly ONE dispatch site in the whole game -- CardPileCmd.cs:917, at the bottom of CardPileCmd.Shuffle -- so it fires from the explicit Shuffle command and from ShuffleIfNecessary (CardPileCmd.cs:972-981, which calls Shuffle only when the draw pile is empty and the discard pile is not), and NOT from the combat-start randomise, which is a different call path (CardPile.RandomizeOrderInternal). The sim's on_shuffle has exactly three call sites: player.py:218 (reshuffle_discard_into_draw = the ShuffleIfNecessary path), player.py:239 (shuffle_draw_and_discard = the explicit Shuffle) and cards/havoc.py:42 (Havoc's inline ShuffleIfNecessary, whose C# counterpart also routes through Shuffle). The sets match. EXECUTED (`py audit/tools/relic_probes_b16.py abacus-shuffle`): 0 block at combat start with the relic attached, 6 block after a ShuffleIfNecessary reshuffle -- exactly the C# numbers. Rule 7: player.py, cards/havoc.py and CardPileCmd.cs are not hashed by this record."
+      "rationale": "Hook.AfterShuffle has exactly ONE dispatch site in the whole game -- CardPileCmd.cs:917, at the bottom of CardPileCmd.Shuffle -- so it fires from the explicit Shuffle command and from ShuffleIfNecessary (CardPileCmd.cs:972-981, which calls Shuffle only when the draw pile is empty and the discard pile is not), and NOT from the combat-start randomise, which is a different call path (CardPile.RandomizeOrderInternal). The sim's on_shuffle has exactly three call sites: player.py:486 (reshuffle_discard_into_draw = the ShuffleIfNecessary path), player.py:522 (shuffle_draw_and_discard = the explicit Shuffle) and cards/havoc.py:42 (Havoc's inline ShuffleIfNecessary, whose C# counterpart also routes through Shuffle). The sets match. EXECUTED (`py audit/tools/relic_probes_b16.py abacus-shuffle`): 0 block at combat start with the relic attached, 6 block after a ShuffleIfNecessary reshuffle -- exactly the C# numbers. Rule 7: player.py, cards/havoc.py and CardPileCmd.cs are not hashed by this record."
     },
     {
       "what": "N4: C# skips the AfterShuffle dispatch entirely when the combat is over or ending; the sim's on_shuffle has no is_over gate",
       "verdict": "faithful",
-      "rationale": "CLOSED (found while settling this record's hooks.AfterShuffle entry, round 11): both dispatch sites now open with the over-or-ending gate. `reshuffle_discard_into_draw` (player.py:341-373) and `shuffle_draw_and_discard` (player.py:375-396) each start `if _is_over_or_ending(self._hooks): return` (player.py:344, :385) BEFORE the reshuffle logic and before `self._hooks.on_shuffle(self)`, where `is_over_or_ending` (cmds.py:30-40) is documented as the command-side mirror of `CombatManager.Instance.IsOverOrEnding` -- matching CardPileCmd.Shuffle's own early return (CardPileCmd.cs:866-869). A shuffle triggered after the combat is decided can no longer reach `on_shuffle` at all, so the Abacus's block grant is gated exactly as the game gates it. WAS: PlayerCombatState.reshuffle_discard_into_draw fired hooks.on_shuffle(self) unconditionally and the_abacus.py added no gate of its own, so a reshuffle after the last enemy died still granted 6 Block; the previous DORMANT reachability finding (no ported effect draws after the win) no longer needs to hold because the divergence itself is gone."
+      "rationale": "CLOSED (found while settling this record's hooks.AfterShuffle entry, round 11): both dispatch sites now open with the over-or-ending gate. `reshuffle_discard_into_draw` (player.py:486-520) and `shuffle_draw_and_discard` (player.py:522-556) each start `if _is_over_or_ending(self._hooks): return` (player.py:489, :532 -- RECONFIRMED 2026-08-04, only line numbers moved) BEFORE the reshuffle logic and before `self._hooks.on_shuffle(self)`, where `is_over_or_ending` (cmds.py:30-40) is documented as the command-side mirror of `CombatManager.Instance.IsOverOrEnding` -- matching CardPileCmd.Shuffle's own early return (CardPileCmd.cs:866-869). A shuffle triggered after the combat is decided can no longer reach `on_shuffle` at all, so the Abacus's block grant is gated exactly as the game gates it. WAS: PlayerCombatState.reshuffle_discard_into_draw fired hooks.on_shuffle(self) unconditionally and the_abacus.py added no gate of its own, so a reshuffle after the last enemy died still granted 6 Block; the previous DORMANT reachability finding (no ported effect draws after the win) no longer needs to hold because the divergence itself is gone."
     },
     {
       "what": "N5: Flash() (TheAbacus.cs:25), CanonicalVars (:17) and the Block ExtraHoverTips (:19)",

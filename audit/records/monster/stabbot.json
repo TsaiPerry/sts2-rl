@@ -6,16 +6,16 @@
   },
   "sim_source": {
     "path": "sts2_rl\\monsters\\glory\\fabricator.py",
-    "sha256": "789a1a3297f11e8b4097b8c315c4d63c2509d5e1d68a164d4d56ce40a4326284"
+    "sha256": "b3df21ebed6055dabca3cef5e5a0d1efc96279b98aae518d80ad669b6fbfeb3e"
   },
   "hooks": {
     "MinInitialHp": {
-      "maps_to": "min_hp = 18 (fabricator.py:73)",
+      "maps_to": "min_hp = 18 (fabricator.py:95)",
       "verdict": "faithful",
       "rationale": "Stabbot.cs:21 GetValueIfAscension(ToughEnemies, 19, 18) -> non-ascension 18."
     },
     "MaxInitialHp": {
-      "maps_to": "max_hp = 23 (fabricator.py:74)",
+      "maps_to": "max_hp = 23 (fabricator.py:96)",
       "verdict": "faithful",
       "rationale": "Stabbot.cs:23 GetValueIfAscension(ToughEnemies, 24, 23) -> non-ascension 23."
     },
@@ -30,21 +30,21 @@
       "rationale": "Presentation only, per SHARED-FINDINGS section 4 (monster stream) and monster_state_machine guards N2/N5. The whole override body is `if (TestMode.IsOff) { FabricatorNormal.SetBotFallPosition(NCombatRoom.Instance.GetCreatureNode(Creature)); }` -- SetBotFallPosition (FabricatorNormal.cs:60-68) writes a Node2D's Position so the bot drops in from the right height. Read to the END before deciding, per the KinPriest N6 precedent: there is no mechanical statement in it at all. The sim has no override and needs none."
     },
     "GenerateMoveStateMachine": {
-      "maps_to": "Stabbot.build_machine (fabricator.py:76-82)",
+      "maps_to": "Stabbot.build_machine (fabricator.py:98-104)",
       "verdict": "faithful",
-      "rationale": "Stabbot.cs:40-47 is one self-looping MoveState('STAB_MOVE', StabMove, new SingleAttackIntent(11), new DebuffIntent()); fabricator.py:76-82 is identical, with the two C# intents collapsed to Intent(ATTACK, damage=11, also=(DEBUFF,)). No branch state on either side."
+      "rationale": "Stabbot.cs:40-47 is one self-looping MoveState('STAB_MOVE', StabMove, new SingleAttackIntent(11), new DebuffIntent()); fabricator.py:98-104 is identical, with the two C# intents collapsed to Intent(ATTACK, damage=11, also=(DEBUFF,)). No branch state on either side. (Re-verified 2026-08-04: content unchanged, only a 22-line shift.)"
     }
   },
   "guards": [
     {
-      "what": "StabMove damage, debuff and ORDER (Stabbot.cs:49-55 vs fabricator.py:84-88)",
+      "what": "StabMove damage, debuff and ORDER (Stabbot.cs:49-55 vs fabricator.py:106-110)",
       "verdict": "faithful",
-      "rationale": "StabDamage = GetValueIfAscension(DeadlyEnemies, 12, 11) -> 11 = _STAB_DMG (fabricator.py:23); one hit on both sides; then FrailPower 1 on the targets, matching _STAB_FRAIL = 1 (:24). Attack-then-debuff order matches, which matters because Frail is a Debuff and so is Artifact-interceptable (cmds.py:299-306): applying it after the damage means an Artifact stack the attack could not have removed is still there to eat it, on both sides."
+      "rationale": "StabDamage = GetValueIfAscension(DeadlyEnemies, 12, 11) -> 11 = _STAB_DMG (fabricator.py:23); one hit on both sides; then FrailPower 1 on the targets, matching _STAB_FRAIL = 1 (:24). Attack-then-debuff order matches, which matters because Frail is a Debuff and so is Artifact-interceptable (cmds.py), on both sides."
     },
     {
-      "what": "`applier` omitted on the Frail application (fabricator.py:88) where C# passes base.Creature (Stabbot.cs:54)",
+      "what": "`applier` omitted on the Frail application (fabricator.py:110) where C# passes base.Creature (Stabbot.cs:54)",
       "verdict": "deliberate-divergence",
-      "rationale": "PowerCmd.apply's applier defaults to None (cmds.py:271-277) and the port does not pass one. Same observable, established by execution rather than assumed: the only four places in the sim where `applier` changes an outcome are relics/unsettling_lamp.py:47 (`applier is not self.player`), powers.py:195 (RitualPower, `applier is not None and applier.side != owner.side`), powers.py:1167 (ViciousPower, `applier is not self.owner`) and powers.py:3094 (`applier is self.owner`). For a monster-applied debuff landing on the PLAYER, None and the Stabbot give the same answer at all four: the Lamp's guard fails either way (the applier is never the player), and Ritual/Vicious/the stat-stealer are not held by the player in any Glory fight and key on the OWNER, not on a monster. Concrete trigger that would make it a gap: any ported listener that branches on `applier is None`, or a power stored on the player whose behaviour depends on which enemy applied it. Same mechanism and same verdict wherever a batch-7 unit self-buffs or debuffs without an applier."
+      "rationale": "PowerCmd.apply's applier defaults to None (cmds.py) and the port does not pass one. Same observable, established by execution rather than assumed: the only four places in the sim where `applier` changes an outcome are relics/unsettling_lamp.py:47 (`applier is not self.player`), powers.py:195 (RitualPower, `applier is not None and applier.side != owner.side`), powers.py:1167 (ViciousPower, `applier is not self.owner`) and powers.py:3094 (`applier is self.owner`). For a monster-applied debuff landing on the PLAYER, None and the Stabbot give the same answer at all four: the Lamp's guard fails either way (the applier is never the player), and Ritual/Vicious/the stat-stealer are not held by the player in any Glory fight and key on the OWNER, not on a monster. Concrete trigger that would make it a gap: any ported listener that branches on `applier is None`, or a power stored on the player whose behaviour depends on which enemy applied it. Same mechanism and same verdict wherever a batch-7 unit self-buffs or debuffs without an applier."
     },
     {
       "what": "Rule 29 -- Stabbot vs its siblings",
@@ -62,17 +62,17 @@
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     }
   ]

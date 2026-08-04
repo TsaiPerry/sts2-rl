@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -31,29 +31,39 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/hooks.py",
-      "sha256": "9c3e688e90a65df969ac129be51eb0d7d5ae9a412bf31b490d623b380b72bc92",
+      "sha256": "3d39a103f9636007fe654337d08443cc48445a6b0a31c52c20f080487699bf0a",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Models/Powers/MinionPower.cs",
+      "sha256": "10ed71ca328a4cc2325a7424ea67df54ca93e73562f22ca7dcb3964962c05537",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:2312 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py:2942 `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack (not overridden)",
+      "maps_to": "powers.py:137-139 Power.on_stack (not overridden)",
       "verdict": "faithful",
-      "rationale": "PowerStackType.Single, sim does not override on_stack, so it adds -- matching PowerCmd.ModifyAmount (PowerCmd.cs:236). The Amount IS read here (it is the reattach heal, ReattachPower.cs:47 / powers.py:2365-2366), which is precisely why leaving on_stack alone matters; monsters/hive/decimillipede.py applies it once per segment."
+      "rationale": "PowerStackType.Single, sim does not override on_stack, so it adds -- matching PowerCmd.ModifyAmount (PowerCmd.cs:236). The Amount IS read here (it is the reattach heal, ReattachPower.cs:47 / powers.py:3004-3005), which is precisely why leaving on_stack alone matters; monsters/hive/decimillipede.py applies it once per segment."
     },
     "ShouldScaleInMultiplayer": {
       "maps_to": "no sim counterpart",
@@ -61,24 +71,24 @@
       "rationale": "Multiplayer-only scaling. Out of scope."
     },
     "AfterDeath": {
-      "maps_to": "powers.py:2343-2352 ReattachPower.on_death",
+      "maps_to": "powers.py:2981-2991 ReattachPower.on_death",
       "verdict": "faithful",
-      "rationale": "The one unit in this family the sim gets STRUCTURALLY right: it uses the real after-death hook (hooks.on_death, cmds.py:105) plus should_remove_from_combat_after_death, so the segment genuinely dies at 0 HP and is retained, exactly as C# does -- and combat.py:288-292's comment says so outright (\"a corpse the combat retained (a withered Decimillipede segment) keeps taking turns -- that is how it reaches REATTACH\"). Guard-for-guard: `wasRemovalPrevented || base.Owner != creature` -> `creature is not self.owner or self.is_reviving` (powers.py:2347; see the wasRemovalPrevented guard below), and `!AreAllOtherSegmentsDead() || !base.Owner.IsDead` -> `if self._all_others_down(): return` (powers.py:2349-2350). The `|| !base.Owner.IsDead` arm is dropped, which is defensive only: on this path the owner is always dead. The else-branch (DoFadeOutOnAllSegments) is pure presentation."
+      "rationale": "The one unit in this family the sim gets STRUCTURALLY right: it uses the real after-death hook (hooks.on_death, cmds.py:162) plus should_remove_from_combat_after_death, so the segment genuinely dies at 0 HP and is retained, exactly as C# does -- and combat.py's `_resolve_death`-adjacent comment says so outright (\"a corpse the combat retained (a withered Decimillipede segment) keeps taking turns -- that is how it reaches REATTACH\"). Guard-for-guard: `wasRemovalPrevented || base.Owner != creature` -> `creature is not self.owner or self.is_reviving` (powers.py:2986; see the wasRemovalPrevented guard below), and `!AreAllOtherSegmentsDead() || !base.Owner.IsDead` -> `if self._all_others_down(): return` (powers.py:2988-2989). The `|| !base.Owner.IsDead` arm is dropped, which is defensive only: on this path the owner is always dead. The else-branch (DoFadeOutOnAllSegments) is pure presentation."
     },
     "ShouldAllowHitting": {
-      "maps_to": "powers.py:2354-2357 should_allow_hitting",
+      "maps_to": "powers.py:2993-2996 should_allow_hitting",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: PowerCmd.apply now opens with `if not hooks.should_allow_hitting(target): return` (cmds.py:394-395), the sim's port of PowerCmd.Apply<T>'s `if (!target.CanReceivePowers) return null` (PowerCmd.cs:73-76), whose CanReceivePowers reuses Hook.ShouldAllowHitting (Creature.cs:308-322). VERIFIED 2026-07-27 by reading cmds.py:369-396 and both C# files. WAS: the predicate was wired into DamageCmd.deal only, so a debuff landed on a creature the game refuses to touch -- Vulnerable sticking to a reviving Test Subject."
+      "issue": "Closed 2026-07-27: PowerCmd.apply (cmds.py:853) opens with `if not can_receive_powers(hooks, target): return None` (cmds.py:901), and `can_receive_powers` (cmds.py:65-75) is `not target.is_removed_from_combat and hooks.should_allow_hitting(target)` -- the sim's port of PowerCmd.Apply<T>'s `if (!target.CanReceivePowers) return null` (PowerCmd.cs:73-76), whose CanReceivePowers reuses Hook.ShouldAllowHitting (Creature.cs:308-322). WAS: the predicate was wired into DamageCmd.deal only (cmds.py:311-312), so a debuff landed on a creature the game refuses to touch -- Vulnerable sticking to a reviving Test Subject."
     },
     "ShouldCreatureBeRemovedFromCombatAfterDeath": {
-      "maps_to": "powers.py:2338-2341 should_remove_from_combat_after_death (hooks.py:603, consumed at cmds.py:102-104)",
+      "maps_to": "powers.py:2976-2979 should_remove_from_combat_after_death (hooks.py:1889-1893, consumed at cmds.py:158-160)",
       "verdict": "faithful",
-      "rationale": "`creature != base.Owner -> true, else false` maps exactly to `return creature is not self.owner`. This is the only power in half B that uses the sim's real hook for it, and it is why the Decimillipede works: cmds.py:102-104 sets `retained_after_death = not should_remove_from_combat_after_death(...)` and combat.py:292 then keeps the corpse taking turns."
+      "rationale": "`creature != base.Owner -> true, else false` maps exactly to `return creature is not self.owner`. This is the only power in half B that uses the sim's real hook for it, and it is why the Decimillipede works: cmds.py:158-160 sets `retained_after_death = not should_remove_from_combat_after_death(...)` and combat.py:737 then keeps the corpse taking turns."
     },
     "ShouldPowerBeRemovedAfterOwnerDeath": {
       "maps_to": "no sim counterpart",
       "verdict": "faithful",
-      "rationale": "`ShouldPowerBeRemovedAfterOwnerDeath() => false`. C# strips a dead creature's powers at CreatureCmd.cs:533 (`creature.RemoveAllPowersAfterDeath()`, then each power's AfterRemoved) and this override opts out so the power survives the death it is supposed to react to. The sim never removes powers on death at all -- a grep of cmds.py's kill/death path finds no `powers.clear()` or per-power removal, and cmds.py:96-105 goes straight from the HP write to should_die / should_remove_from_combat_after_death / on_death -- so `false` is the sim's universal behaviour and this override is satisfied for free. Faithful HERE. The inverse is a real machinery gap owned by nobody: the C# DEFAULT is `true`, so every power WITHOUT this override should be stripped on its owner's death and in the sim none is. That is reported in content-power-report-b.md section 3 rather than verdicted on this unit, because it is an engine-wide absence and not this power's divergence. Third-file citations, not hashed here. ENGINE-LEVEL SIBLING (added 2026-07-26): the INVERSE finding -- that C#'s DEFAULT is `true` so every power WITHOUT this override should be stripped on its owner's death and in the sim none is -- now carries a verdict of its own at audit/records/seam/creature_card_cmds.json step 8b (`gap`, LIVE, executed on the Decimillipede). It used to exist only as prose in content-power-report-b.md section 3c. This entry stays `faithful` because the override asks for exactly the behaviour the sim gives for free; the engine-wide absence is step 8b's, not this unit's."
+      "rationale": "`ShouldPowerBeRemovedAfterOwnerDeath() => false`. C# strips a dead creature's powers at CreatureCmd.cs:533 (`creature.RemoveAllPowersAfterDeath()`, then each power's AfterRemoved) and this override opts out so the power survives the death it is supposed to react to. RE-READ THIS PASS, AND THE PREMISE HAS CHANGED SINCE THIS RECORD WAS WRITTEN: the sim NOW strips powers after death for real. `_strip_powers_after_death` (cmds.py:223-238) is called from the real-death arm of `_resolve_death` and does exactly the C# thing -- `doomed = [p for p in target.powers.values() if p.should_power_be_removed_after_owner_death() and hooks.should_power_be_removed_on_death(p)]`, then `_expire()` + `on_removed` for each -- so ReattachPower's `False` override is no longer 'satisfied for free', it is now the thing that actively keeps this power alive on its own owner's death, exactly matching C#. This appears to CLOSE the previously-recorded engine-level sibling gap at `audit/records/seam/creature_card_cmds.json` step 8b (last known as `gap`, LIVE, 'the sim strips no powers on death') -- that record is seam-owned and out of my batch, so I have NOT edited it, but flagging for the controller: `_strip_powers_after_death` existing and being wired into `_resolve_death`'s real-death arm looks like it closes 8b. Faithful HERE either way, since this power's own override behaves correctly under both the old and the new model."
     },
     "ShouldOwnerDeathTriggerFatal": {
       "maps_to": "no sim counterpart",
@@ -90,22 +100,22 @@
     {
       "what": "ReattachPower.cs:53 `wasRemovalPrevented`",
       "verdict": "faithful",
-      "rationale": "CORRECTION worth writing down, because the parameter is misnamed in the decompiled source and the obvious reading is wrong: `wasRemovalPrevented: true` is passed when **Hook.ShouldDie returned FALSE**, i.e. when the DEATH was prevented (CreatureCmd.cs:566), and `false` on the path where the creature really dies (CreatureCmd.cs:519). It is NOT about ShouldCreatureBeRemovedFromCombatAfterDeath, which is computed separately at CreatureCmd.cs:508 and does not feed the flag. So `!wasRemovalPrevented` means \"the creature actually died\". The sim fires hooks.on_death ONLY on the should_die-returned-True branch (cmds.py:98-105) and fires nothing at all on the prevented branch (cmds.py:106-113 does hp = 1 then after_preventing_death), so every `!wasRemovalPrevented` guard in this batch is satisfied structurally rather than by a matching test. Faithful for every ported listener, because all of them early-out on the flag. The residue -- that the sim has no AfterDeath dispatch AT ALL for a prevented death -- is a dormant machinery gap: no ported power acts on `wasRemovalPrevented == true`. Third-file citations, not hashed here."
+      "rationale": "CORRECTION worth writing down, because the parameter is misnamed in the decompiled source and the obvious reading is wrong: `wasRemovalPrevented: true` is passed when **Hook.ShouldDie returned FALSE**, i.e. when the DEATH was prevented (CreatureCmd.cs:566), and `false` on the path where the creature really dies (CreatureCmd.cs:519). It is NOT about ShouldCreatureBeRemovedFromCombatAfterDeath, which is computed separately at CreatureCmd.cs:508 and does not feed the flag. So `!wasRemovalPrevented` means \"the creature actually died\". RE-READ THIS PASS: the sim's `_resolve_death` (cmds.py:126-220) NOW calls `hooks.on_death` on BOTH branches -- the real-death arm at cmds.py:162 (`hooks.on_death(target, False)`) and the prevented arm at cmds.py:219 (`hooks.on_death(target, True)`) -- unlike the earlier structure this rationale used to describe, where the prevented branch never dispatched AfterDeath at all. ReattachPower.on_death (powers.py:2981-2991) itself does NOT test its `was_removal_prevented` parameter, only `creature is not self.owner or self.is_reviving`, so on paper a prevented death would still wither the segment. DORMANT, executed by reading rather than a probe: `hooks.should_die` (hooks.py:1872-1880) only has two registered listeners in the whole sim -- `LizardTailPower.should_die_late` and the Fairy-in-a-Bottle-equivalent potion's `should_die` (potions.py:1394-1395, `return creature.side != \"player\"`, i.e. it vetoes ONLY when `creature.side == \"player\"`) -- both player-only relics/potions, and grep of every monster package for a `should_die` override returns none. ReattachPower's owner is always an enemy (a Decimillipede segment), so the prevented branch of `_resolve_death` is never reached for it; `was_removal_prevented` arrives as `False` on every call this power's owner can ever receive. Named trigger: an enemy-side death-prevention listener (none ported) or Reattach applied to a player (never happens; the applier is the Hive Decimillipede monster only). Third-file citations, not hashed here."
     },
     {
       "what": "ReattachPower.cs:149-158 GetOtherSegments / AreAllOtherSegmentsDead",
       "verdict": "faithful",
-      "rationale": "C# filters `GetTeammatesOf(Owner).Except([Owner]).Where(c => c.HasPower<ReattachPower>())` and asks `.All(s => s.IsDead)`; powers.py:2324-2336 filters `combat.enemies` for `e is not self.owner and \"reattach\" in e.powers` and asks `all(s.is_dead ...)`. Equivalent in single-player (teammates of an enemy == the enemy list), and the vacuous-truth case matches too: a lone segment gets `all([]) == True` on both sides, which is what makes killing the last one final."
+      "rationale": "C# filters `GetTeammatesOf(Owner).Except([Owner]).Where(c => c.HasPower<ReattachPower>())` and asks `.All(s => s.IsDead)`; powers.py:2962-2974 filters `combat.enemies` for `e is not self.owner and \"reattach\" in e.powers` and asks `all(s.is_dead ...)`. Equivalent in single-player (teammates of an enemy == the enemy list), and the vacuous-truth case matches too: a lone segment gets `all([]) == True` on both sides, which is what makes killing the last one final."
     },
     {
       "what": "ReattachPower.cs:40-49 DoReattach's AreAllOtherSegmentsDead guard",
       "verdict": "faithful",
-      "rationale": "powers.py:2359-2362 reproduces it, comment included. The heal differs in FORM -- C# calls `CreatureCmd.Heal(Owner, base.Amount)` (heal BY Amount, capped at max HP) where powers.py:2365-2366 SETS `hp = self.amount` -- but the segment is at 0 HP when it reattaches, so heal-by-N and set-to-N coincide. Recorded because they would not coincide if anything ever healed a withered segment first, and nothing does."
+      "rationale": "powers.py:2998-3001 reproduces it, comment included. The heal differs in FORM -- C# calls `CreatureCmd.Heal(Owner, base.Amount)` (heal BY Amount, capped at max HP) where powers.py:3004-3005 SETS `hp = self.amount` -- but the segment is at 0 HP when it reattaches, so heal-by-N and set-to-N coincide. Recorded because they would not coincide if anything ever healed a withered segment first, and nothing does."
     },
     {
-      "what": "powers.py:2364 `self.owner.retained_after_death = False` on reattach",
+      "what": "powers.py:3003 `self.owner.retained_after_death = False` on reattach",
       "verdict": "faithful",
-      "rationale": "No C# counterpart is needed -- C# never removed the creature -- but the sim must clear the flag it set at cmds.py:102-104 or the revived segment would keep being treated as a corpse. Correct, and load-bearing."
+      "rationale": "No C# counterpart is needed -- C# never removed the creature -- but the sim must clear the flag it set at cmds.py:158-160 or the revived segment would keep being treated as a corpse. Correct, and load-bearing."
     },
     {
       "what": "ReattachPower.cs:44,46,64,111-147 NCombatRoom / NDecimillipedeSegmentVfx / SetCreatureIsInteractable / DoFadeOutOnAllSegments",

@@ -2,7 +2,7 @@
   "unit": "relic/history_course",
   "game_source": {
     "path": "src\\Core\\Models\\Relics\\HistoryCourse.cs",
-    "sha256": "52e276e91f28d1e748bb3066846ee7140fd38b4a1d4295a364e3ef6cd32d8913"
+    "sha256": "7d8a8b3a7d2341abc55fcfa699417d07a834063dc5d86e7683b6b6e408bb76e6"
   },
   "sim_source": {
     "path": "sts2_rl\\relics\\history_course.py",

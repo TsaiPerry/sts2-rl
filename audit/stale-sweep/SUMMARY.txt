@@ -1,0 +1,2 @@
+monster: class-a 1 / class-b 16
+TOTAL: class-a 1 / class-b 16 (classified 17)

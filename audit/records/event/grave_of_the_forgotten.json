@@ -16,12 +16,12 @@
     },
     {
       "path": "sts2_rl/events/base.py",
-      "sha256": "70bda89d8e4509e892ea50283ae24c5763e09f94b6121106140c40cc30e870e1",
+      "sha256": "8547770f3b1d30c4034bb8253bf66ed8b217271782e64698cba960dd0d470306",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -34,7 +34,7 @@
   "guards": [
     {
       "what": "GenerateInitialOptions' LOCK (GraveOfTheForgotten.cs:41-49): CONFRONT is replaced by a null-onChosen CONFRONT_LOCKED option when HasEnchantableCards is false -- the option is still PRESENT, just unclickable, and ACCEPT is always offered",
-      "maps_to": "events/grave_of_the_forgotten.py:36-41 builds exactly that: a 'CONFRONT_LOCKED' EventOption with on_chosen None (EventOption.locked, events/base.py:62-64, and choose() refuses it, events/base.py:153-154), followed by ACCEPT. The re-check is meaningful even though IsAllowed already passed -- the sim reproduces the redundancy rather than collapsing it.",
+      "maps_to": "events/grave_of_the_forgotten.py:36-41 builds exactly that: a 'CONFRONT_LOCKED' EventOption with on_chosen None (EventOption.locked, events/base.py, and choose() refuses it, events/base.py), followed by ACCEPT. The re-check is meaningful even though IsAllowed already passed -- the sim reproduces the redundancy rather than collapsing it.",
       "verdict": "faithful"
     },
     {
@@ -44,7 +44,7 @@
     },
     {
       "what": "Accept (GraveOfTheForgotten.cs:67-71): RelicCmd.Obtain<ForgottenSoul>",
-      "maps_to": "events/grave_of_the_forgotten.py:50-52 add_relic('forgotten_soul'), which runs the relic's AfterObtained (run.py:546-553).",
+      "maps_to": "events/grave_of_the_forgotten.py:50-52 add_relic('forgotten_soul'), which runs the relic's AfterObtained (run.py:957-964).",
       "verdict": "faithful"
     },
     {

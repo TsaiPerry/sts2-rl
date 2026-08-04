@@ -16,7 +16,7 @@
     },
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     }
   ],
@@ -28,7 +28,7 @@
     "ModifyMaxEnergy": {
       "maps_to": "modify_max_energy (bread.py:18-21)",
       "verdict": "faithful",
-      "rationale": "Bread.cs:19-31 returns the amount unchanged when TurnNumber == 1 and otherwise adds EnergyVar('GainEnergy', 1).BaseValue; bread.py:19-21 is the same branch with the same constant. Consulted at player.py:163 = turn_structure step 17. The C# null-check on PlayerCombatState is defensive and has no sim counterpart to diverge from."
+      "rationale": "Bread.cs:19-31 returns the amount unchanged when TurnNumber == 1 and otherwise adds EnergyVar('GainEnergy', 1).BaseValue; bread.py:19-21 is the same branch with the same constant. Consulted at player.py:372 (`_setup_player_turn`, turn_structure step 17) -- re-verified 2026-08-04: `should_reset_energy` is now evaluated FIRST and `modify_max_energy` is called exactly once regardless of branch (player.py:371-376), matching CombatManager.cs:641-649's order exactly (this was previously a dormant ordering gap, fixed since the last audit); the fix does not change this relic's verdict since bread's own effect depends only on `self.turn`, not the reset/add branch taken. The C# null-check on PlayerCombatState is defensive and has no sim counterpart to diverge from."
     },
     "AfterSideTurnStart": {
       "maps_to": "on_player_turn_started (bread.py:23-25)",

@@ -49,7 +49,7 @@
     {
       "what": "LeechingHugMove passes a NULL applier for the Weak but the CREATURE for the Strength (SlimedBerserker.cs:77-78); the sim omits both (slimed_berserker.py:65-66)",
       "verdict": "deliberate-divergence",
-      "rationale": "PROMPT.md class 15's shape -- paired applications rarely carry the same guard set, and here the source itself is asymmetric: `PowerCmd.Apply<WeakPower>(ctx, targets, 3m, null, null)` has a null applier while `PowerCmd.Apply<StrengthPower>(ctx, Creature, 3m, Creature, null)` names the Berserker. The sim's PowerCmd.apply defaults applier to None (cmds.py:271-277) and neither call passes one, so the Weak matches the source exactly and only the Strength differs. Same observable, established by execution rather than assumed and identical to monster/stabbot's guard (governing rule 3): the only four sim sites where `applier` changes an outcome are relics/unsettling_lamp.py:47, powers.py:195 (RitualPower), powers.py:1167 (ViciousPower) and powers.py:3094, and a monster self-buff gives the same answer at all four whether the applier is None or the monster. Concrete trigger: any ported listener branching on `applier is None`, or a power on the monster whose behaviour keys on which creature buffed it."
+      "rationale": "PROMPT.md class 15's shape -- paired applications rarely carry the same guard set, and here the source itself is asymmetric: `PowerCmd.Apply<WeakPower>(ctx, targets, 3m, null, null)` has a null applier while `PowerCmd.Apply<StrengthPower>(ctx, Creature, 3m, Creature, null)` names the Berserker. The sim's PowerCmd.apply defaults applier to None (cmds.py) and neither call passes one, so the Weak matches the source exactly and only the Strength differs. Same observable, established by execution rather than assumed and identical to monster/stabbot's guard (governing rule 3): the only four sim sites where `applier` changes an outcome are relics/unsettling_lamp.py:47, powers.py:195 (RitualPower), powers.py:1167 (ViciousPower) and powers.py:3094, and a monster self-buff gives the same answer at all four whether the applier is None or the monster. Concrete trigger: any ported listener branching on `applier is None`, or a power on the monster whose behaviour keys on which creature buffed it."
     },
     {
       "what": "VomitIchorMove's discard-pile add (SlimedBerserker.cs:70 vs slimed_berserker.py:53-57)",
@@ -82,22 +82,22 @@
     },
     {
       "path": "sts2_rl\\cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\monsters\\base.py",
-      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     }
   ]

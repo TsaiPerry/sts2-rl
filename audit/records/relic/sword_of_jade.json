@@ -56,17 +56,17 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
@@ -89,7 +89,7 @@
     "Rarity": {
       "maps_to": "rarity = RelicRarity.EVENT (sword_of_jade.py:19)",
       "verdict": "faithful",
-      "rationale": "SwordOfJade.cs:15 is RelicRarity.Event. EXECUTED (b15-pool): absent from the grab bag and named by no event -- the ONLY way to get it is relic/sword_of_stone replacing itself after five elite victories, which the b15-swords probe drives end to end (relics ['sword_of_stone'] -> ['sword_of_jade'] on the fifth elite). That matches the C# situation exactly (SwordOfStone.cs:48 is the only RelicCmd.Replace target for it), so binding rule 6's relic-side leg is satisfied via the chain. Event rarity also makes it untradable on both sides (relics/base.py:132-136)."
+      "rationale": "SwordOfJade.cs:15 is RelicRarity.Event. EXECUTED (b15-pool): absent from the grab bag and named by no event -- the ONLY way to get it is relic/sword_of_stone replacing itself after five elite victories, which the b15-swords probe drives end to end (relics ['sword_of_stone'] -> ['sword_of_jade'] on the fifth elite). That matches the C# situation exactly (SwordOfStone.cs:48 is the only RelicCmd.Replace target for it), so binding rule 6's relic-side leg is satisfied via the chain. Event rarity also makes it untradable on both sides (relics/base.py:188-199)."
     },
     "AfterRoomEntered": {
       "maps_to": "on_combat_start (sword_of_jade.py:22-29)",
@@ -117,7 +117,7 @@
     {
       "what": "N3: `room is CombatRoom` (SwordOfJade.cs:23) vs on_combat_start firing for every combat the sim builds",
       "verdict": "faithful",
-      "rationale": "The port's own docstring makes the claim ('the sim fires on_combat_start for every combat room type, so the hook maps there') and it holds: CombatState.__init__ fires hooks.on_combat_start() unconditionally (combat.py:208) and every RunState combat path -- Monster, Elite, Boss and the combat events -- goes through it, which is the same set as `room is CombatRoom`. The non-combat AfterRoomEntered rooms (EventRoom.cs:80, MerchantRoom.cs:68, RestSiteRoom.cs:37, TreasureRoom.cs:44) are excluded on both sides. Distinct from relic/sling_of_courage, whose C# AfterRoomEntered additionally filters RoomType.Elite and which therefore needs the run's room_type; this relic needs no such filter."
+      "rationale": "The port's own docstring makes the claim ('the sim fires on_combat_start for every combat room type, so the hook maps there') and it holds: CombatState.__init__ fires hooks.on_combat_start() unconditionally (combat.py:356, RECONFIRMED 2026-08-04 -- only the line number moved) and every RunState combat path -- Monster, Elite, Boss and the combat events -- goes through it, which is the same set as `room is CombatRoom`. The non-combat AfterRoomEntered rooms (EventRoom.cs:80, MerchantRoom.cs:68, RestSiteRoom.cs:37, TreasureRoom.cs:44) are excluded on both sides. Distinct from relic/sling_of_courage, whose C# AfterRoomEntered additionally filters RoomType.Elite and which therefore needs the run's room_type; this relic needs no such filter."
     },
     {
       "what": "N4: no state, no reset hook, no IsAllowed override; and the fact that AfterObtained is NOT overridden even though the relic arrives mid-run via RelicCmd.Replace",

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "63c0df752ca09e9de59285b0c9bc9be809da18e69b61b65424d75f37ee1ffc6b",
+      "sha256": "416789386ad4af19cb52a3c275a2c39c1708bb90ebc4dc5c8fb4e88a7055d557",
       "side": "sim"
     },
     {
@@ -36,30 +36,30 @@
     },
     {
       "path": "sts2_rl/rewards.py",
-      "sha256": "1ae7e53a0abfc78396ea4b115f87a530cb9ccd088b56e6fffe9883215defb681",
+      "sha256": "94925ea14c0058d99a11278e6999e75110ed7e9803de9cfc9cfc2b6846194bf2",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:1676 power_type = PowerType.BUFF",
+      "maps_to": "powers.py power_type = PowerType.BUFF",
       "verdict": "faithful",
       "rationale": "HeistPower.cs:11 PowerType.Buff; the sim agrees. Constant, not GetTypeForAmount."
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py Power.on_stack",
       "verdict": "faithful",
       "rationale": "HeistPower.cs:13 PowerStackType.Counter; the sim's inherited on_stack adds unconditionally, matching PowerCmd.cs:236. Third-file citation, not hashed."
     },
     "InstanceType": {
       "maps_to": "no sim counterpart",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-30 (tier-2 campaign): HeistPower.instance_type = PowerInstanceType.INSTANCED (sts2_rl/powers.py), mirroring HeistPower.cs:15. Verified directly by test/test_powers.py::TestPowerInstanceType::test_heist_two_applications_are_independent_amounts. DORMANT stands: the only applier (SurprisePower) applies it once per Fat Gremlin.  The text it replaced read: HeistPower.cs:15 PowerInstanceType.Instanced -- the audit/records/seam/power_cmd.json G5 mechanism, cross-referenced under rule 3. DORMANT here: the only applier is SurprisePower applying one HeistPower to the one Fat Gremlin it spawns (powers.py:1698ff), so two simultaneous instances are unreachable. Eleventh PowerInstanceType unit -- see the note on power/thievery."
+      "issue": "Closed 2026-07-30 (tier-2 campaign): HeistPower.instance_type = PowerInstanceType.INSTANCED (sts2_rl/powers.py), mirroring HeistPower.cs:15. Verified directly by test/test_powers.py::TestPowerInstanceType::test_heist_two_applications_are_independent_amounts. DORMANT stands: the only applier (SurprisePower) applies it once per Fat Gremlin.  The text it replaced read: HeistPower.cs:15 PowerInstanceType.Instanced -- the audit/records/seam/power_cmd.json G5 mechanism, cross-referenced under rule 3. DORMANT here: the only applier is SurprisePower applying one HeistPower to the one Fat Gremlin it spawns (powers.pyff), so two simultaneous instances are unreachable. Eleventh PowerInstanceType unit -- see the note on power/thievery."
     },
     "BeforeDeath": {
-      "maps_to": "powers.py:1678-1685 HeistPower.on_death",
+      "maps_to": "powers.py HeistPower.on_death",
       "verdict": "gap",
-      "issue": "HOOK-PHASE MISMATCH -- a BEFORE hook ported onto an AFTER hook, the recurring shape section 0 item 5 of the stream report names for thorns/curl_up/skittish/suck, now in a death-time form. C# calls Hook.BeforeDeath UNCONDITIONALLY at CreatureCmd.cs:503, two lines BEFORE Hook.ShouldDie at :505 decides whether the death stands. The sim's on_death fires only INSIDE the should_die-true branch (cmds.py:96-105), i.e. it is AfterDeath (CreatureCmd.cs:519), not BeforeDeath. Two divergences follow: (a) when a listener prevents the death, C# has already queued the GoldReward and the sim has not; and (b) if the creature is later killed for real, C# calls BeforeDeath a SECOND time and queues the reward TWICE. DORMANT, established by enumerating the ported should_die listeners rather than by assertion: they are IllusionPower (powers.py:1566), SteamEruptionPower (:2016), AdaptablePower (:3365), FairyInABottle (potions.py:1242, player-only) and Lizard Tail (relics/lizard_tail.py:35, player-only). The three enemy ones are self-buffs on Hive and Glory monsters; HeistPower's owner is the Underdocks Fat Gremlin that SurprisePower spawns, and nothing applies a death-preventer to it. Named trigger: any ported effect that prevents a Fat Gremlin's death, or applying Illusion/Adaptable cross-act."
+      "issue": "HOOK-PHASE MISMATCH -- a BEFORE hook ported onto an AFTER hook, the recurring shape section 0 item 5 of the stream report names for thorns/curl_up/skittish/suck, now in a death-time form. C# calls Hook.BeforeDeath UNCONDITIONALLY at CreatureCmd.cs:503, two lines BEFORE Hook.ShouldDie at :505 decides whether the death stands. The sim's on_death fires only INSIDE the should_die-true branch (cmds.py), i.e. it is AfterDeath (CreatureCmd.cs:519), not BeforeDeath. Two divergences follow: (a) when a listener prevents the death, C# has already queued the GoldReward and the sim has not; and (b) if the creature is later killed for real, C# calls BeforeDeath a SECOND time and queues the reward TWICE. DORMANT, established by enumerating the ported should_die listeners rather than by assertion: they are IllusionPower (powers.py), SteamEruptionPower (:2016), AdaptablePower (:3365), FairyInABottle (potions.py, player-only) and Lizard Tail (relics/lizard_tail.py:35, player-only). The three enemy ones are self-buffs on Hive and Glory monsters; HeistPower's owner is the Underdocks Fat Gremlin that SurprisePower spawns, and nothing applies a death-preventer to it. Named trigger: any ported effect that prevents a Fat Gremlin's death, or applying Illusion/Adaptable cross-act."
     }
   },
   "guards": [
@@ -71,12 +71,12 @@
     {
       "what": "HeistPower.cs:25 AddExtraReward(base.Target.Player, GoldReward(..., wasGoldStolenBack: true))",
       "verdict": "faithful",
-      "rationale": "The sim appends RewardExtra.of_gold(self.amount) to combat.pending_reward_extras (powers.py:1684-1685), documented at rewards.py:363 as the wasGoldStolenBack port. Same amount, same single-player recipient, same reward-screen destination."
+      "rationale": "The sim appends RewardExtra.of_gold(self.amount) to combat.pending_reward_extras (powers.py), documented at rewards.py as the wasGoldStolenBack port. Same amount, same single-player recipient, same reward-screen destination."
     },
     {
-      "what": "powers.py:1679 the sim ADDS an amount <= 0 test",
+      "what": "powers.py the sim ADDS an amount <= 0 test",
       "verdict": "faithful",
-      "rationale": "A GUARD THE SIM ADDS (bug class 8) that turns out to be LOAD-BEARING COMPENSATION, which is why it is faithful rather than a divergence. C# has no such test, so on its face a zero-amount HeistPower would queue a GoldReward(0) in the game and nothing in the sim -- and a zero amount is very reachable (kill the Merc before it ever attacks, so ThieveryPower's total is 0 and SurprisePower moves 0 across). But C#'s PowerCmd.Apply returns early on amount == 0m (PowerCmd.cs:104), so the game never creates the power at all and never reaches BeforeDeath. The sim has no zero-amount no-op -- that is power_cmd's step-6 finding, confirmed here by reading cmds.py:288-326 -- so it DOES create HeistPower(0), and this added guard is what makes the two sides agree. Recorded because the guard must not be removed independently of fixing power_cmd step 6: either alone is correct, neither-or-both is a divergence."
+      "rationale": "A GUARD THE SIM ADDS (bug class 8) that turns out to be LOAD-BEARING COMPENSATION, which is why it is faithful rather than a divergence. C# has no such test, so on its face a zero-amount HeistPower would queue a GoldReward(0) in the game and nothing in the sim -- and a zero amount is very reachable (kill the Merc before it ever attacks, so ThieveryPower's total is 0 and SurprisePower moves 0 across). But C#'s PowerCmd.Apply returns early on amount == 0m (PowerCmd.cs:104), so the game never creates the power at all and never reaches BeforeDeath. The sim has no zero-amount no-op -- that is power_cmd's step-6 finding, confirmed here by reading cmds.py -- so it DOES create HeistPower(0), and this added guard is what makes the two sides agree. Recorded because the guard must not be removed independently of fixing power_cmd step 6: either alone is correct, neither-or-both is a divergence."
     },
     {
       "what": "HeistPower.cs:23 the CombatRoom type test, and the escape path",

@@ -10,14 +10,14 @@
   },
   "hooks": {
     "RoomType": {
-      "maps_to": "rooms.py:187-189 `weak_keys=(\"devoted_sculptor\", ...)` (glory ActRooms)",
+      "maps_to": "rooms.py:261-263 `weak_keys=(\"devoted_sculptor\", ...)` (glory ActRooms)",
       "verdict": "deliberate-divergence",
-      "rationale": "DevotedSculptorWeak.cs:9 `RoomType => RoomType.Monster` (the WEAK encounters are still room-type Monster; weakness is a separate axis, see IsWeak below). Modeled structurally by pool membership -- `devoted_sculptor` is in `weak_keys`, which `RoomSet._generate_parity`/`_generate_legacy` (rooms.py:339-347, :382-390) draws from for the act's FIRST `num_weak` normal-slot rooms before falling back to `normal_keys`, and both pools feed the same `normal_keys`/`next_normal_encounter` accessor -- so the room TYPE (Monster, for gold-ladder purposes) is identical whether the room came from the weak or the regular bag. One shared mechanism across this batch; see `encounter/_room_type_and_weak` in the report."
+      "rationale": "DevotedSculptorWeak.cs:9 `RoomType => RoomType.Monster` (the WEAK encounters are still room-type Monster; weakness is a separate axis, see IsWeak below). Modeled structurally by pool membership -- `devoted_sculptor` is in `weak_keys`, which `RoomSet._generate_parity`/`_generate_legacy` (rooms.py:439-448, :482-491, :382-390) draws from for the act's FIRST `num_weak` normal-slot rooms before falling back to `normal_keys`, and both pools feed the same `normal_keys`/`next_normal_encounter` accessor -- so the room TYPE (Monster, for gold-ladder purposes) is identical whether the room came from the weak or the regular bag. One shared mechanism across this batch; see `encounter/_room_type_and_weak` in the report."
     },
     "IsWeak": {
-      "maps_to": "rooms.py:339-347 RoomSet._generate_parity's `num_weak`-gated weak_keys draw (and its `_generate_legacy` twin at :382-390)",
+      "maps_to": "rooms.py:439-448, :482-491 RoomSet._generate_parity's `num_weak`-gated weak_keys draw (and its `_generate_legacy` twin at :382-390)",
       "verdict": "deliberate-divergence",
-      "rationale": "DevotedSculptorWeak.cs:11 `IsWeak => true`. The sim's `Encounter` dataclass has no `is_weak` field at all -- weakness is modeled by which POOL an encounter id is drawn from during act-room generation (the first `num_weak` normal-slot picks come from `rooms.weak_keys`, the rest from `rooms.normal_keys`), not by a flag on the encounter object itself. `devoted_sculptor` is listed ONLY in `weak_keys` (rooms.py:187-189), never in `normal_keys`, so it can only ever be drawn during the act-opening weak window, matching `IsWeak`'s real effect (`grep -rn IsWeak src/Core` shows it gates the act's opening-fight selection, the same job `num_weak` performs here). Same observable, different architecture -- filed under the shared `encounter/_room_type_and_weak` mechanism, since `RoomType` and `IsWeak` are both facts the sim recovers from the SAME pool-membership structure rather than per-encounter fields."
+      "rationale": "DevotedSculptorWeak.cs:11 `IsWeak => true`. The sim's `Encounter` dataclass has no `is_weak` field at all -- weakness is modeled by which POOL an encounter id is drawn from during act-room generation (the first `num_weak` normal-slot picks come from `rooms.weak_keys`, the rest from `rooms.normal_keys`), not by a flag on the encounter object itself. `devoted_sculptor` is listed ONLY in `weak_keys` (rooms.py:261-263), never in `normal_keys`, so it can only ever be drawn during the act-opening weak window, matching `IsWeak`'s real effect (`grep -rn IsWeak src/Core` shows it gates the act's opening-fight selection, the same job `num_weak` performs here). Same observable, different architecture -- filed under the shared `encounter/_room_type_and_weak` mechanism, since `RoomType` and `IsWeak` are both facts the sim recovers from the SAME pool-membership structure rather than per-encounter fields."
     },
     "AllPossibleMonsters": {
       "maps_to": "no sim counterpart",
@@ -60,7 +60,7 @@
     {
       "what": "Reachability",
       "verdict": "faithful",
-      "rationale": "rooms.py:187-189 lists `devoted_sculptor` in Glory's `weak_keys`, and `DEVOTED_SCULPTOR_WEAK` is registered in `sts2_rl/monsters/glory/__init__.py`'s `ENCOUNTERS` dict (line 58)."
+      "rationale": "rooms.py:261-263 lists `devoted_sculptor` in Glory's `weak_keys`, and `DEVOTED_SCULPTOR_WEAK` is registered in `sts2_rl/monsters/glory/__init__.py`'s `ENCOUNTERS` dict (line 58)."
     }
   ],
   "verdict": "gap",
@@ -78,17 +78,17 @@
     },
     {
       "path": "sts2_rl\\monsters\\base.py",
-      "sha256": "424336cf4fb7be8026278b7a34af428082d8487fb57f25c3565311fe5c993388",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\combat.py",
-      "sha256": "2c5965f8b6f9922be014a0f8da885f0186c2d6dd11e2aa210ff1dc01784b0016",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl\\rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     },
     {

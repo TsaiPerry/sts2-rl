@@ -41,7 +41,7 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
@@ -53,6 +53,11 @@
       "path": "src/Core/Combat/CombatManager.cs",
       "sha256": "38d7193b2ec448cec170d7c96645059b2f7ef46ae2f12a6a3863299b30125840",
       "side": "game"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
+      "side": "sim"
     }
   ],
   "hooks": {
@@ -74,12 +79,12 @@
     "AfterCombatEnd": {
       "maps_to": "reset_for_combat (sts2_rl/relics/red_skull.py:42-46)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/red_skull.py:42-46 clears `_applied` (RedSkull.cs:52-57; the base.Status half is presentation). WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:215-228) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:247-250) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/red_skull.py:42-46 clears `_applied` (RedSkull.cs:52-57; the base.Status half is presentation). WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
     },
     "AfterCurrentHpChanged": {
       "maps_to": "on_current_hp_changed -> _update (sts2_rl/relics/red_skull.py), idempotent re-evaluation driven by the owner's HP against the `_applied` flag that reset_for_combat clears",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the stale flag is gone. sts2_rl/relics/red_skull.py:42-46 clears `_applied` in `reset_for_combat`, which Relic.attach runs on every new CombatState (sts2_rl/relics/base.py:192-195) -- RedSkull.cs:52-57's AfterCombatEnd `StrengthApplied = false`. The re-evaluation itself was already faithful; what made it wrong was reading a flag latched in an earlier fight. WAS: with `_applied` True and the player above the threshold, the relic applied -3 Strength to a player who had none."
+      "issue": "Closed 2026-07-27: the stale flag is gone. sts2_rl/relics/red_skull.py:42-46 clears `_applied` in `reset_for_combat`, which Relic.attach runs on every new CombatState (sts2_rl/relics/base.py:247-250) -- RedSkull.cs:52-57's AfterCombatEnd `StrengthApplied = false`. The re-evaluation itself was already faithful; what made it wrong was reading a flag latched in an earlier fight. WAS: with `_applied` True and the player above the threshold, the relic applied -3 Strength to a player who had none."
     },
     "ExtraHoverTips": {
       "maps_to": "no counterpart",
@@ -91,7 +96,7 @@
     {
       "what": "G1 (LIVE): `_applied` is never reset, so from combat 2 onward the relic is either DEAD or actively harmful -- two distinct wrong outcomes, both executed",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/red_skull.py:42-46 clears `_applied` (RedSkull.cs:52-57 AfterCombatEnd), and its comment records both wrong outcomes the carry produced. WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
+      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:215-228) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:247-250) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/red_skull.py:42-46 clears `_applied` (RedSkull.cs:52-57 AfterCombatEnd), and its comment records both wrong outcomes the carry produced. WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
     },
     {
       "what": "N1: C#'s threshold is a DECIMAL comparison `CurrentHp > MaxHp * (50/100)` (RedSkull.cs:70); the sim floors the threshold first (`max_hp * 50 // 100`, red_skull.py:28)",
@@ -111,7 +116,7 @@
     {
       "what": "N4: the removal is `PowerCmd.Apply<StrengthPower>(-baseValue)` on both sides, not a power removal",
       "verdict": "faithful",
-      "rationale": "RedSkull.cs:76 applies -3 rather than removing the power, and red_skull.py:35 calls the same _change_strength helper with a negative amount. This routes through the stacking arm of the sim's PowerCmd.apply (cmds.py:308-321), which removes the power when the total reaches 0 -- mirroring ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:247-250). So a player with exactly the relic's 3 Strength ends with no Strength power at all on both sides, and a player with additional Strength keeps the remainder. NOTE per binding rule 7: cmds.py and PowerCmd.cs are not hashed by this record."
+      "rationale": "RedSkull.cs:76 applies -3 rather than removing the power, and red_skull.py:35 calls the same _change_strength helper with a negative amount. This routes through the stacking arm of the sim's PowerCmd.apply (cmds.py:990-1005), which removes the power when the total reaches 0 -- mirroring ModifyAmount -> ShouldRemoveDueToAmount (PowerCmd.cs:247-250). So a player with exactly the relic's 3 Strength ends with no Strength power at all on both sides, and a player with additional Strength keeps the remainder. NOTE per binding rule 7: cmds.py and PowerCmd.cs are not hashed by this record."
     }
   ],
   "verdict": "gap",

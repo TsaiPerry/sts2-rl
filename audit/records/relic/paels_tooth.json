@@ -21,22 +21,22 @@
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     },
     {
       "path": "sts2_rl/driver.py",
-      "sha256": "6c1618e527985d8142ca16aed3f82df383ac351ba9a42f46c5cbc555572edf85",
+      "sha256": "a1aecf30215574f9bc62dd01cb7c73346bbc1b9b84dd5dcc8dabd67101f8c345",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -58,22 +58,22 @@
     "HasUponPickupEffect": {
       "maps_to": "has_upon_pickup_effect = True (paels_tooth.py:16)",
       "verdict": "faithful",
-      "rationale": "PaelsTooth.cs:51 `HasUponPickupEffect => true`; the flag feeds RelicModel.IsTradable, mirrored at relics/base.py:126-136. Matches."
+      "rationale": "PaelsTooth.cs:51 `HasUponPickupEffect => true`; the flag feeds RelicModel.IsTradable, mirrored at relics/base.py:188-199. Matches."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained(run) (paels_tooth.py:26-30), dispatched by RunState.add_relic (run.py:552)",
+      "maps_to": "after_obtained(run) (paels_tooth.py:26-30), dispatched by RunState.add_relic (run.py:957)",
       "verdict": "faithful",
       "issue": "Closed 2026-07-29 (round 6): the candidate filter is the intersection. PaelsTooth.cs:82 passes `filter: (CardModel c) => c.IsUpgradable` and CardSelectCmd.FromDeckForRemoval ANDs `IsRemovable` onto it; relics/paels_tooth.py now offers `[c for c in run.removable_cards() if c.is_upgradable]` instead of `run.removable_cards()` alone, so Curses, Statuses and already-smithed cards can no longer be stored -- which mattered because a stored non-upgradable card came back UN-upgraded and the relic silently did nothing for it. Everything else in this rollup was already reconciled (count, deck removal, the Ordinal store order). One legacy test moved with it: test_paels_tooth_stores_cards_in_ordinal_id_order held a Regret to make its ordering point and a Curse is no longer offerable, so it uses Feed. test/test_relics.py::TestPaelsToothCandidateFilter is the new pin. NOT closed by this entry: `item.MutableClone()` (PaelsTooth.cs:86), which is N1 and safe here.  The text it replaced read: Rollup of guard G1 per binding rule 4 (G2 is now closed). The count matches (CardsVar(5), PaelsTooth.cs:53-57, read via DynamicVars.Cards.IntValue at :80, vs CARDS = 5 at paels_tooth.py:18; no AscensionHelper.GetValueIfAscension in the file); removing the picks from the deck matches (`CardPileCmd.RemoveFromDeck(item)` at PaelsTooth.cs:88 vs `run.deck.remove(card)` at paels_tooth.py:36); and the STORED ORDER now matches too \u2014 paels_tooth.py:33-34 ends the selection in `sorted(..., key=lambda c: c.id.upper())`, which is PaelsTooth.cs:80's `.OrderBy(c => c.Id.Entry, StringComparer.Ordinal)`, and the order is load-bearing because AfterCombatEnd's PlayerRng.Rewards.NextItem indexes into the store. WHAT REMAINS is the CANDIDATE FILTER (G1, LIVE): PaelsTooth.cs:80 passes `filter: (CardModel c) => c.IsUpgradable` and CardSelectCmd.FromDeckForRemoval ANDs `c.IsRemovable` onto it, whereas paels_tooth.py:27 passes `run.removable_cards()`, which is `[c for c in self.deck if not c.eternal]` (run.py:419-421) \u2014 IsRemovable only. Curses, Statuses and already-smithed cards can therefore be offered and stored where C# would never accept them, and a stored non-upgradable card comes back UN-upgraded (paels_tooth.py:49-50 correctly guards `if card.is_upgradable`), so the relic silently does nothing for it. C#'s `item.MutableClone()` (PaelsTooth.cs:86) still has no sim counterpart, which is safe here and is N1.  NARROWED 2026-07-28 (Task 0, ledger-vs-code pass after the Tier 1 fix campaign): the rest of this entry is closed in today's code. The issue it replaced read: Rollup of guards G1 and G2 per binding rule 4. The count matches (CardsVar(5), PaelsTooth.cs:55, read via DynamicVars.Cards.IntValue at :83, vs CARDS = 5 at paels_tooth.py:18; no AscensionHelper.GetValueIfAscension in the file) and removing the picks from the deck matches (`CardPileCmd.RemoveFromDeck(item)` vs `run.deck.remove(card)`). What diverges is the CANDIDATE FILTER (G1, LIVE -- C# requires IsUpgradable, the sim does not) and the STORED ORDER (G2, LIVE for RNG parity -- C# sorts by card id before storing, the sim keeps selection order). C#'s `item.MutableClone()` (line 86) has no sim counterpart, which is safe here and is N1."
     },
     "AfterCombatEnd": {
-      "maps_to": "after_combat_end(run, room_type) (paels_tooth.py:32-44), dispatched by RunState.finish_combat (run.py:1206-1208)",
+      "maps_to": "after_combat_end(run, room_type) (paels_tooth.py:32-44), dispatched by RunState.finish_combat (run.py:1733)",
       "verdict": "faithful",
-      "rationale": "PaelsTooth.cs:93-114: bail unless `!base.Owner.Creature.IsDead && SerializableCards.Count != 0` (line 95, mirrored by paels_tooth.py:34's `if run.is_dead or not self.stored_cards: return`); pick with `base.Owner.PlayerRng.Rewards.NextItem(SerializableCards)` (:99), which paels_tooth.py:38 matches exactly via `run.player_rng.rewards.next_item(self.stored_cards)`; upgrade behind `if (cardModel.IsUpgradable)` (:105-108), which paels_tooth.py:42-43 mirrors with `if card.is_upgradable` -- so PROMPT.md bug class 14 does NOT fire here, unlike astrolabe and bone_tea; add to the Deck pile (:109) via run.add_card, which dispatches the same ModifyCardBeingAddedToDeck and AfterCardChangedPiles hooks (run.py:341-354) and appends, matching CardPileCmd.Add's default CardPilePosition.Bottom. Two orderings differ harmlessly: C# adds the card then removes it from the store (:109, :111) while the sim removes first (:41), and C# sets base.Status from the PRE-removal count (:110) -- both presentation/bookkeeping with the same end state. C#'s `RunState.ContainsCard` guard (:101) exists because FromSerializable builds a NEW CardModel that must be registered with the run; the sim returns the very Card object it removed, so there is nothing to register twice. The dispatch condition differs in a way that cannot be observed: run.py:1206 skips the hook when `self.is_dead`, and the C# body's own first guard is `!IsDead`."
+      "rationale": "PaelsTooth.cs:93-114: bail unless `!base.Owner.Creature.IsDead && SerializableCards.Count != 0` (line 95, mirrored by paels_tooth.py:34's `if run.is_dead or not self.stored_cards: return`); pick with `base.Owner.PlayerRng.Rewards.NextItem(SerializableCards)` (:99), which paels_tooth.py:38 matches exactly via `run.player_rng.rewards.next_item(self.stored_cards)`; upgrade behind `if (cardModel.IsUpgradable)` (:105-108), which paels_tooth.py:42-43 mirrors with `if card.is_upgradable` -- so PROMPT.md bug class 14 does NOT fire here, unlike astrolabe and bone_tea; add to the Deck pile (:109) via run.add_card, which dispatches the same ModifyCardBeingAddedToDeck and AfterCardChangedPiles hooks (run.py:524-536) and appends, matching CardPileCmd.Add's default CardPilePosition.Bottom. Two orderings differ harmlessly: C# adds the card then removes it from the store (:109, :111) while the sim removes first (:41), and C# sets base.Status from the PRE-removal count (:110) -- both presentation/bookkeeping with the same end state. C#'s `RunState.ContainsCard` guard (:101) exists because FromSerializable builds a NEW CardModel that must be registered with the run; the sim returns the very Card object it removed, so there is nothing to register twice. The dispatch condition differs in a way that cannot be observed: run.py's finish_combat skips the hook when `self.is_dead`, and the C# body's own first guard is `!IsDead`. (2026-08-04: run.py had drifted substantially; re-verified same signature/shape at new line 1733.)"
     },
     "AfterCloned": {
       "maps_to": "no counterpart",
       "verdict": "waiver",
-      "rationale": "PaelsTooth.cs:75-79 blanks _serializableCards on a model clone, so the canonical/preview copy of the relic never shows another player's stored cards. This is the source's canonical-vs-mutable model infrastructure; the sim has no model-cloning layer and constructs relics directly (relics/base.py:73-74). Infrastructure, no observable effect."
+      "rationale": "PaelsTooth.cs:75-79 blanks _serializableCards on a model clone, so the canonical/preview copy of the relic never shows another player's stored cards. This is the source's canonical-vs-mutable model infrastructure; the sim has no model-cloning layer and constructs relics directly (relics/base.py's `make_relic`, line 102). Infrastructure, no observable effect."
     }
   },
   "guards": [
@@ -105,7 +105,7 @@
     {
       "what": "N4: the dispatch condition -- C#'s AfterCombatEnd fires after every combat room; the sim's fires only when finish_combat is given a room type",
       "verdict": "faithful",
-      "rationale": "run.py:1206-1208 gates the relic hook on `room_type is not None and not self.is_dead`, and both drivers pass the room type on every combat (executed in `py audit/tools/relic_probes_b11.py pantograph-boss`: driver.py:331 and conformance/runner.py:210 both pass `room_type=room_type`). The is_dead half duplicates the C# body's own first guard (:95). Checked because a relic that returns a card 'after each combat you survive' would be silently inert if the driver omitted the argument."
+      "rationale": "run.py's finish_combat (run.py:1733) gates the relic hook on `room_type is not None and not self.is_dead`, and both drivers pass the room type on every combat (executed in `py audit/tools/relic_probes_b11.py pantograph-boss`: driver.py:519 and conformance/runner.py:264 both pass `room_type=room_type`). The is_dead half duplicates the C# body's own first guard (:95). Checked because a relic that returns a card 'after each combat you survive' would be silently inert if the driver omitted the argument. (2026-08-04: driver.py/conformance/runner.py/run.py line numbers had drifted; call sites re-verified.)"
     }
   ],
   "verdict": "waiver",

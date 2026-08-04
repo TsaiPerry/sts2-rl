@@ -11,12 +11,12 @@
   "extra_sources": [
     {
       "path": "sts2_rl/player.py",
-      "sha256": "f5b830ff2b35f6d56c8f3844c62d82b338c9ec4107fb918f54d61ae6a333a0aa",
+      "sha256": "5f44427a06d75c1e4f43694fed9d1bbcb8d7b315cb5eba122af9b8ee63a62e6a",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -28,7 +28,7 @@
     "ModifyMaxEnergy": {
       "maps_to": "modify_max_energy (blessed_antler.py:23-24)",
       "verdict": "faithful",
-      "rationale": "BlessedAntler.cs:24-31 adds EnergyVar(1).IntValue to the owner's max energy; the sim adds ENERGY = 1. The sim's modify_max_energy is consulted at player.py:163, which is audit/records/seam/turn_structure.json step 17's Hook.ModifyMaxEnergy -- the same point in the turn, before the reset/add decision."
+      "rationale": "BlessedAntler.cs:24-31 adds EnergyVar(1).IntValue to the owner's max energy; the sim adds ENERGY = 1. The sim's modify_max_energy is consulted at player.py:372, which is audit/records/seam/turn_structure.json step 17's Hook.ModifyMaxEnergy -- the same point in the turn, before the reset/add decision."
     },
     "BeforeHandDraw": {
       "maps_to": "on_player_turn_start (blessed_antler.py:26-33)",

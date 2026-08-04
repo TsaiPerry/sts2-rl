@@ -21,7 +21,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -31,7 +31,12 @@
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
+      "side": "sim"
+    },
+    {
+      "path": "sts2_rl/relics/base.py",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -63,24 +68,24 @@
     "AfterCombatEnd": {
       "maps_to": "reset_for_combat (sts2_rl/relics/diamond_diadem.py:28-33)",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/diamond_diadem.py:28-33 zeroes `cards_played_this_turn` (DiamondDiadem.cs:78-84), and its comment records exactly the hole the turn-end reset left. WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
+      "issue": "Closed 2026-07-27, re-pinned 2026-08-04: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:215-228) and `Relic.attach` runs it every time the relic joins a new CombatState (sts2_rl/relics/base.py:247-250) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), and it also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/diamond_diadem.py:28-33 zeroes `cards_played_this_turn` (DiamondDiadem.cs:78-84), and its comment records exactly the hole the turn-end reset left. WAS: nothing in the sim ever put the flag back, so the relic worked in the first combat of a run only."
     }
   },
   "guards": [
     {
       "what": "G1 (LIVE): the sim's only reset of cards_played_this_turn is inside on_player_turn_end, which does NOT run on the turn the player wins -- so the winning turn's count is carried into the next combat and suppresses the relic on that combat's first turn",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:177-190) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:192-195) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/diamond_diadem.py:28-33 clears `cards_played_this_turn` (DiamondDiadem.cs:80 AfterCombatEnd), and its comment records exactly the hole the turn-end reset left: a combat that ends inside play_card never reaches on_player_turn_end. WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
+      "issue": "Closed 2026-07-27, re-pinned 2026-08-04: the per-combat reset exists. `Relic.reset_for_combat` is declared on the base (sts2_rl/relics/base.py:215-228) and `Relic.attach` calls it every time the relic joins a new CombatState (sts2_rl/relics/base.py:247-250) -- one sim boundary standing in for the three C# spells it (AfterCombatEnd / BeforeCombatStart / AfterRoomEntered(CombatRoom)), which also covers the hole AfterCombatEnd alone leaves when a fight ends inside play_card. sts2_rl/relics/diamond_diadem.py:28-33 clears `cards_played_this_turn` (DiamondDiadem.cs:80 AfterCombatEnd), and its comment records exactly the hole the turn-end reset left: a combat that ends inside play_card never reaches on_player_turn_end. WAS: the flag was set in __init__ (once per RUN, at RunState.add_relic) and never cleared, so the relic worked in the first combat of a run only."
     },
     {
       "what": "G2 (LIVE): Hook.AfterCardPlayed fires once per Replay iteration in C# and once per logical play in the sim, so the card count is too LOW and the relic triggers when the game would not",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-27: Hook.AfterCardPlayed fires once per Replay iteration. CombatState._resolve_card_play now opens `for play_index in range(play_count)` and fires `before_card_played` INSIDE it (sts2_rl/combat.py:574-576) and `on_card_played` at the end of each iteration (sts2_rl/combat.py:597-600), which is CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` bracket. A Throwing-Axe-doubled card therefore advances `cards_played_this_turn` by two, as in the game. Diamond Diadem correctly counts auto-plays (sts2_rl/relics/diamond_diadem.py:35-37) because DiamondDiadem.cs:43-56 has no IsAutoPlay clause. WAS: the sim fired the hook once for the whole play-count loop, so the count ran LOW and the 'at most 2' threshold fired when the game withholds it."
+      "issue": "Closed 2026-07-27, re-verified 2026-08-04 (line numbers re-pinned after combat.py grew): Hook.AfterCardPlayed fires once per Replay iteration. `CombatState._play_count_loop` opens `for play_index in range(play_count)` and fires `before_card_played` INSIDE it (sts2_rl/combat.py:1153-1155) and `on_card_played` at the end of each iteration, gated on `not self.is_over` (sts2_rl/combat.py:1208-1209), which is CardModel.cs:1904-1965's `for (int i = 0; i < playCount; i++)` bracket. A Throwing-Axe-doubled card therefore advances `cards_played_this_turn` by two, as in the game. Diamond Diadem correctly counts auto-plays (sts2_rl/relics/diamond_diadem.py:35-37) because DiamondDiadem.cs:43-56 has no IsAutoPlay clause. WAS: the sim fired the hook once for the whole play-count loop, so the count ran LOW and the 'at most 2' threshold fired when the game withholds it."
     },
     {
       "what": "G3: the two C# guards on AfterCardPlayed -- `cardPlay.Card.Owner != base.Owner` and `!CombatManager.Instance.IsInProgress` (DiamondDiadem.cs:45-52) -- which diamond_diadem.py:28-29 omits",
       "verdict": "faithful",
-      "rationale": "Both are structurally satisfied rather than dropped. The owner clause is the multiplayer per-player filter the shared contract puts out of scope (one player in the sim). The IsInProgress clause is satisfied because on_card_played is a combat hook dispatched only by a live CombatState, and combat.py:493-494 breaks the play loop once the combat is decided -- the same argument audit/records/relic/brilliant_scarf.json's N1 makes for the identical pair of clauses, so binding rule 3 keeps the verdict aligned. The residual post-lethal window is audit/records/seam/hook_dispatch.json G8's subject, verdicted there and dormant for a counter the combat discards."
+      "rationale": "Both are structurally satisfied rather than dropped. The owner clause is the multiplayer per-player filter the shared contract puts out of scope (one player in the sim). The IsInProgress clause is satisfied because `on_card_played` is gated by `if not self.is_over:` at the dispatch site itself (sts2_rl/combat.py:1208-1209, re-pinned 2026-08-04 -- the old :493-494 citation now resolves to unrelated monster-intent code after combat.py grew) -- the same argument audit/records/relic/brilliant_scarf.json's N1 makes for the identical pair of clauses, so binding rule 3 keeps the verdict aligned. The residual post-lethal window is audit/records/seam/hook_dispatch.json G8's subject, verdicted there and dormant for a counter the combat discards."
     },
     {
       "what": "G4: DynamicVar('CardThreshold', 2m) read as BaseValue (DiamondDiadem.cs:41, 62, 74) vs CARD_THRESHOLD = 2 (diamond_diadem.py:22), and PowerCmd.Apply's amount of 1m (DiamondDiadem.cs:65)",

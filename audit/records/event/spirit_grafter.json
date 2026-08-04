@@ -26,7 +26,7 @@
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
@@ -36,13 +36,23 @@
     },
     {
       "path": "sts2_rl/potions.py",
-      "sha256": "63c0df752ca09e9de59285b0c9bc9be809da18e69b61b65424d75f37ee1ffc6b",
+      "sha256": "416789386ad4af19cb52a3c275a2c39c1708bb90ebc4dc5c8fb4e88a7055d557",
       "side": "sim"
     },
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
+    },
+    {
+      "path": "src/Core/Entities/Creatures/Creature.cs",
+      "sha256": "f2483a7c55b0b0a248552a9ff458237d3682eb9f1b893866dcb32a0e07ffc8f1",
+      "side": "game"
+    },
+    {
+      "path": "src/Core/Models/PotionModel.cs",
+      "sha256": "78b161c2e578894935b57bc17a99349aeefd7509a094cc3534b406c40258b8a9",
+      "side": "game"
     }
   ],
   "hooks": {},
@@ -54,7 +64,7 @@
     },
     {
       "what": "LetItIn (SpiritGrafter.cs:37-43): Heal(25) FIRST, then CreateCard<Metamorphosis>, then CardPileCmd.Add(card, PileType.Deck)",
-      "maps_to": "events/spirit_grafter.py:29-32 heal(25) then add_card(make_card('metamorphosis')). Order preserved. The card is ported -- EXECUTED (`py audit/tools/event_probes.py reach`): metamorphosis is in _CARD_CLASSES (cards/event_cards.py). run.add_card runs Hook.ModifyCardBeingAddedToDeck and the AfterCardChangedPiles tail (run.py:341-354), which is what CardPileCmd.Add runs, so this event is in the add_card set and NOT in creature_card_cmds G3's transform radius. Plain CreatureCmd.Heal -- no hooks in C# either (CreatureCmd.cs:691-703), so turn_structure step 38a does not apply; `py audit/tools/event_probes.py heal` lists this event under the plain-heal verb.",
+      "maps_to": "events/spirit_grafter.py:29-32 heal(25) then add_card(make_card('metamorphosis')). Order preserved. The card is ported -- EXECUTED (`py audit/tools/event_probes.py reach`): metamorphosis is in _CARD_CLASSES (cards/event_cards.py). run.add_card runs Hook.ModifyCardBeingAddedToDeck and the AfterCardChangedPiles tail (run.py:524-537, was :341-354), which is what CardPileCmd.Add runs, so this event is in the add_card set and NOT in creature_card_cmds G3's transform radius. Plain CreatureCmd.Heal -- no hooks in C# either (CreatureCmd.cs:691-703), so turn_structure step 38a does not apply; `py audit/tools/event_probes.py heal` lists this event under the plain-heal verb.",
       "verdict": "faithful"
     },
     {
@@ -64,7 +74,7 @@
     },
     {
       "what": "GenerateInitialOptions (SpiritGrafter.cs:28-35): LET_IT_IN then REJECTION, both unconditional",
-      "maps_to": "events/spirit_grafter.py:23-27, same order, no gates. Note there is no IsAllowed on this event at all, so a deck with nothing upgradable can still pick REJECTION and just take the 10 -- the same in both (select_cards returns [] for an empty list, run.py:384-385, which is FirstOrDefault's null).",
+      "maps_to": "events/spirit_grafter.py:23-27, same order, no gates. Note there is no IsAllowed on this event at all, so a deck with nothing upgradable can still pick REJECTION and just take the 10 -- the same in both (select_cards returns [] for an empty list, run.py:585-, was :384-385, which is FirstOrDefault's null).",
       "verdict": "faithful"
     },
     {
@@ -73,9 +83,9 @@
       "verdict": "faithful"
     },
     {
-      "what": "EV-1: Rejection's 10 HP loss (SpiritGrafter.cs:52) can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:294-302) just subtracts",
+      "what": "EV-1: Rejection's 10 HP loss (SpiritGrafter.cs:52) can reduce the player to 0 HP. C# routes event damage through CreatureCmd.Damage, whose Hook.ShouldDie / Hook.AfterPreventingDeath pass runs over RunState.IterateHookListeners (RunState.cs:545-596), which yields the POTION BELT outside combat; RunState.lose_hp (run.py:420-432, was :294-302) just subtracts",
       "verdict": "faithful",
-      "issue": "Closed 2026-07-29 (round 6): the run-level death pass is complete. `RunState.lose_hp` already clamped at 0 (Creature.LoseHpInternal, Creature.cs:450) and already ran `_resolve_death` -- CreatureCmd's Kill tail (CreatureCmd.cs:504-570) over the belt, which is the only limb of RunState.IterateHookListeners (RunState.cs:545-596) carrying a ported death listener. What was left was the LAST line of this entry's own fix note: Fairy in a Bottle's `after_preventing_death` opened with `if self.combat is None: return`, so the preventer was found and then did nothing. That early return is now the OUT-OF-COMBAT ARM of OnUseWrapper instead -- RemoveBeforeUse nulls the belt slot and the new `FairyInABottle.use_out_of_combat` heals -- which is what PotionModel.cs:294/:298/:334/:336/:340's null-combat guards reduce the wrapper to, and the same reading RunState.use_potion already recorded. EXECUTED: `py audit/tools/event_probes.py lethal` -- all three legs MATCH (alive, hp 24, Fairy consumed) where all three read DIVERGE. test/test_events.py::TestRunLevelDeathPrevention pins both outcomes, including the no-Fairy run ending dead at exactly 0.  The text it replaced read: NARROWED 2026-07-28 -- STILL A GAP. Two legs closed, the decisive one did not. CLOSED: RunState.lose_hp (run.py:304-316) now clamps at 0 (no more negative HP) and runs the run-level death-prevention pass -- `_resolve_death` (run.py:318-345) walks the potion belt asking `should_die` and calls `after_preventing_death` on the preventer, the port of CreatureCmd.KillWithoutCheckingWinCondition (CreatureCmd.cs:489-571). REMAINS: the belt Fairy's out-of-combat arm. FairyInABottle.should_die (potions.py:1310-1311) answers False so the Fairy IS selected as the preventer, but FairyInABottle.after_preventing_death (potions.py:1313-1316) still returns immediately when `self.combat is None`, so nothing heals, `_resolve_death` re-kills through its 10 recursions, and the player still ends DEAD with the Fairy still in the belt. EXECUTED 2026-07-28 (`py audit/tools/event_probes.py lethal`, plus ad-hoc at the repo root): 5 HP + belt Fairy, lose 15 -> sim hp=0, dead, belt still ['FairyInABottle']; the game ends alive at 24 HP with the Fairy consumed. LIVE exactly as before -- only the negative-HP secondary is fixed."
+      "issue": "Closed 2026-07-29 (round 6): the run-level death pass is complete. `RunState.lose_hp` already clamped at 0 (Creature.LoseHpInternal, Creature.cs:450) and already ran `_resolve_death` -- CreatureCmd's Kill tail (CreatureCmd.cs:504-570) over the belt, which is the only limb of RunState.IterateHookListeners (RunState.cs:545-596) carrying a ported death listener. What was left was the LAST line of this entry's own fix note: Fairy in a Bottle's `after_preventing_death` opened with `if self.combat is None: return`, so the preventer was found and then did nothing. That early return is now the OUT-OF-COMBAT ARM of OnUseWrapper instead -- RemoveBeforeUse nulls the belt slot and the new `FairyInABottle.use_out_of_combat` heals -- which is what PotionModel.cs:294/:298/:334/:336/:340's null-combat guards reduce the wrapper to, and the same reading RunState.use_potion already recorded. EXECUTED: `py audit/tools/event_probes.py lethal` -- all three legs MATCH (alive, hp 24, Fairy consumed) where all three read DIVERGE. test/test_events.py::TestRunLevelDeathPrevention pins both outcomes, including the no-Fairy run ending dead at exactly 0.  The text it replaced read: NARROWED 2026-07-28 -- STILL A GAP. Two legs closed, the decisive one did not. CLOSED: RunState.lose_hp (run.py:420-432, was :304-316) now clamps at 0 (no more negative HP) and runs the run-level death-prevention pass -- `_resolve_death` (run.py:434-461, was :318-345) walks the potion belt asking `should_die` and calls `after_preventing_death` on the preventer, the port of CreatureCmd.KillWithoutCheckingWinCondition (CreatureCmd.cs:489-571). REMAINS: the belt Fairy's out-of-combat arm. FairyInABottle.should_die (potions.py:1394, was :1310-1311) answers False so the Fairy IS selected as the preventer, but FairyInABottle.after_preventing_death (potions.py:1397, was :1313-1316) still returns immediately when `self.combat is None`, so nothing heals, `_resolve_death` re-kills through its 10 recursions, and the player still ends DEAD with the Fairy still in the belt. EXECUTED 2026-07-28 (`py audit/tools/event_probes.py lethal`, plus ad-hoc at the repo root): 5 HP + belt Fairy, lose 15 -> sim hp=0, dead, belt still ['FairyInABottle']; the game ends alive at 24 HP with the Fairy consumed. LIVE exactly as before -- only the negative-HP secondary is fixed."
     },
     {
       "what": "the Metamorphosis card hover tip and the `.ThatDoesDamage(RejectionHpLoss)` annotation (SpiritGrafter.cs:32-33)",

@@ -6,7 +6,7 @@
   },
   "sim_source": {
     "path": "sts2_rl\\powers.py",
-    "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0"
+    "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1"
   },
   "extra_sources": [
     {
@@ -26,24 +26,24 @@
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     }
   ],
   "hooks": {
     "Type": {
-      "maps_to": "powers.py:2080 `power_type = PowerType.BUFF`",
+      "maps_to": "powers.py:2626 `power_type = PowerType.BUFF`",
       "verdict": "faithful"
     },
     "StackType": {
-      "maps_to": "powers.py:64-66 Power.on_stack",
+      "maps_to": "powers.py:137-140 Power.on_stack",
       "verdict": "faithful",
       "rationale": "PowerStackType.Counter. The sim has no StackType concept; Power.on_stack adds unconditionally, which is what PowerCmd.ModifyAmount does (PowerCmd.cs:236 -- no StackType branch). Third-file citations, not hashed here."
     },
     "ModifyDamageCap": {
-      "maps_to": "powers.py:2082-2090 modify_damage_cap (hooks.py, applied at cmds.py:61-63)",
+      "maps_to": "powers.py:2628-2635 modify_damage_cap (hooks.py, applied at cmds.py:341-343)",
       "verdict": "faithful",
-      "rationale": "`target != base.Owner -> decimal.MaxValue` maps to `return None` (powers.py:2090), which cmds.py:62 reads as \"no cap\"; otherwise both return base.Amount. Two things checked. (1) The cap is applied to EVERY damage type on both sides -- cmds.py:60-63 sits OUTSIDE the `is_powered_attack` gate, and C# runs ModifyDamageCap in the same unconditional ModifyDamageInternal pass as the additive/multiplicative families (Hook.cs:2533-2542) -- so the pipeline-level gate that makes SurroundedPower a gap does not touch this power. (2) The MIN-of-all-caps aggregation matches: C# folds `if (num5 < num4) num4 = num5` over the listeners and the sim's dispatcher returns the minimum, so multiple caps compose identically (Intangible's cap 1 plus this power's). Owner is the ported Hive Exoskeleton. Third-file citations, not hashed here."
+      "rationale": "`target != base.Owner -> decimal.MaxValue` maps to `return None` (powers.py falls through past the `target is self.owner` branch), which cmds.py:342 reads as \"no cap\"; otherwise both return base.Amount. Two things checked. (1) The cap is applied to EVERY damage type on both sides -- cmds.py:341-343 sits OUTSIDE the `is_powered_attack` gate (that gate lives inside each additive/multiplicative listener now, not centrally), and C# runs ModifyDamageCap in the same unconditional ModifyDamageInternal pass as the additive/multiplicative families (Hook.cs:2533-2542) -- so the pipeline-level gate that makes SurroundedPower a gap does not touch this power. (2) The MIN-of-all-caps aggregation matches: C# folds `if (num5 < num4) num4 = num5` over the listeners and the sim's dispatcher returns the minimum, so multiple caps compose identically (Intangible's cap 1 plus this power's). Owner is the ported Hive Exoskeleton. RE-VERIFIED 2026-08-04 (line numbers only). Third-file citations, not hashed here."
     },
     "AfterModifyingDamageAmount": {
       "maps_to": "no sim counterpart",
@@ -59,5 +59,5 @@
     }
   ],
   "verdict": "waiver",
-  "audited": "2026-07-26"
+  "audited": "2026-08-04"
 }

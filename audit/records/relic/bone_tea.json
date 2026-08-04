@@ -16,22 +16,22 @@
     },
     {
       "path": "sts2_rl/cards/base.py",
-      "sha256": "b1717a7dfa9d3776aeb8bc86ab67220925e88d9c318696092e00b5c1b065cfbf",
+      "sha256": "2911044371557c3e99319c7823b85f75702c7ba25372a4e98c36bbba5fab7ac8",
       "side": "sim"
     },
     {
       "path": "sts2_rl/conformance/combat_driver.py",
-      "sha256": "85d79b1e7a4a23eed96bdbcce77acfa17284166f14f13eacaa91ff6d1675845e",
+      "sha256": "83678aea44785d20f84cfa7e87691a40e3b22bdac2a5bdb412a902573f065eea",
       "side": "sim"
     },
     {
       "path": "sts2_rl/conformance/runner.py",
-      "sha256": "614a2e5074d84de88168f2420d90970ea2c17b03ea08de173f8bfe7b173b1839",
+      "sha256": "a3944fe1c28a2493a17a3ff9e26ac6f0d59b1266fe6814107024ee6179b790ca",
       "side": "sim"
     },
     {
       "path": "sts2_rl/relics/base.py",
-      "sha256": "e6b5c55a887cca456072370ea5d9f5718ba28163cf1bfa64b81579218db5ad3f",
+      "sha256": "5774c975c5b5b9de05e5fda4ce5fd82e5571b01de06d81c0d7e77b8319936770",
       "side": "sim"
     }
   ],
@@ -41,9 +41,9 @@
       "verdict": "faithful"
     },
     "IsUsedUp": {
-      "maps_to": "is_used_up property (bone_tea.py:27-29), overriding Relic.is_used_up (relics/base.py:119-123)",
+      "maps_to": "is_used_up property (bone_tea.py:27-29), overriding Relic.is_used_up (relics/base.py:183-186)",
       "verdict": "faithful",
-      "rationale": "`IsUsedUp => CombatsLeft <= 0` (BoneTea.cs:11) vs `return self.combats_left <= 0`. The flag feeds Relic.is_tradable (relics/base.py:132), so a used-up Bone Tea drops out of the trade events on both sides."
+      "rationale": "`IsUsedUp => CombatsLeft <= 0` (BoneTea.cs:11) vs `return self.combats_left <= 0`. The flag feeds Relic.is_tradable (relics/base.py:189-197), so a used-up Bone Tea drops out of the trade events on both sides."
     },
     "ShowCounter": {
       "maps_to": "no counterpart",

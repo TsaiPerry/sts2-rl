@@ -17,7 +17,7 @@
     "MaxInitialHp": {
       "maps_to": "soul_nexus.py:36 `max_hp = 234`",
       "verdict": "faithful",
-      "rationale": "SoulNexus.cs:24 `=> MinInitialHp`, so the HP range is degenerate and Monster.__init__'s rng.randint(min, max) (monsters/base.py:79) draws the same value for any seed."
+      "rationale": "SoulNexus.cs:24 `=> MinInitialHp`, so the HP range is degenerate and Monster.__init__'s rng.randint(min, max) (monsters/base.py) draws the same value for any seed."
     },
     "ShouldFadeAfterDeath": {
       "maps_to": "no sim counterpart",
@@ -69,22 +69,22 @@
     {
       "what": "DrainLifeMove's three sub-effects and their ORDER (SoulNexus.cs:98-105)",
       "verdict": "faithful",
-      "rationale": "C#: DamageCmd.Attack(18) -> PowerCmd.Apply<VulnerablePower>(targets, 2) -> PowerCmd.Apply<WeakPower>(targets, 2). soul_nexus.py:63-68 does the same three in the same order against ctx.player. C#'s applier is base.Creature at both apply sites; the sim passes none, so PowerCmd.apply's default of None is used (cmds.py:271-277). That matters only to listeners keyed on the applier, and neither VulnerablePower nor WeakPower has one -- unlike The Lost, whose record DOES need the explicit applier because PossessStrengthPower's tracker keys on it. Numbers checked against the non-ascension branch: SoulBurnDamage GetValueIfAscension(DeadlyEnemies, 31, 29) = 29, MaelstromDamage (7, 6) = 6, MaelstromRepeat (4, 4) = 4, DrainLifeDamage (19, 18) = 18, both power amounts literal 2m."
+      "rationale": "C#: DamageCmd.Attack(18) -> PowerCmd.Apply<VulnerablePower>(targets, 2) -> PowerCmd.Apply<WeakPower>(targets, 2). soul_nexus.py:63-68 does the same three in the same order against ctx.player. C#'s applier is base.Creature at both apply sites; the sim passes none, so PowerCmd.apply's default of None is used (cmds.py). That matters only to listeners keyed on the applier, and neither VulnerablePower nor WeakPower has one -- unlike The Lost, whose record DOES need the explicit applier because PossessStrengthPower's tracker keys on it. Numbers checked against the non-ascension branch: SoulBurnDamage GetValueIfAscension(DeadlyEnemies, 31, 29) = 29, MaelstromDamage (7, 6) = 6, MaelstromRepeat (4, 4) = 4, DrainLifeDamage (19, 18) = 18, both power amounts literal 2m."
     },
     {
       "what": "Multi-hit MAELSTROM (6 x 4) through _execute_attack vs AttackCommand's hit loop",
       "verdict": "faithful",
-      "rationale": "monsters/base.py:107-118 `_execute_attack` fires before_attack, loops `hits` times through DamageCmd.deal and breaks when the player or the attacker is dead; then after_attack. C#'s AttackCommand.Execute (AttackCommand.cs:528-546) has the same two loop guards -- `if (Attacker.IsDead) break;` and an empty alive-target list -- and the sim's single target IS the player, so the two loops agree hit for hit. The one asymmetry is C#'s PRE-loop `if (Attacker.IsDead) return this;` (AttackCommand.cs:528-531), which also skips Hook.BeforeAttack; the sim has no such pre-guard. Unreachable for this unit and EXECUTED rather than asserted (rule 5): a sim monster can only take a turn while dead if `retained_after_death` is set (combat.py:292, :306), that flag is written only where hooks.should_remove_from_combat_after_death returns False (cmds.py:102-104, :200-202), and `grep -rn 'def should_remove_from_combat_after_death' sts2_rl/` returns exactly two sites -- the hook itself (hooks.py:603) and ReattachPower (powers.py:2338), which this monster never holds."
+      "rationale": "monsters/base.py `_execute_attack` fires before_attack, loops `hits` times through DamageCmd.deal and breaks when the player or the attacker is dead; then after_attack. C#'s AttackCommand.Execute (AttackCommand.cs:528-546) has the same two loop guards -- `if (Attacker.IsDead) break;` and an empty alive-target list -- and the sim's single target IS the player, so the two loops agree hit for hit. The one asymmetry is C#'s PRE-loop `if (Attacker.IsDead) return this;` (AttackCommand.cs:528-531), which also skips Hook.BeforeAttack; the sim has no such pre-guard. Unreachable for this unit and EXECUTED rather than asserted (rule 5): a sim monster can only take a turn while dead if `retained_after_death` is set (combat.py, :306), that flag is written only where hooks.should_remove_from_combat_after_death returns False (cmds.py, :200-202), and `grep -rn 'def should_remove_from_combat_after_death' sts2_rl/` returns exactly two sites -- the hook itself (hooks.py) and ReattachPower (powers.py:2338), which this monster never holds."
     },
     {
       "what": "Intent mapping: SingleAttackIntent / MultiAttackIntent / DebuffIntent(strong: true)",
       "verdict": "faithful",
-      "rationale": "The sim collapses C#'s AbstractIntent[] into one Intent with an `also` tuple (monsters/base.py:36-59). SOUL_BURN -> Intent(ATTACK, damage=29); MAELSTROM -> Intent(ATTACK, damage=6, hits=4); DRAIN_LIFE -> Intent(ATTACK, damage=18, also=(DEBUFF_STRONG,)) for C#'s [SingleAttackIntent(18), DebuffIntent(strong: true)]. Every number in the C# intent list survives the collapse for this unit. (The intent vocabulary itself is in no seam's scope -- monster_state_machine boundary item 2 -- so this is a unit-level check.)"
+      "rationale": "The sim collapses C#'s AbstractIntent[] into one Intent with an `also` tuple (monsters/base.py). SOUL_BURN -> Intent(ATTACK, damage=29); MAELSTROM -> Intent(ATTACK, damage=6, hits=4); DRAIN_LIFE -> Intent(ATTACK, damage=18, also=(DEBUFF_STRONG,)) for C#'s [SingleAttackIntent(18), DebuffIntent(strong: true)]. Every number in the C# intent list survives the collapse for this unit. (The intent vocabulary itself is in no seam's scope -- monster_state_machine boundary item 2 -- so this is a unit-level check.)"
     },
     {
       "what": "Encounter and pool reachability",
       "verdict": "faithful",
-      "rationale": "SoulNexusElite.cs generates exactly one SoulNexus with a null slot and RoomType.Elite; the sim's SOUL_NEXUS_ELITE (soul_nexus.py:71-74) is the same single-monster encounter, registered as Glory's elite key `soul_nexus` (monsters/glory/__init__.py:74) and listed in rooms.py:195 elite_keys. Both sides reachable."
+      "rationale": "SoulNexusElite.cs generates exactly one SoulNexus with a null slot and RoomType.Elite; the sim's SOUL_NEXUS_ELITE (soul_nexus.py:71-74) is the same single-monster encounter, registered as Glory's elite key `soul_nexus` (monsters/glory/__init__.py:74) and listed in rooms.py elite_keys. Both sides reachable."
     }
   ],
   "verdict": "waiver",
@@ -122,27 +122,27 @@
     },
     {
       "path": "sts2_rl/monsters/base.py",
-      "sha256": "0fd1857a4001e42a5b39a50ce658b7bd767f7d3b6e42a9733f11850af06e180f",
+      "sha256": "7389d8c67798de1fa8314f7569e98f14d248862eccf20ebf652528affa547cf1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/cmds.py",
-      "sha256": "cb19497cf0a2e6a827fd8ea912c4b2ccc00305ec72f5a38e378d26365b5b9a9c",
+      "sha256": "59d6315eee45195c01a59d38ee15cdf3654970f5818bd970ab6101ced93dc18d",
       "side": "sim"
     },
     {
       "path": "sts2_rl/combat.py",
-      "sha256": "9e2c8a38776f6f0bb505b5b916976f6657c19360ad862d68022c19765848979e",
+      "sha256": "e96cce165539bdcaf6d9a89cb7a3771f369033898750bb681da8b411a00a96a3",
       "side": "sim"
     },
     {
       "path": "sts2_rl/powers.py",
-      "sha256": "9231e3f0931fe70004341cb72aa6305043391e0ee6199417f5e3c5d34f199be0",
+      "sha256": "7b8fdd4f644f525d60c08fee405ddfe4dceaedfa05de64a80bb8e4412ea26ca1",
       "side": "sim"
     },
     {
       "path": "sts2_rl/rooms.py",
-      "sha256": "c2ede528225ff24d527c32d07d8dc7265645ac431850b4711138ada218748ecb",
+      "sha256": "dc435f0c6f540c10a8374a8ee9e07325069c455349782f60cea87bc9754f642f",
       "side": "sim"
     },
     {

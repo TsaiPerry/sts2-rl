@@ -11,7 +11,7 @@
   "extra_sources": [
     {
       "path": "sts2_rl/run.py",
-      "sha256": "ca9ffc808f1fe7903d57dce0e818a41837e3dd42f81140a56db3301a58a2a10f",
+      "sha256": "6d735699fb4c6963d78b58b1cb1b713f33070af14b0865e49c4206aa2967d040",
       "side": "sim"
     }
   ],
@@ -26,9 +26,9 @@
       "rationale": "Matches NeowsTorment.cs:17."
     },
     "AfterObtained": {
-      "maps_to": "after_obtained (neows_torment.py:15-18), dispatched by RunState.add_relic (run.py:546-553)",
+      "maps_to": "after_obtained (neows_torment.py:15-18), dispatched by RunState.add_relic (run.py)",
       "verdict": "faithful",
-      "rationale": "NeowsTorment.cs:19-23 creates one NeowsFury and adds it to the Deck pile; neows_torment.py:18 is `run.add_card(make_card('neows_fury'))`. EXECUTED (py audit/tools/relic_probes_b10.py nutritious): a one-Strike deck becomes ['strike', 'neows_fury'] -- the card is ported (sts2_rl/cards/neows_fury.py) and lands at the end of the deck. Same mapping relic/calling_bell N1 already verdicted faithful (binding rule 3): run.add_card (run.py:341-354) runs modify_card_being_added_to_deck before the append and after_card_added_to_deck after it -- the two deck-add hooks the sim models -- and the append lands at the end of the deck like CardPileCmd's default CardPilePosition.Bottom. Hook.ShouldAddToDeck, which CardPileCmd.Add also consults, is waived as dead code in the C# source itself: calling_bell G4 established by grep that the whole game contains zero overrides. Rule 7: run.py, relics/calling_bell.py and CardPileCmd.cs are unhashed here."
+      "rationale": "NeowsTorment.cs:19-23 creates one NeowsFury and adds it to the Deck pile; neows_torment.py:18 is `run.add_card(make_card('neows_fury'))`. EXECUTED (py audit/tools/relic_probes_b10.py nutritious): a one-Strike deck becomes ['strike', 'neows_fury'] -- the card is ported (sts2_rl/cards/neows_fury.py) and lands at the end of the deck. Same mapping relic/calling_bell N1 already verdicted faithful (binding rule 3): run.add_card (run.py) runs modify_card_being_added_to_deck before the append and after_card_added_to_deck after it -- the two deck-add hooks the sim models -- and the append lands at the end of the deck like CardPileCmd's default CardPilePosition.Bottom. Hook.ShouldAddToDeck, which CardPileCmd.Add also consults, is waived as dead code in the C# source itself: calling_bell G4 established by grep that the whole game contains zero overrides. Rule 7: run.py, relics/calling_bell.py and CardPileCmd.cs are unhashed here."
     }
   },
   "guards": [
