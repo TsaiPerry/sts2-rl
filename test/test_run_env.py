@@ -62,7 +62,7 @@ def test_action_layout():
     # REWARD_RELIC (the take-or-skip relic offer, relic/_auto_keep), widening
     # the leading phase segment; v6: the out-of-combat potion block appended
     # to the ACTION layout (potion/_any_time_usage); v7 (T5a+T5b,
-    # prompts/entity-obs-schema.md phase 1): the flat float Box observation
+    # entity-obs-schema phase 1): the flat float Box observation
     # becomes the {"f", "i"} Dict contract, the SELECT_CARDS (card id,
     # upgraded)-PAIR block (2*N_CARDS wide, one FIRST-MATCH action per pair)
     # is replaced by a per-CANDIDATE-index block (MAX_SELECT_CANDIDATES

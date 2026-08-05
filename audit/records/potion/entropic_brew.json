@@ -71,7 +71,7 @@
     },
     {
       "path": "sts2_rl/full_env.py",
-      "sha256": "4ba9a145147eb29e6f42a10acb70986873bf1bb12d47a12ef764a423572f312f",
+      "sha256": "af9081c507be23d95c2a840c277f0cd5820a4a1998eb6b3ff87c5410db09b951",
       "side": "sim"
     },
     {

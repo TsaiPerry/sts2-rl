@@ -152,7 +152,7 @@ from .vocab import capacity as vocab_capacity, frozen_ids
 # (potion/_any_time_usage). The observation is byte-identical to v5, so v5
 # checkpoints migrate losslessly by growing the actor head alone
 # (checkpoints.migrate_checkpoint_actions).
-# v7 (OBS_SCHEMA.md, prompts/entity-obs-schema.md phase 1, T5a): the flat
+# v7 (OBS_SCHEMA.md, entity-obs-schema phase 1, T5a): the flat
 # float Box observation is replaced by the {"f": Box(0,1), "i": Box(0,
 # MAX_OBS_ID)} Dict contract — every one-hot/multi-hot vocabulary segment
 # (potions, deck, relics, boss identity, event identity, shop/reward stock,

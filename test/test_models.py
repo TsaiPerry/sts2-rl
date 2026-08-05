@@ -1,7 +1,7 @@
 """Tests for the three PPO architectures (sts2_rl/models.py) and the
 train_torch checkpoint arch stamping.
 
-There are three ``--arch`` choices now (T6 of prompts/entity-obs-schema.md):
+There are three ``--arch`` choices now (T6 of the entity-obs-schema work):
 
 * ``mlp`` / ``entity`` -- the frozen v3-era designs. Both still WORK against
   the v4 ``{"f", "i"}`` envs (models.py's own module docstring: "a deliberate

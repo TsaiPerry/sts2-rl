@@ -1,8 +1,7 @@
 """Round 14, lane R8 — the AttackCommand-level AfterAttack bracket and the
 damage-pipeline powered-attack gate (StrikeDummy / FakeStrikeDummy).
 
-See .superpowers/sdd/round14/R8-report.md for the full per-entry verdicts and
-citations. Each test below pins one entry's executed claim.
+Each test below pins one entry's executed claim.
 """
 from __future__ import annotations
 

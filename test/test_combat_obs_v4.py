@@ -1,5 +1,4 @@
-"""Acceptance tests for the v4 combat observation (OBS_SCHEMA.md; T4 of
-prompts/entity-obs-schema.md).
+"""Acceptance tests for the v4 combat observation (OBS_SCHEMA.md).
 
 Written BEFORE full_env.py's v4 implementation (TDD) — every test here was
 confirmed RED against the v3 tree before a single line of the new encoder was

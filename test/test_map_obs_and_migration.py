@@ -1,7 +1,7 @@
 """Schema v7's run.boss.ids / run.map.grid observation, and what is left of
 the pre-v7 checkpoint-migration tooling.
 
-T7 (prompts/entity-obs-schema.md phase 1) judgment call, made deliberately
+T7 (OBS_SCHEMA.md phase 1) judgment call, made deliberately
 and reported here rather than silently: the flat-`Box` -> `{"f", "i"}` `Dict`
 rewrite (run_env.py's own module comment, RUN_OBS_SCHEMA_VERSION history)
 states there is NO v6->v7 weight migration — a flat array and a two-leaf

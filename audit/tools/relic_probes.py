@@ -24,8 +24,8 @@ Probes (batch 1 = the Tier 1 pilot):
 POOL-WIDE SWEEPS (all 258 relics at once). The pilot batch found that its live
 gaps cluster into a few repeating SHAPES rather than sixteen unique bugs, so
 each sweep chases one shape across the whole roster before the per-unit batches
-run — the batches then confirm rather than discover. Findings are triaged in
-`.superpowers/sdd/content-relic-sweeps.md`; these probes produce the raw hits.
+run — the batches then confirm rather than discover. Findings are triaged into
+`audit/records/relic/*.json`; these probes produce the raw hits.
 
   sweep-reset      per-combat state the sim never resets (belt_buckle shape)
   sweep-isallowed  C# IsAllowed/IsAllowedAtNeow pool gates vs the sim
@@ -718,7 +718,7 @@ def probe_sweep_reset() -> None:
 
     A hit is NOT automatically a gap -- PROMPT.md bug class 13 says trace to
     the first READER of the stale field. This sweep produces the candidate
-    list; `.superpowers/sdd/content-relic-sweeps.md` carries the triage.
+    list; the per-relic records under `audit/records/relic/` carry the triage.
     """
     from sts2_rl.relics import ALL_RELICS
 

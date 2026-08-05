@@ -1,5 +1,5 @@
-r"""Offline predicted-vs-realized diff for RunReplays auto-validation (design
-docs/superpowers/specs/2026-07-24-runreplays-autovalidation-design.md §4).
+r"""Offline predicted-vs-realized diff for RunReplays auto-validation
+(§4 of the autovalidation design).
 
 The mod's autoplay loop (AutoplaySession) replays an exported ``actions.sts2replay``
 on the real game and dumps, per command, the game's *realized* state:

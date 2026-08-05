@@ -90,7 +90,7 @@
     },
     {
       "path": "sts2_rl/run_env.py",
-      "sha256": "0fbf37c71bd88a6963647e2ced06a7b74afc6ccfaf3700e8e9da15b035da05d9",
+      "sha256": "64f4dda2bc415536f9343fc40b608849890dca0fb67fab54e0d143685385ae52",
       "side": "sim"
     }
   ],

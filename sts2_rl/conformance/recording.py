@@ -3,8 +3,8 @@
 A recording is a header block (``# Key: Value``) followed by command lines of
 the form ``Name arg arg # comment`` where the comment may carry a card id
 (``# CARD.X (id)``) and/or a pre-state annotation
-(``|| Hand: [names] Enemies: [name hp/maxhp, ...]``). See
-docs/superpowers/specs/2026-07-20-sp2-map-economy-parity-design.md."""
+(``|| Hand: [names] Enemies: [name hp/maxhp, ...]``).
+"""
 from __future__ import annotations
 
 import re

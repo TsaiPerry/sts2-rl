@@ -1,7 +1,5 @@
 """Round 14 (R6-F) -- the coordinated `living_enemies()` vs `hittable_enemies()`
-candidate-set fix R6 deferred (see .superpowers/sdd/round14/R6-report.md,
-"Findings not in the brief" #2, and R6-review.md's "base.py deferral"
-section).
+candidate-set fix R6 deferred to a follow-up lane.
 
 C# ground truth: `Kusarigama.cs:115` and `LetterOpener.cs:118` both draw
 their candidate set from `base.Owner.Creature.CombatState.HittableEnemies`

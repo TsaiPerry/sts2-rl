@@ -1,5 +1,5 @@
 """Acceptance tests for the v7 run observation (OBS_SCHEMA.md; T5a of
-prompts/entity-obs-schema.md).
+OBS_SCHEMA.md).
 
 Written BEFORE run_env.py's v7 rewrite (TDD) — every test here was confirmed
 RED against the v6 (flat-Box) tree before a single line of the new encoder

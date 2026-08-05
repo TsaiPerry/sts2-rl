@@ -1,6 +1,5 @@
-"""Round 13, unlabelled batch `power-1` (`.superpowers/sdd/unlabelled-r13/
-power-1-brief.md`): pinning tests for the entries settled FIXED in
-`.superpowers/sdd/round13/R3-report.md`.
+"""Round 13, unlabelled batch `power-1`: pinning tests for the entries the
+round settled FIXED.
 
 - Dark Embrace: draws `Amount`, not a hard-coded 1 (DarkEmbracePower.cs:47),
   and defers an Ethereal-caused exhaust's draw to `AfterSideTurnEnd` so the

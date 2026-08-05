@@ -76,8 +76,9 @@
 > calibration facts that cost real time are now stated outright — the
 > **`GetValueIfAscension` argument order** below, and the fact that **a sweep's
 > own output is evidence, not authority**. Sweeps A and B were both found
-> unsound by the batches that used them and have been rewritten; see
-> `.superpowers/sdd/content-relic-sweeps.md`. If a sweep's bucket label makes a
+> unsound by the batches that used them and have been rewritten; see the
+> sweep docstrings in `audit/tools/relic_probes.py`. If a sweep's bucket
+> label makes a
 > safety claim ("safe only if…"), either test the claim or do not put units in
 > that bucket.
 >
@@ -356,8 +357,8 @@ over the whole roster and let the batches confirm rather than discover.
 `audit/tools/relic_probes.py` has the relic versions and is the template —
 `sweep-reset` / `sweep-reset-exec` (class 13), `sweep-isallowed` (class 16),
 `sweep-stubs` / `sweep-stub-premises` (class 12), `sweep-upgrade` (class 14),
-`sweep-clone` (class 17); findings in
-`.superpowers/sdd/content-relic-sweeps.md`. `audit/tools/potion_probes.py` is
+`sweep-clone` (class 17); findings in the per-relic records under
+`audit/records/relic/`. `audit/tools/potion_probes.py` is
 the second worked example and shows the other half of the pattern — three of its
 probes (`aoe-power`, `touch-of-insanity`, `pin-append`) are not sweeps at all but
 **executed witnesses for individual gaps**, which is what turns a "LIVE" label

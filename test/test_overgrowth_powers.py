@@ -1,4 +1,4 @@
-﻿"""
+"""
 Tests for the 11 overgrowth enemy powers, card afflictions, and status card creation.
 
 Run with:  python -m pytest test/test_overgrowth_powers.py -v
@@ -40,7 +40,7 @@ from sts2_rl.powers import (
 )
 
 
-# â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Helpers ───────────────────────────────────────────────────────────────
 
 def fresh(seed: int = 0) -> CombatState:
     return CombatState(rng=random.Random(seed))
@@ -55,9 +55,9 @@ def _status_cards_in_discard(cs: CombatState) -> list:
     return [c for c in cs.player.discard_pile if c.card_type == CardType.STATUS]
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ══════════════════════════════════════════════════════════════════════════
 # Stub power registry and basic properties
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ══════════════════════════════════════════════════════════════════════════
 
 _STUB_POWERS = [
     SlowPower,
@@ -92,9 +92,9 @@ class TestStubPowerRegistry:
         assert cls.power_type == PowerType.BUFF
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ══════════════════════════════════════════════════════════════════════════
 # Apply and stacking
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ══════════════════════════════════════════════════════════════════════════
 
 class TestStubPowerApplyAndStack:
     @pytest.mark.parametrize("cls", _STUB_POWERS)
@@ -126,9 +126,9 @@ class TestStubPowerApplyAndStack:
         assert p.amount == 4
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ══════════════════════════════════════════════════════════════════════════
 # Artifact interaction (debuffs blocked; buffs pass through)
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ══════════════════════════════════════════════════════════════════════════
 
 class TestStubPowerArtifactInteraction:
     @pytest.mark.parametrize("cls", _DEBUFF_POWERS)
@@ -148,9 +148,9 @@ class TestStubPowerArtifactInteraction:
         assert cs.enemy.powers["artifact"].amount == 1  # artifact intact
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ══════════════════════════════════════════════════════════════════════════
 # Power behaviors (mirroring the STS2 source implementations)
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ══════════════════════════════════════════════════════════════════════════
 
 class TestConstrictBehavior:
     def test_constrict_damages_player_at_end_of_their_turn(self):
@@ -226,7 +226,7 @@ class TestSlowBehavior:
             cs.hooks.on_card_played(card)
         before = cs.enemy.hp
         DamageCmd.deal(cs.hooks, cs.enemy, 10, dealer=cs.player, card=card)
-        assert cs.enemy.hp == before - 13  # 10 Ã— 1.3
+        assert cs.enemy.hp == before - 13  # 10 × 1.3
 
     def test_slow_counter_resets_at_the_enemy_side_start(self):
         # SlowPower.cs:52 is AfterSideTurnStart (CombatManager.cs:522), one
@@ -473,9 +473,9 @@ class TestMinionBehavior:
         assert cs._all_enemies_dead()
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ══════════════════════════════════════════════════════════════════════════
 # Status card classes
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ══════════════════════════════════════════════════════════════════════════
 
 class TestStatusCardClasses:
     def test_slimed_is_status_type(self):
@@ -558,9 +558,9 @@ class TestStatusCardClasses:
             assert card.id == card_id
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-# Status card creation â€” monsters add cards to player discard
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ══════════════════════════════════════════════════════════════════════════
+# Status card creation — monsters add cards to player discard
+# ══════════════════════════════════════════════════════════════════════════
 
 class TestLeafSlimeSGoop:
     def test_goop_adds_one_slimed_to_discard(self):
@@ -634,9 +634,9 @@ class TestLeafSlimeMStickyShot:
         cs = fresh_with(LeafSlimeM)
         slime = cs.enemies[0]
         ctx = cs._ctx()
-        slime.take_turn(ctx)  # STICKY_SHOT â†’ 2 Slimed
+        slime.take_turn(ctx)  # STICKY_SHOT → 2 Slimed
         slime._move_key = "STICKY_SHOT"
-        slime.take_turn(ctx)  # STICKY_SHOT again â†’ 2 more
+        slime.take_turn(ctx)  # STICKY_SHOT again → 2 more
         assert len([c for c in cs.player.discard_pile if isinstance(c, SlimedCard)]) == 4
 
 
@@ -729,9 +729,9 @@ class TestPhrogParasiteInfect:
         cs = fresh_with(PhrogParasite)
         parasite = cs.enemies[0]
         ctx = cs._ctx()
-        parasite.take_turn(ctx)  # INFECT â†’ 3 cards
-        parasite.take_turn(ctx)  # LASH â†’ no cards
-        parasite.take_turn(ctx)  # INFECT â†’ 3 more cards
+        parasite.take_turn(ctx)  # INFECT → 3 cards
+        parasite.take_turn(ctx)  # LASH → no cards
+        parasite.take_turn(ctx)  # INFECT → 3 more cards
         assert len([c for c in cs.player.discard_pile if isinstance(c, InfectionCard)]) == 6
 
 
@@ -843,9 +843,9 @@ class TestVineShamblerGraspingVines:
         assert intent.has(MoveType.CARD_DEBUFF)
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ══════════════════════════════════════════════════════════════════════════
 # Status cards accumulate across multiple enemy turns
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ══════════════════════════════════════════════════════════════════════════
 
 class TestStatusCardAccumulation:
     def test_multiple_slime_goop_turns_stack_in_discard(self):
@@ -861,7 +861,7 @@ class TestStatusCardAccumulation:
         cs = fresh_with(LeafSlimeM)
         slime = cs.enemies[0]
         ctx = cs._ctx()
-        slime.take_turn(ctx)  # STICKY_SHOT â†’ 2 Slimed to discard
+        slime.take_turn(ctx)  # STICKY_SHOT → 2 Slimed to discard
         hand_slimed = [c for c in cs.player.hand if isinstance(c, SlimedCard)]
         discard_slimed = [c for c in cs.player.discard_pile if isinstance(c, SlimedCard)]
         assert len(hand_slimed) == 0

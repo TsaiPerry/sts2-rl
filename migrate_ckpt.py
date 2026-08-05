@@ -1,5 +1,5 @@
 """Formerly: migrate an out-of-date run-scale checkpoint one schema hop
-forward. As of the phase-1 schema bump (prompts/entity-obs-schema.md) THIS
+forward. As of the phase-1 schema bump THIS
 TOOL CANNOT MIGRATE ANYTHING — running it always exits with an error.
 
 The run observation moved from a flat array to an ``"f"``/``"i"`` Dict, a
@@ -35,7 +35,7 @@ from sts2_rl.checkpoints import migrate_checkpoint, migrate_checkpoint_actions
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="No checkpoint can be migrated any more (phase-1 schema "
-                    "bump, prompts/entity-obs-schema.md) — this always exits "
+                    "bump) — this always exits "
                     "with an error explaining why. Kept for the error message "
                     "only; see the module docstring. Start --fresh instead.",
     )

@@ -1,6 +1,6 @@
 """Completeness harness for the source-to-sim audit pipeline.
 
-Design: docs/superpowers/specs/2026-07-24-source-audit-pipeline-design.md.
+Design: audit/README.md.
 Deliberately dumb — enumeration, hashing, and record validation only; it
 never judges faithfulness. Agents write the audit records; this tool makes
 sure they cannot skip a unit, skip a hook, or leave a verdict vague.
@@ -60,9 +60,9 @@ GAME_MODEL_DIRS = {
     # "out of scope" into "unaudited", which is a fact the tools can report.
     "potion": "src/Core/Models/Potions",
     # Three "systems tier" kinds added 2026-08-03 (wiring only, no records
-    # yet — see prompts/2026-08-03-audit-the-systems-tier.md). `encounter`
-    # and `affliction` are the game's own content dirs; `character` gets one
-    # too even though only Ironclad is in scope (see `_sim_units`'s comment).
+    # yet). `encounter` and `affliction` are the game's own content dirs;
+    # `character` gets one too even though only Ironclad is in scope
+    # (see `_sim_units`'s comment).
     "encounter": "src/Core/Models/Encounters",
     "affliction": "src/Core/Models/Afflictions",
     "character": "src/Core/Models/Characters",
@@ -974,8 +974,8 @@ SEAM_SOURCES: dict[str, tuple[list[str], list[str]]] = {
          "sts2_rl/monsters/underdocks/living_fog.py"],
     ),
     # Five "systems tier" seams added 2026-08-03 (wiring only — scope docs +
-    # empty records, see prompts/2026-08-03-audit-the-systems-tier.md and its
-    # follow-up P1-T2 brief). No verdicts yet; audit/seams/<name>.md carries
+    # empty records). No verdicts yet;
+    # audit/seams/<name>.md carries
     # the scope-boundary reasoning summarized in each comment below.
     "rng_streams": (
         # Rng.cs is the counter-wrapping PRNG every stream is one instance of;

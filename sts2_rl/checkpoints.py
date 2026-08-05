@@ -249,7 +249,7 @@ def check_checkpoint(ckpt: dict, spec: ModelSpec,
         print(f"Curriculum handoff: continuing a {ckpt_kind!r}-env checkpoint "
               f"on the {spec.env_kind!r} env.")
     if ckpt.get("obs_schema") != obs_schema_version(spec):
-        # Phase 1 (prompts/entity-obs-schema.md) rewrote the observation from
+        # Phase 1 of the entity-obs-schema work rewrote the observation from
         # a flat array to an "f"/"i" Dict — a different Gym space type, not a
         # reshape of the same array — so there is deliberately NO migration
         # onto the current schema for any older checkpoint, including the

@@ -131,8 +131,8 @@ SEAMS = [
 # seven content kinds ``harness.GAME_MODEL_DIRS`` defines.
 #
 # ``encounter``/``affliction``/``character`` joined 2026-08-03 as pure WIRING
-# (prompts/2026-08-03-audit-the-systems-tier.md, task 1 of the systems-tier
-# campaign): every unit has a skeleton on disk (empty hooks/guards, verdict
+# (task 1 of the systems-tier campaign): every unit has a skeleton on disk
+# (empty hooks/guards, verdict
 # "") but zero filled verdicts. They still belong in ``CONTENT_KINDS`` and NOT
 # ``UNAUDITED_KINDS`` -- ``UNAUDITED_KINDS`` means "the harness defines this
 # kind and there are NO records for it at all" (see its own comment and

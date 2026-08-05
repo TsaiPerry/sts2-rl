@@ -1,8 +1,7 @@
 """The Act-2/3 Ancient shrines and their relics, vs the source:
 src/Core/Models/Events/{Orobas,Pael,Tezcatara,Nonupeipe,Tanx,Vakuu}.cs and the
 relic models they grant (src/Core/Models/Relics). Sections are added per
-ancient as each phase lands (plan: docs/superpowers/plans/
-2026-07-17-act23-ancient-relics.md)."""
+ancient as each phase lands."""
 import random
 
 from sts2_rl.cards import CardRarity, make_card

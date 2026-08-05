@@ -5,10 +5,8 @@ segment is, which half it lives in, what the padding means, and why each size
 is the size it is. Companion to `OBS_PLAN.md` (which is the *history* of the
 observation design) and `RL_ARCHITECTURE.md` (the model side).
 
-Executed from `prompts/entity-obs-schema.md`, phase 1. Progress and the
-measurements behind every number here live in
-`docs/superpowers/plans/2026-08-01-entity-obs-schema.md`, which is
-authoritative if the two ever disagree.
+This file is authoritative for the schema; the measurements behind each number
+are reproducible from the tests and probes it names.
 
 > **Status: BOTH halves are IMPLEMENTED.** The COMBAT half (§5, §6) —
 > `sts2_rl/full_env.py` (T4, 2026-08-02), pinned by

@@ -4,8 +4,8 @@ We read only the fields the conformance harness needs: the rng block
 (``/rng`` — the 12 RunRngSet stream counters + string seed — and
 ``/players[0]/rng`` — the 3 PlayerRngSet counters + numeric seed), plus the
 per-act pre-rolled encounter id lists and map history used as parity oracles.
-No full save deserialization. See
-docs/superpowers/specs/2026-07-20-sp2-map-economy-parity-design.md."""
+No full save deserialization.
+"""
 from __future__ import annotations
 
 import json

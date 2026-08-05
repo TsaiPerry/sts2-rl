@@ -1,6 +1,6 @@
 """The four enchantments the shared events grant: Sharp, Nimble, Vigorous
 and Corrupted. Source: src/Core/Models/Enchantments/{Sharp,Nimble,Vigorous,
-Corrupted}.cs (plan: docs/superpowers/plans/2026-07-19-shared-events.md)."""
+Corrupted}.cs. Sim side: `enchantments.py`."""
 import random
 
 from sts2_rl.cards import make_card

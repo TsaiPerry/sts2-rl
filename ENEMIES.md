@@ -1,8 +1,8 @@
-# ENEMIES.md — implementing the remaining enemies
+# ENEMIES.md — porting enemies into the sim
 
-How to port the rest of the STS2 enemy roster into the sim. Read CLAUDE.md
-first; its golden rule applies doubly here — **every number and move pattern
-comes from the decompiled source** at `c:\Users\Perry\Desktop\Slay the Spire 2`.
+How to port an STS2 enemy into the sim. Read CLAUDE.md first; its golden rule
+applies doubly here — **every number and move pattern comes from the decompiled
+source** at `c:\Users\Perry\Desktop\Slay the Spire 2`.
 
 ## Current status
 
@@ -12,7 +12,24 @@ comes from the decompiled source** at `c:\Users\Perry\Desktop\Slay the Spire 2`.
 | Act 2 — Underdocks | `src/Core/Models/Acts/Underdocks.cs` | `sts2_rl/monsters/underdocks/` | ✅ complete (20 encounters) |
 | Act 2 — Hive (parallel Act 2; the game picks one) | `src/Core/Models/Acts/Hive.cs` | `sts2_rl/monsters/hive/` | ✅ complete (20 encounters) |
 | Act 3 — Glory | `src/Core/Models/Acts/Glory.cs` | `sts2_rl/monsters/glory/` | ✅ complete (18 encounters) |
-| Event encounters (no act pool) | `src/Core/Models/Encounters/*EventEncounter.cs` | partial | optional |
+| Event encounters (no act pool) | `src/Core/Models/Encounters/*EventEncounter.cs` | mostly ported | see below |
+
+**All four act rosters are complete** — 111 monster classes, 138 powers. What
+remains is event-encounter and cross-character content:
+
+- **Not ported:** `TheArchitectEventEncounter`'s Architect.
+- **Ported since this file was written:** FakeMerchantMonster
+  (`monsters/fake_merchant.py`), MysteriousKnight
+  (`monsters/hive/flail_knight.py`), the BattleFriend dummies
+  (`monsters/glory/battle_friend.py`).
+
+### Skip entirely
+
+- **Test scaffolding**: everything in `Mocks/`, `DeprecatedMonster`,
+  `BigDummy`, `OneHpMonster`, `TenHpMonster`, `SingleAttackMoveMonster`,
+  `MultiAttackMoveMonster`.
+- **Ally/pet units** the sim's Ironclad-only scope never spawns: `Osty`
+  (Necrobinder resource), `Byrdpip` (relic pet).
 
 ## Where to look in the source
 
@@ -34,79 +51,10 @@ comes from the decompiled source** at `c:\Users\Perry\Desktop\Slay the Spire 2`.
 4. **Move-machine primitives**: `src/Core/MonsterMoves/` (intents, state
    types) — already ported to `sts2_rl/monsters/state_machine.py`.
 5. **Powers a monster applies/owns**: `src/Core/Models/Powers/<Name>.cs`.
-   Check `sts2_rl/powers.py` first — ~50 are already ported.
+   Check `sts2_rl/powers.py` first — 138 are already ported.
 
 Ignore `.uid` files and everything under `Models/Monsters/Mocks/` and
 `Models/Encounters/Mocks/`.
-
-## Remaining roster
-
-Exact per-fight counts below come from each encounter's `GenerateMonsters()` —
-re-verify when implementing.
-
-### Hive (Act 2 variant) — ✅ done, `sts2_rl/monsters/hive/`
-
-All 20 encounters ported (tests in `test/test_hive.py`). Notes for the next
-act's port — the actual lineups differed from earlier guesses; always trust
-`GenerateMonsters()`:
-
-- ChompersNormal is Chomper ×2 (second has `ScreamFirst`), MytesNormal is
-  Myte ×2, Exoskeletons are ×3 weak / ×4 normal, and the act pool has
-  TunnelerWeak only (no TunnelerNormal).
-- OvicopterNormal and TheObscuraNormal start with just the main monster;
-  ToughEgg / Parafright are summoned mid-fight.
-- New powers live in powers.py (Imbalanced, HardToKill, Tender, Hatch,
-  Slumber, EscapeArtist, Flutter, Swipe, Burrowed, Reattach, PersonalHive,
-  VitalSpark + Tainted, BackAttackLeft/Right, CrabRage, Surrounded, Sandpit,
-  Disintegration, MindRot, Sloth, WasteAway); new status cards are Toxic,
-  FranticEscape, and the Knowledge Demon choosable curses
-  (`cards/knowledge_curses.py`, chosen via `select_cards` with purpose
-  `"curse_of_knowledge"`).
-
-### Glory (Act 3) — ✅ done, `sts2_rl/monsters/glory/`
-
-All 18 encounters ported (tests in `test/test_glory.py`). Notes / corrections
-to the original guesses — always trust `GenerateMonsters()`:
-
-- ScrollsOfBiting is ×3 (weak) / ×4 (normal), not ×4/×5; each scroll's opening
-  move is staggered via `StarterMoveIdx` (a `_ScrollsEncounter` factory rolls
-  it from the combat RNG, and the normal fight's 4th scroll always opens on
-  More Teeth). AxebotsNormal is a single Axebot (not ×2) that respawns via Stock.
-- ConstructMenagerieNormal is PunchConstruct + CubexConstruct ×2 (reuses the
-  Act-1/Act-2 constructs); KnightsElite reuses the Hive act's FlailKnight.
-- QueenBoss is TorchHeadAmalgam (a minion) + Queen; the Queen switches from
-  Burn Bright to attacks once the amalgam dies (branch conditions read
-  `amalgam.is_gone`, since monsters are not hook listeners).
-- New powers live in powers.py (PaperCuts, Stock, Rampart, Galvanic, Soar,
-  PossessStrength/Speed, Dampen, Hex, HighVoltage, WitheringPresence,
-  ChainsOfBinding, Adaptable, PainfulStabs, Nemesis); new afflictions are
-  Galvanized/Hexed/Bound (afflictions.py); the new status card is Wither
-  (cards/wither.py). `CreatureCmd.lose_max_hp` was added for Paper Cuts.
-- Approximations (the sim lacks the card-keyword plumbing): Hex grants Ethereal
-  by setting each Hexed card's `is_ethereal` flag directly and restoring it when
-  the Hex lifts; the Queen's mid-turn Burn Bright→Enrage re-telegraph happens at
-  resolution rather than the instant the amalgam dies. Both documented inline.
-- The Test Subject is a three-phase boss: AdaptablePower prevents death and
-  forces its Respawn move (100 → 200 → 300 HP), gaining Painful Stabs then
-  Nemesis; its third death is final.
-
-### Event encounters (optional, lower priority)
-
-Not in any act pool; fought via map events. `DenseVegetationEventEncounter`
-(Wriggler ×2) and `PunchOffEventEncounter` (PunchConstruct ×3) already have
-their monsters implemented. Remaining monsters: Architect
-(`TheArchitectEventEncounter`), FakeMerchantMonster, MysteriousKnight,
-and whatever `BattlewornDummyEventEncounter` spawns (read the file — it
-builds its lineup differently).
-
-### Skip entirely
-
-- **Test scaffolding**: everything in `Mocks/`, `DeprecatedMonster`,
-  `BigDummy`, `OneHpMonster`, `TenHpMonster`, `SingleAttackMoveMonster`,
-  `MultiAttackMoveMonster`.
-- **Ally/pet units** (the sim has no relics/pets/characters that spawn them):
-  `Osty` (Necrobinder resource), `Byrdpip` (relic pet), `PaelsLegion`
-  (Pael ancient-event relic), `BattleFriendV1/V2/V3`.
 
 ## Implementation recipe (per encounter)
 
@@ -143,7 +91,7 @@ builds its lineup differently).
    to the act package's `ENCOUNTERS` dict (grouped Weak/Normal/Elite/Boss —
    copy `underdocks/__init__.py`'s shape), export monsters + encounters from
    the package `__init__`, and re-export from `monsters/__init__.py`.
-8. **Test** (new `test/test_hive.py` / `test_glory.py`, mirroring
+8. **Test** (mirroring `test/test_hive.py` / `test_glory.py` /
    `test_underdocks.py`): hp range over several seeds, the move
    cycle/branching (drive `cs.end_turn()` and assert intents/damage), each
    new power's behavior, and any spawn-time powers. Run the full suite:
@@ -153,26 +101,43 @@ builds its lineup differently).
 
 ## Gotchas that bit previous ports
 
+- **Trust `GenerateMonsters()`, never a guess about the lineup.** The Hive and
+  Glory ports both found the real compositions differed from what the
+  encounter names implied — ScrollsOfBiting is ×3/×4 not ×4/×5, AxebotsNormal
+  is a *single* Axebot that respawns via Stock, OvicopterNormal starts with
+  just the Ovicopter and summons the eggs mid-fight.
 - **HP/damage numbers**: always the last `GetValueIfAscension` argument.
   Cross-check a couple against the wiki if unsure, but the source wins.
-- **RNG discipline**: one shared `random.Random` per combat. Monster move
-  rolls happen when the machine advances (the game rolls at intent-display
-  time from a separate `MonsterAi` stream — accepted deviation, see
-  CLAUDE.md). Don't add RNG draws to combat setup without checking seeded
-  tests.
+- **`AddBranch`'s int arguments are cooldown / maxRepeats, NOT weights.**
+  Five hand-rolled monsters misread them. Read the overload before porting a
+  `RandomBranchState`.
+- **RNG discipline**: combat randomness goes through `CombatState.combat_rng`
+  (`combat_rng.py`), which has seven named accessors — `shuffle`,
+  `monster_ai`, `card_gen`, `card_selection`, `targets`, `energy`,
+  `potion_gen`. In legacy (RL-training) mode every accessor is the one shared
+  `random.Random`; in a string-seeded parity run each is a `GameRandomAdapter`
+  over the matching game stream. **Use the accessor that names your purpose,
+  never `combat._rng` directly** — reaching for the shared object is the most
+  common fidelity defect in this codebase, and it desyncs every later draw in
+  a parity run. Monster move rolls belong on `combat_rng.monster_ai`.
 - **Stun/escape**: stunned monsters skip `take_turn` but still tick
   turn-start/end effects and must show `Intent(MoveType.STUN)`; escapes go
   through `CreatureCmd.escape` (counts as gone, not dead).
+- **Death is not removal**: a creature can die at 0 HP and keep taking turns
+  (withered Decimillipede segments). Only removal from `Enemies` is vetoed.
 - **Forced state changes** (a power interrupting the move cycle, like
   TerrorEel's Shriek): use `machine.force_current_state(...)` and
   `must_perform_once_before_transitioning=True` so an end-of-turn roll can't
   skip the forced move.
-- **Gold theft** (Thieving Hopper, like Gremlin Merc before it): the sim has
-  no gold — implement the move as a no-op or intent-only, document it in the
-  docstring, and note it in CLAUDE.md's gaps if it's load-bearing.
 - **Segmented/linked monsters** (Decimillipede): check the source for
   death-linking or position-dependent behavior between segments before
   assuming they're independent creatures.
-- **Summoners** (Fabricator, Queen, Entomancer?): summoned units register as
+- **Summoners** (Fabricator, Queen, Entomancer): summoned units register as
   hook listeners via `CreatureCmd.add` (fires `on_creature_added`); decide
-  minion status from the source, since it drives the win condition.
+  minion status from the source, since it drives the win condition. Slot
+  *placement* can matter — the Ovicopter's eggs occupy specific slots.
+- **Approximations must be documented inline.** Glory's card-keyword-heavy
+  powers are approximated where the sim lacks the plumbing: Hex sets each
+  Hexed card's `is_ethereal` flag directly, and the Queen re-telegraphs an
+  in-progress Burn Bright as Enrage at move resolution rather than the instant
+  the Torch Head Amalgam dies.

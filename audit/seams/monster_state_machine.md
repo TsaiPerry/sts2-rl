@@ -306,8 +306,7 @@ are named here so the holes are documented:
    `LagavulinMatriarch.AfterDamageReceived` is the wake-from-damage path whose
    sim counterpart is `AsleepPower` → `wake_up(stunned=True)`
    (`underdocks/lagavulin_matriarch.py:75-87`). **Handed to the content-monster
-   stream** with its own heading in
-   `audit/prompts/2026-07-26-content-monster.md`.
+   stream**, which audited it.
 
 ## Seed facts, verified
 
@@ -675,8 +674,8 @@ the "Gaps found" correction note below**:
   (**G6**), and the ungated spawn roll (**G9**, steps 11/48).
 
 **Verdict counts**, recomputed programmatically from
-`audit/records/seam/monster_state_machine.json`, are stated in the JSON's own summary
-and in `.superpowers/sdd/task-10-report.md`; do not copy them by hand.
+`audit/records/seam/monster_state_machine.json`, are stated in the JSON's own
+summary; do not copy them by hand.
 
 ### Gaps found
 

@@ -1,7 +1,7 @@
 """The Fake Merchant shared event (FakeMerchant.cs), his nine knock-off
 relics, and the fight a Foul Potion starts (FakeMerchantMonster.cs /
-FakeMerchantEventEncounter.cs). Plan:
-docs/superpowers/plans/2026-07-19-shared-events.md."""
+FakeMerchantEventEncounter.cs). Sim side: `events/__init__.py`'s
+SHARED_EVENTS."""
 import random
 
 from sts2_rl.cards import make_card

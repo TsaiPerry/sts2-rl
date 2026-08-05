@@ -1,7 +1,7 @@
 # Engine seam: `rng_streams`
 
-**STATUS: AUDITED 2026-08-03** (Phase 2 batch 1 of the systems-tier campaign,
-`prompts/2026-08-03-audit-the-systems-tier.md`). Record:
+**STATUS: AUDITED 2026-08-03** (Phase 2 batch 1 of the systems-tier campaign).
+Record:
 `audit/records/seam/rng_streams.json` (23 steps, 8 guards). Top-level verdict
 `gap` — one dormant divergence (`step 16`, `WeightedNextItem`'s float32-vs-
 double precision, zero consumers on either side today), everything else

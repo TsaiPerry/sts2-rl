@@ -8,9 +8,7 @@ of guard-level analysis (2026-07-26 initial audit, narrowed 2026-07-27/28/29,
 and -- for three of them -- a round-13 R8 fix pass on 2026-08-01). This file
 does NOT re-derive that analysis from scratch; it RE-EXECUTES each guard's
 own reachability/mechanism claim against the CURRENT tree, and several times
-finds the claim has gone stale in one direction or the other (see
-R4-report.md for the full per-entry verdicts). See
-.superpowers/sdd/round14/R4-report.md for citations.
+finds the claim has gone stale in one direction or the other.
 """
 from __future__ import annotations
 

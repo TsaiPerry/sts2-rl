@@ -4,8 +4,7 @@ Each test below pins one of the report's executed claims: a re-confirmed
 DORMANT reachability census, a STALE-ALREADY-FIXED behavioural check (the
 mechanism the record's `issue` text still described has since been fixed by
 other lanes in this round), or a fresh-execution demonstration of a guard's
-mechanism. See .superpowers/sdd/round13/R4-report.md for the full per-entry
-verdicts and citations.
+mechanism.
 """
 from __future__ import annotations
 

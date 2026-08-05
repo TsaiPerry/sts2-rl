@@ -130,7 +130,7 @@ from .previews import (
 # intent + card previews, full power vocabulary, enemy identity, history
 # scalars, dexterity fix. v3: capacity-padded frozen vocabularies (vocab.py) —
 # dims are reserved capacities, so future content additions no longer bump
-# this. v4 (OBS_SCHEMA.md, prompts/entity-obs-schema.md phase 1): the flat
+# this. v4 (OBS_SCHEMA.md, entity-obs-schema phase 1): the flat
 # float Box is replaced by the {"f": Box(0,1), "i": Box(0, MAX_ID)} Dict —
 # every entity is a row addressed by id, not a slot in a one-hot, so two
 # instances of one power are two rows instead of one dict slot overwriting

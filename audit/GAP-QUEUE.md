@@ -4,8 +4,8 @@ Every `"verdict": "gap"` entry in `audit/records/**`, de-duplicated **by
 mechanism** and ordered for work. Generated from the records, not transcribed.
 
 **This file holds current state, the fix for each gap, and standing lessons —
-nothing else.** Which round closed what, and when, is in the git log and in
-`docs/superpowers/plans/`; it is deliberately not kept here. A closed mechanism
+nothing else.** Which round closed what, and when, is in the git log; it is
+deliberately not kept here. A closed mechanism
 is deleted from this file, not annotated — if a mechanism has no gap entry left
 in the records, it has no section here.
 

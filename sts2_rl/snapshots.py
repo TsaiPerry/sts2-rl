@@ -1,5 +1,5 @@
 """snapshots.py — mid-run start-state snapshots for the combat env (R11,
-phase 3 of prompts/entity-obs-schema.md, Task 2).
+phase 3 of the entity-obs-schema work, Task 2).
 
 A `Snapshot` captures the six facts a combat needs to start with full
 fidelity instead of the combat env's synthetic defaults (fresh basic deck,
@@ -8,7 +8,7 @@ state), relics (with counters), hp/max_hp, potion belt (slot gaps
 preserved), the current act, and which encounter it is about to fight.
 `snapshot_from_run` reads those facts off a live `RunState` + `Encounter`
 (the exact point `RunDriver._run_combat` reaches right after
-`run.create_combat`, per docs/superpowers/plans/.../inv-B); `build_start_state`
+`run.create_combat`, per the R11 snapshot invariants); `build_start_state`
 turns a `Snapshot` back into fresh engine objects a caller threads into
 `CombatState`/`STS2FullCombatEnv`. Fidelity is proven at the OBS level (the
 rebuilt state's deck/relic/potion/hp rows match the source's), per phase-3

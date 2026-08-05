@@ -48,7 +48,7 @@ Probes:
                     v6 item 3 this is NOT a fidelity gap).
 
 REFUTATION PASS (spare capacity; nothing to do with the two batch-18 units).
-`.superpowers/sdd/content-relic-sweeps.md`'s CONFIRMED table asserts LIVE
+The relic tier's sweep triage asserted LIVE
 carried-state gaps for ten relics. A sweep may escalate a candidate but never
 clear one, and the same applies to a batch's own conclusion -- so the four
 boldest claims were re-derived from the C# and re-executed here with

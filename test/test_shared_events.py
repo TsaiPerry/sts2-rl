@@ -1,8 +1,7 @@
 """The shared (cross-act) event pool vs the source: ModelDb.AllSharedEvents
 (src/Core/Models/ModelDb.cs:135) — 18 events appended to EVERY act's event
 queue by ActModel.GenerateRooms. One section per event; sections are added
-per wave as the port lands (plan: docs/superpowers/plans/
-2026-07-19-shared-events.md)."""
+per wave as the port lands."""
 import random
 
 from sts2_rl.cards import make_card

@@ -105,7 +105,7 @@ class TestAdaptableIllusionDeathIsReal:
 
 # ══════════════════════════════════════════════════════════════════════════
 # power/the_bomb/InstanceType — CLOSED (phase 0 of
-# prompts/entity-obs-schema.md). `Creature.powers` is C#'s ordered
+# OBS_SCHEMA.md). `Creature.powers` is C#'s ordered
 # `List<PowerModel>` now, so `PowerInstanceType.Instanced` gives The Bomb the
 # two real instances the round-14 witness below could only assert the absence
 # of. The `bombs` fuse-list workaround is retired.

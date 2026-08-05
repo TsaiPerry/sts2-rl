@@ -36,7 +36,7 @@
     },
     {
       "path": "test/test_shared_enchantments.py",
-      "sha256": "3909ddad2cced14f28f053439fddfd81a019757b0407195a743756019338ea66",
+      "sha256": "7f0f1520cbf6a6148a290f5cd868a2f1e55d9067e29412f72254942bbe9ed89c",
       "side": "sim"
     }
   ],

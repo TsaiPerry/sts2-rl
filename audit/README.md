@@ -14,9 +14,6 @@ seen every unit, every hook, every guard — and **staleness** — knowing a
 verdict still describes today's code. Those two parts are mechanical, and
 they are what the tools in `tools/` do. They never judge faithfulness.
 
-- Design: [`../docs/superpowers/specs/2026-07-24-source-audit-pipeline-design.md`](../docs/superpowers/specs/2026-07-24-source-audit-pipeline-design.md)
-- Plan: [`../docs/superpowers/plans/2026-07-24-source-audit-pipeline.md`](../docs/superpowers/plans/2026-07-24-source-audit-pipeline.md)
-
 ---
 
 ## Status
@@ -140,7 +137,6 @@ audit/
   seams/*.md         12 seam docs — 6 ordering specs, 6 scope scaffolds only
                      (the same 6 unfilled seams as above)
   tools/             the harness, the status tool, the queue generator, probes
-  prompts/           the shared contract + the 10 stream prompts
 ```
 
 **Deliberately not here:** `test/test_hook_order.py`, `test/test_audit_harness.py`
@@ -248,8 +244,8 @@ Two things a pin can do wrong, both of which happened and are now checked by
   than one credited to none, because it reports coverage in two places at once.
 
 Fixing anything in `sts2_rl/` marks the records that hashed those files stale
-— see [Staleness](#staleness). That is why fixes run as their own stream
-(`prompts/2026-07-26-gap-fixes.md`) after the audit tiers, not beside them.
+— see [Staleness](#staleness). That is why fixes run as their own stream, after
+the audit tiers, not beside them.
 
 ---
 
@@ -444,13 +440,11 @@ record; it was a review finding on three consecutive seam tasks.
 The folder is built for content streams to extend it concurrently without
 colliding. A stream is one worktree, one branch, one directory.
 
-1. Read **[`prompts/_shared-audit-contract.md`](prompts/_shared-audit-contract.md)**
-   in full. It is binding: operational rules, the eight verdict rules (each
-   written after a real defect shipped), the ownership matrix, and the per-unit
-   procedure.
-2. Take your stream's prompt from **[`prompts/`](prompts/)**. The dependency
-   graph, branch names and worktree setup are in
-   **[`prompts/README-parallel-streams.md`](prompts/README-parallel-streams.md)**.
+1. Read **[`tools/PROMPT.md`](tools/PROMPT.md)** in full — the versioned
+   per-unit instruction sheet and bug-class checklist. It is binding: the
+   verdict rules there were each written after a real defect shipped.
+2. Read the [Verdict vocabulary](#verdict-vocabulary) and
+   [Rollup rule](#rollup-rule) sections above, plus the ownership matrix below.
 3. Write records to **`records/<kind>/*.json`** — generate each with
    `harness.py skeleton`, never by hand. You own that one directory and nothing
    else.

@@ -1,5 +1,5 @@
 """Buffer-safety tests for the v4/v7 observation builders
-(prompts/entity-obs-schema.md).
+(OBS_SCHEMA.md).
 
 **What this file used to be** (v3): a reference-equality harness. It froze
 the pre-vectorization pure-Python builders (``_ref_*``) as an oracle and

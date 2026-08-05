@@ -13,8 +13,7 @@ Act 1 is checked here because its map is generated with zero relics/cards in
 play (Neow fires after the first act's map is built), so its layout is a
 clean function of the seed alone. Later acts can carry map-editing relics and
 denser type counts, so their exact verification is deferred to the
-dll-dumped grid oracle. See
-docs/superpowers/specs/2026-07-20-sp2-map-economy-parity-design.md."""
+dll-dumped grid oracle."""
 from __future__ import annotations
 
 import json

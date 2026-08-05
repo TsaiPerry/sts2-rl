@@ -1,5 +1,5 @@
 """`Creature.powers` as C#'s ordered `List<PowerModel>` (phase 0 of
-prompts/entity-obs-schema.md; closes `power_cmd/G5`).
+OBS_SCHEMA.md; closes `power_cmd/G5`).
 
 `Creature.powers` used to be a `dict[str, Power]`, one slot per power id. A
 `PowerInstanceType.Instanced` application would overwrite that slot: the

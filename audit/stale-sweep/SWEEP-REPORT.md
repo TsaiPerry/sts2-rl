@@ -143,7 +143,7 @@ hash-only pass).
 ## Class (b) campaign — closing summary (2026-08-04)
 
 All 818 class-(b) records re-audited across 38 batches (waves of parallel
-subagents, disjoint per-kind slices; ledger: .superpowers/sdd/progress.md).
+subagents, disjoint per-kind slices).
 Result: **0 stale, 0 invalid, 954/954 audited** (`py audit/tools/audit_status.py`).
 
 - Verdict flips: 16 mechanisms fully CLOSED (engine fixes had landed after

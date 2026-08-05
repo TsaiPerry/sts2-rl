@@ -1,4 +1,4 @@
-"""Tests for the raw-torch evaluation path (prompts/eval-torch.md).
+"""Tests for the raw-torch evaluation path.
 
 Covers the policy adapter (`sts2_rl.evaluation.torch_policy` /
 `load_torch_policy`) and the run-scale evaluation loop (`evaluate_run`).

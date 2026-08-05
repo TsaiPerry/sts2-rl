@@ -1,6 +1,6 @@
 """relic_obs.py — pure, side-effect-free mapping from a live relic instance to
-its observation row: ``(counter, flag)``. Implements OBS_SCHEMA.md §6 (R1 of
-`prompts/entity-obs-schema.md` phase 1), whose row shape is
+its observation row: ``(counter, flag)``. Implements OBS_SCHEMA.md §6, whose
+row shape is
 ``(relic_id, counter, flag)`` — the id half is written by the observation
 caller from `vocab.py`; this module supplies only the two aux floats.
 
@@ -35,9 +35,9 @@ Of the 70 stateful relics, this module admits **50**: **32 carry a counter**
 both), and **20 are excluded outright** — no ``ShowCounter``, ``Status``
 assignment or ``IsUsedUp`` override anywhere in their `.cs` file. See
 ``EXCLUDED_RELIC_STATE`` for the exact attributes that must never reach the
-tensor, and the module docstring in `prompts/entity-obs-schema.md`'s report
-for four corrections this census makes to the 2026-08-01 planning-doc
-census (verified against source, not copied from prose):
+tensor. Four corrections this census makes to the original
+2026-08-01 planning-doc census
+(verified against source, not copied from prose):
 
 - **`brilliant_scarf` and `paels_legion` are ALSO in-combat-only** —
   `BrilliantScarf.cs:125-135` guards `ShowCounter` on

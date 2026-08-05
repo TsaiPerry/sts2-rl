@@ -86,7 +86,7 @@ def probe_eye_reset() -> None:
     PaelsEye.cs:142-147 AfterCombatEnd sets UsedThisCombat = false. The sim's
     port sets `self.used_this_combat = True` in on_extra_turn and clears it
     nowhere, and relic instances live on RunState.relics across every combat.
-    CONFIRMS `.superpowers/sdd/content-relic-sweeps.md` sweep A, which reached
+    CONFIRMS the relic tier's sweep A, which reached
     the same field by the pool-wide `sweep-reset-exec` route; this probe adds
     the OBSERVABLE (the extra turn itself) that the field-level diff does not
     show.
@@ -643,7 +643,7 @@ def probe_wing_rewards() -> None:
 def probe_growth_clone() -> None:
     """paels_growth N1: what the shallow rebuild actually drops at THIS site.
 
-    Sweep E (`.superpowers/sdd/content-relic-sweeps.md`) lists
+    Sweep E (`relic_probes.py sweep-clone`) lists
     `relics/paels_growth.py:39` as one of five shallow-rebuild sites against
     C#'s `ClonePreservingMutability` (CardModel.cs:2168-2179). Per-instance
     state a clone should carry: upgrade level, enchantment, affliction,

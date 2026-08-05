@@ -1,8 +1,8 @@
 """Executed dormancy probes for the power stream's half-B (enemy-power) audits.
 
-Every number quoted in `audit/records/power/*.json` for the units below, and every
-number in `.superpowers/sdd/content-power-report-b.md`, is re-derivable from
-one of these subcommands. Follows the pattern of
+Every number quoted in `audit/records/power/*.json` for the units below is
+re-derivable from one of these subcommands.
+Follows the pattern of
 `audit/tools/dormancy_probes.py` and `audit/tools/power_census.py`.
 
     py audit/tools/power_slot_probes.py rosters

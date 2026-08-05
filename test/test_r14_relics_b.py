@@ -10,9 +10,7 @@ from earlier rounds. It RE-EXECUTES the claims that matter for THIS round's
 verdict against the CURRENT tree (a should_allow_hitting census that backs
 three separate records' dormancy claims, the bag_of_marbles power-backstop
 asymmetry, and the vambrace docstring fix) and pins one NEW finding (Paper
-Phrog's missing target-identity check). See
-.superpowers/sdd/round14/R6-report.md for the full per-entry verdicts and
-citations.
+Phrog's missing target-identity check).
 """
 from __future__ import annotations
 

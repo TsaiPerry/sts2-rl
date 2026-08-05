@@ -21,7 +21,7 @@
     },
     {
       "path": "audit/tools/relic_probes.py",
-      "sha256": "597a25479c99a777c5de776c45c4ca1c7949c11e024b5ad08035b2033f6657da",
+      "sha256": "73d45dc9eff9063630da0a359cecff51b46614ea04a1ff318f1a9c96cd3ff97b",
       "side": "sim"
     },
     {

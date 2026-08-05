@@ -1,6 +1,6 @@
 """The shared observation-contract module — OBS_SCHEMA.md Sec.2.
 
-Phase 1 (T1) of ``prompts/entity-obs-schema.md``: the int/float ``Dict`` obs
+Phase 1 (T1) of the entity-obs-schema work: the int/float ``Dict`` obs
 contract, the named-segment-map idiom generalized from ``full_env.py``'s
 ``obs_segments()`` / ``obs_slices()``, and the padded-row writer three later
 lanes (R1 relics, R2 card-instance rows, hand/enemy/pile blocks) build on.

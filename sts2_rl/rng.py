@@ -1,5 +1,5 @@
-"""Bit-exact port of the game's RNG stack (see docs/superpowers/specs/
-2026-07-20-sim-to-replay-design.md). Ground truth: Slay the Spire 2/src/Core/
+"""Bit-exact port of the game's RNG stack.
+Ground truth: Slay the Spire 2/src/Core/
 Random/*.cs and src/Core/Helpers/StringHelper.cs. Validated against
 test/data/rng_golden.json (dumped from sts2.dll)."""
 from __future__ import annotations

@@ -1,5 +1,5 @@
-"""Order-tracing tests pinning engine-seam hook sequences (Tier 2 of
-docs/superpowers/specs/2026-07-24-source-audit-pipeline-design.md).
+"""Order-tracing tests pinning engine-seam hook sequences (Tier 2 of the
+source-to-sim audit pipeline — see audit/README.md).
 
 `trace` wraps HookSystem instance methods to record invocation order. These
 tests are the durable form of the seam audits: a future edit cannot
@@ -1644,9 +1644,9 @@ class TestPotionContentPins:
     FAILS at the assertion its reason describes rather than erroring, which is
     what stops an xfail from reading as coverage it does not provide.
 
-    OWNERSHIP NOTE: audit/prompts/_shared-audit-contract.md reserves this file
-    for the seam session. audit/prompts/2026-07-26-content-potion.md overrides
-    that for this stream ("add a strict=True xfail to test/test_hook_order.py"),
+    OWNERSHIP NOTE: the shared audit contract reserved this file for the seam
+    session. The potion stream's prompt overrode that for this stream
+    ("add a strict=True xfail to test/test_hook_order.py"),
     and audit/README.md already flags the snag. The pins are confined to this
     one class so the widening is easy to see and easy to move.
     """

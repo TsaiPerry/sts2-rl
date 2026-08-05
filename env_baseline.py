@@ -1,6 +1,6 @@
 """Absolute sanity floors for the training envs — gross-breakage detection.
 
-Read `prompts/entity-obs-schema.md`, "Measurement", before changing anything
+Read `OBS_SCHEMA.md` before changing anything
 here. **This tool deliberately has no before/after mode.** An earlier version
 had one; it was struck, and re-introducing it would be a mistake, not an
 improvement:

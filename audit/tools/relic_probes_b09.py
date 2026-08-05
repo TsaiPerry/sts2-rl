@@ -111,7 +111,7 @@ def probe_pool() -> None:
 def probe_isallowed() -> None:
     """The IsBeforeAct3TreasureChest floor gate, for this batch's 3 members.
 
-    Sweep B (`.superpowers/sdd/content-relic-sweeps.md`) puts lucky_fysh,
+    Sweep B (`relic_probes.py sweep-isallowed`) puts lucky_fysh,
     meal_ticket and molten_egg in the 17-relic `TotalFloor < 41` cluster.
     Confirmed here rather than re-derived: the sim's Relic base declares no
     is_allowed member at all, and the grab bag still yields all three well

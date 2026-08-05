@@ -369,8 +369,7 @@ class TestInterfaceContract:
         # `potion` joined 2026-07-26, replacing the shared contract's blanket
         # "potions are out of scope" clause with an ordinary unaudited kind.
         # `encounter`/`affliction`/`character` joined 2026-08-03 as the first
-        # three "systems tier" kinds (wiring only, no records filled in yet --
-        # prompts/2026-08-03-audit-the-systems-tier.md task 1).
+        # three "systems tier" kinds (wiring only, no records filled in yet).
         assert set(harness.GAME_MODEL_DIRS) == {
             "relic", "power", "card", "monster", "event", "enchantment",
             "potion", "encounter", "affliction", "character",

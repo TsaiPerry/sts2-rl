@@ -5,9 +5,7 @@ DORMANT reachability census, a STALE-ALREADY-FIXED behavioural check (the
 mechanism the record's `issue` text still described has since been fixed by
 other lanes in this round — mostly R1's `hooks.py` listener-derivation rework
 and the tier-2 `seam/power_cmd` Task 17/18 rewrite), or a fresh-execution
-demonstration of a guard's mechanism. See
-.superpowers/sdd/round13/R8-report.md for the full per-entry verdicts and
-citations.
+demonstration of a guard's mechanism.
 """
 from __future__ import annotations
 

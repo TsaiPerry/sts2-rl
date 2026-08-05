@@ -1,6 +1,6 @@
 """Darv — the shared Ancient (Darv.cs) — its 12 relics, and the shared-ancient
-partition RunManager.GenerateRooms performs across a run's acts. Plan:
-docs/superpowers/plans/2026-07-19-shared-events.md."""
+partition RunManager.GenerateRooms performs across a run's acts. Sim side:
+`rooms.py`'s SHARED_ANCIENTS."""
 import random
 
 from sts2_rl.cards import make_card

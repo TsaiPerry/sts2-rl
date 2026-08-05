@@ -1,4 +1,4 @@
-"""R4 acceptance tests (T5b, prompts/entity-obs-schema.md): the SELECT_CARDS
+"""R4 acceptance tests (T5b, OBS_SCHEMA.md): the SELECT_CARDS
 action block must address the SAME per-candidate rows the v7 observation
 writes, so two candidates sharing (card id, upgraded) but differing in
 enchantment, affliction or cost modifier are independently selectable.
