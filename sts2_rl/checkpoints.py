@@ -317,6 +317,25 @@ def check_checkpoint(ckpt: dict, spec: ModelSpec,
             f"(obs_dim, n_actions, hidden); can't resume — match --hidden or use --fresh.")
 
 
+def check_ascension(ckpt: dict, ascension: int) -> None:
+    """Warn (never refuse) when resuming a checkpoint at a different
+    ``--ascension`` than it was last saved at.
+
+    Same stamp location as ``env_kind`` (``checkpoint_payload`` in
+    ``train_torch.py``), but a deliberately weaker check: ``check_checkpoint``
+    above hard-refuses an env/schema/arch mismatch because there is no weight
+    migration across those, but ascension is just a run-generation knob the
+    env itself already reads at reset (``STS2RunEnv``/``STS2CurriculumRunEnv``
+    Tasks 1-3) — v7 deliberately resumes training across ascensions (e.g.
+    ramping ascension mid-curriculum), so a print is the right strength of
+    signal here, not a ``SystemExit``.
+    """
+    ckpt_ascension = ckpt.get("ascension", 0)
+    if ckpt_ascension != ascension:
+        print(f"Ascension change: checkpoint was last saved at ascension "
+              f"{ckpt_ascension}, this run uses {ascension}.")
+
+
 def spec_from_checkpoint(ckpt: dict, env_kind: str,
                          card_obs: str = "hybrid") -> ModelSpec:
     """The spec a saved checkpoint describes, evaluated against ``env_kind``.
@@ -448,6 +467,140 @@ def migrate_checkpoint_actions(ckpt: dict, card_obs: str = "hybrid") -> dict:
         "without this migration's v6 flat-action target ever being rebuilt, "
         "so there is no schema left for this checkpoint to migrate onto — "
         "start training over with --fresh.")
+
+
+def warm_start_agent(agent: Any, ckpt: dict, spec: ModelSpec) -> tuple[int, int]:
+    """Cross-kind partial load for ``--warm-start`` (Task 6b): copy whatever
+    structurally transfers from ``ckpt`` into ``agent`` (already built for
+    ``spec``, the TARGET env — see ``make_model``/``model_obs_layout``),
+    leaving everything else at ``agent``'s own fresh init. Unlike
+    ``load_agent``/``check_checkpoint``'s ``--resume`` path, ``ckpt`` may be
+    a DIFFERENT env kind (run <-> combat) — that cross-kind handoff is the
+    whole point of this function, so it deliberately does not call
+    ``check_checkpoint``, which would refuse exactly that.
+
+    Two transfer mechanisms, both measured live against real ``make_model``
+    output for both kinds (not assumed):
+
+    * **Exact name + shape match** in ``state_dict()`` — every key EXCEPT
+      ``{actor,critic}_encoder._blocks.*`` (handled separately below).
+      Covers the fixed-shape heads (``end_turn_head``/``play_head``/
+      ``potion_head`` — ``PairPointerHead``/``PointerHead`` score per-row via
+      a fixed ``(block_dim, ctx_dim)`` contract, independent of row count),
+      every vocab embedding table (``actor_encoder.tables.*``), and the
+      deeper trunk layers (``actor.2``/``critic.2``/``critic.4``) that
+      happen to shape-match at the default hidden sizes. ``actor.0``/
+      ``critic.0`` (the first trunk ``Linear``, whose in-width is the
+      encoder's pooled output width — 747 combat vs 3253 run) and every
+      run-only head (``choice_row_overlay_heads``/``choice_float_overlay_
+      heads``/``positional_heads``/``pointer_heads``) fail this check by
+      construction (absent on one side, or shape-mismatched) and so are
+      never in ``transferred`` — they stay at ``agent``'s fresh init with no
+      special-casing needed.
+    * **``_blocks.*`` by LOGICAL segment name.** ``_EntsetEncoder._blocks``
+      is a POSITIONALLY indexed ``ModuleList`` (one row-projection ``Linear``
+      per row block, in ``entset_segment_plan`` order) where the same index
+      can name a totally different logical segment on each side — e.g.
+      index 6 is combat's ``enemy2.powers`` (in-width 19) but run's
+      ``shop.relics`` (in-width 19, the SAME shape by coincidence). A blind
+      name+shape ``strict=False`` load would silently copy shop-relic
+      weights into the enemy-powers slot. This function instead maps both
+      sides' blocks to their logical name (``entset_segment_plan`` +
+      ``models._entset_logical_name``, the same pairing ``_EntsetEncoder``
+      itself builds at construction) and transfers ``_blocks.{i}`` only
+      where the logical name matches on both sides AND the projection's
+      ``(out, in)`` shape also matches. Both ``actor_encoder`` and (when not
+      shared) ``critic_encoder`` share ONE block ordering per side (built
+      from the same ``f_segments``/``i_segments``), so one pair of logical
+      maps covers both prefixes.
+
+    Fresh optimizer / fresh ``global_step``/``iteration`` are the caller's
+    job (a warm-start is a NEW run with warm weights, not a resume) — this
+    function only mutates ``agent``'s parameters in place.
+
+    Returns ``(n_transferred_params, n_reinitialized_params)`` and prints a
+    one-line summary, so a warm-started training log shows the handoff
+    happened (mirroring ``check_checkpoint``'s "Curriculum handoff" print
+    for the same-kind ``--resume`` path).
+    """
+    import re
+
+    import torch
+
+    from . import models
+
+    ckpt_arch = ckpt.get("arch", "mlp")
+    if ckpt_arch != "entset" or spec.arch != "entset":
+        raise SystemExit(
+            f"--warm-start requires arch=entset on both sides (checkpoint "
+            f"arch={ckpt_arch!r}, this run's --arch={spec.arch!r}); the mlp/"
+            f"entity archs have fixed-width heads with no cross-kind "
+            f"structural correspondence to transfer.")
+
+    src_state: dict[str, torch.Tensor] = ckpt["model"]
+    tgt_state: dict[str, torch.Tensor] = agent.state_dict()
+
+    blocks_re = re.compile(r"^(actor_encoder|critic_encoder)\._blocks\.(\d+)\.(weight|bias)$")
+
+    transferred: dict[str, torch.Tensor] = {}
+
+    # 1) exact name + shape match, everywhere EXCEPT _blocks.* (below).
+    for key, tgt_tensor in tgt_state.items():
+        if blocks_re.match(key):
+            continue
+        src_tensor = src_state.get(key)
+        if src_tensor is not None and tuple(src_tensor.shape) == tuple(tgt_tensor.shape):
+            transferred[key] = src_tensor
+
+    # 2) _blocks.* by logical segment name -- never by raw position.
+    src_env_kind = ckpt.get("env_kind", "combat")
+    src_spec = ModelSpec(
+        env_kind=src_env_kind, card_obs=spec.card_obs, arch="entset",
+        hidden=tuple(ckpt.get("hidden", spec.hidden)),
+        shared_encoder=bool(ckpt.get("shared_encoder", spec.shared_encoder)))
+    src_f, src_i = model_obs_layout(src_spec)
+    src_row_blocks, _src_raw_f = models.entset_segment_plan(src_f, src_i)
+    src_logical_to_idx = {
+        models._entset_logical_name(name): i
+        for i, (name, _cap, _n_float, _vocabs) in enumerate(src_row_blocks)
+    }
+
+    tgt_row_blocks, _tgt_raw_f = models.entset_segment_plan(agent.f_segments, agent.i_segments)
+    tgt_idx_to_logical = {
+        i: models._entset_logical_name(name)
+        for i, (name, _cap, _n_float, _vocabs) in enumerate(tgt_row_blocks)
+    }
+
+    for key, tgt_tensor in tgt_state.items():
+        m = blocks_re.match(key)
+        if not m:
+            continue
+        prefix, idx_str, param = m.groups()
+        tgt_logical = tgt_idx_to_logical.get(int(idx_str))
+        if tgt_logical is None:
+            continue
+        src_idx = src_logical_to_idx.get(tgt_logical)
+        if src_idx is None:
+            continue
+        src_key = f"{prefix}._blocks.{src_idx}.{param}"
+        src_tensor = src_state.get(src_key)
+        if src_tensor is not None and tuple(src_tensor.shape) == tuple(tgt_tensor.shape):
+            transferred[key] = src_tensor
+
+    full_state = dict(tgt_state)
+    full_state.update(transferred)
+    agent.load_state_dict(full_state)
+
+    n_total_params = sum(t.numel() for t in tgt_state.values())
+    n_transferred_params = sum(t.numel() for t in transferred.values())
+    n_reinitialized_params = n_total_params - n_transferred_params
+    print(
+        f"Warm-start: {src_env_kind!r} checkpoint -> {spec.env_kind!r} env: "
+        f"{len(transferred)}/{len(tgt_state)} keys transferred "
+        f"({n_transferred_params}/{n_total_params} params), "
+        f"{len(tgt_state) - len(transferred)} keys / {n_reinitialized_params} "
+        f"params reinitialized.")
+    return n_transferred_params, n_reinitialized_params
 
 
 def load_agent(path: str, *, env_kind: str, obs_dim: tuple[int, int], n_actions: int,

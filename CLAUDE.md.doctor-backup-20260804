@@ -1,0 +1,569 @@
+# CLAUDE.md
+
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
+## 1. Think Before Coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+## 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+## 4. Don't Commit on Your Own
+
+**Never run `git commit` (or `git push`) unless I explicitly ask you to.**
+
+- Make and stage changes freely; leave committing to me.
+- When work is ready, say so and let me review the diff and commit it myself.
+- This holds even mid-task, even when a workflow or skill would normally commit automatically — surface the finished changes instead of committing them.
+
+## 5. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+---
+
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+# sts2-rl
+
+A pure-Python simulation of **Slay the Spire 2 combat**, wrapped in a Gymnasium
+environment, with the goal of training PyTorch models to play the game. The
+current training path is a **raw-PyTorch masked PPO** loop (`train_torch.py` +
+`sts2_rl/models.py`); the Stable-Baselines3 / MaskablePPO path (`train.py`, full
+combat env) is now a legacy reference.
+
+For the end-to-end RL stack (env → network → PPO loop), see
+[RL_ARCHITECTURE.md](RL_ARCHITECTURE.md). For a file-by-file reader's guide to
+the `sts2_rl/` core modules, see
+[MODULES.md](MODULES.md). For the engine-side decision interfaces an env must
+respect (action space, `card_selector`, what to read off `CombatState`), see
+[RL.md](RL.md). For the normative observation contract, see
+[OBS_SCHEMA.md](OBS_SCHEMA.md); [OBS_PLAN.md](OBS_PLAN.md) is the history of
+how that observation was designed (all phases shipped).
+
+## The golden rule: fidelity to the decompiled source
+
+The decompiled STS2 game source lives in the sibling directory
+`c:\Users\Perry\Desktop\Slay the Spire 2` (C#, Godot). It is the **source of
+truth** for all game mechanics. When implementing or changing combat logic,
+check the real implementation first:
+
+| Topic | Where to look in the game source |
+|---|---|
+| Hooks (events/modifiers/predicates) | `src/Core/Hooks/Hook.cs`, `src/Core/Models/AbstractModel.cs` |
+| Damage/block pipeline, damage typing | `src/Core/Commands/DamageCmd.cs`, `src/Core/ValueProps/` |
+| Effect verbs (heal, stun, escape, ...) | `src/Core/Commands/CreatureCmd.cs`, `PlayerCmd.cs`, `CardCmd.cs` |
+| Monster stats, moves, AI | `src/Core/Models/Monsters/<Name>.cs` |
+| Events | `src/Core/Models/EventModel.cs`, `src/Core/Models/Events/`; per-act pools in `src/Core/Models/Acts/<Act>.cs` (AllEvents) |
+| Enchantments | `src/Core/Models/EnchantmentModel.cs`, `src/Core/Models/Enchantments/` |
+| Move state machines & intents | `src/Core/MonsterMoves/` |
+| Powers | `src/Core/Models/Powers/` (276 of them) |
+| Relics | `src/Core/Models/Relics/`; per-character pools in `src/Core/Models/RelicPools/` |
+| Potions | `src/Core/Models/Potions/` |
+| Turn structure | `src/Core/Combat/CombatManager.cs`, `PlayerTurnPhase.cs` |
+
+Numbers (HP ranges, damage, stacks) should be taken from the source models —
+note that many are wrapped in `AscensionHelper.GetValueIfAscension(...)`; this
+sim uses the **non-ascension** values.
+
+## Commands
+
+```powershell
+# Run all tests (from repo root; uses the `py` launcher on this machine)
+py -m pytest test/ -q
+
+# Train (current path): raw-PyTorch masked PPO (saves runs/sts2_torch.pt)
+py train_torch.py                                      # combat env, Act-1 pool
+py train_torch.py --encounter fuzzy_wurm_weak --timesteps 500000
+py train_torch.py --resume runs/sts2_torch.pt          # continue
+py train_torch.py --env run                            # FULL-RUN env (map/events/
+                                                       # shops/rewards + combat;
+                                                       # saves runs/sts2_run_torch.pt)
+py train_torch.py --env column                         # phase-1 curriculum: full runs
+                                                       # on randomized single-column
+                                                       # maps, floor-only reward (saves
+                                                       # runs/sts2_column_torch.pt; its
+                                                       # checkpoint resumes on --env run)
+py train_torch.py --arch entset                        # (the default) EntitySetActorCritic,
+                                                       # the v4-native arch — masked per-row
+                                                       # embeddings over the {f,i} obs Dict
+                                                       # (models.py); --arch mlp/entity are
+                                                       # refused against the current envs
+                                                       # (unnormalized ids would swamp the
+                                                       # numeric features — checkpoints.py);
+                                                       # checkpoints are arch-stamped —
+                                                       # switching arch = full retrain
+py train_torch.py --anneal-lr                          # decay lr 3e-4 -> 0 over THIS
+                                                       # invocation's iterations (a resume
+                                                       # restarts the schedule over its own
+                                                       # --timesteps budget)
+# Stability defaults: --target-kl 0.02 early-stops the epoch loop on the run-scale
+# envs (--env run|column) when the RUNNING MEAN of the current epoch's approx_kl
+# exceeds it, scored after every minibatch (not at the epoch boundary — a whole
+# epoch at 6x the target is enough to permanently cost a trained policy several
+# reward points); --env combat keeps it off. Pass --target-kl 0 to disable, or
+# --ent-coef-final to anneal the entropy bonus (default: constant at --ent-coef).
+
+# Resuming after an ENV CHANGE that moves the return distribution (a new reward
+# term, a rule change like a per-act heal): the critic is stale, so its
+# advantages are mis-signed and a full-LR resume spends them wrecking a good
+# policy. Warm the value head up first — the actor is untouched (kl is exactly
+# 0.0000 for those iterations, logged as [critic-warmup]):
+py train_torch.py --resume runs/sts2_run_torch_v4.pt --critic-warmup 20
+
+# Unattended long runs: every save is atomic (<path>.tmp + os.replace), each
+# periodic save also writes an iter-stamped snapshot <stem>.iter000123.pt
+# (last --keep-snapshots kept, default 5) plus <stem>.best.pt on the best
+# 100-episode --best-metric (win for combat/run, ep_ret for column — the
+# exploring policy's own metric, not a greedy eval), and every iteration
+# appends a row to <stem>.csv. Checkpoints carry global_step, so a resume
+# continues the step count, the CSV, and fresh env seeds. --lr defaults to
+# None: on a resume the optimizer's saved LR is kept unless --lr is passed.
+# --n-envs/--n-steps follow the same rule (defaults 32/512): checkpoints record
+# the rollout geometry, so a bare --resume reproduces the batch that trained
+# the weights instead of silently reverting it. Each field resolves
+# independently (explicit flag > checkpoint > default), and the resolved
+# "N envs x M steps (batch B)" line is printed at startup.
+py train_torch.py --keep-snapshots 0 --best-metric none  # live checkpoint + CSV only
+
+# Train (legacy reference): SB3 MaskablePPO on the full combat env (saves sts2_full.zip)
+py train.py
+# Minimal toy-env SB3 trainer (env.py Strike/Defend only, saves sts2_ppo.zip)
+py test/rl.py
+
+# Evaluate a saved model (win rate + final-HP stats over N episodes;
+# --env full adds lethal-probe accuracy, --baselines adds baseline rows).
+# A *.pt model is a train_torch.py checkpoint (arch/schema/env read from its
+# own stamps, greedy by default); anything else loads as an SB3 zip.
+py eval.py sts2_ppo --episodes 1000                    # legacy SB3, toy env
+py eval.py --env full --baselines                      # no model: random + oracle
+py eval.py runs/sts2_torch.pt --env full               # torch combat ckpt: win% + probes
+py eval.py runs/sts2_column_torch.pt --env column --episodes 50 --baselines
+py eval.py runs/sts2_run_torch.pt --env run --sample   # sample instead of argmax
+# Run-scale rows report win%, mean/median max floor, acts reached, HP on wins,
+# decisions/episode, and the death-floor distribution. Deterministic per --seed.
+
+# Per-encounter breakdown of a torch combat checkpoint (all non-boss Act-1 fights)
+py test/eval.py --model runs/sts2_torch.pt --episodes 50
+
+# migrate_ckpt.py is retired: the phase-1 {"f", "i"} Dict rewrite is not a
+# feature-only schema bump, so nothing can be migrated across it. Running it
+# always exits with an error explaining why. Pre-v4 checkpoints need a retrain.
+
+# Observation ablation: train + compare full vs numeric-ablated obs arms
+py test/ablation.py
+
+# Interactive terminal combat demo (pick encounter by editing ENCOUNTER in the file)
+py test/run.py
+```
+
+Dependencies (see `requirements.txt`): `gymnasium`, `numpy`, `greenlet`
+(run-env engine suspension) and `torch` (installed separately — CPU vs CUDA is a manual choice; the default
+paths run on CPU, but `--device cuda` is measured faster for `--arch entity`
+on this machine — see train_torch.py's docstring). `stable-baselines3` /
+`sb3-contrib` are only for the legacy SB3 path (`train.py`, `test/rl.py`);
+`train_torch.py` doesn't use them. `eval.py` and `train.py` contain a
+compatibility shim for PyTorch ≥2.12 + SB3 2.9's model-loading path — don't
+remove it.
+
+## Package layout
+
+One line per file; see [MODULES.md](MODULES.md) for the file-by-file reader's
+guide (and the exhaustive per-relic / per-card / per-event enumerations).
+
+```
+sts2_rl/
+  combat.py       CombatState (turn loop, play/use_potion/end_turn, win checks,
+                  select_cards entry point) + CombatCtx (per-execution context)
+  player.py       PlayerCombatState: energy, hand/draw/discard/exhaust piles,
+                  potions, turn start (block clear → energy → hooks → draw)
+  creatures.py    Creature base: hp/block/powers/side, stunned, escaped, is_gone
+  hooks.py        HookSystem — the central callback registry (see below)
+  history.py      CombatHistory — combat event log (card plays/exhausts, damage
+                  received), this-turn/whole-combat queries; first hook listener
+  cmds.py         Command layer (DamageCmd, BlockCmd, PowerCmd, CreatureCmd,
+                  DrawCmd, ExhaustCmd, CardCmd, CardPileCmd, EnergyCmd, …)
+  valueprops.py   ValueProp flags + DamageProps combos (damage typing)
+  previews.py     Pure-read previews of displayed numbers (intent damage through
+                  the full modifier pipeline, post-block incoming, card damage/
+                  block/cost); never mutates state
+  selectors.py    scripted_card_selector — deterministic CombatState.card_selector
+                  heuristic; installed by STS2FullCombatEnv by default
+  probes.py       Lethal-arithmetic probe suite (OBS_PLAN Phase 4): micro-scenario
+                  pairs scoring a policy's numeric grasp; lethal_oracle baseline
+  evaluation.py   evaluate_win_rate / evaluate_probes / evaluate_run (run-scale:
+                  floors, acts reached, death distribution) + policy adapters
+                  (masked_random_policy, model_policy for SB3, TorchPolicy /
+                  load_torch_policy for train_torch checkpoints); drives eval.py
+                  and test/ablation.py
+  powers.py       Power classes (buffs/debuffs, incl. Colorless card powers) +
+                  ALL_POWERS registry
+  relics/         Relic base (base.py) + one module per relic — the full Ironclad-
+                  obtainable pool plus event/Neow relics. base.py declares the
+                  run-level hook surface; __init__.py auto-imports + freezes
+                  ALL_RELICS / make_relic. Each relic is a whole-combat hook
+                  listener (mirrors RelicModel); purely out-of-combat relics are
+                  registered no-op stubs
+  afflictions.py  Card-attached markers (Ringing, Entangled, Smog, …)
+  enchantments.py Event-granted card enchantments (Sown, Slither, Steady, Spiral,
+                  Perfect Fit, Souls, Glam); hook listeners alongside their card
+  run.py          RunState — out-of-combat run layer (HP, gold, deck, relics,
+                  potions, relic grab bag, card transform, select_cards/option,
+                  create_combat/finish_combat) + act sequencing (start_run rolls
+                  [Overgrowth|Underdocks] → Hive → Glory; advance_act boss-to-boss)
+  rewards.py      Post-combat & treasure rewards (gold, the pity-driven 3-card
+                  choice, act-scaled upgrades, potion drops, elite relic); pity
+                  state lives on RunState
+  events/         Event base (base.py, @register_event/make_event) + one module
+                  per event — the full Overgrowth/Underdocks/Hive/Glory pools,
+                  plus SHARED_EVENTS: the cross-act pool (ModelDb.
+                  AllSharedEvents) that rides EVERY act's queue, gated into
+                  the right acts by each event's own is_allowed;
+                  ancient.py is the AncientEvent base for the act-start shrines
+                  (entering one heals to full) — neow.py run-start;
+                  orobas/pael/tezcatara at Hive, nonupeipe/tanx/vakuu at Glory
+                  (driver.ACT_ANCIENTS rolls one per act entry), plus the
+                  SHARED ancient darv.py, which driver.SHARED_ANCIENTS
+                  partitions across the run's acts. Combat events expose their
+                  fight via event.pending_encounter
+  potions.py      Potion base + every potion an Ironclad run can roll
+                  (SharedPotionPool's 45 + Ironclad4Epoch's 3; potion_pools.py
+                  holds the rarity roster the reward/shop generators draw
+                  from) + event-only Glowwater, Potion-Shaped Rock and Foul
+                  Potion (12 damage to EVERY creature, thrower included).
+                  Fairy in a Bottle is PotionUsage.Automatic: belt potions are
+                  hook listeners, so it vetoes the player's death from the belt
+                  and `automatic` keeps it out of use_potion / the action mask.
+                  The 12 cross-character potions are NOT ported (unreachable
+                  for the Ironclad; most need orbs/Stars/Forge/Osty/Souls)
+  cards/          Card base + the full single-player Ironclad & Colorless pools,
+                  event/trash-heap/mad-science cards, statuses and all 18 curses
+                  (@register_card/make_card). pool.py = in-combat generation +
+                  curse pool + transform options. Every card is a whole-combat
+                  hook listener (mirrors CardModel) with a card.combat back-ref
+  monsters/
+    base.py       Monster base, Intent + MoveType (15-type vocabulary), Encounter
+    state_machine.py  Port of the game's MonsterMoveStateMachine (see below)
+    overgrowth/   Act 1 (default) enemies + ENCOUNTERS
+    underdocks/   Act 1 (alternate, unlock-gated) enemies + ENCOUNTERS
+    hive/         Act 2 enemies + ENCOUNTERS (+ Flail/Mysterious Knight for
+                  The Lantern Key)
+    glory/        Act 3 enemies + ENCOUNTERS (multi-phase bosses; Battle Friend
+                  dummies for the Battleworn Dummy event)
+  env.py          STS2CombatEnv (Gymnasium), OBS_DIM=17, 3 actions — toy
+                  Strike/Defend env, intentionally minimal
+  vocab.py        Frozen append-only vocabularies + reserved capacities (persisted
+                  to vocab.json — COMMIT it, never hand-reorder). Layout constants
+                  are capacities sized to hold the COMPLETE game (N_CARDS=640,
+                  N_RELICS=336, N_POWERS=288, N_MONSTERS=144, N_POTIONS=80,
+                  N_EVENTS=96, N_PURPOSES=24), so porting content appends into
+                  reserved slots and checkpoints fine-tune instead of retraining.
+                  Exceeding a capacity raises at import
+  full_env.py     STS2FullCombatEnv — the real combat training env (flat Discrete
+                  over hand×target+potions, action masks, obs schema v6 — the
+                  {"f", "i"} Dict contract of OBS_SCHEMA.md). Also the
+                  module-level combat action block + obs builder shared with the
+                  run driver/env, and AblatedObsEnv
+  driver.py       RunDriver — a whole run as straight-line code where EVERY
+                  decision is one injectable ask(DecisionRequest) -> int callback;
+                  random_asker / play_random_run for headless baselines
+  run_env.py      STS2RunEnv — the full-run Gymnasium env. Runs RunDriver on a
+                  greenlet so every decision is a masked step (RL.md two-phase
+                  design). Flat Discrete(1381); obs = run block (incl. the act
+                  boss's identity + the whole act-map grid with topology and
+                  position, visible every step like the game's UI, schema v9) +
+                  phase blocks + combat block; RUN_OBS_SCHEMA_VERSION guards
+                  checkpoints
+  curriculum_env.py  STS2CurriculumRunEnv — phase-1 curriculum: STS2RunEnv on
+                  randomized single-column maps with floor-only reward. Same
+                  obs/action layout as STS2RunEnv, so checkpoints hand off to
+                  --env run for phase 2
+  checkpoints.py  ModelSpec (env kind / card_obs / arch / hidden) + the shared
+                  checkpoint construction path: obs schema & segment layout,
+                  make_model, check_checkpoint, load_agent. train_torch.py and
+                  eval.py both go through it, so a checkpoint always reloads
+                  into the architecture it was trained as. make_model REFUSES
+                  --arch mlp/entity against the v4-generation envs (migrate_
+                  ckpt.py likewise can no longer migrate anything and always
+                  exits with an error)
+  models.py       Torch actor-critics for train_torch.py: EntitySetActorCritic
+                  (--arch entset, the default and the only one make_model still
+                  builds) — masked per-row embeddings over the {"f", "i"} obs
+                  Dict, one shared table per vocab kind with rows = vocab.py
+                  capacities, so new content appends without reshaping weights.
+                  MaskedActorCritic (mlp) and EntityActorCritic (entity) are
+                  frozen legacy arches kept for old checkpoints. Checkpoints
+                  are arch-stamped and refuse any other arch
+test/             pytest suites + rl.py (toy trainer) + run.py (interactive demo)
+                  + ablation.py (full-vs-ablated obs arms)
+eval.py           Model evaluation harness (win rate; --env full adds lethal-probe
+                  accuracy + baseline rows)
+```
+
+## Core architecture
+
+### Hook system (`hooks.py`)
+
+Mirrors the game's `AbstractModel` hook pattern. Listeners (powers, and in
+principle relics/cards) are registered on a single `HookSystem`; dispatch is
+**duck-typed** — a hook only calls listeners that define the method, so powers
+implement only what they need. Three families:
+
+- **Modifier** — aggregate returns: additive (summed), multiplicative
+  (product), or chain (each listener transforms the value). Examples:
+  `modify_damage_additive` (Strength), `modify_block_multiplicative` (Frail),
+  `modify_hp_lost` (Slippery/Intangible), `modify_card_energy_cost` (Tangled).
+- **Event** — fire-and-forget notifications: `on_card_played`,
+  `on_damage_received`, `on_enemy_turn_start`, `on_creature_added`,
+  `on_potion_used`, ...
+- **Predicate** — any listener returning False short-circuits:
+  `should_die` (Illusion), `should_clear_block` (Barricade),
+  `should_play_card` (Ringing), `should_allow_hitting`.
+
+`hooks.combat` back-references the owning `CombatState` so powers can reach
+combat-level state (spawning creatures, ending combat).
+
+### Damage typing (`valueprops.py`)
+
+Every `DamageCmd.deal` is typed with `ValueProp` flags, mirroring the game:
+
+- `MOVE` — attack damage from cards/enemy moves. Only `MOVE`-and-not-`UNPOWERED`
+  damage goes through the Strength/Vulnerable/Weak modifier hooks
+  (`is_powered_attack`), and only `MOVE` damage fires `on_attacked`.
+- `UNPOWERED` — relic/potion/power damage (Thorns, Fire Potion): blockable but
+  never modified.
+- `UNBLOCKABLE` — skips block absorption (Poison).
+
+When `props` is omitted, it is inferred (card/monster attack; downgraded to
+unpowered for `card.is_unpowered`). The damage pipeline order is:
+powered modifiers → damage cap (Intangible) → `on_attacked` → block absorption
+→ `modify_hp_lost` → apply → death check (`should_die`) → post-damage events.
+
+**Known intentional behaviors:** Thorns is blockable (the game's Thorns deals
+`Unpowered` damage), and Poison goes through `modify_hp_lost` (so Intangible /
+Slippery cap it).
+
+### Monster AI
+
+Two styles coexist:
+
+1. **Hand-rolled `_move_key` patterns** (most monsters) — fine for the many
+   enemies whose real state machines are deterministic loops.
+2. **`MachineMonster` + `MonsterMoveStateMachine`** (`monsters/state_machine.py`)
+   — a faithful port of the game's declarative move graphs: `MoveState`
+   (perform callback + telegraphed `Intent`), `RandomBranchState` (weighted
+   rolls with lambda weights, `CANNOT_REPEAT` / `CAN_REPEAT_X_TIMES` /
+   `USE_ONLY_ONCE` repeat rules, and cooldowns — all keyed off the machine's
+   `state_log`), and `ConditionalBranchState` (first true condition wins).
+   Byrdonis, Fogmog, and Mawler are ported; **prefer this for new monsters and
+   for any monster whose source uses `RandomBranchState`/`ConditionalBranchState`.**
+
+Intents use the full 15-type `MoveType` vocabulary from the game (ATTACK, BUFF,
+DEBUFF, DEFEND, ESCAPE, HEAL, SUMMON, SLEEP, STUN, STATUS_CARD, CARD_DEBUFF,
+DEATH_BLOW, ...). `Intent.also` carries secondary types for multi-effect moves
+(e.g. an attack that also blocks is `ATTACK` with `also=(DEFEND,)`); check with
+`intent.has(MoveType.X)`.
+
+Stunned creatures (`creature.stunned`, set via `CreatureCmd.stun`) skip their
+move in the combat loop but still receive turn-start/turn-end effects, and
+should show `Intent(MoveType.STUN)`. Escaped creatures (`CreatureCmd.escape`)
+count as gone for the win condition without dying.
+
+### Turn / combat flow (`combat.py`)
+
+`CombatState.end_turn()` runs, in order: player turn-end hooks → turn-end-in-
+hand card effects (ethereal exhaust, Burn damage) → discard hand → per-enemy
+turns (block clear → `on_enemy_turn_start` → move or stun-skip →
+`on_enemy_turn_end`) → `on_enemy_side_end` (Vulnerable/Weak/Frail tick here) →
+next player turn (block clear → energy reset → `on_player_turn_start` → draw).
+Combat ends when the player dies or every non-**minion** enemy is dead or
+escaped (`minion` power marks secondary enemies like Kin Followers and the Eye
+With Teeth).
+
+### RL environment (`env.py`)
+
+Deliberately narrower than the engine — a minimal Strike/Defend training env:
+
+- **Actions (3):** 0 = end turn, 1 = play a Strike, 2 = play a Defend.
+  `action_masks()` supports MaskablePPO.
+- **Observation (17 floats, documented in env.py):** player hp/block/energy,
+  hand/pile counts, enemy hp/block/strength, intent-attack flag + incoming
+  damage, and five binary intent-type flags (debuff / status-card / defend /
+  summon / idle).
+- **Reward:** per-step HP delta (normalized) + 1.0 on win.
+- Default fight is `FUZZY_WURM_ENCOUNTER`. It deliberately exposes none of the
+  engine's breadth (every encounter, potions, multi-enemy targeting) — that is
+  what `full_env.py` is for. Leave this env minimal.
+
+## Conventions and invariants
+
+- **RNG:** all combat randomness goes through `CombatState.combat_rng`
+  (`combat_rng.py`), which mirrors the game's per-purpose streams with seven
+  named accessors: `shuffle`, `monster_ai`, `card_gen`, `card_selection`,
+  `targets`, `energy`, `potion_gen`. In **legacy** mode (RL training/eval,
+  `CombatState(rng=...)`) every accessor returns the one shared
+  `random.Random`; in **parity** mode (a string-seeded conformance replay) each
+  is a `GameRandomAdapter` over the matching game stream. **Always draw from
+  the accessor that names your purpose — never `combat._rng` directly.**
+  Reaching for the shared object is the most-repeated fidelity defect in this
+  codebase: it is invisible in legacy mode and desyncs every later draw in a
+  parity run. Seeded tests depend on the legacy sequence — don't add RNG draws
+  to combat setup paths without checking the test suite.
+- **Tests must pass:** `py -m pytest test/ -q`. Powers get behavior tests in
+  `test/test_powers.py` / `test_overgrowth_powers.py`; new engine systems in
+  `test_new_features.py`. Tests build combats with `CombatState(rng=random.Random(seed))`
+  and drive `DamageCmd`/`end_turn` directly.
+- Cards/potions register via decorators (`@register_card`, `@register_potion`)
+  and are instantiated by id (`make_card("strike")`).
+- Powers live in `powers.py` with `id` / `name` / `power_type` class attrs;
+  debuffs are intercepted by Artifact in `PowerCmd.apply`. `power._tick()`
+  handles duration decrement + expiry; `_expire()` unregisters.
+- Effects go through **commands** (`cmds.py`), never by mutating hp/block
+  directly — that's what keeps hook dispatch correct.
+- Style: `from __future__ import annotations`, lazy imports inside methods to
+  avoid circulars (powers ↔ cmds ↔ cards), dataclasses for value types.
+
+## Known gaps vs. the real game (deliberate, roughly priority-ordered)
+
+- The full-run env (run_env.py) covers every decision of a full three-act run
+  ([Overgrowth|Underdocks] → Hive → Glory, all fully wired into run sequencing
+  and rooms.py). The final boss ends the run with a victory and no reward
+  screen; act transition (RunManager.EnterNextAct) grants no boss relic, and
+  the between-acts full heal is the Ancient shrine's entry heal
+  (AncientEventModel.BeforeEventStarted — ported in events/ancient.py);
+  DoubleBoss (Asc 10) adds a second boss to the final act. The toy env.py still
+  exposes only Strike/Defend (intentional).
+- Relics: the full Ironclad-obtainable pool is implemented (SharedRelicPool 118
+  + IroncladRelicPool 8 = 126), plus the event-pool, Neow, all six Act-2/3
+  Ancient-shrine pools (Orobas/Pael/Tezcatara at the Hive shrine,
+  Nonupeipe/Tanx/Vakuu at Glory — events/ancient.py + one event module each;
+  the driver rolls one per act entry via ACT_ANCIENTS), the shared ancient
+  Darv's 12, and the shared events' own (Chosen Cheese, the three teas, the
+  three dolls, Wongo's two, and the Fake Merchant's 9 knock-offs + Rug).
+  Purely out-of-combat
+  relics (gold/map/deck/rewards/rest/enchantments) are no-op stubs, and the
+  env does not expose relics in its observation. A few gate on
+  CombatState.room_type (Sling of Courage, Pantograph). Cross-character
+  effects are stubbed: Sea Glass entirely, Prismatic Gem's card-pool half
+  (its +1 energy is real). Per-relic wiring lives in relics/ and MODULES.md.
+  The character's starting relic (Ironclad → Burning Blood, Ironclad.cs:57) is
+  granted at run start by `RunState.start_run` (Player.PopulateStartingRelics),
+  in every run — so `run.relics[0]` is always `burning_blood`.
+- No orbs. Card keywords cover ethereal/unplayable/exhaust/innate/retain/sly
+  (Sly's plumbing exists but no ported content grants or consumes it) plus
+  `Card.eternal`, which gates event removals/transforms via
+  `RunState.removable_cards`. The enchantment system is modeled only as far as
+  events/Neow/Ancient relics grant it (Sown, Slither, Steady, Spiral, Perfect
+  Fit, Souls, Glam, Imbued, Goopy, Tezcatara's Ember, Swift, Instinct, Clone,
+  and the shared events' Sharp/Nimble/Vigorous/Corrupted —
+  enchantments.py); shops and the full catalogue are not. In-combat
+  card selection is a headless mechanism (`CombatState.select_cards`, overridable
+  via `card_selector`), not actual selection screens; events use the analogous
+  `RunState.select_cards` / `select_option`.
+- The run layer (run.py) covers act sequencing, Neow, map travel (incl. the
+  map-generation modifier pipeline — Spoils Map, Golden Compass), rest sites,
+  treasure, post-combat rewards (rewards.py), the full event pools, a merchant
+  shop (shop.py), and combat-event rewards (event fights run as real Monster
+  rooms). Still missing: run-level dispatch of most combat hooks — only the
+  reward/room hooks plus HP-loss modifiers (Tungsten Rod) are dispatched.
+  Colorful Philosophers needs multiple character colours, so it is never
+  eligible in the single-character sim; the Mad Science Chaos rider and
+  Improvement's after-combat upgrade fall back to the Ironclad pool / are
+  documented no-ops. Potion offers are auto-kept when a slot is free (except the
+  post-combat potion reward, an explicit take/skip).
+- Shared (cross-act) events: 17 of the 18 in ModelDb.AllSharedEvents are
+  ported and wired into every act's queue (events/__init__.py SHARED_EVENTS).
+  One is deliberately deferred: **War Historian Repy**, whose `IsAllowed` is
+  hard-false — it is reached only by carrying a Lantern Key, through a room
+  hook the sim doesn't model. The Fake Merchant's bespoke shop UI is
+  approximated as ordinary event options. **Crystal Sphere** is ported
+  (events/crystal_sphere.py + the 11×11 grid engine in
+  events/_crystal_sphere.py), with one deliberate narrowing: the two event
+  options are real policy decisions, but the minigame's CELL CLICKS are
+  resolved inside the engine rather than surfaced as actions — a 121-cell
+  grid does not fit CHOICE_SLOTS, and the event is far too rare for a head
+  that wide to ever train. The click rule is the game's own automated one
+  (CrystalSphereScreenHandler, the AutoSlay handler: a uniformly random
+  hidden cell, Big tool), drawn from a SIM-ONLY `crystal_sphere_rng` stream
+  so it can never disturb a parity counter — in the game a click is human
+  input and consumes no run RNG at all. `RunState.crystal_sphere_clicks`
+  overrides the rule, which is how the conformance runner replays a
+  recording's `CrystalSphereClick {x} {y} {tool}` commands exactly.
+- No character resources (Stars, Forge/Sovereign Blade, Osty, Doom, summons).
+- Monster moves roll when the machine advances; the game rolls them at
+  intent-display time. The stream is right (`combat_rng.monster_ai`), the
+  moment is not.
+- 27 of the 111 monsters still use hand-rolled move logic instead of the state
+  machine (fine while behavior-equivalent); all four act rosters (Overgrowth,
+  Underdocks, Hive, Glory) are complete — **ENEMIES.md** is the porting guide.
+  Glory's card-keyword-heavy powers are approximated where the sim lacks the
+  plumbing: Hex sets each Hexed card's `is_ethereal` flag directly (no keyword-
+  modifier hook), and the Queen re-telegraphs an in-progress Burn Bright as
+  Enrage at move resolution rather than the instant the Torch Head Amalgam dies.
+- The attack-command boundary (`hooks.before_attack`/`after_attack`, used by
+  Vigor to consume its stacks after one full multi-hit attack) brackets
+  monster attacks (`Monster._execute_attack`) and player Attack-card plays
+  (`CombatState._resolve_card_play`) — matching the game's per-AttackCommand
+  semantics (AttackCommand.cs) for all ported content: no ported non-Attack
+  card issues attack damage (self-HP-loss skills are plain damage commands in
+  the game), and Vigor ports VigorPower.cs's IsPoweredAttack guard (unpowered
+  attacks neither use nor consume it). If a non-Attack card that issues a
+  real AttackCommand (Flechettes/Lunar Blast-style) is ever ported, the
+  card-type gate in `_resolve_card_play` must widen with it.
+- `before_card_played` fires once per card play, not once per Replay
+  iteration (the game constructs a fresh CardPlay per replay loop iteration,
+  CardModel.cs) — harmless for the current listeners (Surrounded/Strangle/
+  Sown/Pen Nib) but a real divergence under Replay effects.
+- No Early/Late hook phases. `history.py` records card plays, exhausts and
+  damage received only — audited to cover every history query the ported pools
+  make. The game's other CombatHistory entry types (CardDrawn/Discarded,
+  EnergySpent, BlockGained, PowerReceived, PotionUsed, …) are queried only by
+  unported content — add each with the content that needs it.

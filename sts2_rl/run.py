@@ -319,7 +319,7 @@ class RunState:
         # path keeps them on the shared run.rng. Constructing them draws no RNG,
         # so run-construction seed parity is preserved.
         odds_rng = self.player_rng.rewards if self.player_rng is not None else self.rng
-        self.card_rarity_odds = CardRarityOdds(odds_rng)
+        self.card_rarity_odds = CardRarityOdds(odds_rng, run=self)
         self.potion_reward_odds = PotionRewardOdds(odds_rng)
         # Post-combat "extras" carried out of the last finished combat, awaiting
         # the reward screen (mirrors a CombatRoom's ExtraRewards being folded in
@@ -876,6 +876,29 @@ class RunState:
         self.potions.extend([None] * count)
 
     @property
+    def can_remove_potions(self) -> bool:
+        """`Player.CanRemovePotions` — whether the belt's Use and Discard
+        buttons are live (`NPotionPopup` disables both when this is false,
+        NPotionPopup.cs:139-142).
+
+        C# writes it as a flag set in `BeforeEventStarted` and cleared in
+        `OnEventFinished`; the sim derives it from the open event instead, so
+        there is no set/restore pair to leak if an event is ever abandoned
+        without finishing. The three events that set it are marked with
+        `Event.locks_potion_belt` (see that attribute).
+
+        This gates the player-facing belt ACTION only
+        (`DecisionRequest.potion_actions`), exactly like the buttons it
+        mirrors — engine-driven discards go through `PotionCmd.Discard`, which
+        C# does not gate either (TheFutureOfPotions.cs:126 discards the traded
+        potion while the flag is false).
+        """
+        event = self.current_event
+        return not (event is not None
+                    and getattr(event, "locks_potion_belt", False)
+                    and not event.finished)
+
+    @property
     def held_potions(self) -> list[Potion]:
         """The potions actually held, in slot order, with empty slots
         filtered out (Player.cs `Potions => _potionSlots.Where(p => p !=
@@ -1263,6 +1286,36 @@ class RunState:
         self._has_second_boss = (
             is_final_act and ascension >= AscensionLevel.DOUBLE_BOSS
         )
+        # AscensionManager.ApplyEffectsTo (AscensionManager.cs:52-65) runs
+        # once, at run start (RunManager creates one AscensionManager per
+        # run and applies it to the player before the first act's map is
+        # rolled) — gate on act_index == 0 so a later start_act (act 2/3)
+        # never re-applies these.
+        if self.act_index == 0:
+            if self.has_ascension(AscensionLevel.TIGHT_BELT):
+                # AscensionManager.cs:56-59: `player.SubtractFromMaxPotionCount(1)`.
+                # The belt is still all-None here (__init__ ran before
+                # ascension was known and nothing has procured a potion yet)
+                # — assert that before truncating so a reordered call site
+                # doesn't silently drop a held potion.
+                assert all(p is None for p in self.potions), (
+                    "TightBelt must apply before any potion is held")
+                self.max_potions -= 1
+                self.potions = self.potions[: self.max_potions]
+            if self.has_ascension(AscensionLevel.ASCENDERS_BANE):
+                # AscensionManager.cs:60-65: `player.RunState.CreateCard<
+                # AscendersBane>(player); ascendersBane.FloorAddedToDeck = 1;
+                # player.Deck.AddInternal(ascendersBane, -1, silent: true)`.
+                # `silent: true` skips CardPileCmd's AfterCardChangedPiles /
+                # ModifyCardBeingAddedToDeck hook dispatch (unlike
+                # RunState.add_card) — append straight to the deck list, the
+                # way AddInternal does. `FloorAddedToDeck` is pure save/UI
+                # history metadata (NDeckHistory, NMapPointHistory) with no
+                # ported reader in this repo (grep floor_added_to_deck: no
+                # Card field exists), so it is not modeled here.
+                from .cards import make_card
+
+                self.deck.append(make_card("ascenders_bane"))
         self.map = self._generate_map()
         self._generate_rooms()
         self.current_point = self.map.starting_point
@@ -1677,6 +1730,11 @@ class RunState:
 
     # ── Combat integration ───────────────────────────────────────────────
 
+    def has_ascension(self, level: "AscensionLevel") -> bool:
+        """AscensionManager.HasLevel (AscensionManager.cs:45-48): levels are
+        cumulative — asc N grants every level <= N."""
+        return self.ascension >= int(level)
+
     def create_combat(self, encounter: Encounter, **kwargs) -> CombatState:
         """Enter a combat carrying this run's deck, relics, potions, and HP.
 
@@ -1723,6 +1781,11 @@ class RunState:
             player_gold=self.gold,
             # In-combat generation draws from the character's CardPool.
             character=self.character,
+            # Combat-side mirror of the run's ascension (see
+            # HookSystem.ascension). Must be passed into the constructor,
+            # not set after — CombatState.__init__ spawns monsters (which
+            # read hooks.ascension for their stat rolls) during construction.
+            ascension=self.ascension,
             **kwargs,
         )
         combat.deck_card_origins = {
@@ -1743,6 +1806,24 @@ class RunState:
         # A plain list copy preserves slot identity/gaps 1:1 (both sides are
         # the same fixed-length list[Potion | None] shape).
         self.potions = list(combat.player.potions)
+        # The belt is the run's again, so drop each potion's back-reference to
+        # the combat that just ended. `Potion.combat` mirrors
+        # `PotionModel.Owner.Creature.CombatState`, which is null whenever the
+        # owner is not in a combat — the sim used to set it in
+        # `CombatState.__init__` and never clear it, leaving every surviving
+        # potion pointing at a finished combat for the rest of the run.
+        #
+        # Fairy in a Bottle is the one potion that reads it: out of combat its
+        # `after_preventing_death` checked `self.combat is None` to pick the
+        # run-level arm, so a stale pointer sent it down the in-combat arm
+        # instead. It then discarded itself from the DEAD combat's belt while
+        # staying in the run's — free unlimited death prevention — and the
+        # NEXT out-of-combat death raised `ValueError: ... is not in list`
+        # from `PlayerCombatState.discard_potion`, which killed a training run
+        # inside Jungle Maze Adventure's `run.lose_hp`.
+        for potion in self.potions:
+            if potion is not None:
+                potion.combat = None
         # In-combat gold gains (Hand of Greed) credit the run's ledger;
         # in-combat thefts (Gremlin Merc's Thievery — PlayerCmd.LoseGold
         # GoldLossType.Stolen) debit it. Steals are capped in-combat against

@@ -262,6 +262,17 @@ class TestSpite:
         play(cs, card)
         assert cs.enemy.hp == before - 15
 
+    def test_base_hits_matches_printed_repeat_var(self):
+        # Spite.cs's obs writer (and sts2-rl's own base_hits contract field)
+        # report the CARD's printed hit count (RepeatVar base value = 2),
+        # not the runtime-conditional hitCount computed in OnPlay/on_play.
+        # base_hits previously defaulted to 1 (unset _hits), diverging from
+        # the game dump's base_hits=2 at every observed hand appearance.
+        card = SpiteCard()
+        assert card.base_hits == 2
+        card.upgrade()
+        assert card.base_hits == 3
+
 
 class TestTearAsunder:
     def test_base_single_hit(self):

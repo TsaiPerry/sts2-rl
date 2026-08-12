@@ -209,6 +209,23 @@ asymmetry is worth its second constant.
 > changed — only field order, block names, and two widths the plan-stage
 > draft had wrong.
 
+> **v7 correction (SpireBot schema audit, 2026-08-04, `OBS_SCHEMA_VERSION`
+> 6 → 7, `docs/superpowers/specs/2026-08-04-spirebot-schema-audit.md`):**
+> the audit walked every combat v6 field against the LIVE GAME's own
+> readable API surface (as opposed to the sim's internal state) and found
+> **zero fields with no game-readable equivalent** — every segment is
+> either KEEP (a direct C# read), REDEFINE (a close proxy, stated exactly),
+> or ACCUMULATE (session-state bookkeeping the mod maintains itself, e.g.
+> intent history and the `.overflow` flags). **No segment or width
+> changed** — this bump is a semantics reclassification, not a resize; see
+> §5.5 for the full per-segment disposition table. The one REDEFINE with an
+> actual code change: `cards.f`'s `effective_cost` (§5.2's `cards.f` row)
+> now reads the card's PLAIN printed `energy_cost` for draw/discard/exhaust
+> pile cards, not the hook-modified preview `hand.f` uses — those piles
+> aren't `Hand`, so the game's own preview pipeline (`UpdateDynamicVarPreview`'s
+> `runGlobalHooks` gate) never hook-modifies them either. This matches what
+> `run_env._run_card_row` already did for out-of-combat card rows.
+
 ### 5.1 Int half
 
 | segment | rows × fields | notes |
@@ -238,7 +255,7 @@ unit (fine `/100` + coarse `/500`) and the existing `_signed` mapping.
 | `enemy{e}.intent_history.f` | 6 × 3 × 15 | **new (v6, R3, 2026-08-02):** one segment per enemy slot, `MAX_INTENT_HISTORY` (3) rows of 15 floats each, most-recent-first. No `.ids` half — see §5.4. |
 | `damage_matrix` | 60 | unchanged, still aligned 1:1 with the play actions |
 | `potions.f` | 10 × 1 | targeted flag — **correction:** block named `potions.f`, not `potion{p}.f`. **Final review fix-pass correction:** cap is `MAX_POTION_ROWS` (10, `full_env.py:350`), matching `potions.ids` above, not 3. |
-| `cards.f` | 96 × 4 | **correction:** the four fields, named exactly: `(upgrade, effective_cost, affliction_amount, exhaust_on_next_play)`. This block deliberately does NOT carry `_has_single_turn_retain` / `_has_single_turn_sly` — those are hand-only state cleared by end-of-turn cleanup — but DOES carry `exhaust_on_next_play`, genuine per-instance state that survives the card leaving hand. |
+| `cards.f` | 96 × 4 | **correction:** the four fields, named exactly: `(upgrade, effective_cost, affliction_amount, exhaust_on_next_play)`. This block deliberately does NOT carry `_has_single_turn_retain` / `_has_single_turn_sly` — those are hand-only state cleared by end-of-turn cleanup — but DOES carry `exhaust_on_next_play`, genuine per-instance state that survives the card leaving hand. **v7 REDEFINE (2026-08-04):** `effective_cost` is the card's PLAIN printed `energy_cost` — NOT hook-modified — because pile cards aren't in `Hand` and the game's own preview pipeline never runs hooks for them either (`full_env._pile_card_row`). `hand.f`'s `effective_cost` is unaffected — cards actually in hand ARE covered by the game's hook-modified preview. |
 | `player.powers.overflow`, `player.relics.overflow`, `hand.overflow`, `enemies.overflow`, `potions.overflow`, `cards.overflow`, `enemy{e}.powers.overflow` (× 6) | 1 each | **correction, made explicit per §2.3/T4 brief §3.5:** exactly these 12 blocks carry an overflow flag — every block with a `cap`. Set to `1.0` iff `ObsBuffer.write_rows` truncated that block this step. |
 
 ### 5.3 Piles — the hidden-information rule
@@ -396,6 +413,45 @@ buffer is a `deque(maxlen=MAX_INTENT_HISTORY)` the recorder itself
 maintains, so it is physically incapable of holding more than the cap.
 §2.3's "truncate rather than assert" framing has nothing to truncate here.
 
+### 5.5 v7 game-observable audit — per-segment disposition
+
+Source: `docs/superpowers/specs/2026-08-04-spirebot-schema-audit.md`, walked
+against `sts2_rl/full_env.py` (this schema's implementation) and the
+decompiled game source, to answer "if a C# mod (SpireBot) had to fill this
+same schema from LIVE GAME STATE instead of the sim, could it?" Dispositions:
+**KEEP** (a direct C# API read), **REDEFINE** (a close proxy exists, stated
+exactly — one has a real behavior change, `cards.f`'s `effective_cost` above),
+**ACCUMULATE** (the mod maintains this as session state the game doesn't
+expose a running counter for). **No DROP rows exist in combat v6/v7** — every
+field has a game source. This table is segment-level; see the audit doc for
+the field-by-field version with exact API citations.
+
+| segment | disposition | game source (summary) |
+|---|---|---|
+| `player.powers.ids` / `.f` | KEEP (aux: KEEP for 10 admitted power ids, structural-0 elsewhere) | `Creature.Powers[i]` (id, `.Amount`); `aux` via `PowerModel.DisplayAmount` per-id table |
+| `player.relics.ids` / `.f` | KEEP (flag/counter gated per-relic) | `player.Relics[i]` (id); `RelicModel.ShowCounter`/`.DisplayAmount`/`.Status`/`.IsUsedUp` |
+| `hand.ids` / `.f` | KEEP | `combat.Player.PlayerCombatState.Hand.Cards[h]`; `CardModel`/`DynamicVars`/`CanPlayTargeting` fields; cost + damage + block previews via `UpdateDynamicVarPreview`/`Hook.Modify*` (Task 1 pattern — hook-modified, card IS in hand) |
+| `enemies.ids` / `.f` | KEEP | `combatState.Enemies[e]` (`Monster` id, `Creature` vitals, `Monster.NextMove.Intents`); attack preview via the same `Hook.ModifyDamage` call class |
+| `enemy{e}.powers.ids` / `.f` | KEEP (aux: KEEP for enemy-side admitted ids, structural-0 elsewhere) | `Creature.Powers[i]`, same accessor as player powers |
+| `potions.ids` / `.f` | KEEP | `player.GetPotionAtSlotIndex(p)`; targeted flag from `PotionModel.TargetType` |
+| `cards.ids` | KEEP | `combat.DrawPile`/`DiscardPile`/`ExhaustPile`; `pile_id` is a literal, not a game field |
+| `cards.f` | KEEP, except `effective_cost` = **REDEFINE** (v7 code change) | `CardModel.IsUpgraded`/`.Affliction`/deferred-exhaust flag; `effective_cost` = PLAIN `energy_cost` (no hooks — pile cards aren't in `Hand`) |
+| `player.*` scalars (hp/block/energy/strength/dexterity/pile_sizes/turn) | KEEP | `player.Creature`/`combat.Energy`/`PlayerCombatState.TurnNumber`/pile `.Cards.Count` |
+| `player.incoming_post_block` | KEEP (Task 1 pattern) | sum of per-enemy `Hook.ModifyDamage(target=player)` minus `player.Creature.Block` — same admissibility class as `damage_matrix` |
+| `player.cards_played_this_turn` / `attacks_this_turn` / `damage_taken` | KEEP | `combat.History.Entries` (`CombatHistory`, a public queryable event log) filtered to this turn |
+| `damage_matrix` | KEEP (Task 1 verdict) | `card.UpdateDynamicVarPreview(...)` → `DynamicVars.Damage`/`CalculatedDamage.PreviewValue`, per hand card × living enemy |
+| `enemy{e}.intent_history.f` | **ACCUMULATE** | no game field — mod snapshots each enemy's already-KEEP intent flags/preview numbers itself, once per player-turn-start, pre-reroll, mirroring `CombatState._roll_enemy_intents`'s timing |
+| every `*.overflow` (12 blocks) | **ACCUMULATE** | no game field — mod's own truncate-and-flag bookkeeping, mirroring `ObsBuffer.write_rows` |
+
+**Net effect on this schema**: zero width change, zero segments added or
+removed. The single code change is `cards.f`'s `effective_cost` (§5.2). The
+`enemy{e}.intent_history.f` block (270 floats, §5.4) is the single largest
+chunk of session-state bookkeeping a C# `ObsBuilder` will have to implement,
+but every field it records is itself already KEEP at the point of capture —
+it is ACCUMULATE-shaped, not DROP-shaped. See the audit doc for the run
+observation's (v9 → v10) parallel table and the mask-contract findings
+(Tasks 11/12 scope).
+
 ---
 
 ## 5A. Run observation (v7)
@@ -431,6 +487,39 @@ maintains, so it is physically incapable of holding more than the cap.
 > (`(4710 + 1464) × 4`). Bumped in the SAME change this time — the v8
 > correction above exists precisely because that discipline was missed once
 > already.
+>
+> **Amendment (Task B, 2026-08-04, `RUN_OBS_SCHEMA_VERSION` stays 10):** the
+> same-day v9→v10 audit (§5A.1 below) flagged one real content gap outside
+> its KEEP/DROP/REDEFINE/ACCUMULATE scope — no observation segment carried
+> the `REWARD_RELIC` offer's relic identity (`DecisionKind` gained
+> `REWARD_RELIC` at run-obs v5, but no `reward.relic.*` block was ever
+> added). Perry approved closing it AS AN AMENDMENT to v10 in place rather
+> than a same-day v11 bump — v10 was brand-new and uncommitted, nothing had
+> trained on it yet, and every doc/test/contract already referenced 10. Two
+> new width-1 segments, `reward.relic.f`/`reward.relic.ids` (§5A's
+> phase-specific table, `REWARD_RELIC` row): **`f_dim` = 4711** floats,
+> **`i_dim` = 1465** ints, **24,704 bytes/env/step** (`(4711 + 1465) × 4`).
+> This is the only width change since the v9→v10 bump.
+>
+> **Correction (2026-08-07, `RUN_OBS_SCHEMA_VERSION` 10 → 11):**
+> `REWARD_CARD_SLOTS` 3 → 4. The cap was written against `CARD_REWARD_COUNT`
+> ("RewardsSet: always 3"), but **Lasting Candy appends a fourth option** to a
+> post-encounter offer (`cards.extend(added)`, `relics/lasting_candy.py`; it
+> is the game's only implementer of `Hook.TryModifyCardRewardOptions`' early
+> pass, and adds exactly one, so 4 is the true maximum). The fourth card was
+> being truncated out of the observation by `write_rows` while
+> `legal_actions` — `range(len(cards) + 1)`, skip last — still offered it, and
+> `CHOICE_SLOTS`=16 left room to pick it. Worse than invisible: the count
+> moves SKIP from index 3 to index 4 on exactly those screens, so a policy
+> that had learned "slot 3 = skip" would take an unseen card. The 5- and
+> 8-card sites (Brain Leech's share branch, Room Full of Cheese, Hefty Tablet)
+> route through `run.select_cards` into the 96-wide `select.candidates` block
+> and are unaffected. `models.run_action_layout`'s `choice_row_overlays` entry
+> for `reward.cards` widens with the constant, so the new slot gets a pointer
+> score rather than a bare positional bias. One 4-wide row added to each half:
+> **`f_dim` = 4715** floats, **`i_dim` = 1469** ints, **24,736 bytes/env/step**
+> (`(4715 + 1469) × 4`). No checkpoint migration — nothing on disk claimed
+> schema 10.
 
 The run observation is **one `ObsLayout`/`ObsBuffer`** (`run_obs_layout()`):
 this module's own segments (`run_obs_segments_f`/`_i`, below) followed by
@@ -459,8 +548,9 @@ id / zero float, exactly as `ObsBuffer.reset()` leaves it (§2.1).
 | `MAP` | `map{m}` (× `MAP_SLOTS`=7) | the CURRENT decision's 1-ply option preview, action-aligned; distinct from the always-visible `run.map.grid` above |
 | `EVENT` | `event.present/page/ids`, `event.options` | `event.ids` is a single scalar id (no cap to overflow, so a direct write not a `write_rows` call) |
 | `SHOP` | `shop.cards`(7) / `shop.relics`(3) / `shop.potions`(3) / `shop.removal` | id+float rows, R6 log1p costs (`SHOP_COST_LOG_DENOM=900`, T5a fix-pass retune); unstocked slots are explicit PAD rows (positional, `sort=False`) |
-| `REWARD_CARD` | `reward.cards`(3) | R2 rows (`_run_card_row`), positional — an unresolvable card id becomes an explicit PAD row IN PLACE, never a dropped/shifted slot (§2.1) |
+| `REWARD_CARD` | `reward.cards`(4) | R2 rows (`_run_card_row`), positional — an unresolvable card id becomes an explicit PAD row IN PLACE, never a dropped/shifted slot (§2.1). Width 4, not `CARD_REWARD_COUNT`=3: Lasting Candy appends one Power option through `Hook.TryModifyCardRewardOptions`' early pass (the game's only implementer of it), and the count also moves SKIP in the mask — `legal_actions` is `range(len(cards)+1)` with skip last, so a 4-card screen puts the bonus card at index 3 and skip at 4 (v11 bump; see §5A.2) |
 | `REWARD_POTION` | `reward.potion.ids/.f` | single scalar id + presence float |
+| `REWARD_RELIC` | `reward.relic.ids/.f` | **Task B, v10 amendment.** Single scalar id + presence float, from `DecisionRequest.relic` (NOT `request.rewards` — the offered item lives on the request itself). Width 1, mirroring `reward.potion`, not `reward.cards`: `RunState.offer_relic`/the `reward_selector("relic", ...)` seam always offers exactly ONE relic at a time, take-or-skip, even when a reward set holds several `RelicReward`s (`CombatRewards.relics` — e.g. Lava Rock's two extras on the act-1 boss); each is its own independent `REWARD_RELIC` screen. A relic whose id is not in `RELIC_INDEX` is skipped (zero-fill), same invariant as `run.relics` below. |
 | `SELECT_CARDS` / `SELECT_OPTION` | `select.purpose.ids`, `select.count`, `select.skippable`, `select.candidates`(`MAX_SELECT_CANDIDATES`=96) | `select.candidates` is the ONLY other sorted run-level block besides `run.deck` — `from_draw` candidates arrive in draw-pile order, which the real game's own select screen does not show either (confirmed at source, `NCombatPileCardSelectScreen.UpdatePileContents`); `_sorted_candidate_order` computes the identical sort key independently, capped and id-filtered exactly like the write, so the two can never disagree (R4's action-space seam, T5b) |
 
 **Overflow flags**: `run.potions`, `run.deck`, `run.relics`, `run.boss`,
@@ -493,6 +583,62 @@ quantity resolvable arbitrarily far out) toward more spread while keeping
 defaults, not measurements** — no act-0 census reaches these balances or
 prices (§7) — pinned by `test_gold_realistic_band_resolves_without_plateau`
 and `test_shop_cost_realistic_band_spreads_more_than_the_old_defect`.
+
+### 5A.1 v10 game-observable audit — per-segment disposition
+
+Source: `docs/superpowers/specs/2026-08-04-spirebot-schema-audit.md`, the
+same audit as §5.5, walked against `sts2_rl/run_env.py` (this schema's
+implementation, excluding the embedded `combat.*` block — see §5.5 for that
+half's v6→v7 table) for "could a C# mod (SpireBot) fill this segment from
+LIVE GAME STATE instead of the sim?" Same disposition vocabulary as §5.5:
+**KEEP**, **REDEFINE**, **ACCUMULATE**. **No DROP rows exist in run v9/v10**
+— every field has a game source.
+
+| segment | disposition | game source (summary) |
+|---|---|---|
+| `phase` | REDEFINE (doc-only, no v10 code change) | no single C# field carries `DecisionKind` — the mod builds the one-hot from the same disjoint screen-state predicates `ReplayDispatcher.GetDispatchableTypes` already checks; this env's own `phase` write (from `DecisionKind` directly) is unaffected |
+| `run.hp_ratio`/`hp_abs`/`max_hp_abs`/`run.gold`/`run.act`/`run.floor` | KEEP | `player.Creature`, `player.Gold`, `state.CurrentActIndex`/`ActFloor` |
+| `run.potions` | KEEP | `player.PotionSlots.Count`, `player.GetPotionAtSlotIndex(p)` |
+| `run.deck` | KEEP | `player.Deck.Cards[i]`; cost = plain printed cost (no live `CombatState` to hook through), same rule as `cards.f`'s v7 REDEFINE |
+| `run.relics` | KEEP (out-of-combat counter suppression list, same admissibility as combat `player.relics.f`) | `RelicModel.DisplayAmount`/`.ShowCounter`, gated by an `_IN_COMBAT_ONLY_COUNTERS` list the mod must replicate |
+| `run.boss` | KEEP | the act's boss encounter definition, known at act entry (not a live creature) |
+| `run.map.grid`/`.meta` / `map{m}` | KEEP | `NMapScreen`'s point dictionary (`MapCoord`→`NMapPoint`), same structure `MapMoveCommand`'s enumeration already reads |
+| `event.present`/`.page`/`.ids`/`.options` | KEEP | `RoomType`/`ReplayState.ActiveEventSynchronizer`, `sync.Events[0]` and its `CurrentOptions` |
+| `shop.cards`/`.relics`/`.potions`/`.removal` | KEEP | `OpenShopCommand.GetEntries(room)`, the same enumeration `Buy*Command`s use |
+| `reward.cards`/`reward.potion` | KEEP | `CombatRewards.Cards`/`.Potion` |
+| `reward.relic` | **KEEP (Task B, v10 amendment — closes the gap this table's Net-effect paragraph used to flag)** | the reward screen's `RelicReward.Relic.Id` for the button currently offered — `ClaimRewardCommand.EnumerateRewardButtons(screen)`'s current entry when its underlying reward is a `RelicReward` (`ReplayDispatcher.cs`'s `ClaimRewardCommand`/`RewardsScreenHandler`), same reflection path the mod already walks to dispatch take/skip |
+| `select.count`/`.skippable` | KEEP | the active selection screen's `MinSelect`/cancelable flag (`CardSelectorPrefs`) |
+| `select.candidates` | KEEP | the active screen's candidate `CardModel` list; mod must independently re-sort by the sim's canonical key (`_sorted_candidate_order`) rather than trust screen order |
+| `select.purpose.ids` | REDEFINE (doc-only, no v10 code change) | no C# field carries the sim's `purpose` string — the mod tags it as session state at the moment it dispatches the action that opened the screen, then looks it up in the same `PURPOSE_INDEX` vocabulary; this env's own write (from `DecisionRequest.purpose`, engine-annotated) is unaffected |
+| every `.overflow` (5 run-level blocks) | ACCUMULATE | no game field — mod's own truncate-and-flag bookkeeping, same as combat's |
+
+**Net effect on this schema**: `RUN_OBS_SCHEMA_VERSION` 9 → 10, **plus the
+Task B amendment below**, zero segments removed, both REDEFINE
+rows describe how a *future* C# `ObsBuilder` will source the value from live
+game state, not a change to what this Python env computes today (`phase`
+already comes straight from `DecisionKind`; `select.purpose.ids` already
+comes straight from `DecisionRequest.purpose` via `PURPOSE_INDEX`). The
+embedded `combat.*` block moves to v7 alongside it (§5.5). One content gap
+the audit flagged as OUT OF SCOPE for the bump itself (existing-field
+disposition only, not new fields) is CLOSED by the same-day amendment below;
+the mask-contract findings remain a future action-space review (Tasks 11/12
+scope) — see the audit doc's "Step 3" table.
+
+**Task B amendment (2026-08-04, `reward.relic.f`/`reward.relic.ids`,
+`RUN_OBS_SCHEMA_VERSION` stays 10):** the audit's own "also noted" flagged
+that no segment carried the `REWARD_RELIC` offer's relic identity. Perry
+approved closing it as an amendment to v10 in place (see run_env.py's "v10
+amendment" comment and the audit doc's own addendum section for the full
+disposition-table entry). `f_dim`/`i_dim` each grow by 1 (4710→4711,
+1464→1465) — see this section's own "Amendment" note above for the byte
+accounting. **Ordering guarantee**: because the segment is width 1 (one
+relic offered at a time, take-or-skip — see the phase-specific table's
+`REWARD_RELIC` row above), slot 0 of `reward.relic.ids/.f` trivially aligns
+with slot 0 of the screen's `CHOICE` action range (action `CHOICE_BASE + 0`
+= take, matching `DecisionRequest.own_actions()`'s `[0, 1]` for
+`REWARD_RELIC`) — the same alignment contract `reward.cards`/`select.
+candidates` hold for their own multi-slot cases, just with a trivial (single-
+slot) instance of it here.
 
 ---
 

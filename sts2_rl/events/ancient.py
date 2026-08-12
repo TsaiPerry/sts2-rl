@@ -26,9 +26,19 @@ class AncientEvent(Event):
         # the player to full (amount = MaxHp - CurrentHp via CreatureCmd.Heal)
         # — this is the game's between-acts heal. Neow first zeroes HP (the
         # run-start revive animation), which at non-ascension nets the same
-        # full heal, so the sim skips it; Weary Traveler (Asc 2) scales the
-        # heal to 80%, out of scope per the non-ascension convention.
-        self.run.heal(self.run.max_hp - self.run.hp)
+        # full heal, so the sim skips it. Weary Traveler (Asc 2,
+        # AncientEventModel.cs:180-183) scales the DECIMAL amount to 80%
+        # BEFORE the heal — `if (HasAscension(WearyTraveler)) amount *=
+        # 0.8m; await CreatureCmd.Heal(creature, amount, ...)` — so the gate
+        # sits here, not inside heal()'s int() truncation (RunState.heal
+        # already truncates toward zero via `int(amount)`, matching the
+        # C# decimal->int cast the game's Heal command performs).
+        from ..actmap import AscensionLevel
+
+        amount = self.run.max_hp - self.run.hp
+        if self.run.has_ascension(AscensionLevel.WEARY_TRAVELER):
+            amount *= 0.8
+        self.run.heal(amount)
         return super().begin()
 
     def _relic_option(self, relic_id: str) -> EventOption:

@@ -6,7 +6,8 @@ import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, Monster, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, Monster, MoveType, asc_value
 from ..state_machine import (
     MachineMonster,
     MonsterMoveStateMachine,
@@ -19,11 +20,14 @@ if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
-_WRITHE_DMG = 5
+_WRITHE_DMG = 5          # DecimillipedeSegment.cs:68 base
+_WRITHE_DMG_ASC = 6      # DeadlyEnemies
 _WRITHE_HITS = 2
-_BULK_DMG = 6
+_BULK_DMG = 6            # DecimillipedeSegment.cs:72 base
+_BULK_DMG_ASC = 7        # DeadlyEnemies
 _BULK_STR = 2
-_CONSTRICT_DMG = 8
+_CONSTRICT_DMG = 8       # DecimillipedeSegment.cs:70 base
+_CONSTRICT_DMG_ASC = 9   # DeadlyEnemies
 _CONSTRICT_WEAK = 1
 _REATTACH_HP = 25
 
@@ -36,8 +40,22 @@ class DecimillipedeSegment(MachineMonster):
     when the last standing segment is killed (see ReattachPower)."""
     name = "Decimillipede"
 
-    min_hp = 40
-    max_hp = 46
+    min_hp = 40            # DecimillipedeSegment.cs:64
+    max_hp = 46              # DecimillipedeSegment.cs:66
+    min_hp_asc = 46          # DecimillipedeSegment.cs:64 -- ToughEnemies
+    max_hp_asc = 52          # DecimillipedeSegment.cs:66 -- ToughEnemies
+
+    def _writhe_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _WRITHE_DMG_ASC, _WRITHE_DMG)
+
+    def _bulk_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _BULK_DMG_ASC, _BULK_DMG)
+
+    def _constrict_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _CONSTRICT_DMG_ASC, _CONSTRICT_DMG)
 
     def __init__(
         self,
@@ -71,25 +89,34 @@ class DecimillipedeSegment(MachineMonster):
         if hp % 2 == 1:
             hp += 1
         taken = {t.max_hp for t in teammates}
+        # The wrap bounds are MaxInitialHp/MinInitialHp (DecimillipedeSegment.
+        # cs:64-66) — AscensionHelper-scaled properties, so ToughEnemies wraps
+        # inside the 46-52 range, not back into the base one.
+        wrap_hi = asc_value(self._hooks, AscensionLevel.TOUGH_ENEMIES,
+                            DecimillipedeSegment.max_hp_asc,
+                            DecimillipedeSegment.max_hp)
+        wrap_lo = asc_value(self._hooks, AscensionLevel.TOUGH_ENEMIES,
+                            DecimillipedeSegment.min_hp_asc,
+                            DecimillipedeSegment.min_hp)
         while hp in taken:
             hp += 2
-            if hp > DecimillipedeSegment.max_hp:
-                hp = DecimillipedeSegment.min_hp
+            if hp > wrap_hi:
+                hp = wrap_lo
         from ...cmds import CreatureCmd
         CreatureCmd.set_max_and_current_hp(self._hooks, self, hp)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         writhe = MoveState(
             "WRITHE_MOVE", self._writhe,
-            Intent(MoveType.ATTACK, damage=_WRITHE_DMG, hits=_WRITHE_HITS),
+            Intent(MoveType.ATTACK, damage=self._writhe_dmg(), hits=_WRITHE_HITS),
         )
         bulk = MoveState(
             "BULK_MOVE", self._bulk,
-            Intent(MoveType.ATTACK, damage=_BULK_DMG, also=(MoveType.BUFF,)),
+            Intent(MoveType.ATTACK, damage=self._bulk_dmg(), also=(MoveType.BUFF,)),
         )
         constrict = MoveState(
             "CONSTRICT_MOVE", self._constrict,
-            Intent(MoveType.ATTACK, damage=_CONSTRICT_DMG, also=(MoveType.DEBUFF,)),
+            Intent(MoveType.ATTACK, damage=self._constrict_dmg(), also=(MoveType.DEBUFF,)),
         )
         dead = MoveState("DEAD_MOVE", self._dead, Intent(MoveType.HIDDEN))
         reattach = MoveState(
@@ -117,16 +144,16 @@ class DecimillipedeSegment(MachineMonster):
         self._current_move = dead
 
     def _writhe(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _WRITHE_DMG, _WRITHE_HITS)
+        self._execute_attack(ctx, self._writhe_dmg(), _WRITHE_HITS)
 
     def _bulk(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _BULK_DMG, 1)
+        self._execute_attack(ctx, self._bulk_dmg(), 1)
         from ...cmds import PowerCmd
         from ...powers import StrengthPower
         PowerCmd.apply(ctx.hooks, self, StrengthPower, _BULK_STR)
 
     def _constrict(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _CONSTRICT_DMG, 1)
+        self._execute_attack(ctx, self._constrict_dmg(), 1)
         from ...cmds import PowerCmd
         from ...powers import WeakPower
         PowerCmd.apply(ctx.hooks, ctx.player, WeakPower, _CONSTRICT_WEAK, applier=self)
@@ -190,14 +217,22 @@ class DecimillipedeEncounter(Encounter):
         # returns), so the AfterCurrentHpChanged this now fires reaches
         # nobody.
         from ...cmds import CreatureCmd
+        # Same asc-aware wrap bounds as `adjust_hp_after_added` (MaxInitialHp/
+        # MinInitialHp, DecimillipedeSegment.cs:64-66).
+        wrap_hi = asc_value(hooks, AscensionLevel.TOUGH_ENEMIES,
+                            DecimillipedeSegment.max_hp_asc,
+                            DecimillipedeSegment.max_hp)
+        wrap_lo = asc_value(hooks, AscensionLevel.TOUGH_ENEMIES,
+                            DecimillipedeSegment.min_hp_asc,
+                            DecimillipedeSegment.min_hp)
         for seg in segments:
             hp = seg.max_hp
             if hp % 2 == 1:
                 hp += 1
             while any(o is not seg and o.max_hp == hp for o in segments):
                 hp += 2
-                if hp > DecimillipedeSegment.max_hp:
-                    hp = DecimillipedeSegment.min_hp
+                if hp > wrap_hi:
+                    hp = wrap_lo
             CreatureCmd.set_max_and_current_hp(hooks, seg, hp)
         return segments
 

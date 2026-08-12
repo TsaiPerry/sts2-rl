@@ -104,12 +104,18 @@ class TheFutureOfPotions(Event):
         alternative — surfaced via `pending_rewards`, same as brain_leech.py
         / trial.py's mid-event reward screens.
 
-    The source's CanRemovePotions=false guard is UI-only (the sim has no
-    out-of-combat potion discard surface) and is not modeled.
+    CanRemovePotions=false (TheFutureOfPotions.cs:92) is modeled --
+    `locks_potion_belt`. It used to be dismissed as UI-only, which held only
+    while the sim had no out-of-combat belt surface at all. This event's
+    options CAPTURE the potion objects they trade (`initial_options`' closure),
+    so a belt drink between building the page and answering it left an option
+    naming a potion no longer held, and `_trade`'s `run.discard_potion` raised
+    `ValueError: ... is not in list`.
     """
 
     id = "the_future_of_potions"
     name = "The Future of Potions"
+    locks_potion_belt = True
 
     @classmethod
     def is_allowed(cls, run: RunState) -> bool:

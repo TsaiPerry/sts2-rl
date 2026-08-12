@@ -76,8 +76,15 @@ def test_action_layout():
     # the version bump is recorded here for the ledger; v9 (R3, 2026-08-02):
     # same shape of bump — the embedded combat block grew again (per-enemy
     # intent history), again unaffecting this action-layout pin, again
-    # recorded here for the ledger.
-    assert RUN_OBS_SCHEMA_VERSION == 9
+    # recorded here for the ledger; v10 (SpireBot schema audit, Task 4,
+    # 2026-08-04): pure version bump, zero width change (audit found no
+    # DROP/added rows in run v9 or combat v6->v7) — again unaffecting this
+    # action-layout pin; v11 (2026-08-07): REWARD_CARD_SLOTS 3->4, an
+    # OBSERVATION widening (Lasting Candy's appended option) that likewise
+    # leaves the action layout alone — the reward screen's options already
+    # lived in the 16-wide CHOICE block, which had the room all along. That
+    # was the whole defect: the action was legal, the observation was not.
+    assert RUN_OBS_SCHEMA_VERSION == 11
     # Combat block sized for the true worst-case belt: 1 + 10×6 + 10×6 = 121.
     assert N_COMBAT_ACTIONS == combat_action_count(MAX_POTION_SLOTS) == 121
     assert CHOICE_BASE == 121
@@ -245,6 +252,53 @@ def test_combat_block_live_in_combat():
     assert live, "combat block must carry live features once in combat"
     phase = obs["f"][layout.f_slices["phase"]]
     assert phase[list(DecisionKind).index(DecisionKind.COMBAT)] == 1.0
+
+
+def test_run_potions_block_reflects_live_combat_belt_not_stale_run_snapshot():
+    # Round-6 obs-parity bug: `RunState.finish_combat` only syncs
+    # `run.potions` from `combat.player.potions` when the combat ENDS, but
+    # `run.potions` (the run-level belt obs, offset 0 of `run.potions.ids`)
+    # is what player-facing UsePotion changes update live in the game — a
+    # potion drunk MID-combat (e.g. via a SelectCards side-effect like Skill
+    # Potion) empties its belt slot immediately in the game's own dump, but
+    # the sim's `_build_obs` read `run.potions` (the RunState's own,
+    # pre-combat-frozen list) instead of the live `combat.player.potions`,
+    # so the obs kept showing the already-drunk potion until the combat's
+    # `finish_combat` call. Confirmed against a real game dump: seed
+    # 89U21BV1TZ act 0 floor 15's Combat decisions 4-13 show the belt's
+    # slot 2 already empty (a Skill Potion drunk via the floor's SelectCards
+    # decision), while the sim dump kept showing it filled for the whole
+    # rest of the combat.
+    from sts2_rl.potions import make_potion
+    from sts2_rl.run_env import POTION_INDEX
+    from sts2_rl.obs import oid
+
+    env = shared_env()
+    rng = np.random.default_rng(5)
+    obs, _ = env.reset(seed=5)
+    layout = run_obs_layout()
+    for _ in range(5_000):
+        if env._request is not None and env._request.kind == DecisionKind.COMBAT:
+            break
+        mask = env.action_masks()
+        obs, _, term, trunc, _ = env.step(int(rng.choice(np.flatnonzero(mask))))
+        assert not (term or trunc), "episode ended before reaching a combat"
+
+    combat = env._request.combat
+    assert combat is not None
+    # Simulate "drunk mid-combat": the live combat belt's slot 0 is empty,
+    # while the RunState's own (pre-combat, stale) snapshot still shows a
+    # potion there -- exactly the divergence `finish_combat` would only
+    # reconcile at combat end.
+    combat.player.potions[0] = None
+    env._run.potions[0] = make_potion("block_potion")
+
+    obs = env._build_obs()
+    ids = obs["i"][layout.i_slices["run.potions.ids"]]
+    assert ids[0] == 0, (
+        "run.potions.ids must reflect the LIVE in-combat belt "
+        "(combat.player.potions), not RunState's stale pre-combat snapshot"
+    )
 
 
 class _InvincibleRunEnv(STS2RunEnv):

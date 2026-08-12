@@ -50,12 +50,35 @@ def _modified_damage(
     dealer: Creature | None,
     card: Card | None,
     props: ValueProp,
-) -> int:
+    *,
+    round_result: bool = True,
+) -> int | float:
     """Steps 1–2 of DamageCmd.deal: the modifier passes, then the damage cap.
 
     Mirrors DamageCmd.deal exactly — the source card's enchantment folds in
     first, then every listener is called and self-gates on props. Pure-read, so
     it passes no `modifiers` list and notifies nobody.
+
+    Round-6 obs-parity fix: the game's OWN preview pipeline
+    (`CalculatedDamageVar.UpdateCardPreview` -> `Hook.ModifyDamage` ->
+    `Hook.ModifyDamageInternal`, all `decimal` arithmetic — see
+    `Hook.cs:2511-2539`) never casts to `int` mid-pipeline; the additive
+    stage runs, then EVERY multiplicative modifier (Strength is additive,
+    Vulnerable/Weak are multiplicative — 1.5m / 0.75m respectively) applies
+    to that running float total, and only `DynamicVar.ToHighlightedString`'s
+    UI text call truncates to `int` — a completely separate call site from
+    this pipeline, and NOT one this preview module reaches. `card_base_damage`
+    then `_modified_damage` used to truncate here too (`int(...)` right after
+    the multiplicative stage), one full stage earlier than the game ever
+    does — e.g. 7 base * 1.4 (40% Strength via a percentage relic/power) =
+    9.8 in the game's own preview telemetry, but this used to floor it to 9
+    before the caller could see the fractional part. `round_result=False`
+    (used by `preview_card_damage`, which feeds `full_env.py`'s
+    `damage_matrix` observation — an RL feature, not the actual damage dealt
+    when a card resolves) skips that early cast so the returned value keeps
+    the game's own precision; every other caller (actual per-hit damage
+    dealt in combat resolution, enemy-intent lethal math) keeps
+    `round_result=True`'s int semantics unchanged.
     """
     ench = card.enchantment if card is not None else None
     if ench is not None:
@@ -63,8 +86,10 @@ def _modified_damage(
         amount *= ench.enchant_damage_multiplicative(amount, props)
     amount = hooks.modify_damage_additive(
         target, amount, dealer, card, None, props)
-    amount = int(hooks.modify_damage_multiplicative(
-        target, amount, dealer, card, None, props))
+    amount = hooks.modify_damage_multiplicative(
+        target, amount, dealer, card, None, props)
+    if round_result:
+        amount = int(amount)
     cap = hooks.modify_damage_cap(target, dealer, card)
     if cap is not None:
         amount = min(amount, cap)
@@ -94,7 +119,9 @@ def _post_block_hp_loss(
     return lost, block
 
 
-def preview_incoming_damage(combat: CombatState, enemy: Monster) -> AttackPreview | None:
+def preview_incoming_damage(
+    combat: CombatState, enemy: Monster, intent: "Intent | None" = None,
+) -> AttackPreview | None:
     """Preview an enemy's telegraphed attack against the player.
 
     Mirrors AttackIntent.GetSingleDamage: the intent's per-hit damage through
@@ -102,10 +129,19 @@ def preview_incoming_damage(combat: CombatState, enemy: Monster) -> AttackPrevie
     Intangible cap) with MOVE props — exactly what DamageCmd.deal will compute
     when the enemy takes its turn. Returns None when the enemy is gone,
     stunned (it will skip the move), or not attacking.
+
+    ``intent`` lets a caller preview a SPECIFIC (already-resolved) intent
+    instead of re-deriving ``enemy.current_intent`` live — needed by
+    `CombatState._record_intent_history`, which must preview the intent that
+    was actually DISPLAYED for the turn just performed, not whatever
+    `current_intent` reads now (a hand-rolled monster's `take_turn` has
+    already advanced its own move-key state by the time history is
+    recorded). Defaults to the live read for every other caller.
     """
     if enemy.is_gone or enemy.stunned:
         return None
-    intent = enemy.current_intent
+    if intent is None:
+        intent = enemy.current_intent
     if not intent.has(MoveType.ATTACK):
         return None
     player = combat.player
@@ -158,20 +194,49 @@ def card_base_damage(
 
 def preview_card_damage(
     combat: CombatState, card: Card, target: Creature
-) -> int | None:
+) -> int | float | None:
     """Fully modified per-hit damage this card would deal to target — the
-    number the game prints on the card face for that target."""
+    number the game prints on the card face for that target (truncated to
+    `int` only by the game's own UI text call, `DynamicVar.
+    ToHighlightedString` — see `_modified_damage`'s docstring)."""
     base = card_base_damage(combat, card, target)
     if base is None:
         return None
     props = DamageProps.CARD_UNPOWERED if card.is_unpowered else DamageProps.CARD
-    return _modified_damage(combat.hooks, target, base, combat.player, card, props)
+    return _modified_damage(
+        combat.hooks, target, base, combat.player, card, props, round_result=False,
+    )
 
 
-def preview_card_block(combat: CombatState, card: Card) -> int | None:
+def preview_card_block(
+    combat: CombatState, card: Card, *, props: ValueProp = ValueProp.MOVE,
+) -> int | None:
     """Fully modified block this card would grant the player (Dexterity,
     Frail) — mirrors BlockCmd.apply's powered pipeline. None for cards that
-    grant no block."""
+    grant no block.
+
+    ``props`` defaults to ``ValueProp.MOVE`` — the actual in-play pipeline
+    (``BlockCmd.apply``'s ``ValueProp.MOVE``), used by every caller that
+    wants the real block a played card would grant (probes.py's lethal/
+    planning math, test_previews.py).
+
+    ``full_env.py``'s ``hand.f`` observation field is a DIFFERENT caller with
+    a DIFFERENT requirement: it must mirror what the game's own
+    ``DecisionDumper`` (SpireBot's ``CombatObsWriter.cs:470``) actually
+    captures for that exact field, which calls
+    ``Hook.ModifyBlock(..., default, card, null, ...)`` — ``default(ValueProp)``
+    is ``ValueProp.None`` (props param not `.Move`). Since
+    ``DexterityPower.ModifyBlockAdditive`` / ``FrailPower.ModifyBlockMultiplicative``
+    (and every other block modifier in the decompiled source) gate on
+    ``props.IsPoweredCardOrMonsterMoveBlock()``, which requires the ``Move``
+    flag, passing ``ValueProp.NONE`` here makes every such modifier a no-op —
+    so the game's own hand-preview number is the RAW base block, unaffected
+    by Dexterity/Frail/etc. This was found by an obs-parity diff against a
+    live game dump (89U): the sim's ``hand.f`` block-preview field
+    over-applied Frail's 0.75 multiplier (and Dexterity's additive bonus)
+    where the game's own captured field showed the unmodified base value.
+    Callers that want the real modified number (not this observation quirk)
+    must keep the default."""
     base = card.base_block
     if base is None:
         return None
@@ -180,12 +245,12 @@ def preview_card_block(combat: CombatState, card: Card) -> int | None:
     ench = card.enchantment
     amount = base
     if ench is not None:
-        amount += ench.enchant_block_additive(amount, ValueProp.MOVE)
-        amount *= ench.enchant_block_multiplicative(amount, ValueProp.MOVE)
+        amount += ench.enchant_block_additive(amount, props)
+        amount *= ench.enchant_block_multiplicative(amount, props)
     amount = hooks.modify_block_additive(
-        player, amount, card, None, ValueProp.MOVE)
+        player, amount, card, None, props)
     amount = int(hooks.modify_block_multiplicative(
-        player, amount, card, None, ValueProp.MOVE))
+        player, amount, card, None, props))
     return max(0, amount)
 
 

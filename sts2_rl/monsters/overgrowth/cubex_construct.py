@@ -3,7 +3,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, Monster, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, Monster, MoveType, asc_value
 
 if TYPE_CHECKING:
     from ...combat import CombatCtx
@@ -11,9 +12,11 @@ if TYPE_CHECKING:
 
 # Sequence: CHARGE_UP → RB → RB → EXPEL → RB → RB → EXPEL → ...
 _CYCLE_AFTER_CHARGE = ["RB", "RB", "EXPEL"]
-_RB_DMG = 7
+_RB_DMG = 7             # CubexConstruct.cs:45 (BlastDamage) base
+_RB_DMG_ASC = 8         # DeadlyEnemies
 _RB_STR = 2
-_EXPEL_DMG = 5
+_EXPEL_DMG = 5          # CubexConstruct.cs:47 (ExpelDamage) base
+_EXPEL_DMG_ASC = 6      # DeadlyEnemies
 _EXPEL_HITS = 2
 _CHARGE_STR = 2
 _START_BLOCK = 13
@@ -21,8 +24,10 @@ _START_BLOCK = 13
 
 class CubexConstruct(Monster):
     name = "Cubex Construct"
-    min_hp = 65
+    min_hp = 65            # CubexConstruct.cs:41
     max_hp = 65
+    min_hp_asc = 70         # CubexConstruct.cs:41 -- ToughEnemies
+    max_hp_asc = 70
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
@@ -33,14 +38,20 @@ class CubexConstruct(Monster):
         self._move_key = "CHARGE_UP"
         self._cycle_step = 0
 
+    def _rb_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES, _RB_DMG_ASC, _RB_DMG)
+
+    def _expel_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES, _EXPEL_DMG_ASC, _EXPEL_DMG)
+
     @property
     def current_intent(self) -> Intent:
         if self._move_key == "CHARGE_UP":
             from ...powers import StrengthPower
             return Intent(MoveType.BUFF, buffs=[(StrengthPower, _CHARGE_STR)])
         if self._move_key == "RB":
-            return Intent(MoveType.ATTACK, damage=_RB_DMG, also=(MoveType.BUFF,))
-        return Intent(MoveType.ATTACK, damage=_EXPEL_DMG, hits=_EXPEL_HITS)
+            return Intent(MoveType.ATTACK, damage=self._rb_dmg(), also=(MoveType.BUFF,))
+        return Intent(MoveType.ATTACK, damage=self._expel_dmg(), hits=_EXPEL_HITS)
 
     def take_turn(self, ctx: CombatCtx) -> None:
         from ...cmds import PowerCmd
@@ -50,12 +61,12 @@ class CubexConstruct(Monster):
             self._move_key = "RB"
             self._cycle_step = 0
         elif self._move_key == "RB":
-            self._execute_attack(ctx, _RB_DMG, 1)
+            self._execute_attack(ctx, self._rb_dmg(), 1)
             PowerCmd.apply(ctx.hooks, self, StrengthPower, _RB_STR)
             self._cycle_step += 1
             self._move_key = _CYCLE_AFTER_CHARGE[self._cycle_step % 3]
         else:  # EXPEL
-            self._execute_attack(ctx, _EXPEL_DMG, _EXPEL_HITS)
+            self._execute_attack(ctx, self._expel_dmg(), _EXPEL_HITS)
             self._cycle_step += 1
             self._move_key = _CYCLE_AFTER_CHARGE[self._cycle_step % 3]
 

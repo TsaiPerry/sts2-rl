@@ -3,18 +3,21 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import MachineMonster, MonsterMoveStateMachine, MoveState
 
 if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
-_CHARGE_DMG = 25
+_CHARGE_DMG = 25            # MechaKnight.cs:52 base
+_CHARGE_DMG_ASC = 30        # DeadlyEnemies
 _FLAMETHROWER_BURN = 4
 _WINDUP_BLOCK = 15
 _WINDUP_STR = 5
-_HEAVY_CLEAVE_DMG = 35
+_HEAVY_CLEAVE_DMG = 35      # MechaKnight.cs:54 base
+_HEAVY_CLEAVE_DMG_ASC = 40  # DeadlyEnemies
 _ARTIFACT = 3
 
 
@@ -28,6 +31,8 @@ class MechaKnight(MachineMonster):
 
     min_hp = 300
     max_hp = 300
+    min_hp_asc = 320   # MechaKnight.cs:48 -- ToughEnemies (MaxInitialHp == MinInitialHp)
+    max_hp_asc = 320
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
@@ -35,12 +40,21 @@ class MechaKnight(MachineMonster):
         from ...powers import ArtifactPower
         PowerCmd.apply(hooks, self, ArtifactPower, _ARTIFACT)
 
+    def _charge_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _CHARGE_DMG_ASC, _CHARGE_DMG)
+
+    def _heavy_cleave_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _HEAVY_CLEAVE_DMG_ASC, _HEAVY_CLEAVE_DMG)
+
     def build_machine(self) -> MonsterMoveStateMachine:
         charge = MoveState(
-            "CHARGE_MOVE", self._charge, Intent(MoveType.ATTACK, damage=_CHARGE_DMG)
+            "CHARGE_MOVE", self._charge, lambda: Intent(MoveType.ATTACK, damage=self._charge_dmg())
         )
         flamethrower = MoveState(
-            "FLAMETHROWER_MOVE", self._flamethrower, Intent(MoveType.STATUS_CARD)
+            "FLAMETHROWER_MOVE", self._flamethrower,
+            Intent(MoveType.STATUS_CARD, status_count=_FLAMETHROWER_BURN),
         )
         windup = MoveState(
             "WINDUP_MOVE", self._windup,
@@ -48,7 +62,7 @@ class MechaKnight(MachineMonster):
         )
         heavy_cleave = MoveState(
             "HEAVY_CLEAVE_MOVE", self._heavy_cleave,
-            Intent(MoveType.ATTACK, damage=_HEAVY_CLEAVE_DMG),
+            lambda: Intent(MoveType.ATTACK, damage=self._heavy_cleave_dmg()),
         )
         charge.follow_up = flamethrower
         flamethrower.follow_up = windup
@@ -59,7 +73,7 @@ class MechaKnight(MachineMonster):
         )
 
     def _charge(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _CHARGE_DMG, 1)
+        self._execute_attack(ctx, self._charge_dmg(), 1)
 
     def _flamethrower(self, ctx: CombatCtx) -> None:
         from ...cards import BurnCard
@@ -75,7 +89,7 @@ class MechaKnight(MachineMonster):
         PowerCmd.apply(ctx.hooks, self, StrengthPower, _WINDUP_STR)
 
     def _heavy_cleave(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _HEAVY_CLEAVE_DMG, 1)
+        self._execute_attack(ctx, self._heavy_cleave_dmg(), 1)
 
 
 MECHA_KNIGHT_ELITE = Encounter(

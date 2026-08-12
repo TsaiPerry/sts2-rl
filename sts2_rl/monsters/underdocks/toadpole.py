@@ -4,7 +4,8 @@ import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, Monster, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, Monster, MoveType, asc_value
 from ..state_machine import (
     ConditionalBranchState,
     MachineMonster,
@@ -16,9 +17,11 @@ if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
-_SPIKE_SPIT_DMG = 3
+_SPIKE_SPIT_DMG = 3       # Toadpole.cs:49 base
+_SPIKE_SPIT_DMG_ASC = 4   # DeadlyEnemies
 _SPIKE_SPIT_HITS = 3
-_WHIRL_DMG = 7
+_WHIRL_DMG = 7            # Toadpole.cs:53 base
+_WHIRL_DMG_ASC = 8        # DeadlyEnemies
 _SPIKEN_THORNS = 2
 
 
@@ -29,6 +32,19 @@ class Toadpole(MachineMonster):
 
     min_hp = 21
     max_hp = 25
+    min_hp_asc = 22   # Toadpole.cs:32 -- ToughEnemies
+    max_hp_asc = 26   # Toadpole.cs:34 -- ToughEnemies
+
+    def _spike_spit_dmg(self) -> int:
+        """Toadpole.cs:49 `SpikeSpitDamage` -- read at both the telegraphed
+        Intent and the executed attack."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _SPIKE_SPIT_DMG_ASC, _SPIKE_SPIT_DMG)
+
+    def _whirl_dmg(self) -> int:
+        """Toadpole.cs:53 `WhirlDamage`."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _WHIRL_DMG_ASC, _WHIRL_DMG)
 
     def __init__(
         self,
@@ -43,11 +59,11 @@ class Toadpole(MachineMonster):
     def build_machine(self) -> MonsterMoveStateMachine:
         spike_spit = MoveState(
             "SPIKE_SPIT_MOVE", self._spike_spit,
-            Intent(MoveType.ATTACK, damage=_SPIKE_SPIT_DMG,
-                   hits=_SPIKE_SPIT_HITS),
+            lambda: Intent(MoveType.ATTACK, damage=self._spike_spit_dmg(),
+                            hits=_SPIKE_SPIT_HITS),
         )
         whirl = MoveState(
-            "WHIRL_MOVE", self._whirl, Intent(MoveType.ATTACK, damage=_WHIRL_DMG)
+            "WHIRL_MOVE", self._whirl, lambda: Intent(MoveType.ATTACK, damage=self._whirl_dmg())
         )
         spiken = MoveState("SPIKEN_MOVE", self._spiken, Intent(MoveType.BUFF))
         init = ConditionalBranchState("INIT_MOVE")
@@ -64,10 +80,10 @@ class Toadpole(MachineMonster):
         from ...cmds import PowerCmd
         from ...powers import ThornsPower
         PowerCmd.apply(ctx.hooks, self, ThornsPower, -_SPIKEN_THORNS)
-        self._execute_attack(ctx, _SPIKE_SPIT_DMG, _SPIKE_SPIT_HITS)
+        self._execute_attack(ctx, self._spike_spit_dmg(), _SPIKE_SPIT_HITS)
 
     def _whirl(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _WHIRL_DMG, 1)
+        self._execute_attack(ctx, self._whirl_dmg(), 1)
 
     def _spiken(self, ctx: CombatCtx) -> None:
         from ...cmds import PowerCmd

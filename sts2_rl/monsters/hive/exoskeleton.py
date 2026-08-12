@@ -6,7 +6,8 @@ import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, Monster, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, Monster, MoveType, asc_value
 from ..state_machine import (
     ConditionalBranchState,
     MachineMonster,
@@ -21,8 +22,10 @@ if TYPE_CHECKING:
     from ...hooks import HookSystem
 
 _SKITTER_DMG = 1
-_SKITTER_HITS = 3
-_MANDIBLES_DMG = 8
+_SKITTER_HITS = 3        # Exoskeleton.cs:36 (SkitterRepeats) base
+_SKITTER_HITS_ASC = 4    # DeadlyEnemies
+_MANDIBLES_DMG = 8       # Exoskeleton.cs:38 base
+_MANDIBLES_DMG_ASC = 9   # DeadlyEnemies
 _ENRAGE_STR = 2
 _HARD_TO_KILL = 9
 
@@ -33,8 +36,10 @@ class Exoskeleton(MachineMonster):
     fourth: random); MANDIBLES chains into ENRAGE, everything else rolls
     SKITTER/MANDIBLES without repeating."""
 
-    min_hp = 24
-    max_hp = 28
+    min_hp = 24             # Exoskeleton.cs:30
+    max_hp = 28              # Exoskeleton.cs:32
+    min_hp_asc = 25          # Exoskeleton.cs:30 -- ToughEnemies
+    max_hp_asc = 29          # Exoskeleton.cs:32 -- ToughEnemies
 
     def __init__(
         self,
@@ -48,14 +53,22 @@ class Exoskeleton(MachineMonster):
         from ...powers import HardToKillPower
         PowerCmd.apply(hooks, self, HardToKillPower, _HARD_TO_KILL)
 
+    def _skitter_hits(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _SKITTER_HITS_ASC, _SKITTER_HITS)
+
+    def _mandibles_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _MANDIBLES_DMG_ASC, _MANDIBLES_DMG)
+
     def build_machine(self) -> MonsterMoveStateMachine:
         skitter = MoveState(
             "SKITTER_MOVE", self._skitter,
-            Intent(MoveType.ATTACK, damage=_SKITTER_DMG, hits=_SKITTER_HITS),
+            Intent(MoveType.ATTACK, damage=_SKITTER_DMG, hits=self._skitter_hits()),
         )
         mandibles = MoveState(
             "MANDIBLES_MOVE", self._mandibles,
-            Intent(MoveType.ATTACK, damage=_MANDIBLES_DMG),
+            Intent(MoveType.ATTACK, damage=self._mandibles_dmg()),
         )
         enrage = MoveState("ENRAGE_MOVE", self._enrage, Intent(MoveType.BUFF))
         rand = RandomBranchState("RAND")
@@ -74,10 +87,10 @@ class Exoskeleton(MachineMonster):
         )
 
     def _skitter(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _SKITTER_DMG, _SKITTER_HITS)
+        self._execute_attack(ctx, _SKITTER_DMG, self._skitter_hits())
 
     def _mandibles(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _MANDIBLES_DMG, 1)
+        self._execute_attack(ctx, self._mandibles_dmg(), 1)
 
     def _enrage(self, ctx: CombatCtx) -> None:
         from ...cmds import PowerCmd

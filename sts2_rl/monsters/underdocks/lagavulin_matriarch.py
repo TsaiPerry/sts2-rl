@@ -3,7 +3,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import (
     ConditionalBranchState,
     MachineMonster,
@@ -15,10 +16,14 @@ if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
-_SLASH_DMG = 19
-_SLASH2_DMG = 12
-_SLASH2_BLOCK = 12
-_DISEMBOWEL_DMG = 9
+_SLASH_DMG = 19               # LagavulinMatriarch.cs:53 base
+_SLASH_DMG_ASC = 21           # DeadlyEnemies (asc 9+)
+_SLASH2_DMG = 12              # LagavulinMatriarch.cs:55 base
+_SLASH2_DMG_ASC = 14          # DeadlyEnemies (asc 9+)
+_SLASH2_BLOCK = 12            # LagavulinMatriarch.cs:57 base -- gated on ToughEnemies
+_SLASH2_BLOCK_ASC = 14        # ToughEnemies (asc 8+)
+_DISEMBOWEL_DMG = 9           # LagavulinMatriarch.cs:59 base
+_DISEMBOWEL_DMG_ASC = 10      # DeadlyEnemies (asc 9+)
 _DISEMBOWEL_HITS = 2
 _SIPHON_STR_DEX = 2
 _PLATING = 12
@@ -34,6 +39,8 @@ class LagavulinMatriarch(MachineMonster):
 
     min_hp = 222
     max_hp = 222
+    min_hp_asc = 233     # LagavulinMatriarch.cs:49 ToughEnemies (asc 8+)
+    max_hp_asc = 233     # LagavulinMatriarch.cs:51 `MaxInitialHp => MinInitialHp`
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         self.is_awake = False
@@ -43,18 +50,37 @@ class LagavulinMatriarch(MachineMonster):
         PowerCmd.apply(hooks, self, PlatingPower, _PLATING)
         PowerCmd.apply(hooks, self, AsleepPower, _ASLEEP_TURNS)
 
+    def _slash_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _SLASH_DMG_ASC, _SLASH_DMG)
+
+    def _slash2_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _SLASH2_DMG_ASC, _SLASH2_DMG)
+
+    def _slash2_block(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.TOUGH_ENEMIES,
+                          _SLASH2_BLOCK_ASC, _SLASH2_BLOCK)
+
+    def _disembowel_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _DISEMBOWEL_DMG_ASC, _DISEMBOWEL_DMG)
+
     def build_machine(self) -> MonsterMoveStateMachine:
         sleep = MoveState("SLEEP_MOVE", self._sleep, Intent(MoveType.SLEEP))
         slash = MoveState(
-            "SLASH_MOVE", self._slash, Intent(MoveType.ATTACK, damage=_SLASH_DMG)
+            "SLASH_MOVE", self._slash,
+            lambda: Intent(MoveType.ATTACK, damage=self._slash_dmg()),
         )
         slash2 = MoveState(
             "SLASH2_MOVE", self._slash2,
-            Intent(MoveType.ATTACK, damage=_SLASH2_DMG, also=(MoveType.DEFEND,)),
+            lambda: Intent(MoveType.ATTACK, damage=self._slash2_dmg(),
+                            also=(MoveType.DEFEND,)),
         )
         disembowel = MoveState(
             "DISEMBOWEL_MOVE", self._disembowel,
-            Intent(MoveType.ATTACK, damage=_DISEMBOWEL_DMG, hits=_DISEMBOWEL_HITS),
+            lambda: Intent(MoveType.ATTACK, damage=self._disembowel_dmg(),
+                            hits=_DISEMBOWEL_HITS),
         )
         soul_siphon = MoveState(
             "SOUL_SIPHON_MOVE", self._soul_siphon,
@@ -99,15 +125,15 @@ class LagavulinMatriarch(MachineMonster):
         pass
 
     def _slash(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _SLASH_DMG, 1)
+        self._execute_attack(ctx, self._slash_dmg(), 1)
 
     def _slash2(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _SLASH2_DMG, 1)
+        self._execute_attack(ctx, self._slash2_dmg(), 1)
         from ...cmds import BlockCmd
-        BlockCmd.apply(ctx.hooks, self, _SLASH2_BLOCK)
+        BlockCmd.apply(ctx.hooks, self, self._slash2_block())
 
     def _disembowel(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _DISEMBOWEL_DMG, _DISEMBOWEL_HITS)
+        self._execute_attack(ctx, self._disembowel_dmg(), _DISEMBOWEL_HITS)
 
     def _soul_siphon(self, ctx: CombatCtx) -> None:
         from ...cmds import PowerCmd

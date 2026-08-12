@@ -6,7 +6,8 @@ import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, Monster, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, Monster, MoveType, asc_value
 from ..state_machine import (
     ConditionalBranchState,
     MachineMonster,
@@ -19,9 +20,11 @@ if TYPE_CHECKING:
     from ...creatures import Creature
     from ...hooks import HookSystem
 
-_ROLLOUT_DMG = 16
+_ROLLOUT_DMG = 16       # SlumberingBeetle.cs:43 base
+_ROLLOUT_DMG_ASC = 18   # DeadlyEnemies
 _ROLLOUT_STR = 2
-_PLATING = 15
+_PLATING = 15           # SlumberingBeetle.cs:45 base
+_PLATING_ASC = 18       # ToughEnemies
 _SLUMBER = 3
 
 
@@ -31,8 +34,10 @@ class SlumberingBeetle(MachineMonster):
     turn: 16 damage + 2 self Strength."""
     name = "Slumbering Beetle"
 
-    min_hp = 86
+    min_hp = 86              # SlumberingBeetle.cs:39 base
     max_hp = 86
+    min_hp_asc = 89          # SlumberingBeetle.cs:39 -- ToughEnemies (MaxInitialHp == MinInitialHp)
+    max_hp_asc = 89
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         self.is_awake = False
@@ -41,14 +46,19 @@ class SlumberingBeetle(MachineMonster):
         super().__init__(hooks, rng or random.Random())
         from ...cmds import PowerCmd
         from ...powers import PlatingPower, SlumberPower
-        PowerCmd.apply(hooks, self, PlatingPower, _PLATING)
+        plating = asc_value(hooks, AscensionLevel.TOUGH_ENEMIES, _PLATING_ASC, _PLATING)
+        PowerCmd.apply(hooks, self, PlatingPower, plating)
         PowerCmd.apply(hooks, self, SlumberPower, _SLUMBER)
+
+    def _rollout_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _ROLLOUT_DMG_ASC, _ROLLOUT_DMG)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         snore = MoveState("SNORE_MOVE", self._snore, Intent(MoveType.SLEEP))
         rollout = MoveState(
             "ROLL_OUT_MOVE", self._rollout,
-            Intent(MoveType.ATTACK, damage=_ROLLOUT_DMG, also=(MoveType.BUFF,)),
+            Intent(MoveType.ATTACK, damage=self._rollout_dmg(), also=(MoveType.BUFF,)),
         )
         branch = ConditionalBranchState("SNORE_NEXT")
         branch.add_state(snore, lambda: "slumber" in self.powers)
@@ -116,7 +126,7 @@ class SlumberingBeetle(MachineMonster):
         pass
 
     def _rollout(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _ROLLOUT_DMG, 1)
+        self._execute_attack(ctx, self._rollout_dmg(), 1)
         from ...cmds import PowerCmd
         from ...powers import StrengthPower
         PowerCmd.apply(ctx.hooks, self, StrengthPower, _ROLLOUT_STR)

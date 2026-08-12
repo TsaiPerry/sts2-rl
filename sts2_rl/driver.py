@@ -150,6 +150,13 @@ SKIPPABLE_PURPOSES = frozenset({
 # belt exists; `RunDriver._ask` intercepts the whole range.
 POTION_ACTION_BASE = 1000
 
+# `RunDriver._ask`'s "the screen you were answering resolved itself, there is
+# nothing left to answer" result. Only reachable via the belt overlay: a drink
+# that finishes the screen underneath (Foul Potion in the Fake Merchant event).
+# Callers that can raise such a screen must handle it; every other decision
+# returns a real option index.
+NO_ANSWER = -1
+
 
 @dataclass
 class DecisionRequest:
@@ -203,12 +210,27 @@ class DecisionRequest:
         """
         if self.in_combat or self.combat is not None:
             return []
+        # `Player.CanRemovePotions` gates the Use button itself
+        # (NPotionPopup.cs:139-142) — three events lock the belt for their
+        # whole duration. See `RunState.can_remove_potions`.
+        if not self.run.can_remove_potions:
+            return []
         from .potions import USAGE_ANY_TIME
 
         return [
             POTION_ACTION_BASE + slot
             for slot, potion in enumerate(self.run.potions)
-            if potion is not None and potion.usage == USAGE_ANY_TIME
+            if potion is not None
+            and potion.usage == USAGE_ANY_TIME
+            # `PotionModel.PassesCustomUsabilityCheck` DISABLES the Use button
+            # (NPotionPopup.cs:144-147), so a potion it refuses is not an
+            # option on this screen at all -- it must not reach the mask.
+            # Foul Potion is the source's only override (shop stall / Fake
+            # Merchant only). `RunState.use_potion` has consulted this gate
+            # since the potion_pipeline/G1 fix; this list did not, so the mask
+            # promised a slot the executor refused and `RunDriver._ask` tripped
+            # its own `assert drunk` -- killing the env worker mid-training.
+            and potion.passes_custom_usability_check(run=self.run)
         ]
 
     def own_actions(self) -> list[int]:
@@ -364,6 +386,16 @@ class RunDriver:
         # inside a fight (see DecisionRequest.in_combat).
         request.in_combat = request.combat is not None or self._combat is not None
         while True:
+            # An asked decision must always have at least one legal action --
+            # the RL env turns `legal_actions` straight into the policy's
+            # action mask, and an all-False mask is not a choice the policy can
+            # make (a masked categorical over -inf logits is NaN, and a
+            # `flatnonzero` sampler picks from an empty array). Loudly here
+            # beats silently there.
+            if not request.legal_actions():
+                raise RuntimeError(
+                    f"decision with NO legal actions: {request!r} — the mask "
+                    f"would be all-False")
             self.decisions += 1
             action = int(self._ask_fn(request))
             if action not in request.legal_actions():
@@ -377,6 +409,17 @@ class RunDriver:
             # Terminates — every drink empties a belt slot.
             drunk = self.run.use_potion(action - POTION_ACTION_BASE)
             assert drunk, "potion_actions offered a slot use_potion refused"
+            # ...unless the drink RESOLVED the screen underneath. Foul Potion
+            # is the one that can: drunk in the Fake Merchant event it runs
+            # `FakeMerchant.FoulPotionThrown`, which blows up the stall and
+            # finishes the event (FoulPotion.cs:89-108), so there is no page
+            # left to answer. Re-asking there handed the policy an empty option
+            # list -- an all-False mask, caught by the guard at the top of this
+            # loop. Report it to the caller instead; `_run_event` re-checks
+            # `event.finished` and stops. (SHOP cannot reach this: `leave` is
+            # always in its own actions.)
+            if not request.own_actions():
+                return NO_ANSWER
 
     # ── Selector adapters (RunState.card_selector / CombatState.card_selector
     #    via create_combat, RunState.option_selector) ─────────────────────
@@ -626,6 +669,11 @@ class RunDriver:
             idx = self._ask(DecisionRequest(
                 kind=DecisionKind.EVENT, run=self.run, event=event,
             ))
+            if idx == NO_ANSWER:
+                # A belt drink finished the event out from under this page
+                # (Foul Potion at the Fake Merchant). There is no option to
+                # choose; the loop condition sees `finished` and exits.
+                continue
             chosen = event.choose(idx)
             assert chosen, f"locked/unknown option {idx} slipped past the mask"
             if event.pending_rewards is not None:

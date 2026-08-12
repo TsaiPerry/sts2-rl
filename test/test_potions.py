@@ -1006,3 +1006,76 @@ class TestOnUseWrapper:
         assert depth_seen == [0]      # suppressed inside the bracket
         cs._check_for_empty_hand()
         assert len(cs.player.hand) == 1
+
+
+class TestFullHandRedirect:
+    """`CardPileCmd.Add(card, PileType.Hand)` into a FULL hand puts the card in
+    the DISCARD pile — a model-level redirect, not a visual one:
+
+        bool isFullHandAdd = targetPile.Type == PileType.Hand
+            && targetPile.Cards.Count >= CardPile.MaxCardsInHand;   // 10
+        if (isFullHandAdd)
+            targetPile = CardPile.Get(PileType.Discard, card.Owner);
+        ...
+        targetPile.AddInternal(card2, ...);          // CardPileCmd.cs:419-421, :510
+
+    Three sim callers appended to `hand` unconditionally instead, producing an
+    11-card hand: over the game's own limit, and past `full_env.MAX_HAND`, so
+    the extra card was truncated out of the observation and unreachable by
+    `combat_action_mask` (`hand[:MAX_HAND]`) — invisible AND unplayable. It
+    surfaced as `UserWarning: obs segment 'combat.hand': 11 rows exceeds cap 10`
+    during training.
+    """
+
+    @staticmethod
+    def _full_hand_combat():
+        import random as _random
+
+        from sts2_rl import CombatState
+        from sts2_rl.cards import make_card
+        from sts2_rl.monsters import FUZZY_WURM_ENCOUNTER
+
+        cs = CombatState(rng=_random.Random(0),
+                         starting_deck=[make_card("strike") for _ in range(20)],
+                         encounter=FUZZY_WURM_ENCOUNTER)
+        p = cs.player
+        p.hand[:] = [make_card("strike") for _ in range(p.MAX_HAND_SIZE)]
+        assert len(p.hand) == p.MAX_HAND_SIZE
+        return cs
+
+    def test_move_to_hand_redirects_a_full_hand_to_discard(self):
+        from sts2_rl.cards import make_card
+        from sts2_rl.cmds import CardPileCmd
+
+        cs = self._full_hand_combat()
+        p = cs.player
+        card = make_card("defend")
+        assert CardPileCmd.move_to_hand(p, card) == "discard"
+        assert len(p.hand) == p.MAX_HAND_SIZE, "the hand must not exceed its cap"
+        assert card in p.discard_pile
+
+    def test_move_to_hand_uses_the_hand_when_there_is_room(self):
+        from sts2_rl.cards import make_card
+        from sts2_rl.cmds import CardPileCmd
+
+        cs = self._full_hand_combat()
+        p = cs.player
+        p.hand.pop()
+        card = make_card("defend")
+        assert CardPileCmd.move_to_hand(p, card) == "hand"
+        assert card in p.hand
+
+    def test_liquid_memories_on_a_full_hand_leaves_the_hand_at_the_cap(self):
+        """The end-to-end shape: the potion still spends and still flags the
+        card free, but the hand never grows past the cap."""
+        from sts2_rl.cards import make_card
+        from sts2_rl.potions import make_potion
+
+        cs = self._full_hand_combat()
+        p = cs.player
+        target = make_card("bash")
+        p.discard_pile.append(target)
+        make_potion("liquid_memories").use(cs._ctx())
+        assert len(p.hand) <= p.MAX_HAND_SIZE, (
+            f"hand grew to {len(p.hand)} — obs would truncate and the mask "
+            f"could not reach the tail")

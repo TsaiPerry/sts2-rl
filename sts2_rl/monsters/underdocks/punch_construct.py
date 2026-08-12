@@ -3,7 +3,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import MachineMonster, MonsterMoveStateMachine, MoveState
 
 if TYPE_CHECKING:
@@ -11,8 +12,10 @@ if TYPE_CHECKING:
     from ...hooks import HookSystem
 
 _READY_BLOCK = 10
-_STRONG_PUNCH_DMG = 14
-_FAST_PUNCH_DMG = 5
+_STRONG_PUNCH_DMG = 14        # PunchConstruct.cs:37 base
+_STRONG_PUNCH_DMG_ASC = 16    # DeadlyEnemies
+_FAST_PUNCH_DMG = 5           # PunchConstruct.cs:39 base
+_FAST_PUNCH_DMG_ASC = 6       # DeadlyEnemies
 _FAST_PUNCH_HITS = 2
 _FAST_PUNCH_FRAIL = 1
 
@@ -25,6 +28,16 @@ class PunchConstruct(MachineMonster):
 
     min_hp = 55
     max_hp = 55
+    min_hp_asc = 60   # PunchConstruct.cs:33 -- ToughEnemies (MaxInitialHp == MinInitialHp)
+    max_hp_asc = 60
+
+    def _strong_punch_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _STRONG_PUNCH_DMG_ASC, _STRONG_PUNCH_DMG)
+
+    def _fast_punch_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _FAST_PUNCH_DMG_ASC, _FAST_PUNCH_DMG)
 
     def __init__(
         self,
@@ -64,12 +77,12 @@ class PunchConstruct(MachineMonster):
         ready = MoveState("READY_MOVE", self._ready, Intent(MoveType.DEFEND))
         strong_punch = MoveState(
             "STRONG_PUNCH_MOVE", self._strong_punch,
-            Intent(MoveType.ATTACK, damage=_STRONG_PUNCH_DMG),
+            lambda: Intent(MoveType.ATTACK, damage=self._strong_punch_dmg()),
         )
         fast_punch = MoveState(
             "FAST_PUNCH_MOVE", self._fast_punch,
-            Intent(MoveType.ATTACK, damage=_FAST_PUNCH_DMG, hits=_FAST_PUNCH_HITS,
-                   also=(MoveType.DEBUFF,)),
+            lambda: Intent(MoveType.ATTACK, damage=self._fast_punch_dmg(), hits=_FAST_PUNCH_HITS,
+                            also=(MoveType.DEBUFF,)),
         )
         ready.follow_up = fast_punch
         fast_punch.follow_up = strong_punch
@@ -82,10 +95,10 @@ class PunchConstruct(MachineMonster):
         BlockCmd.apply(ctx.hooks, self, _READY_BLOCK)
 
     def _strong_punch(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _STRONG_PUNCH_DMG, 1)
+        self._execute_attack(ctx, self._strong_punch_dmg(), 1)
 
     def _fast_punch(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _FAST_PUNCH_DMG, _FAST_PUNCH_HITS)
+        self._execute_attack(ctx, self._fast_punch_dmg(), _FAST_PUNCH_HITS)
         from ...cmds import PowerCmd
         from ...powers import FrailPower
         PowerCmd.apply(ctx.hooks, ctx.player, FrailPower, _FAST_PUNCH_FRAIL)

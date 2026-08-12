@@ -138,6 +138,7 @@ class CombatState:
         encounter_selection_rng=None,
         character=None,
         track_card_ids: bool = False,
+        ascension: int = 0,
     ) -> None:
         # The character fighting this combat (CombatManager reaches it as
         # `Owner.Character`). In-combat card generation draws from
@@ -170,6 +171,13 @@ class CombatState:
 
         self.hooks = HookSystem()
         self.hooks.combat = self
+        # Must be set before `create_monsters` below (and before any other
+        # hook listener registration) — monster HP/move rolls read
+        # `hooks.ascension` at construction time (asc_value), so setting it
+        # after this constructor returns would silently leave every spawned
+        # monster at ascension 0. See RunState.create_combat, which passes
+        # the run's ascension in as this kwarg.
+        self.hooks.ascension = ascension
         # PlayerCombatState.TurnNumber — bumped for EVERY player turn, extra
         # turns included (CombatManager.cs:1417). This is what turn-numbered
         # content reads: Horn Cleat, Captain's Wheel, Sparkling Rouge, Royal
@@ -599,8 +607,18 @@ class CombatState:
         if enemy.net_id is None:
             return
         from .previews import preview_incoming_damage
-        intent = enemy.current_intent
-        preview = preview_incoming_damage(self, enemy)
+        # `displayed_intent` is the snapshot `_perform_move` took right
+        # before `take_turn` ran (see monsters/base.py's docstring). It is
+        # None only when `take_turn` never ran this cycle (the stunned
+        # branch whose current move isn't the synthetic STUN_STATE_ID move,
+        # `_run_enemy_turns`'s `elif enemy.stunned:` arm) — in that case
+        # nothing mutated the monster's move-key state, so a live read is
+        # exactly the displayed value.
+        intent = (
+            enemy.displayed_intent if enemy.displayed_intent is not None
+            else enemy.current_intent
+        )
+        preview = preview_incoming_damage(self, enemy, intent)
         entry = IntentHistoryEntry(
             flags=intent_flags(intent, enemy.stunned),
             per_hit=preview.per_hit if preview is not None else None,
@@ -647,6 +665,13 @@ class CombatState:
         :449 re-runs, so it is read rather than re-dispatched.
         """
         enemy.is_performing_move = True
+        # Snapshot the intent as displayed BEFORE `take_turn` can mutate any
+        # move-key state it drives itself (hand-rolled monsters advance their
+        # own state inside `take_turn`; see `Monster.displayed_intent`'s
+        # docstring in monsters/base.py). `_record_intent_history` reads this
+        # instead of re-querying `current_intent` live at the next
+        # player-turn start, after `take_turn` has already moved on.
+        enemy.displayed_intent = enemy.current_intent
         try:
             enemy.take_turn(self._ctx())
         finally:
@@ -758,6 +783,17 @@ class CombatState:
                 # for the next player-turn-start roll.
                 pass
             elif enemy.stunned:
+                # Snapshot the displayed intent BEFORE clearing the flag: for
+                # a hand-rolled monster whose stun is its own `stunned`-gated
+                # `current_intent` (Wriggler's spawn stun — not the synthetic
+                # STUN_STATE move), `take_turn` never runs this cycle, so
+                # without this the next roll's `_record_intent_history`
+                # live-read fallback sees the POST-WAKE next move and the
+                # history row records an intent that was never displayed
+                # (89U (0,15): sim rows read the turn-4 attack/buff where the
+                # game showed — and both live rows agreed on — stun all of
+                # turn 3).
+                enemy.displayed_intent = enemy.current_intent
                 enemy.stunned = False
                 move = getattr(enemy, "_current_move", None)
                 if move is not None and move.id == STUN_STATE_ID:

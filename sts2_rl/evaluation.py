@@ -10,7 +10,8 @@ A *policy* here is any callable ``(env, obs, mask) -> action int`` —
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+import csv
+from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
 
 import numpy as np
@@ -221,6 +222,40 @@ class RunEvalReport:
     hp_left: tuple[int, ...]         # end-of-run HP (0 when the run ended in death)
     decisions: tuple[int, ...]       # decisions answered, per episode
 
+    # Per-episode return and the behavior tallies the run envs report in
+    # `info` at episode end (run_env._count_behavior). Default to () so a
+    # report built from an env that emits none of them stays constructible.
+    seeds: tuple[int, ...] = ()      # the seed each episode ran on
+    returns: tuple[float, ...] = ()  # summed step reward, per episode
+    end_turns: tuple[int, ...] = ()
+    energy_unspent: tuple[float, ...] = ()
+    card_offers: tuple[int, ...] = ()
+    card_takes: tuple[int, ...] = ()
+    rest_visits: tuple[int, ...] = ()      # rest sites visited (any answer)
+    rest_heals: tuple[int, ...] = ()       # of those, visits that healed
+    rest_upgrades: tuple[int, ...] = ()    # of those, visits that upgraded
+    # v7 (plan Task 8): behavior counters + per-card exposure tallies.
+    upgrades: tuple[int, ...] = ()         # permanent card upgrades gained
+    removes: tuple[int, ...] = ()          # cards removed from the deck
+    elites_won: tuple[int, ...] = ()       # elite fights won
+    potions_obtained: tuple[int, ...] = ()
+    potions_used: tuple[int, ...] = ()
+    # v8 (plan Task 2): potion ledger USE classification + timing.
+    potions_used_elite: tuple[int, ...] = ()
+    potions_used_boss: tuple[int, ...] = ()
+    potions_used_normal: tuple[int, ...] = ()
+    potions_expired: tuple[int, ...] = ()          # held belt count at episode end
+    potion_use_hp: tuple[float, ...] = ()          # sum of hp/max_hp at each drink
+    # v8 (plan Task 3): relics gained tally (starting relic never counts).
+    relics: tuple[int, ...] = ()
+    # v8 (plan Task 1, plan Task 5 threading): HP lost per episode -- a
+    # sloppiness gauge, tracked independent of --hp-potential-scale shaping.
+    hp_lost: tuple[int, ...] = ()
+    # Merged over all episodes: card class name -> count. `field` defaults
+    # because dicts are mutable (still treated as immutable once built).
+    card_offer_counts: dict[str, int] = field(default_factory=dict)
+    card_take_counts_raw: dict[str, int] = field(default_factory=dict)
+
     @property
     def wins(self) -> int:
         return sum(self.victories)
@@ -270,6 +305,123 @@ class RunEvalReport:
     def win_hp(self) -> tuple[int, ...]:
         return tuple(hp for hp, won in zip(self.hp_left, self.victories) if won)
 
+    @property
+    def mean_return(self) -> float:
+        return float(np.mean(self.returns)) if self.returns else 0.0
+
+    @property
+    def energy_unspent_per_turn(self) -> float:
+        """Mean energy left unspent at each real end-turn.
+
+        Pooled over episodes (total energy / total end-turns), NOT a mean of
+        per-episode means: episodes differ enormously in turn count, and
+        train_torch's `energy_unspent` column pools the same way — the two
+        numbers have to be comparable. 0.0 rather than NaN when the policy
+        never ended a turn, so no report row prints `nan`."""
+        turns = sum(self.end_turns)
+        return sum(self.energy_unspent) / turns if turns else 0.0
+
+    @property
+    def card_take_rate(self) -> float:
+        """Fraction of resolved card-reward screens the policy took a card on
+        (pooled like `energy_unspent_per_turn`; 0.0 when none were offered)."""
+        offers = sum(self.card_offers)
+        return sum(self.card_takes) / offers if offers else 0.0
+
+    @property
+    def rest_heal_rate(self) -> float:
+        """Share of rest-site visits the policy healed at.
+
+        Denominator is every visit, so a site the policy simply left counts
+        against both this and `rest_upgrade_rate`. The two can sum above 1.0:
+        one visit can do both (Miniature Tent)."""
+        visits = sum(self.rest_visits)
+        return sum(self.rest_heals) / visits if visits else 0.0
+
+    @property
+    def rest_upgrade_rate(self) -> float:
+        """Share of rest-site visits the policy upgraded a card at.
+
+        Note this does NOT exclude visits where upgrading was impossible (a
+        fully-upgraded deck makes REST_SMITH illegal), so a low rate late in a
+        run can mean "nothing left to upgrade" rather than "chose not to"."""
+        visits = sum(self.rest_visits)
+        return sum(self.rest_upgrades) / visits if visits else 0.0
+
+    @property
+    def potion_use_rate(self) -> float:
+        """Potions drunk per potion obtained, pooled over episodes like the
+        other rates; 0.0 when none obtained.
+
+        `potions_used` (v8 Task 2) counts only actual drinks now — a belt
+        loss with no drink answer behind it (e.g. an event trading a potion
+        away) moves the v8 ledger but not this count."""
+        obtained = sum(self.potions_obtained)
+        return sum(self.potions_used) / obtained if obtained else 0.0
+
+    @property
+    def potion_use_hp_mean(self) -> float:
+        """Mean hp/max_hp AT THE MOMENT a potion was drunk, pooled over
+        episodes like the other rates — "drinks happen in trouble, not on
+        pickup" gauge (v8 plan Task 2). 0.0 when nothing was drunk."""
+        used = sum(self.potions_used)
+        return sum(self.potion_use_hp) / used if used else 0.0
+
+    @property
+    def potion_elite_share(self) -> float:
+        """(elite + boss uses) / all uses, pooled over episodes like the
+        other rates (v8 plan Task 5) -- informational, no target. 0.0 when
+        nothing was drunk."""
+        used = sum(self.potions_used)
+        return ((sum(self.potions_used_elite) + sum(self.potions_used_boss))
+                / used if used else 0.0)
+
+    @property
+    def mean_hp_lost(self) -> float:
+        """Mean HP lost per episode (v8 plan Task 1/5) -- a sloppiness
+        gauge, tracked whether or not --hp-potential-scale shaping is on."""
+        return float(np.mean(self.hp_lost)) if self.hp_lost else 0.0
+
+    @property
+    def mean_potions_used(self) -> float:
+        """Mean potions drunk per episode (a raw count, distinct from
+        `potion_use_rate`'s obtained-normalized share)."""
+        return float(np.mean(self.potions_used)) if self.potions_used else 0.0
+
+    @property
+    def mean_potions_expired(self) -> float:
+        """Mean belt count still held at episode end -- a hoarding gauge
+        (v8 plan Task 2/5)."""
+        return (float(np.mean(self.potions_expired))
+                if self.potions_expired else 0.0)
+
+    @property
+    def mean_relics(self) -> float:
+        """Mean relics gained per episode (v8 plan Task 3/5)."""
+        return float(np.mean(self.relics)) if self.relics else 0.0
+
+    @property
+    def card_take_counts(self) -> dict[str, tuple[int, int]]:
+        """card class name -> (offered, taken), most-offered first."""
+        return {name: (count, self.card_take_counts_raw.get(name, 0))
+                for name, count in sorted(self.card_offer_counts.items(),
+                                          key=lambda kv: (-kv[1], kv[0]))}
+
+    @property
+    def return_histogram(self) -> dict[float, int]:
+        """Episode return -> how many episodes scored exactly it, ascending.
+
+        An exact-value tally, not a binning: the configured reward range is
+        small and integral enough (0-51) that the distinct returns ARE the
+        buckets, and binning would blur genuinely distinct scores. Returns are
+        rounded to 6dp first, so float noise (0.1 + 0.2 vs 0.3) folds into one
+        bucket instead of splitting it."""
+        hist: dict[float, int] = {}
+        for value in self.returns:
+            key = round(float(value), 6)
+            hist[key] = hist.get(key, 0) + 1
+        return dict(sorted(hist.items()))
+
 
 def evaluate_run(
     policy: Policy,
@@ -295,12 +447,36 @@ def evaluate_run(
     hp_left: list[int] = []
     decisions: list[int] = []
     trunc_flags: list[bool] = []
+    seeds: list[int] = []
+    returns: list[float] = []
+    end_turns: list[int] = []
+    energy_unspent: list[float] = []
+    card_offers: list[int] = []
+    card_takes: list[int] = []
+    rest_visits: list[int] = []
+    rest_heals: list[int] = []
+    rest_upgrades: list[int] = []
+    upgrades: list[int] = []
+    removes: list[int] = []
+    elites_won: list[int] = []
+    potions_obtained: list[int] = []
+    potions_used: list[int] = []
+    potions_used_elite: list[int] = []
+    potions_used_boss: list[int] = []
+    potions_used_normal: list[int] = []
+    potions_expired: list[int] = []
+    potion_use_hp: list[float] = []
+    relics: list[int] = []
+    hp_lost: list[int] = []
+    card_offer_counts: dict[str, int] = {}
+    card_take_counts: dict[str, int] = {}
 
     for ep in range(episodes):
         obs, info = env.reset(seed=seed + ep)
         max_floor = int(info.get("floor", 0))
         max_act = int(info.get("act", 0))
         steps = 0
+        total_reward = 0.0
         terminated = truncated = False
         while not (terminated or truncated):
             mask = env.action_masks()
@@ -308,8 +484,9 @@ def evaluate_run(
             if not mask[action]:
                 # Illegal pick → first legal action, so the eval can't stall.
                 action = int(np.flatnonzero(mask)[0])
-            obs, _reward, terminated, truncated, info = env.step(action)
+            obs, reward, terminated, truncated, info = env.step(action)
             steps += 1
+            total_reward += float(reward)
             max_floor = max(max_floor, int(info.get("floor", 0)))
             max_act = max(max_act, int(info.get("act", 0)))
 
@@ -319,6 +496,34 @@ def evaluate_run(
         hp_left.append(int(info.get("hp_left", 0)))
         decisions.append(int(info.get("decisions", steps)))
         trunc_flags.append(bool(truncated and not terminated))
+        seeds.append(seed + ep)
+        returns.append(total_reward)
+        # Behavior tallies: present on the run envs (both terminated and
+        # truncated episodes), absent on envs that don't count them — hence
+        # the 0 defaults rather than a KeyError.
+        end_turns.append(int(info.get("ep_end_turns", 0)))
+        energy_unspent.append(float(info.get("ep_energy_unspent", 0.0)))
+        card_offers.append(int(info.get("ep_card_offers", 0)))
+        card_takes.append(int(info.get("ep_card_takes", 0)))
+        rest_visits.append(int(info.get("ep_rest_visits", 0)))
+        rest_heals.append(int(info.get("ep_rest_heals", 0)))
+        rest_upgrades.append(int(info.get("ep_rest_upgrades", 0)))
+        upgrades.append(int(info.get("ep_upgrades", 0)))
+        removes.append(int(info.get("ep_removes", 0)))
+        elites_won.append(int(info.get("ep_elites_won", 0)))
+        potions_obtained.append(int(info.get("ep_potions_obtained", 0)))
+        potions_used.append(int(info.get("ep_potions_used", 0)))
+        potions_used_elite.append(int(info.get("ep_potions_used_elite", 0)))
+        potions_used_boss.append(int(info.get("ep_potions_used_boss", 0)))
+        potions_used_normal.append(int(info.get("ep_potions_used_normal", 0)))
+        potions_expired.append(int(info.get("ep_potions_expired", 0)))
+        potion_use_hp.append(float(info.get("ep_potion_use_hp", 0.0)))
+        relics.append(int(info.get("ep_relics", 0)))
+        hp_lost.append(int(info.get("ep_hp_lost", 0)))
+        for name, count in info.get("ep_card_offer_ids", {}).items():
+            card_offer_counts[name] = card_offer_counts.get(name, 0) + int(count)
+        for name, count in info.get("ep_card_take_ids", {}).items():
+            card_take_counts[name] = card_take_counts.get(name, 0) + int(count)
 
     return RunEvalReport(
         episodes=episodes,
@@ -328,7 +533,159 @@ def evaluate_run(
         truncations=tuple(trunc_flags),
         hp_left=tuple(hp_left),
         decisions=tuple(decisions),
+        seeds=tuple(seeds),
+        returns=tuple(returns),
+        end_turns=tuple(end_turns),
+        energy_unspent=tuple(energy_unspent),
+        card_offers=tuple(card_offers),
+        card_takes=tuple(card_takes),
+        rest_visits=tuple(rest_visits),
+        rest_heals=tuple(rest_heals),
+        rest_upgrades=tuple(rest_upgrades),
+        upgrades=tuple(upgrades),
+        removes=tuple(removes),
+        elites_won=tuple(elites_won),
+        potions_obtained=tuple(potions_obtained),
+        potions_used=tuple(potions_used),
+        potions_used_elite=tuple(potions_used_elite),
+        potions_used_boss=tuple(potions_used_boss),
+        potions_used_normal=tuple(potions_used_normal),
+        potions_expired=tuple(potions_expired),
+        potion_use_hp=tuple(potion_use_hp),
+        relics=tuple(relics),
+        hp_lost=tuple(hp_lost),
+        card_offer_counts=card_offer_counts,
+        card_take_counts_raw=card_take_counts,
     )
+
+
+# ── Reporting: return histogram + spreadsheet export ─────────────────────────
+
+
+EPISODE_CSV_FIELDS = ("policy", "seed", "floor", "act", "win", "truncated",
+                      "hp_left", "decisions", "ep_return", "end_turns",
+                      "energy_unspent", "card_offers", "card_takes",
+                      "rest_visits", "rest_heals", "rest_upgrades",
+                      "upgrades", "removes", "elites",
+                      "potions_got", "potions_used",
+                      "potions_used_elite", "potions_used_boss",
+                      "potions_used_normal", "potions_expired",
+                      "potion_use_hp", "relics", "hp_lost")
+
+CARDS_CSV_FIELDS = ("policy", "card", "offered", "taken", "take_rate")
+
+HIST_CSV_FIELDS = ("policy", "ep_return", "count", "freq")
+
+#: Longest bar in `reward_histogram_lines`, in characters.
+HIST_BAR_WIDTH = 40
+
+
+def reward_histogram_lines(name: str, report: RunEvalReport) -> list[str]:
+    """ASCII bar chart of the episode-return distribution, one row per value.
+
+    An exact-value tally (see `RunEvalReport.return_histogram`), so the row
+    count is the number of distinct returns observed, not a fixed bin count.
+    """
+    hist = report.return_histogram
+    # ASCII only: this goes to a Windows console under cp1252, where an em
+    # dash comes out as a replacement character.
+    lines = [f"return distribution - {name} ({report.episodes} episodes, "
+             f"{len(hist)} distinct)"]
+    if not hist:
+        lines.append("  (no episodes)")
+        return lines
+    peak = max(hist.values())
+    for value, count in hist.items():
+        bar = "#" * max(1, round(HIST_BAR_WIDTH * count / peak))
+        lines.append(f"  {value:>9.3f} {count:>6}  {count / report.episodes:>6.1%}  {bar}")
+    return lines
+
+
+def write_run_csv(
+    path: str, rows: Sequence[tuple[str, RunEvalReport]]
+) -> tuple[str, str]:
+    """Export run-scale reports as two CSVs; returns (episodes_path, hist_path).
+
+    Two files rather than one because they are two tables with different
+    schemas — stacking them in one file would defeat the spreadsheet import
+    they exist for. ``<stem>.episodes.csv`` is one row per episode per policy
+    (raw data to pivot); ``<stem>.hist.csv`` is the return tally, already in
+    chart-ready shape. A trailing ``.csv`` on ``path`` is stripped, so
+    ``--csv out`` and ``--csv out.csv`` both yield ``out.episodes.csv``.
+
+    Rows stay grouped by policy in input order, so a report with a baseline
+    row sorts predictably in the sheet.
+    """
+    stem = path[:-4] if path.lower().endswith(".csv") else path
+    ep_path, hist_path = f"{stem}.episodes.csv", f"{stem}.hist.csv"
+
+    with open(ep_path, "w", newline="") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(EPISODE_CSV_FIELDS)
+        for name, report in rows:
+            for i in range(report.episodes):
+                writer.writerow([
+                    name,
+                    report.seeds[i],
+                    report.floors[i],
+                    report.acts[i],
+                    int(report.victories[i]),
+                    int(report.truncations[i]),
+                    report.hp_left[i],
+                    report.decisions[i],
+                    round(report.returns[i], 6),
+                    report.end_turns[i],
+                    report.energy_unspent[i],
+                    report.card_offers[i],
+                    report.card_takes[i],
+                    report.rest_visits[i],
+                    report.rest_heals[i],
+                    report.rest_upgrades[i],
+                    # Guarded: a hand-built report may omit the v7 tuples.
+                    report.upgrades[i] if report.upgrades else 0,
+                    report.removes[i] if report.removes else 0,
+                    report.elites_won[i] if report.elites_won else 0,
+                    report.potions_obtained[i] if report.potions_obtained else 0,
+                    report.potions_used[i] if report.potions_used else 0,
+                    report.potions_used_elite[i] if report.potions_used_elite else 0,
+                    report.potions_used_boss[i] if report.potions_used_boss else 0,
+                    report.potions_used_normal[i] if report.potions_used_normal else 0,
+                    report.potions_expired[i] if report.potions_expired else 0,
+                    report.potion_use_hp[i] if report.potion_use_hp else 0.0,
+                    report.relics[i] if report.relics else 0,
+                    report.hp_lost[i] if report.hp_lost else 0,
+                ])
+
+    with open(hist_path, "w", newline="") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(HIST_CSV_FIELDS)
+        for name, report in rows:
+            for value, count in report.return_histogram.items():
+                freq = count / report.episodes if report.episodes else 0.0
+                writer.writerow([name, value, count, round(freq, 6)])
+
+    return ep_path, hist_path
+
+
+def write_cards_csv(
+    path_or_file, rows: Sequence[tuple[str, RunEvalReport]]
+) -> None:
+    """Per-card offer/take table (plan Task 8): one row per (policy, card
+    class), most-offered first — the card-exposure / archetype-forcing signal.
+    ``path_or_file`` is a filesystem path or an open text file."""
+    def _write(fh) -> None:
+        writer = csv.writer(fh)
+        writer.writerow(CARDS_CSV_FIELDS)
+        for name, report in rows:
+            for card, (offered, taken) in report.card_take_counts.items():
+                rate = round(taken / offered, 6) if offered else 0.0
+                writer.writerow([name, card, offered, taken, rate])
+
+    if hasattr(path_or_file, "write"):
+        _write(path_or_file)
+    else:
+        with open(path_or_file, "w", newline="") as fh:
+            _write(fh)
 
 
 # ── Paired-seed A/B ──────────────────────────────────────────────────────────

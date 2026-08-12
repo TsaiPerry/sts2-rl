@@ -4,7 +4,8 @@ import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, Monster, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, Monster, MoveType, asc_value
 from ..state_machine import (
     ConditionalBranchState,
     MachineMonster,
@@ -16,12 +17,20 @@ if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
+# BiteDamage (PhantasmalGardener.cs:39) reads GetValueIfAscension(
+# DeadlyEnemies, 5, 5) -- both branches 5, a no-op; ported as a comment only.
 _BITE_DMG = 5
+# LashDamage (:41) reads GetValueIfAscension(DeadlyEnemies, 7, 7) -- both
+# branches 7, a no-op; ported as a comment only.
 _LASH_DMG = 7
 _FLAIL_DMG = 1
+# FlailRepeat (:45) reads GetValueIfAscension(DeadlyEnemies, 3, 3) -- both
+# branches 3, a no-op; ported as a comment only.
 _FLAIL_HITS = 3
-_ENLARGE_STR = 2
-_SKITTISH_BLOCK = 6
+_ENLARGE_STR = 2         # PhantasmalGardener.cs:47 base
+_ENLARGE_STR_ASC = 3     # DeadlyEnemies
+_SKITTISH_BLOCK = 6      # PhantasmalGardener.cs:49 base
+_SKITTISH_BLOCK_ASC = 7  # ToughEnemies
 
 _SLOTS = ("first", "second", "third", "fourth")
 
@@ -35,6 +44,8 @@ class PhantasmalGardener(MachineMonster):
 
     min_hp = 26
     max_hp = 31
+    min_hp_asc = 27   # PhantasmalGardener.cs:35 -- ToughEnemies
+    max_hp_asc = 32   # PhantasmalGardener.cs:37 -- ToughEnemies
 
     def __init__(
         self,
@@ -47,7 +58,13 @@ class PhantasmalGardener(MachineMonster):
         super().__init__(hooks, rng or random.Random())
         from ...cmds import PowerCmd
         from ...powers import SkittishPower
-        PowerCmd.apply(hooks, self, SkittishPower, _SKITTISH_BLOCK)
+        skittish = asc_value(hooks, AscensionLevel.TOUGH_ENEMIES,
+                              _SKITTISH_BLOCK_ASC, _SKITTISH_BLOCK)
+        PowerCmd.apply(hooks, self, SkittishPower, skittish)
+
+    def _enlarge_str(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _ENLARGE_STR_ASC, _ENLARGE_STR)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         bite = MoveState(
@@ -84,7 +101,7 @@ class PhantasmalGardener(MachineMonster):
     def _enlarge(self, ctx: CombatCtx) -> None:
         from ...cmds import PowerCmd
         from ...powers import StrengthPower
-        PowerCmd.apply(ctx.hooks, self, StrengthPower, _ENLARGE_STR)
+        PowerCmd.apply(ctx.hooks, self, StrengthPower, self._enlarge_str())
 
 
 @dataclass

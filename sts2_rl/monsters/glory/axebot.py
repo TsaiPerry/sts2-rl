@@ -3,7 +3,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import MachineMonster, MonsterMoveStateMachine, MoveState
 
 if TYPE_CHECKING:
@@ -11,10 +12,14 @@ if TYPE_CHECKING:
     from ...hooks import HookSystem
 
 _BOOT_UP_BLOCK = 10
+_BOOT_UP_BLOCK_ASC = 15     # Axebot.cs:36 DeadlyEnemies
 _BOOT_UP_STR_PER_STOCK = 3
+_BOOT_UP_STR_PER_STOCK_ASC = 4  # Axebot.cs:40 DeadlyEnemies
 _ONE_TWO_DMG = 9
+_ONE_TWO_DMG_ASC = 10       # Axebot.cs:38 DeadlyEnemies
 _ONE_TWO_HITS = 2
 _HAMMER_DMG = 12
+_HAMMER_DMG_ASC = 14        # Axebot.cs:42 DeadlyEnemies
 _HAMMER_WEAK = 2
 _HAMMER_FRAIL = 2
 _DEFAULT_STOCK = 2
@@ -33,6 +38,30 @@ class Axebot(MachineMonster):
 
     min_hp = 70
     max_hp = 78
+    min_hp_asc = 76      # Axebot.cs:44 ToughEnemies
+    max_hp_asc = 86      # Axebot.cs:46 ToughEnemies
+
+    def _boot_up_block(self) -> int:
+        """Axebot.cs:36 `BootUpBlock`."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _BOOT_UP_BLOCK_ASC, _BOOT_UP_BLOCK)
+
+    def _boot_up_str_per_stock(self) -> int:
+        """Axebot.cs:40 `BootUpStrGain`."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _BOOT_UP_STR_PER_STOCK_ASC, _BOOT_UP_STR_PER_STOCK)
+
+    def _one_two_dmg(self) -> int:
+        """Axebot.cs:38 `OneTwoDamage`, re-read at Intent (:88) and
+        execution (:113)."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _ONE_TWO_DMG_ASC, _ONE_TWO_DMG)
+
+    def _hammer_dmg(self) -> int:
+        """Axebot.cs:42 `HammerUppercutDamage`, re-read at Intent (:89) and
+        execution (:123)."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _HAMMER_DMG_ASC, _HAMMER_DMG)
 
     def __init__(
         self,
@@ -57,11 +86,11 @@ class Axebot(MachineMonster):
         )
         one_two = MoveState(
             "ONE_TWO_MOVE", self._one_two,
-            Intent(MoveType.ATTACK, damage=_ONE_TWO_DMG, hits=_ONE_TWO_HITS),
+            lambda: Intent(MoveType.ATTACK, damage=self._one_two_dmg(), hits=_ONE_TWO_HITS),
         )
         hammer = MoveState(
             "HAMMER_UPPERCUT_MOVE", self._hammer,
-            Intent(MoveType.ATTACK, damage=_HAMMER_DMG, also=(MoveType.DEBUFF,)),
+            lambda: Intent(MoveType.ATTACK, damage=self._hammer_dmg(), also=(MoveType.DEBUFF,)),
         )
         boot_up.follow_up = hammer
         hammer.follow_up = one_two
@@ -73,16 +102,16 @@ class Axebot(MachineMonster):
         from ...cmds import BlockCmd, PowerCmd
         from ...powers import StrengthPower
         from ...valueprops import ValueProp
-        BlockCmd.apply(ctx.hooks, self, _BOOT_UP_BLOCK, props=ValueProp.MOVE)
-        gain = _BOOT_UP_STR_PER_STOCK * (_DEFAULT_STOCK - self._stock)
+        BlockCmd.apply(ctx.hooks, self, self._boot_up_block(), props=ValueProp.MOVE)
+        gain = self._boot_up_str_per_stock() * (_DEFAULT_STOCK - self._stock)
         if gain:
             PowerCmd.apply(ctx.hooks, self, StrengthPower, gain)
 
     def _one_two(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _ONE_TWO_DMG, _ONE_TWO_HITS)
+        self._execute_attack(ctx, self._one_two_dmg(), _ONE_TWO_HITS)
 
     def _hammer(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _HAMMER_DMG, 1)
+        self._execute_attack(ctx, self._hammer_dmg(), 1)
         from ...cmds import PowerCmd
         from ...powers import FrailPower, WeakPower
         PowerCmd.apply(ctx.hooks, ctx.player, WeakPower, _HAMMER_WEAK)

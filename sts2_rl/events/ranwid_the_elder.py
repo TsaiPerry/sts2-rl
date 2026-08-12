@@ -22,11 +22,15 @@ class RanwidTheElder(Event):
       RELIC:  give the shown random tradable relic -> 2 grab-bag relics
       (POTION/RELIC lock when their roll finds nothing.)
 
-    The source's CanRemovePotions=false guard is UI-only and not modeled.
+    CanRemovePotions=false (RanwidTheElder.cs:42) is modeled --
+    `locks_potion_belt`. The POTION option gives away a SHOWN potion, so the
+    belt has to hold still while the page is open; see `Event.locks_potion_belt`
+    for why the old "UI-only" verdict went stale.
     """
 
     id = "ranwid_the_elder"
     name = "Ranwid the Elder"
+    locks_potion_belt = True
 
     @classmethod
     def is_allowed(cls, run: RunState) -> bool:

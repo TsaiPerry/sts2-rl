@@ -4,22 +4,28 @@ import random
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import MachineMonster, MonsterMoveStateMachine, MoveState
 
 if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
-_GIMME_DMG = 7
+_GIMME_DMG = 7              # GremlinMerc.cs:36 base
+_GIMME_DMG_ASC = 8          # ToughEnemies (asc 8+) -- note: source gates this
+                             # damage site on ToughEnemies, not DeadlyEnemies.
 _GIMME_HITS = 2
-_DOUBLE_SMASH_DMG = 6
+_DOUBLE_SMASH_DMG = 6        # GremlinMerc.cs:40 base
+_DOUBLE_SMASH_DMG_ASC = 7    # ToughEnemies (asc 8+)
 _DOUBLE_SMASH_HITS = 2
 _DOUBLE_SMASH_WEAK = 2
-_HEHE_DMG = 8
+_HEHE_DMG = 8                # GremlinMerc.cs:44 base
+_HEHE_DMG_ASC = 9            # ToughEnemies (asc 8+)
 _HEHE_STR = 2
 _THIEVERY_GOLD = 20  # ThieveryPower applied at 20 (GremlinMerc.AfterAddedToRoom)
-_SNEAKY_TACKLE_DMG = 9
+_SNEAKY_TACKLE_DMG = 9        # SneakyGremlin.cs:25 base
+_SNEAKY_TACKLE_DMG_ASC = 10   # DeadlyEnemies (asc 9+)
 
 
 class GremlinMerc(MachineMonster):
@@ -29,8 +35,10 @@ class GremlinMerc(MachineMonster):
     (SurprisePower), the fat one carrying the stolen gold (HeistPower)."""
     name = "Gremlin Merc"
 
-    min_hp = 47
+    min_hp = 47          # GremlinMerc.cs:28-30
     max_hp = 49
+    min_hp_asc = 51       # ToughEnemies (asc 8+)
+    max_hp_asc = 53
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
@@ -38,6 +46,22 @@ class GremlinMerc(MachineMonster):
         from ...powers import SurprisePower, ThieveryPower
         PowerCmd.apply(hooks, self, SurprisePower, 1)
         PowerCmd.apply(hooks, self, ThieveryPower, _THIEVERY_GOLD)
+
+    def _gimme_dmg(self) -> int:
+        """GremlinMerc.cs:36 `GimmeDamage` -- re-read at both the telegraphed
+        Intent and the executed attack."""
+        return asc_value(self._hooks, AscensionLevel.TOUGH_ENEMIES,
+                          _GIMME_DMG_ASC, _GIMME_DMG)
+
+    def _double_smash_dmg(self) -> int:
+        """GremlinMerc.cs:40 `DoubleSmashDamage`."""
+        return asc_value(self._hooks, AscensionLevel.TOUGH_ENEMIES,
+                          _DOUBLE_SMASH_DMG_ASC, _DOUBLE_SMASH_DMG)
+
+    def _hehe_dmg(self) -> int:
+        """GremlinMerc.cs:44 `HeheDamage`."""
+        return asc_value(self._hooks, AscensionLevel.TOUGH_ENEMIES,
+                          _HEHE_DMG_ASC, _HEHE_DMG)
 
     def _steal(self) -> None:
         thievery = self.powers.get("thievery")
@@ -47,18 +71,18 @@ class GremlinMerc(MachineMonster):
     def build_machine(self) -> MonsterMoveStateMachine:
         gimme = MoveState(
             "GIMME_MOVE", self._gimme,
-            Intent(MoveType.ATTACK, damage=_GIMME_DMG, hits=_GIMME_HITS),
+            lambda: Intent(MoveType.ATTACK, damage=self._gimme_dmg(), hits=_GIMME_HITS),
         )
         double_smash = MoveState(
             "DOUBLE_SMASH_MOVE", self._double_smash,
-            Intent(
-                MoveType.ATTACK, damage=_DOUBLE_SMASH_DMG, hits=_DOUBLE_SMASH_HITS,
+            lambda: Intent(
+                MoveType.ATTACK, damage=self._double_smash_dmg(), hits=_DOUBLE_SMASH_HITS,
                 also=(MoveType.DEBUFF,),
             ),
         )
         hehe = MoveState(
             "HEHE_MOVE", self._hehe,
-            Intent(MoveType.ATTACK, damage=_HEHE_DMG, also=(MoveType.BUFF,)),
+            lambda: Intent(MoveType.ATTACK, damage=self._hehe_dmg(), also=(MoveType.BUFF,)),
         )
         gimme.follow_up = double_smash
         double_smash.follow_up = hehe
@@ -66,18 +90,18 @@ class GremlinMerc(MachineMonster):
         return MonsterMoveStateMachine([gimme, double_smash, hehe], gimme)
 
     def _gimme(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _GIMME_DMG, _GIMME_HITS)
+        self._execute_attack(ctx, self._gimme_dmg(), _GIMME_HITS)
         self._steal()
 
     def _double_smash(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _DOUBLE_SMASH_DMG, _DOUBLE_SMASH_HITS)
+        self._execute_attack(ctx, self._double_smash_dmg(), _DOUBLE_SMASH_HITS)
         self._steal()
         from ...cmds import PowerCmd
         from ...powers import WeakPower
         PowerCmd.apply(ctx.hooks, ctx.player, WeakPower, _DOUBLE_SMASH_WEAK)
 
     def _hehe(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _HEHE_DMG, 1)
+        self._execute_attack(ctx, self._hehe_dmg(), 1)
         self._steal()
         from ...cmds import PowerCmd
         from ...powers import StrengthPower
@@ -89,17 +113,25 @@ class SneakyGremlin(MachineMonster):
     every turn."""
     name = "Sneaky Gremlin"
 
-    min_hp = 10
+    min_hp = 10          # SneakyGremlin.cs:21
     max_hp = 14
+    min_hp_asc = 11       # ToughEnemies (asc 8+) -- SneakyGremlin.cs:21
+    max_hp_asc = 15       # SneakyGremlin.cs:23
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
+
+    def _tackle_dmg(self) -> int:
+        """SneakyGremlin.cs:25 `TackleDamage` -- re-read at both the
+        telegraphed Intent and the executed attack."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _SNEAKY_TACKLE_DMG_ASC, _SNEAKY_TACKLE_DMG)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         spawned = MoveState("SPAWNED_MOVE", self._spawned, Intent(MoveType.STUN))
         tackle = MoveState(
             "TACKLE_MOVE", self._tackle,
-            Intent(MoveType.ATTACK, damage=_SNEAKY_TACKLE_DMG),
+            lambda: Intent(MoveType.ATTACK, damage=self._tackle_dmg()),
         )
         spawned.follow_up = tackle
         tackle.follow_up = tackle
@@ -109,7 +141,7 @@ class SneakyGremlin(MachineMonster):
         pass  # wake-up animation only
 
     def _tackle(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _SNEAKY_TACKLE_DMG, 1)
+        self._execute_attack(ctx, self._tackle_dmg(), 1)
 
 
 class FatGremlin(MachineMonster):
@@ -117,8 +149,10 @@ class FatGremlin(MachineMonster):
     counting as gone for the win condition)."""
     name = "Fat Gremlin"
 
-    min_hp = 13
+    min_hp = 13          # FatGremlin.cs:28-30
     max_hp = 17
+    min_hp_asc = 14       # ToughEnemies (asc 8+)
+    max_hp_asc = 18
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())

@@ -3,7 +3,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import (
     ConditionalBranchState,
     MachineMonster,
@@ -15,12 +16,14 @@ if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
-_FIRE_DMG = 3
+_FIRE_DMG = 3          # TurretOperator.cs:33 base
+_FIRE_DMG_ASC = 4      # DeadlyEnemies
 _FIRE_HITS = 5
 _RELOAD_STR = 1
-_SHIELD_SLAM_DMG = 6
-_SMASH_DMG = 16
-_ENRAGE_STR = 3
+_SHIELD_SLAM_DMG = 6         # LivingShield.cs:26 -- plain const, not ascension-gated
+_SMASH_DMG = 16              # LivingShield.cs:28 base
+_SMASH_DMG_ASC = 18          # DeadlyEnemies (asc 9+)
+_ENRAGE_STR = 3              # LivingShield.cs:30 -- plain const, not ascension-gated
 _RAMPART_BLOCK = 25
 
 
@@ -33,15 +36,23 @@ class TurretOperator(MachineMonster):
 
     min_hp = 41
     max_hp = 41
+    min_hp_asc = 51   # TurretOperator.cs:27 -- ToughEnemies (MaxInitialHp == MinInitialHp)
+    max_hp_asc = 51
+
+    def _fire_dmg(self) -> int:
+        """TurretOperator.cs:33 `FireDamage` -- read at both the telegraphed
+        Intent (both UNLOAD states) and the executed attack."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _FIRE_DMG_ASC, _FIRE_DMG)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         unload1 = MoveState(
             "UNLOAD_MOVE", self._unload,
-            Intent(MoveType.ATTACK, damage=_FIRE_DMG, hits=_FIRE_HITS),
+            lambda: Intent(MoveType.ATTACK, damage=self._fire_dmg(), hits=_FIRE_HITS),
         )
         unload2 = MoveState(
             "UNLOAD_MOVE_2", self._unload,
-            Intent(MoveType.ATTACK, damage=_FIRE_DMG, hits=_FIRE_HITS),
+            lambda: Intent(MoveType.ATTACK, damage=self._fire_dmg(), hits=_FIRE_HITS),
         )
         reload = MoveState("RELOAD_MOVE", self._reload, Intent(MoveType.BUFF))
         unload1.follow_up = unload2
@@ -50,7 +61,7 @@ class TurretOperator(MachineMonster):
         return MonsterMoveStateMachine([unload1, unload2, reload], unload1)
 
     def _unload(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _FIRE_DMG, _FIRE_HITS)
+        self._execute_attack(ctx, self._fire_dmg(), _FIRE_HITS)
 
     def _reload(self, ctx: CombatCtx) -> None:
         from ...cmds import PowerCmd
@@ -68,12 +79,20 @@ class LivingShield(MachineMonster):
 
     min_hp = 55
     max_hp = 55
+    min_hp_asc = 65      # LivingShield.cs:18 ToughEnemies (asc 8+)
+    max_hp_asc = 65      # LivingShield.cs:20 `MaxInitialHp => MinInitialHp`
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
         from ...cmds import PowerCmd
         from ...powers import RampartPower
         PowerCmd.apply(hooks, self, RampartPower, _RAMPART_BLOCK)
+
+    def _smash_dmg(self) -> int:
+        """LivingShield.cs:28 `SmashDamage` -- read at both the telegraphed
+        Intent (current_intent) and the executed attack (_smash)."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _SMASH_DMG_ASC, _SMASH_DMG)
 
     def _ally_count(self) -> int:
         combat = self._hooks.combat
@@ -90,7 +109,8 @@ class LivingShield(MachineMonster):
         )
         smash = MoveState(
             "SMASH_MOVE", self._smash,
-            Intent(MoveType.ATTACK, damage=_SMASH_DMG, also=(MoveType.BUFF,)),
+            lambda: Intent(MoveType.ATTACK, damage=self._smash_dmg(),
+                            also=(MoveType.BUFF,)),
         )
         branch = ConditionalBranchState("SHIELD_SLAM_BRANCH")
         branch.add_state(shield_slam, lambda: self._ally_count() > 0)
@@ -103,7 +123,7 @@ class LivingShield(MachineMonster):
         self._execute_attack(ctx, _SHIELD_SLAM_DMG, 1)
 
     def _smash(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _SMASH_DMG, 1)
+        self._execute_attack(ctx, self._smash_dmg(), 1)
         from ...cmds import PowerCmd
         from ...powers import StrengthPower
         PowerCmd.apply(ctx.hooks, self, StrengthPower, _ENRAGE_STR)

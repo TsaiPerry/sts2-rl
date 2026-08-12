@@ -139,6 +139,111 @@ def test_a_freed_middle_slot_is_refilled_in_place():
     assert len(fresh) == 5
 
 
+def test_reusing_a_slot_evicts_the_corpse_still_holding_it():
+    """The sibling of the test above, WITHOUT its `cs.enemies.remove(victim)`.
+
+    That line stands in for `CombatState.RemoveCreature`, which the sim does
+    not do — corpses stay in `combat.enemies` so enemy indices are stable. But
+    the free-slot scan skips them (`_occupied` filters `is_removed_from_combat`,
+    the test below this one), so a corpse's slot IS handed to the next egg, and
+    nothing used to evict the corpse: the list grew by one per recycled egg,
+    forever.
+
+    That is not cosmetic. Both the observation (`_enemies_rows`) and the action
+    mask (`combat_action_mask`'s `i < MAX_ENEMIES`) address enemies by raw list
+    index over `MAX_ENEMIES`=6 rows, so the overflow pushed LIVING enemies out
+    of both — including, measured on this encounter, the Ovicopter itself.
+    """
+    cs = _combat(OVICOPTER_NORMAL, 4)
+    ovi = cs.enemies[0]
+    ovi._lay_eggs(cs._ctx())
+    victim = next(e for e in cs.enemies if e.slot_name == "egg5")
+    victim.hp = 0
+    assert victim.is_removed_from_combat, "fixture sanity: the egg is a corpse"
+    assert victim in cs.enemies, "the sim keeps corpses in the list"
+
+    ovi._lay_eggs(cs._ctx())
+
+    assert victim not in cs.enemies, (
+        "the corpse kept its list entry while a live egg took its slot")
+    assert [e.slot_name for e in cs.enemies] == [
+        "egg1", "egg2", "egg3", "egg4", "egg5", "ovicopter"]
+    assert len(cs.enemies) == len(OVICOPTER_NORMAL.slots)
+
+
+def test_a_recycling_encounter_never_outgrows_the_targetable_window():
+    """The property the fix exists for: however many eggs are laid, killed and
+    relaid, the enemy list stays within the slot row — so no living creature
+    can slide past `MAX_ENEMIES` into the untargetable, unobservable tail."""
+    from sts2_rl.full_env import MAX_ENEMIES
+
+    cs = _combat(OVICOPTER_NORMAL, 4)
+    ovi = cs.enemies[0]
+    for _round in range(20):
+        ovi._lay_eggs(cs._ctx())
+        for egg in [e for e in cs.enemies if isinstance(e, ToughEgg)][:2]:
+            egg.hp = 0
+        assert len(cs.enemies) <= MAX_ENEMIES, (
+            f"enemy list grew to {len(cs.enemies)} > MAX_ENEMIES={MAX_ENEMIES}")
+        living = [i for i, e in enumerate(cs.enemies) if not e.is_gone]
+        assert all(i < MAX_ENEMIES for i in living), (
+            f"living enemies stranded past the cap at {living}")
+    assert ovi in cs.enemies and not ovi.is_gone
+
+
+def test_no_ported_encounter_can_outgrow_the_targetable_window():
+    """The general form of the two Ovicopter tests above, swept over EVERY
+    ported encounter rather than the one that happened to be caught.
+
+    A recycling summoner is the only way `combat.enemies` can exceed the
+    encounter's own creature count, and both readers of that list index it
+    positionally against `MAX_ENEMIES`. This drives each encounter with a
+    masked-random policy and asserts the list never outgrows the window --
+    which is what keeps the `combat.enemies` overflow warning unreachable.
+
+    Living Fog is the second encounter this caught (its `_bloat` hand-rolled an
+    insertion index instead of using the slot row, so exploded bombs piled up
+    and stranded live enemies at indices 5-6 on seed 11).
+    """
+    import random as _random
+
+    from sts2_rl.full_env import MAX_ENEMIES, STS2FullCombatEnv
+    from sts2_rl.monsters.glory import ENCOUNTERS as GLORY
+    from sts2_rl.monsters.hive import ENCOUNTERS as HIVE
+    from sts2_rl.monsters.overgrowth import ENCOUNTERS as OVER
+    from sts2_rl.monsters.underdocks import ENCOUNTERS as UNDER
+
+    encounters = {}
+    for act, table in (("overgrowth", OVER), ("underdocks", UNDER),
+                       ("hive", HIVE), ("glory", GLORY)):
+        for key, enc in table.items():
+            encounters[f"{act}/{key}"] = enc
+    assert len(encounters) > 50, "sanity: the sweep must actually cover the tables"
+
+    # 15 seeds, not 3: the Living Fog overflow this test was written for first
+    # appears at seed 11 (mutation-checked — at 3 seeds the sweep passes with
+    # the `_bloat` slot port reverted, which would have made it decorative).
+    for name, enc in sorted(encounters.items()):
+        for seed in range(15):
+            env = STS2FullCombatEnv(encounters=[enc])
+            env.reset(seed=seed)
+            state = env._state
+            rng = _random.Random(seed)
+            for _ in range(300):
+                if state is None or not state.enemies:
+                    break
+                assert len(state.enemies) <= MAX_ENEMIES, (
+                    f"{name} seed {seed}: enemy list grew to "
+                    f"{len(state.enemies)} > MAX_ENEMIES={MAX_ENEMIES}, so the "
+                    f"observation truncates and the mask cannot reach the tail")
+                legal = [i for i, m in enumerate(env.action_masks()) if m]
+                if not legal:
+                    break
+                *_, term, trunc, _ = env.step(rng.choice(legal))
+                if term or trunc:
+                    break
+
+
 def test_the_lay_stops_when_the_row_is_full():
     """`if (text != null)` (Ovicopter.cs:88) — LastOrDefault returns null with no
     default argument, so a full row simply lays nothing."""

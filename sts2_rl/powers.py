@@ -833,7 +833,12 @@ class AggressionPower(Power):
         chosen = pool[: min(self.amount, len(pool))]
         for card in chosen:
             player.discard_pile.remove(card)
-            player.hand.append(card)
+            # `CardPileCmd.Add(card, PileType.Hand)` — a full hand redirects to
+            # the discard pile (see `CardPileCmd.move_to_hand`). The upgrade
+            # still lands: C# upgrades the chosen card regardless of where the
+            # Add put it.
+            from .cmds import CardPileCmd
+            CardPileCmd.move_to_hand(player, card)
             if card.upgrade_level == 0:  # IsUpgradable: only unupgraded cards
                 card.upgrade()
 

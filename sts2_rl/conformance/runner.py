@@ -74,6 +74,31 @@ def _all_relic_ids() -> frozenset[str]:
     return _ALL_RELIC_IDS
 
 
+def _node_relic_choices(oracle: "SaveOracle", act_index: int, room_index: int) -> list[str | None]:
+    """The relic ids the save says were OFFERED (not just picked) at map node
+    (`act_index`, `room_index`), in the order the game asked about them —
+    every `relic_choices` entry, `was_picked` or not. `None` marks an entry
+    with no recorded identity (an unported/unresolvable choice).
+
+    Mirrors `ReplayRunner._node_picked_relics`, which filters this same list
+    down to `was_picked` entries to correct which relic was KEPT
+    (`_reconcile_node_relics`). This unfiltered version answers a different
+    question — which relic was OFFERED at the Nth ask — needed to relabel a
+    `REWARD_RELIC` `DecisionRequest.relic` (the sim's own grab-bag pull,
+    drawn off a stream that is not draw-order-faithful yet) with the save's
+    ground truth before an obs is built from it."""
+    history = oracle.map_history
+    hist = history[act_index] if act_index < len(history) else []
+    if room_index >= len(hist):
+        return []
+    out: list[str | None] = []
+    for stat in hist[room_index].get("player_stats", []):
+        for choice in stat.get("relic_choices", []):
+            cid = choice.get("choice")
+            out.append(relic_key(cid) if cid else None)
+    return out
+
+
 class _CommandCursor:
     """A monotonic cursor over a recording's commands. `take(*names)` scans
     forward to the next command matching one of `names`, consuming (and
@@ -221,6 +246,17 @@ class _ForceWinDriver(RunDriver):
         # count_remaining its next ask will carry (see _answer_select_grid).
         self._grid_picks: list = []
         self._grid_open: int | None = None
+        # Ground truth for relabeling a REWARD_RELIC ask's offer (see
+        # `_relabel_relic_offer`): `ReplayRunner.run()` stamps `_oracle` and
+        # the current (act, room) onto this driver right before every
+        # `_resolve_room` call, and `_relic_ask_counts` tracks how many
+        # REWARD_RELIC asks have already been served at the current node (a
+        # node can offer several relics one at a time — Calling Bell's
+        # three, Toy Box's four).
+        self._oracle = None
+        self._cur_act_index = 0
+        self._cur_room_index = 0
+        self._relic_ask_counts: dict[tuple[int, int], int] = {}
         super().__init__(run, ask=self._ask_decision, include_neow=False, **kwargs)
 
     # ── replay recorded combat, else force-win to keep floors advancing ──
@@ -277,6 +313,30 @@ class _ForceWinDriver(RunDriver):
 
     # ── the decision seam for everything resolved inside a room ──────────
     def _ask_decision(self, request: DecisionRequest) -> int:
+        self.prepare_request(request)
+        return self._answer(request)
+
+    def prepare_request(self, request: DecisionRequest) -> None:
+        """Ground-truth corrections applied to `request` BEFORE anything else
+        looks at it — in particular before `sim_obs_dump._ObsSink.record`
+        builds an obs from it, since `_DumpingForceWinDriver._ask_decision`
+        records the request itself, not this class's `_ask_decision` (which
+        it overrides). Split out of `_ask_decision` for exactly that reason:
+        the dumping subclass needs to run this step before its own recording
+        hook, then answer via `_answer` directly rather than through
+        `_ask_decision` again (which would run this step a second time and
+        double-advance `_relic_ask_counts`)."""
+        if request.kind == DecisionKind.REWARD_RELIC:
+            # `request.relic` is the sim's own (not draw-order-faithful)
+            # grab-bag pull at this point, so it disagrees with the game's
+            # actual offer just like the granted relic used to before
+            # `_reconcile_node_relics` existed. Relabel it here, from the
+            # same save ground truth, BEFORE any obs gets built from this
+            # request (`_relabel_relic_offer`) — the object identity is all
+            # that changes; `_answer` below still always takes.
+            self._relabel_relic_offer(request)
+
+    def _answer(self, request: DecisionRequest) -> int:
         legal = request.legal_actions()
         kind = request.kind
         if kind == DecisionKind.EVENT:
@@ -296,7 +356,7 @@ class _ForceWinDriver(RunDriver):
             # it already has to, because the sim's grab-bag identities are not
             # draw-order-faithful yet, so answering the offer from the save
             # here would fix only which relics were KEPT, not which were
-            # OFFERED. Wiring the save into this answer is the follow-up.
+            # OFFERED.
             return 0
         if kind == DecisionKind.SELECT_CARDS and self._combat is None:
             # An OUT-OF-COMBAT card-grid selection (rest-site SMITH, and the
@@ -312,6 +372,32 @@ class _ForceWinDriver(RunDriver):
         # (generation is choice-independent); take the first legal action,
         # which always progresses (skip a reward, leave a shop, pick a card).
         return legal[0]
+
+    def _relabel_relic_offer(self, request: DecisionRequest) -> None:
+        """Replace `request.relic` — the sim's own (not draw-order-faithful)
+        grab-bag pull — with the save's ground truth for the Nth REWARD_RELIC
+        ask at the current node, so an obs built from this request (before
+        the take/skip decision) shows what the game actually offered instead
+        of the sim's mispull. A no-op with no oracle attached (e.g. a bare
+        unit-test driver) or once the current node's recorded offers run out
+        (an offer the save doesn't cover, or an unresolvable/unported id) —
+        `request.relic` is left as the sim's pull in those cases, same as
+        before this method existed."""
+        if self._oracle is None:
+            return
+        node = (self._cur_act_index, self._cur_room_index)
+        idx = self._relic_ask_counts.get(node, 0)
+        self._relic_ask_counts[node] = idx + 1
+        choices = _node_relic_choices(self._oracle, *node)
+        if idx >= len(choices):
+            return
+        rid = choices[idx]
+        if rid is None or rid not in _all_relic_ids():
+            return
+        if request.relic is not None and request.relic.id == rid:
+            return
+        from ..relics import make_relic
+        request.relic = make_relic(rid)
 
     def _answer_select_grid(self, request: DecisionRequest, legal: list[int]) -> int:
         # `SelectGridCard i j k …` names the i-th, j-th, … card in the grid as
@@ -476,7 +562,8 @@ class ReplayRunner:
         return out
 
     def _reconcile_node_relics(self, run, act_index: int, room_index: int,
-                               n_before: int) -> None:
+                               n_before: int,
+                               bag_before: list[str] | None = None) -> None:
         """Make the relics granted while resolving map node (`act_index`,
         `room_index`) match the ones the save says were picked there, replacing
         the sim's RNG picks.
@@ -502,11 +589,30 @@ class ReplayRunner:
                 # ran its AfterObtained, and leaving that +MaxHp behind would
                 # read as a player-state divergence for the rest of the run.
                 relic.undo_after_obtained(run)
+                # The swap must ALSO undo the sim's grab-bag pull: the game
+                # never removed this id from its bag (it pulled `picked`
+                # instead), so leave it available for later pulls — put it
+                # back at its pre-room position (89U's floor-8 chest granted
+                # the sim's own front pull, the reconcile swapped the RELIC
+                # LIST to the save's Vajra, and the untouched bag then let
+                # the floor-9 shop re-offer Vajra — a relic the player
+                # already owned — where the game stocked Pendulum).
+                if (bag_before is not None
+                        and relic.id not in run.relic_grab_bag
+                        and relic.id in bag_before):
+                    pos = bag_before.index(relic.id)
+                    run.relic_grab_bag.insert(
+                        min(pos, len(run.relic_grab_bag)), relic.id)
         owned = {r.id for r in run.relics}
         for rid in self._node_picked_relics(act_index, room_index):
             if rid not in owned and rid in _all_relic_ids():
                 run.add_relic(rid)
                 owned.add(rid)
+            # Mirror the game's pull for the relic it actually granted here:
+            # it is owned now, so it must leave the sim's bag too (add_relic
+            # deliberately never touches the bag — only pulls do).
+            if rid in run.relic_grab_bag:
+                run.relic_grab_bag.remove(rid)
 
     def _neow_relics(self) -> list[str]:
         """The relics the save says were picked at the Act 1 Neow node."""
@@ -986,6 +1092,7 @@ class ReplayRunner:
         # them instead of inventing them (see crystal_sphere_click_policy).
         run.crystal_sphere_clicks = crystal_sphere_click_policy(cursor)
         driver = _ForceWinDriver(run, cursor, acts=acts, ascension=rec.ascension)
+        driver._oracle = self.oracle
 
         run.start_run(acts=acts, ascension=rec.ascension)
         driver._roll_shared_ancients()
@@ -1042,6 +1149,7 @@ class ReplayRunner:
                 reason = "unreachable map coord"
                 break
             n_relics_before = len(run.relics)
+            relic_bag_before = list(run.relic_grab_bag)
             resolution = run.enter_point(dest)
             if room_index < len(hist):
                 d = compare_node_type(
@@ -1050,9 +1158,16 @@ class ReplayRunner:
                 )
                 if d is not None:
                     divergences.append(d)
+            # Stamp the node any REWARD_RELIC ask resolved during this room
+            # belongs to, so `_relabel_relic_offer` can look up the save's
+            # per-offer ground truth (`_reconcile_node_relics` below is keyed
+            # the same way, off `run.act_index`/`room_index`).
+            driver._cur_act_index = run.act_index
+            driver._cur_room_index = room_index
             driver._resolve_room(resolution)
             self._reconcile_node_relics(
-                run, run.act_index, room_index, n_relics_before)
+                run, run.act_index, room_index, n_relics_before,
+                bag_before=relic_bag_before)
             if floor_saves:
                 self._check_floor_state(
                     run, divergences, floor_saves, resync_floors)

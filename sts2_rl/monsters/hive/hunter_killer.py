@@ -4,7 +4,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import (
     MachineMonster,
     MonsterMoveStateMachine,
@@ -16,8 +17,10 @@ from ..state_machine import (
 if TYPE_CHECKING:
     from ...combat import CombatCtx
 
-_BITE_DMG = 17
-_PUNCTURE_DMG = 7
+_BITE_DMG = 17          # HunterKiller.cs:27 base
+_BITE_DMG_ASC = 19      # DeadlyEnemies (asc 9+)
+_PUNCTURE_DMG = 7       # HunterKiller.cs:29 base
+_PUNCTURE_DMG_ASC = 8   # DeadlyEnemies (asc 9+)
 _PUNCTURE_HITS = 3
 _GOOP_TENDER = 1
 
@@ -31,15 +34,31 @@ class HunterKiller(MachineMonster):
 
     min_hp = 121
     max_hp = 121
+    min_hp_asc = 126     # HunterKiller.cs:23 ToughEnemies (asc 8+)
+    max_hp_asc = 126     # HunterKiller.cs:25 `MaxInitialHp => MinInitialHp`
+
+    def _bite_dmg(self) -> int:
+        """HunterKiller.cs:27 `BiteDamage` -- read at both the telegraphed
+        Intent (:39) and the executed attack (:60)."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _BITE_DMG_ASC, _BITE_DMG)
+
+    def _puncture_dmg(self) -> int:
+        """HunterKiller.cs:29 `PunctureDamage` -- read at both the telegraphed
+        Intent (:40) and the executed attack (:68)."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _PUNCTURE_DMG_ASC, _PUNCTURE_DMG)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         goop = MoveState("TENDERIZING_GOOP_MOVE", self._goop, Intent(MoveType.DEBUFF))
         bite = MoveState(
-            "BITE_MOVE", self._bite, Intent(MoveType.ATTACK, damage=_BITE_DMG)
+            "BITE_MOVE", self._bite,
+            lambda: Intent(MoveType.ATTACK, damage=self._bite_dmg()),
         )
         puncture = MoveState(
             "PUNCTURE_MOVE", self._puncture,
-            Intent(MoveType.ATTACK, damage=_PUNCTURE_DMG, hits=_PUNCTURE_HITS),
+            lambda: Intent(MoveType.ATTACK, damage=self._puncture_dmg(),
+                            hits=_PUNCTURE_HITS),
         )
         rand = RandomBranchState("RAND")
         rand.add_branch(bite, 1.0, MoveRepeatType.CANNOT_REPEAT)
@@ -59,10 +78,10 @@ class HunterKiller(MachineMonster):
         PowerCmd.apply(ctx.hooks, ctx.player, TenderPower, _GOOP_TENDER, applier=self)
 
     def _bite(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _BITE_DMG, 1)
+        self._execute_attack(ctx, self._bite_dmg(), 1)
 
     def _puncture(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _PUNCTURE_DMG, _PUNCTURE_HITS)
+        self._execute_attack(ctx, self._puncture_dmg(), _PUNCTURE_HITS)
 
 
 HUNTER_KILLER_NORMAL = Encounter(

@@ -3,7 +3,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import (
     ConditionalBranchState,
     MachineMonster,
@@ -16,11 +17,15 @@ if TYPE_CHECKING:
     from ...hooks import HookSystem
 
 _FOR_THE_QUEEN_STR = 5
-_STRIKE_DOWN_DMG = 21
-_TONGUE_LASH_DMG = 13
+_STRIKE_DOWN_DMG = 21        # FrogKnight.cs:37 base
+_STRIKE_DOWN_DMG_ASC = 23    # DeadlyEnemies (asc 9+)
+_TONGUE_LASH_DMG = 13        # FrogKnight.cs:39 base
+_TONGUE_LASH_DMG_ASC = 14    # DeadlyEnemies (asc 9+)
 _TONGUE_LASH_FRAIL = 2
-_BEETLE_CHARGE_DMG = 35
-_PLATING = 15
+_BEETLE_CHARGE_DMG = 35      # FrogKnight.cs:41 base
+_BEETLE_CHARGE_DMG_ASC = 40  # DeadlyEnemies (asc 9+)
+_PLATING = 15                # FrogKnight.cs:43 base
+_PLATING_ASC = 19            # ToughEnemies (asc 8+)
 
 
 class FrogKnight(MachineMonster):
@@ -33,13 +38,37 @@ class FrogKnight(MachineMonster):
 
     min_hp = 191
     max_hp = 191
+    min_hp_asc = 199     # FrogKnight.cs:33 ToughEnemies (asc 8+)
+    max_hp_asc = 199     # FrogKnight.cs:35 `MaxInitialHp => MinInitialHp`
+
+    def _strike_down_dmg(self) -> int:
+        """FrogKnight.cs:37 `StrikeDownEvilDamage` -- read at both the
+        telegraphed Intent (:71) and the executed attack (:98)."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _STRIKE_DOWN_DMG_ASC, _STRIKE_DOWN_DMG)
+
+    def _tongue_lash_dmg(self) -> int:
+        """FrogKnight.cs:39 `TongueLashDamage` -- read at both the
+        telegraphed Intent (:72) and the executed attack (:106)."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _TONGUE_LASH_DMG_ASC, _TONGUE_LASH_DMG)
+
+    def _beetle_charge_dmg(self) -> int:
+        """FrogKnight.cs:41 `BeetleChargeDamage` -- read at both the
+        telegraphed Intent (:73) and the executed attack (:116)."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _BEETLE_CHARGE_DMG_ASC, _BEETLE_CHARGE_DMG)
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
         self._has_beetle_charged = False
         from ...cmds import PowerCmd
         from ...powers import PlatingPower
-        PowerCmd.apply(hooks, self, PlatingPower, _PLATING)
+        # FrogKnight.cs:43 `PlatingAmount` -- read once at AfterAddedToRoom
+        # (:63), so it is resolved here rather than via a re-read helper.
+        plating = asc_value(hooks, AscensionLevel.TOUGH_ENEMIES,
+                             _PLATING_ASC, _PLATING)
+        PowerCmd.apply(hooks, self, PlatingPower, plating)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         for_the_queen = MoveState(
@@ -47,15 +76,15 @@ class FrogKnight(MachineMonster):
         )
         strike_down = MoveState(
             "STRIKE_DOWN_EVIL", self._strike_down,
-            Intent(MoveType.ATTACK, damage=_STRIKE_DOWN_DMG),
+            lambda: Intent(MoveType.ATTACK, damage=self._strike_down_dmg()),
         )
         tongue_lash = MoveState(
             "TONGUE_LASH", self._tongue_lash,
-            Intent(MoveType.ATTACK, damage=_TONGUE_LASH_DMG, also=(MoveType.DEBUFF,)),
+            lambda: Intent(MoveType.ATTACK, damage=self._tongue_lash_dmg(), also=(MoveType.DEBUFF,)),
         )
         beetle_charge = MoveState(
             "BEETLE_CHARGE", self._beetle_charge,
-            Intent(MoveType.ATTACK, damage=_BEETLE_CHARGE_DMG),
+            lambda: Intent(MoveType.ATTACK, damage=self._beetle_charge_dmg()),
         )
         branch = ConditionalBranchState("HALF_HEALTH")
         branch.add_state(
@@ -81,17 +110,17 @@ class FrogKnight(MachineMonster):
         PowerCmd.apply(ctx.hooks, self, StrengthPower, _FOR_THE_QUEEN_STR)
 
     def _strike_down(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _STRIKE_DOWN_DMG, 1)
+        self._execute_attack(ctx, self._strike_down_dmg(), 1)
 
     def _tongue_lash(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _TONGUE_LASH_DMG, 1)
+        self._execute_attack(ctx, self._tongue_lash_dmg(), 1)
         from ...cmds import PowerCmd
         from ...powers import FrailPower
         PowerCmd.apply(ctx.hooks, ctx.player, FrailPower, _TONGUE_LASH_FRAIL)
 
     def _beetle_charge(self, ctx: CombatCtx) -> None:
         self._has_beetle_charged = True
-        self._execute_attack(ctx, _BEETLE_CHARGE_DMG, 1)
+        self._execute_attack(ctx, self._beetle_charge_dmg(), 1)
 
 
 FROG_KNIGHT_NORMAL = Encounter(

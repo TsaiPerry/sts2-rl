@@ -419,6 +419,28 @@ class Card(ABC):
         return None
 
     @property
+    def canonical_energy_cost(self) -> int:
+        """Round-4 review correction: this is NOT `CardEnergyCost.Canonical`
+        — Canonical is frozen at construction and does not track upgrades.
+        The game-side quantity this actually mirrors is
+        `EnergyCost.GetWithModifiers(CostModifiers.None)`: the printed cost
+        AFTER upgrade (`_on_upgrade` changes `_energy_cost` and that change
+        must show), but immune to every `LocalCostModifier`
+        (`_free_this_turn`/`_cost_this_turn`/`_cost_this_combat`/
+        `_cost_delta_this_turn`), unlike `energy_cost` below which applies
+        them. Round-4 fix: pile-card obs rows (`full_env._pile_card_row`,
+        `run_env._run_card_row`) must read THIS, not `energy_cost` — the
+        game's pile-card writer (`CombatObsWriter.cs:677`) is being switched
+        to the same `GetWithModifiers(CostModifiers.None)` read, so a live
+        whole-combat/whole-turn discount granted while a card sat in hand
+        (Touch of Insanity, Slither, ...) must not leak into the pile-card
+        view after the card moves to draw/discard/exhaust, even though the
+        modifier itself legitimately persists on the Card object until
+        `reset_combat_state`/`end_of_turn_cleanup` clears it — while an
+        upgrade's cost change (e.g. Body Slam 1->0) must still show."""
+        return self._energy_cost
+
+    @property
     def energy_cost(self) -> int:
         # CardEnergyCost.GetWithModifiers short-circuits on `if (_base < 0)
         # return num;` (CardEnergyCost.cs:100-103) BEFORE any local modifier

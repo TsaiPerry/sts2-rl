@@ -203,6 +203,65 @@ def test_branch_prob_is_rejected_outside_the_column_env(monkeypatch):
         train_torch.parse_args()
 
 
+# ── ascension flag ────────────────────────────────────────────────────────
+
+def test_ascension_flag_reaches_the_env_spec(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "run"])
+    args = train_torch.parse_args()
+    assert args.ascension == 0
+    assert train_torch.env_spec(args).ascension == 0
+
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "run",
+                                     "--ascension", "10"])
+    assert train_torch.env_spec(train_torch.parse_args()).ascension == 10
+
+
+def test_ascension_is_accepted_on_the_combat_env(monkeypatch):
+    """v8 plan Task 5: relaxed -- STS2FullCombatEnv takes ascension (v7 Task
+    10 wired it into CombatState/hooks; eval.py's guard was relaxed there
+    too). The v8 curriculum trains combat stages at asc 10 directly, so
+    --env combat --ascension must no longer raise."""
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "combat",
+                                     "--ascension", "5"])
+    args = train_torch.parse_args()
+    assert args.ascension == 5
+    assert train_torch.env_spec(args).ascension == 5
+
+
+def test_hp_and_potion_potential_scale_rejected_on_the_combat_env(monkeypatch):
+    """Unlike --ascension, the v8 HP/potion shaping knobs are run/column-only
+    -- STS2FullCombatEnv doesn't take either kwarg."""
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "combat",
+                                     "--hp-potential-scale", "1.0"])
+    with pytest.raises(SystemExit, match="hp-potential-scale"):
+        train_torch.parse_args()
+
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "combat",
+                                     "--potion-potential-scale", "1.0"])
+    with pytest.raises(SystemExit, match="potion-potential-scale"):
+        train_torch.parse_args()
+
+
+def test_hp_and_potion_potential_scale_flags_reach_the_env_spec(monkeypatch):
+    """v8 plan Task 5: --hp-potential-scale/--potion-potential-scale default
+    off (bit-identical env) and thread through env_spec() like the other
+    v7/v8 reward flags."""
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "run"])
+    args = train_torch.parse_args()
+    assert args.hp_potential_scale == 0.0
+    assert args.potion_potential_scale == 0.0
+    spec = train_torch.env_spec(args)
+    assert spec.hp_potential_scale == 0.0
+    assert spec.potion_potential_scale == 0.0
+
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "column",
+                                     "--hp-potential-scale", "4.0",
+                                     "--potion-potential-scale", "0.3"])
+    spec = train_torch.env_spec(train_torch.parse_args())
+    assert spec.hp_potential_scale == 4.0
+    assert spec.potion_potential_scale == 0.3
+
+
 # ── rollout geometry across a resume ─────────────────────────────────────
 
 def test_rollout_flags_are_none_unless_passed(monkeypatch):

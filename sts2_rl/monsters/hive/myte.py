@@ -5,7 +5,8 @@ import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, Monster, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, Monster, MoveType, asc_value
 from ..state_machine import (
     ConditionalBranchState,
     MachineMonster,
@@ -18,9 +19,12 @@ if TYPE_CHECKING:
     from ...hooks import HookSystem
 
 _TOXIC_COUNT = 2
-_BITE_DMG = 13
-_SUCK_DMG = 4
-_SUCK_STR = 2
+_BITE_DMG = 13       # Myte.cs:38 base
+_BITE_DMG_ASC = 15   # DeadlyEnemies
+_SUCK_DMG = 4        # Myte.cs:40 base
+_SUCK_DMG_ASC = 6    # DeadlyEnemies
+_SUCK_STR = 2        # Myte.cs:42 base
+_SUCK_STR_ASC = 3    # DeadlyEnemies
 
 
 class Myte(MachineMonster):
@@ -29,6 +33,20 @@ class Myte(MachineMonster):
 
     min_hp = 61
     max_hp = 67
+    min_hp_asc = 64   # Myte.cs:34 -- ToughEnemies
+    max_hp_asc = 69   # Myte.cs:36 -- ToughEnemies
+
+    def _bite_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _BITE_DMG_ASC, _BITE_DMG)
+
+    def _suck_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _SUCK_DMG_ASC, _SUCK_DMG)
+
+    def _suck_str(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _SUCK_STR_ASC, _SUCK_STR)
 
     def __init__(
         self,
@@ -40,13 +58,16 @@ class Myte(MachineMonster):
         super().__init__(hooks, rng or random.Random())
 
     def build_machine(self) -> MonsterMoveStateMachine:
-        toxic = MoveState("TOXIC_MOVE", self._toxic, Intent(MoveType.STATUS_CARD))
+        toxic = MoveState(
+            "TOXIC_MOVE", self._toxic,
+            Intent(MoveType.STATUS_CARD, status_count=_TOXIC_COUNT),
+        )
         bite = MoveState(
-            "BITE_MOVE", self._bite, Intent(MoveType.ATTACK, damage=_BITE_DMG)
+            "BITE_MOVE", self._bite, lambda: Intent(MoveType.ATTACK, damage=self._bite_dmg())
         )
         suck = MoveState(
             "SUCK_MOVE", self._suck,
-            Intent(MoveType.ATTACK, damage=_SUCK_DMG, also=(MoveType.BUFF,)),
+            lambda: Intent(MoveType.ATTACK, damage=self._suck_dmg(), also=(MoveType.BUFF,)),
         )
         init = ConditionalBranchState("INIT_MOVE")
         init.add_state(toxic, lambda: self.slot == "first")
@@ -63,13 +84,13 @@ class Myte(MachineMonster):
             CardPileCmd.add_to_hand(ctx.hooks, ctx.player, ToxicCard())
 
     def _bite(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _BITE_DMG, 1)
+        self._execute_attack(ctx, self._bite_dmg(), 1)
 
     def _suck(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _SUCK_DMG, 1)
+        self._execute_attack(ctx, self._suck_dmg(), 1)
         from ...cmds import PowerCmd
         from ...powers import StrengthPower
-        PowerCmd.apply(ctx.hooks, self, StrengthPower, _SUCK_STR)
+        PowerCmd.apply(ctx.hooks, self, StrengthPower, self._suck_str())
 
 
 @dataclass

@@ -91,6 +91,51 @@ def test_fairy_in_a_bottle_saves_a_run_out_of_combat():
     assert run.held_potions == []
 
 
+def test_fairy_in_a_bottle_saves_a_run_out_of_combat_after_a_combat_has_ended():
+    """The test above only covers a fairy that has NEVER been in a combat, so
+    its `Potion.combat` back-reference is still None and
+    `after_preventing_death` takes the out-of-combat arm by luck.
+
+    A fairy that sat in the belt through any combat has `combat` set (
+    `CombatState.__init__` seats the belt as hook listeners), and nothing ever
+    cleared it — so out of combat the potion still believed it was in that
+    finished combat and discarded itself from the DEAD combat's belt, leaving
+    itself in the run's. It stayed available to prevent death again, and the
+    NEXT out-of-combat death raised `ValueError: Fairy in a Bottle is not in
+    list` out of `PlayerCombatState.discard_potion` (killed a training run:
+    Jungle Maze Adventure's solo quest -> `run.lose_hp`).
+
+    C# has no such staleness — `PotionModel.Owner.Creature.CombatState` is
+    null once the owner is not in a combat.
+    """
+    from sts2_rl.monsters import FUZZY_WURM_ENCOUNTER
+
+    run = fresh_run()
+    run.deck = [make_card("strike") for _ in range(5)]
+    fairy = FairyInABottle()
+    assert run.add_potion(fairy)
+
+    combat = run.create_combat(FUZZY_WURM_ENCOUNTER)
+    assert fairy.combat is combat, "fixture sanity: the belt was seated"
+    run.finish_combat(combat)
+    assert fairy.combat is None, (
+        "a finished combat must not stay the potion's owner")
+
+    run.hp = 5
+    run.lose_hp(15)
+    assert not run.is_dead
+    assert run.hp == 24
+    assert run.held_potions == [], (
+        "the fairy was consumed, so it must leave the RUN's belt — not the "
+        "belt of the combat it happened to sit in earlier")
+
+    # And it cannot save the player twice: the second death is real, and must
+    # not raise on the way there.
+    run.hp = 5
+    run.lose_hp(15)
+    assert run.is_dead and run.hp == 0
+
+
 # ── event/EV-2 — LoseMaxHp's overflow is real damage ───────────────────────
 
 

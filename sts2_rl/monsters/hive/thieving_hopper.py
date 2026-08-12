@@ -14,7 +14,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import MachineMonster, MonsterMoveStateMachine, MoveState
 
 if TYPE_CHECKING:
@@ -22,9 +23,12 @@ if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
-_THEFT_DMG = 17
-_HAT_TRICK_DMG = 21
-_NAB_DMG = 14
+_THEFT_DMG = 17          # ThievingHopper.cs:146 base
+_THEFT_DMG_ASC = 19      # DeadlyEnemies
+_HAT_TRICK_DMG = 21      # ThievingHopper.cs:148 base
+_HAT_TRICK_DMG_ASC = 23  # DeadlyEnemies
+_NAB_DMG = 14            # ThievingHopper.cs:150 base
+_NAB_DMG_ASC = 16        # DeadlyEnemies
 _FLUTTER = 5
 _ESCAPE_TIMER = 5
 
@@ -37,6 +41,24 @@ class ThievingHopper(MachineMonster):
 
     min_hp = 79
     max_hp = 79
+    min_hp_asc = 84   # ThievingHopper.cs:89 -- ToughEnemies (MaxInitialHp == MinInitialHp)
+    max_hp_asc = 84
+
+    def _theft_dmg(self) -> int:
+        """ThievingHopper.cs:146 `TheftDamage` -- read at both the Intent and
+        the executed attack."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _THEFT_DMG_ASC, _THEFT_DMG)
+
+    def _hat_trick_dmg(self) -> int:
+        """ThievingHopper.cs:148 `HatTrickDamage`."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _HAT_TRICK_DMG_ASC, _HAT_TRICK_DMG)
+
+    def _nab_dmg(self) -> int:
+        """ThievingHopper.cs:150 `NabDamage`."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _NAB_DMG_ASC, _NAB_DMG)
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         self.is_hovering = False
@@ -48,15 +70,15 @@ class ThievingHopper(MachineMonster):
     def build_machine(self) -> MonsterMoveStateMachine:
         thievery = MoveState(
             "THIEVERY_MOVE", self._thievery,
-            Intent(MoveType.ATTACK, damage=_THEFT_DMG, also=(MoveType.CARD_DEBUFF,)),
+            lambda: Intent(MoveType.ATTACK, damage=self._theft_dmg(), also=(MoveType.CARD_DEBUFF,)),
         )
         flutter = MoveState("FLUTTER_MOVE", self._flutter, Intent(MoveType.BUFF))
         hat_trick = MoveState(
             "HAT_TRICK_MOVE", self._hat_trick,
-            Intent(MoveType.ATTACK, damage=_HAT_TRICK_DMG),
+            lambda: Intent(MoveType.ATTACK, damage=self._hat_trick_dmg()),
         )
         nab = MoveState(
-            "NAB_MOVE", self._nab, Intent(MoveType.ATTACK, damage=_NAB_DMG)
+            "NAB_MOVE", self._nab, lambda: Intent(MoveType.ATTACK, damage=self._nab_dmg())
         )
         escape = MoveState("ESCAPE_MOVE", self._escape, Intent(MoveType.ESCAPE))
         thievery.follow_up = flutter
@@ -135,7 +157,7 @@ class ThievingHopper(MachineMonster):
             swipe = PowerCmd.apply(ctx.hooks, self, SwipePower, 1)
             if swipe is not None:
                 swipe.stolen_card = card
-        self._execute_attack(ctx, _THEFT_DMG, 1)
+        self._execute_attack(ctx, self._theft_dmg(), 1)
 
     def _flutter(self, ctx: CombatCtx) -> None:
         self.is_hovering = True
@@ -144,10 +166,10 @@ class ThievingHopper(MachineMonster):
         PowerCmd.apply(ctx.hooks, self, FlutterPower, _FLUTTER)
 
     def _hat_trick(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _HAT_TRICK_DMG, 1)
+        self._execute_attack(ctx, self._hat_trick_dmg(), 1)
 
     def _nab(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _NAB_DMG, 1)
+        self._execute_attack(ctx, self._nab_dmg(), 1)
 
     def _escape(self, ctx: CombatCtx) -> None:
         self.is_hovering = False

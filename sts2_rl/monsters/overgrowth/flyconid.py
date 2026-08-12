@@ -4,7 +4,8 @@ import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, Monster, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, Monster, MoveType, asc_value
 from ..state_machine import weighted_branch_pick
 from .slimes import LeafSlimeM, TwigSlimeM
 
@@ -12,10 +13,12 @@ if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
-_V_SPORES_VULN = 2
-_FRAIL_SPORES_DMG = 8
+_V_SPORES_VULN = 2       # Flyconid.cs:60 -- no ascension gate on this value
+_FRAIL_SPORES_DMG = 8    # Flyconid.cs:26 SporeDamage base
+_FRAIL_SPORES_DMG_ASC = 9  # DeadlyEnemies (asc 9+)
 _FRAIL_SPORES_FRAIL = 2
-_SMASH_DMG = 11
+_SMASH_DMG = 11          # Flyconid.cs:24 SmashDamage base
+_SMASH_DMG_ASC = 12      # DeadlyEnemies (asc 9+)
 
 # Source: Flyconid.cs GenerateMoveStateMachine. All three moves have base
 # weight 1; the "3/2/1" are COOLDOWNS (StateWeight.cooldown), not weights, and
@@ -31,8 +34,23 @@ class Flyconid(Monster):
     """Equal-weight random among 3 moves gated by per-move cooldowns (V_SPORES
     3, FRAIL_SPORES 2, SMASH 0) + CannotRepeat. The INITIAL state offers only
     FRAIL_SPORES / SMASH (both weight 1 → 50/50), never V_SPORES."""
-    min_hp = 47
+    min_hp = 47          # Flyconid.cs:20-22
     max_hp = 49
+    min_hp_asc = 51       # ToughEnemies (asc 8+)
+    max_hp_asc = 53
+
+    def _smash_dmg(self) -> int:
+        """Flyconid.cs:24 `SmashDamage` -- a C# PROPERTY re-read at both the
+        telegraphed Intent (current_intent) and the executed attack
+        (take_turn), so both sites call this rather than caching."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _SMASH_DMG_ASC, _SMASH_DMG)
+
+    def _frail_spores_dmg(self) -> int:
+        """Flyconid.cs:26 `SporeDamage` -- same re-read pattern as
+        `_smash_dmg` (current_intent + take_turn)."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _FRAIL_SPORES_DMG_ASC, _FRAIL_SPORES_DMG)
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
@@ -50,9 +68,9 @@ class Flyconid(Monster):
             return Intent(MoveType.DEBUFF, buffs=[(VulnerablePower, _V_SPORES_VULN)])
         if self._move_key == "FRAIL_SPORES":
             return Intent(
-                MoveType.ATTACK, damage=_FRAIL_SPORES_DMG, also=(MoveType.DEBUFF,)
+                MoveType.ATTACK, damage=self._frail_spores_dmg(), also=(MoveType.DEBUFF,)
             )
-        return Intent(MoveType.ATTACK, damage=_SMASH_DMG)
+        return Intent(MoveType.ATTACK, damage=self._smash_dmg())
 
     def take_turn(self, ctx: CombatCtx) -> None:
         from ...cmds import PowerCmd
@@ -60,11 +78,11 @@ class Flyconid(Monster):
             from ...powers import VulnerablePower
             PowerCmd.apply(ctx.hooks, ctx.player, VulnerablePower, _V_SPORES_VULN)
         elif self._move_key == "FRAIL_SPORES":
-            self._execute_attack(ctx, _FRAIL_SPORES_DMG, 1)
+            self._execute_attack(ctx, self._frail_spores_dmg(), 1)
             from ...powers import FrailPower
             PowerCmd.apply(ctx.hooks, ctx.player, FrailPower, _FRAIL_SPORES_FRAIL)
         else:
-            self._execute_attack(ctx, _SMASH_DMG, 1)
+            self._execute_attack(ctx, self._smash_dmg(), 1)
         self._log.append(self._move_key)
 
     def telegraph_next_move(self) -> None:

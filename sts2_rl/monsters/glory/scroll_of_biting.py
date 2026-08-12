@@ -3,7 +3,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, Monster, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, Monster, MoveType, asc_value
 from ..state_machine import (
     MachineMonster,
     MonsterMoveStateMachine,
@@ -16,8 +17,10 @@ if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
-_CHOMP_DMG = 14
-_CHEW_DMG = 5
+_CHOMP_DMG = 14         # ScrollOfBiting.cs:41 base
+_CHOMP_DMG_ASC = 16     # DeadlyEnemies
+_CHEW_DMG = 5           # ScrollOfBiting.cs:43 base
+_CHEW_DMG_ASC = 6       # DeadlyEnemies
 _CHEW_HITS = 2
 _MORE_TEETH_STR = 2
 _PAPER_CUTS = 2
@@ -33,8 +36,28 @@ class ScrollOfBiting(MachineMonster):
     Source: ScrollOfBiting.cs (non-ascension values)."""
     name = "Scroll of Biting"
 
-    min_hp = 30
-    max_hp = 37
+    min_hp = 30             # ScrollOfBiting.cs:37 base
+    max_hp = 37              # ScrollOfBiting.cs:39 base
+    min_hp_asc = 33          # ScrollOfBiting.cs:37 -- ToughEnemies
+    max_hp_asc = 39          # ScrollOfBiting.cs:39 -- ToughEnemies
+
+    def _chomp_dmg(self) -> int:
+        # getattr guard: test_monster_branch_audit._build_machine constructs
+        # via cls.__new__(cls) (no __init__, so no _hooks attribute at all)
+        # to inspect build_machine()'s pure branch structure -- base value
+        # there matches Monster.__init__'s own hooks=None convention.
+        hooks = getattr(self, "_hooks", None)
+        if hooks is None:
+            return _CHOMP_DMG
+        return asc_value(hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _CHOMP_DMG_ASC, _CHOMP_DMG)
+
+    def _chew_dmg(self) -> int:
+        hooks = getattr(self, "_hooks", None)
+        if hooks is None:
+            return _CHEW_DMG
+        return asc_value(hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _CHEW_DMG_ASC, _CHEW_DMG)
 
     def __init__(
         self,
@@ -51,11 +74,11 @@ class ScrollOfBiting(MachineMonster):
 
     def build_machine(self) -> MonsterMoveStateMachine:
         chomp = MoveState(
-            "CHOMP", self._chomp, Intent(MoveType.ATTACK, damage=_CHOMP_DMG)
+            "CHOMP", self._chomp, Intent(MoveType.ATTACK, damage=self._chomp_dmg())
         )
         chew = MoveState(
             "CHEW", self._chew,
-            Intent(MoveType.ATTACK, damage=_CHEW_DMG, hits=_CHEW_HITS),
+            Intent(MoveType.ATTACK, damage=self._chew_dmg(), hits=_CHEW_HITS),
         )
         more_teeth = MoveState("MORE_TEETH", self._more_teeth, self._more_teeth_intent)
         branch = RandomBranchState("rand")
@@ -78,10 +101,10 @@ class ScrollOfBiting(MachineMonster):
         return Intent(MoveType.BUFF, buffs=[(StrengthPower, _MORE_TEETH_STR)])
 
     def _chomp(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _CHOMP_DMG, 1)
+        self._execute_attack(ctx, self._chomp_dmg(), 1)
 
     def _chew(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _CHEW_DMG, _CHEW_HITS)
+        self._execute_attack(ctx, self._chew_dmg(), _CHEW_HITS)
 
     def _more_teeth(self, ctx: CombatCtx) -> None:
         from ...cmds import PowerCmd

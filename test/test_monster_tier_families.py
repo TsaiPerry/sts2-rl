@@ -187,9 +187,86 @@ class TestIntentCountLost:
         assert intent.move_type == MoveType.STATUS_CARD
         assert intent.status_count == 2
 
-    def test_status_intent_count_census_is_still_five_of_eighteen(self):
-        """Ledger for monster/_intent_count_lost -- NOT a claim that the
-        open sites are correct.
+    def test_mecha_knight_flamethrower_carries_burn_count(self):
+        """MechaKnight.cs:83 `new StatusIntent(4)` -- FLAMETHROWER_MOVE,
+        reached right after the opening CHARGE."""
+        from sts2_rl.monsters.glory import MechaKnight
+        cs = fresh_with(MechaKnight)
+        assert cs.enemy._current_move.id == "CHARGE_MOVE"
+        cs.end_turn()  # perform CHARGE, roll FLAMETHROWER
+        assert cs.enemy._current_move.id == "FLAMETHROWER_MOVE"
+        intent = cs.enemy.current_intent
+        assert intent.move_type == MoveType.STATUS_CARD
+        assert intent.status_count == 4
+
+    def test_slimed_berserker_vomit_ichor_carries_slime_count(self):
+        """SlimedBerserker.cs:52 `new StatusIntent(10)` -- the opening move."""
+        from sts2_rl.monsters.glory import SlimedBerserker
+        cs = fresh_with(SlimedBerserker)
+        assert cs.enemy._current_move.id == "VOMIT_ICHOR_MOVE"
+        intent = cs.enemy.current_intent
+        assert intent.move_type == MoveType.STATUS_CARD
+        assert intent.status_count == 10
+
+    def test_chomper_screech_carries_dazed_count(self):
+        """Chomper.cs:59 `new StatusIntent(3)` -- the scream-first Chomper's
+        opening move."""
+        from sts2_rl.monsters.hive import Chomper
+        cs = fresh_with(lambda hooks, rng=None: Chomper(hooks, rng, scream_first=True))
+        assert cs.enemy._current_move.id == "SCREECH_MOVE"
+        intent = cs.enemy.current_intent
+        assert intent.move_type == MoveType.STATUS_CARD
+        assert intent.status_count == 3
+
+    def test_myte_toxic_carries_toxic_count(self):
+        """Myte.cs:49 `new StatusIntent(2)` -- the first Myte's opening
+        move."""
+        from sts2_rl.monsters.hive import Myte
+        cs = fresh_with(lambda hooks, rng=None: Myte(hooks, rng, slot="first"))
+        assert cs.enemy._current_move.id == "TOXIC_MOVE"
+        intent = cs.enemy.current_intent
+        assert intent.move_type == MoveType.STATUS_CARD
+        assert intent.status_count == 2
+
+    def test_eye_with_teeth_distract_carries_dazed_count(self):
+        """EyeWithTeeth.cs:39 `new StatusIntent(3)` -- DISTRACT_MOVE, the
+        summon's default (not-reviving) intent."""
+        from sts2_rl.monsters.overgrowth.fogmog import EyeWithTeeth
+        cs = fresh_with(EyeWithTeeth)
+        intent = cs.enemy.current_intent
+        assert intent.move_type == MoveType.STATUS_CARD
+        assert intent.status_count == 3
+
+    def test_haunted_ship_haunt_carries_dazed_count(self):
+        """HauntedShip.cs:44 `new StatusIntent(HauntDazed)`; HauntDazed = 5
+        (HauntedShip.cs:29). The opening move."""
+        from sts2_rl.monsters.underdocks import HauntedShip
+        cs = fresh_with(HauntedShip)
+        assert cs.enemy._current_move.id == "HAUNT_MOVE"
+        intent = cs.enemy.current_intent
+        assert intent.has(MoveType.STATUS_CARD)
+        assert intent.status_count == 5
+
+    def test_soul_fysh_beckon_and_gaze_carry_their_counts(self):
+        """SoulFysh.cs:113 `new StatusIntent(BeckonMoveAmount)` (=2,
+        SoulFysh.cs:60) on the opening BECKON_MOVE; SoulFysh.cs:115 `new
+        StatusIntent(GazeMoveAmount)` (=1, SoulFysh.cs:62) on GAZE_MOVE,
+        reached after DE_GAS."""
+        from sts2_rl.monsters.underdocks import SoulFysh
+        cs = fresh_with(SoulFysh)
+        assert cs.enemy._current_move.id == "BECKON_MOVE"
+        beckon_intent = cs.enemy.current_intent
+        assert beckon_intent.move_type == MoveType.STATUS_CARD
+        assert beckon_intent.status_count == 2
+        cs.end_turn()  # perform BECKON, roll DE_GAS
+        cs.end_turn()  # perform DE_GAS, roll GAZE
+        assert cs.enemy._current_move.id == "GAZE_MOVE"
+        gaze_intent = cs.enemy.current_intent
+        assert gaze_intent.has(MoveType.STATUS_CARD)
+        assert gaze_intent.status_count == 1
+
+    def test_status_intent_count_census_is_now_eighteen_of_eighteen(self):
+        """Ledger for monster/_intent_count_lost -- CLOSED.
 
         `grep -rn "new StatusIntent(" --include=*.cs` over the spec returns
         exactly 18 sites (Aeonglass:102, Chomper:59, EyeWithTeeth:39,
@@ -197,9 +274,15 @@ class TestIntentCountLost:
         Myte:49, Noisebot:45, PhrogParasite:42, SlimedBerserker:52,
         SoulFysh:113, SoulFysh:115, TestSubject:201, TheInsatiable:96,
         TwigSlimeM:37, Vantom:119, Wriggler:55), and the sim has an exact
-        1:1 STATUS_CARD `Intent` construction for each. FIVE of them now
-        carry `status_count`; the other THIRTEEN drop it and are OPEN
-        divergences, listed below with the C# count each one loses.
+        1:1 STATUS_CARD `Intent` construction for each. All 18 now carry
+        `status_count`.
+
+        Round-7 obs-parity fix (2026-08-06): the remaining 8 open call sites
+        (MechaKnight FLAMETHROWER=4, SlimedBerserker VOMIT_ICHOR=10, Chomper
+        SCREECH=3, Myte TOXIC=2, EyeWithTeeth/Fogmog DISTRACT=3, HauntedShip
+        HAUNT=HauntDazed(5), SoulFysh BECKON=BeckonMoveAmount(2) and GAZE=
+        GazeMoveAmount(1)) moved from OPEN to done, each pinned against the
+        C# constant at its call site.
 
         This test exists because the round-13 first pass told the queue
         "all 4 known sites now carry their count" when 14 were open. It
@@ -231,26 +314,23 @@ class TestIntentCountLost:
         assert dict(done) == {
             "glory/aeonglass.py": 1,        # Aeonglass.cs:102 StatusIntent(WitherAmount)
             "glory/fabricator.py": 1,       # Noisebot.cs:45   StatusIntent(2)
-            "glory/test_subject.py": 1,     # TestSubject.cs:201 StatusIntent(BurningGrowlBurnCount)
-            "hive/the_insatiable.py": 1,    # TheInsatiable.cs:96 StatusIntent(6)
-            "overgrowth/vantom.py": 1,      # Vantom.cs:119    StatusIntent(3)
-        }
-        # OPEN -- each of these loses a count the game telegraphs. Not
-        # intended behaviour; work remaining under monster/_intent_count_lost.
-        assert dict(open_sites) == {
             "glory/mecha_knight.py": 1,     # MechaKnight.cs:83  StatusIntent(4)
             "glory/slimed_berserker.py": 1,  # SlimedBerserker.cs:52 StatusIntent(10)
+            "glory/test_subject.py": 1,     # TestSubject.cs:201 StatusIntent(BurningGrowlBurnCount)
             "hive/chomper.py": 1,           # Chomper.cs:59      StatusIntent(3)
             "hive/myte.py": 1,              # Myte.cs:49         StatusIntent(2)
+            "hive/the_insatiable.py": 1,    # TheInsatiable.cs:96 StatusIntent(6)
             "overgrowth/fogmog.py": 1,      # EyeWithTeeth.cs:39 StatusIntent(3)
-            # Wriggler.cs:55 StatusIntent(1) + PhrogParasite.cs:42 StatusIntent(3)
-            "overgrowth/phrog_parasite.py": 2,
+            "overgrowth/vantom.py": 1,      # Vantom.cs:119    StatusIntent(3)
             # LeafSlimeS.cs:32 (1), LeafSlimeM.cs:34 (2), TwigSlimeM.cs:37 (1)
             "overgrowth/slimes.py": 3,
+            # Wriggler.cs:55 StatusIntent(1) + PhrogParasite.cs:42 StatusIntent(3)
+            "overgrowth/phrog_parasite.py": 2,
             "underdocks/haunted_ship.py": 1,  # HauntedShip.cs:44 StatusIntent(HauntDazed)
             # SoulFysh.cs:113 StatusIntent(Beckon) + :115 StatusIntent(Gaze)
             "underdocks/soul_fysh.py": 2,
         }
+        assert dict(open_sites) == {}
 
 
 # ══════════════════════════════════════════════════════════════════════════

@@ -57,9 +57,11 @@ from sts2_rl.full_env import (
     combat_obs_segments_i,
     decode_combat_action,
     write_combat_obs,
+    _abs2,
 )
 from sts2_rl.monsters import INKLETS_NORMAL, Intent, Monster, MoveType
-from sts2_rl.monsters.underdocks import LivingFog, WaterfallGiant, WATERFALL_GIANT_BOSS
+from sts2_rl.monsters.underdocks import (
+    LivingFog, WaterfallGiant, LIVING_FOG_NORMAL, WATERFALL_GIANT_BOSS)
 from sts2_rl.obs import ObsBuffer, ObsLayout
 from sts2_rl.potions import make_potion
 from sts2_rl.powers import (
@@ -356,8 +358,11 @@ def test_gas_bomb_death_blow_shows_as_attack_with_damage_preview():
 
     Uses a real registered monster (Living Fog's Gas Bomb minion, not a
     probes.py dummy) so the fixture is not degenerate."""
-    enc = Encounter(id="v4_deathblow_fog", monster_classes=[LivingFog])
-    cs = _combat(encounter=enc)
+    # The REAL encounter, not a bare `Encounter(monster_classes=[LivingFog])`:
+    # `BloatMove` spawns through `Encounter.GetNextSlot` (LivingFog.cs:91), so
+    # a slotless encounter produces no bomb at all and this test would pass
+    # vacuously on a fixture with nothing in it.
+    cs = _combat(encounter=LIVING_FOG_NORMAL)
     cs.end_turn()  # ADVANCED_GAS
     cs.end_turn()  # BLOAT: spawns a Gas Bomb (sorts ahead of the fog -> slot 0)
     bomb = cs.enemies[0]
@@ -982,3 +987,37 @@ def test_ablated_obs_env_copies_both_halves_not_just_f():
 
     # The first observation must be unaffected by mutating the second.
     np.testing.assert_array_equal(obs1["i"], i1_snapshot)
+
+
+# ── 15. player.damage_taken is per-turn, not whole-combat (round 4 fix) ───────
+
+
+def test_damage_taken_resets_each_turn():
+    """CombatObsWriter.cs:183-185 (game) sums DamageReceivedEntry with
+    ``HappenedThisTurn`` — a per-turn accumulator, matching the sibling
+    ``cards_played_this_turn``/``attacks_this_turn`` fields right above it in
+    both full_env.py and the C# writer. full_env.py:1099-1101 previously
+    omitted ``this_turn=True`` on its ``of_type(DamageReceivedEntry)`` call,
+    summing every damage-received entry for the whole combat instead."""
+    s = _combat()
+    p = s.player
+
+    # Round 1: player takes 5 damage.
+    s.history.on_damage_received(p, 5, dealer=None, card=None)
+    obs = build_combat_obs(s)
+    layout = combat_obs_layout()
+    dmg_taken_slice = layout.f_slices["player.damage_taken"]
+    assert obs["f"][dmg_taken_slice][0] == pytest.approx(_abs2(5)[0])
+
+    # Round 2: no damage taken yet this turn — must read back to zero, even
+    # though the whole-combat total (5) is still nonzero.
+    s.round_number = 2
+    obs2 = build_combat_obs(s)
+    assert obs2["f"][dmg_taken_slice][0] == pytest.approx(0.0)
+    assert obs2["f"][dmg_taken_slice][1] == pytest.approx(0.0)
+
+    # Round 2: player takes 3 more damage — only THIS turn's 3 should show,
+    # not the whole-combat total of 8.
+    s.history.on_damage_received(p, 3, dealer=None, card=None)
+    obs3 = build_combat_obs(s)
+    assert obs3["f"][dmg_taken_slice][0] == pytest.approx(_abs2(3)[0])

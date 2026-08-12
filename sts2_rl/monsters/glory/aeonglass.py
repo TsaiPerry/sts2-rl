@@ -3,7 +3,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import MachineMonster, MonsterMoveStateMachine, MoveState
 
 if TYPE_CHECKING:
@@ -12,11 +13,15 @@ if TYPE_CHECKING:
     from ...hooks import HookSystem
 
 _EBB_DMG = 26
+_EBB_DMG_ASC = 32       # Aeonglass.cs:34 DeadlyEnemies
 _EBB_BLOCK = 33
 _EYE_LASERS_DMG = 11
+_EYE_LASERS_DMG_ASC = 12   # Aeonglass.cs:38 DeadlyEnemies
 _EYE_LASERS_HITS = 2
 _INTENSITY_BASE_STR = 3
+_INTENSITY_BASE_STR_ASC = 4   # Aeonglass.cs:42 DeadlyEnemies
 _WITHER_AMOUNT = 1
+_WITHER_AMOUNT_ASC = 2         # Aeonglass.cs:44 DeadlyEnemies
 _WITHERING_PRESENCE = 6
 _ARTIFACT = 3
 
@@ -31,6 +36,34 @@ class Aeonglass(MachineMonster):
 
     min_hp = 512
     max_hp = 512
+    # Aeonglass.cs:28-30 -- MaxInitialHp => MinInitialHp, so the ToughEnemies
+    # range is degenerate (min==max) same as the base range.
+    min_hp_asc = 535
+    max_hp_asc = 535
+
+    def _ebb_dmg(self) -> int:
+        """Aeonglass.cs:34 `EbbDamage`, re-read at Intent (:100) and
+        execution (:114)."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _EBB_DMG_ASC, _EBB_DMG)
+
+    def _eye_lasers_dmg(self) -> int:
+        """Aeonglass.cs:38 `EyeLasersDamage`, re-read at Intent (:101) and
+        execution (:122)."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _EYE_LASERS_DMG_ASC, _EYE_LASERS_DMG)
+
+    def _wither_amount(self) -> int:
+        """Aeonglass.cs:44 `WitherAmount`, re-read at Intent (:102) and
+        execution (:145's CardPileCmd.AddToCombatAndPreview count)."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _WITHER_AMOUNT_ASC, _WITHER_AMOUNT)
+
+    def _intensity_base_str(self) -> int:
+        """Aeonglass.cs:42 `IncreasingIntensityBaseStrength`, re-read each
+        time `IncreasingIntensityTotalStrength` (:72) is computed (:146)."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _INTENSITY_BASE_STR_ASC, _INTENSITY_BASE_STR)
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
@@ -66,18 +99,17 @@ class Aeonglass(MachineMonster):
     def build_machine(self) -> MonsterMoveStateMachine:
         ebb = MoveState(
             "EBB_MOVE", self._ebb,
-            Intent(MoveType.ATTACK, damage=_EBB_DMG, also=(MoveType.DEFEND,)),
+            lambda: Intent(MoveType.ATTACK, damage=self._ebb_dmg(), also=(MoveType.DEFEND,)),
         )
         lasers = MoveState(
             "EYE_LASERS_MOVE", self._lasers,
-            Intent(MoveType.ATTACK, damage=_EYE_LASERS_DMG, hits=_EYE_LASERS_HITS),
+            lambda: Intent(MoveType.ATTACK, damage=self._eye_lasers_dmg(), hits=_EYE_LASERS_HITS),
         )
         intensity = MoveState(
             "INCREASING_INTENSITY_MOVE", self._intensity,
-            # Aeonglass.cs:102 `new StatusIntent(WitherAmount)` -- non-ascension
-            # WitherAmount = 1 (Aeonglass.cs:44), same value as _WITHER_AMOUNT.
-            Intent(MoveType.STATUS_CARD, also=(MoveType.BUFF,),
-                   status_count=_WITHER_AMOUNT),
+            # Aeonglass.cs:102 `new StatusIntent(WitherAmount)`.
+            lambda: Intent(MoveType.STATUS_CARD, also=(MoveType.BUFF,),
+                            status_count=self._wither_amount()),
         )
         ebb.follow_up = lasers
         lasers.follow_up = intensity
@@ -85,13 +117,13 @@ class Aeonglass(MachineMonster):
         return MonsterMoveStateMachine([ebb, lasers, intensity], ebb)
 
     def _ebb(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _EBB_DMG, 1)
+        self._execute_attack(ctx, self._ebb_dmg(), 1)
         from ...cmds import BlockCmd
         from ...valueprops import ValueProp
         BlockCmd.apply(ctx.hooks, self, _EBB_BLOCK, props=ValueProp.MOVE)
 
     def _lasers(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _EYE_LASERS_DMG, _EYE_LASERS_HITS)
+        self._execute_attack(ctx, self._eye_lasers_dmg(), _EYE_LASERS_HITS)
 
     def _intensity(self, ctx: CombatCtx) -> None:
         from ...cards import WitherCard
@@ -101,7 +133,7 @@ class Aeonglass(MachineMonster):
             if isinstance(card, WitherCard):
                 card.fake_upgrade()
         self.wither_upgrade_count += 1
-        for _ in range(_WITHER_AMOUNT):
+        for _ in range(self._wither_amount()):
             wither = WitherCard()
             # Fake-upgraded by this monster's own
             # `on_card_generated_for_combat`, fired from `add_to_discard`'s
@@ -111,7 +143,7 @@ class Aeonglass(MachineMonster):
             CardPileCmd.add_to_discard(ctx.hooks, ctx.player, wither)
         PowerCmd.apply(
             ctx.hooks, self, StrengthPower,
-            _INTENSITY_BASE_STR + self._additional_strength,
+            self._intensity_base_str() + self._additional_strength,
         )
         self._additional_strength += 1
 

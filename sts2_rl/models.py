@@ -403,6 +403,7 @@ _ENTSET_SEGMENT_VOCABS: dict[str, tuple[str | None, ...]] = {
     "shop.potions": ("potions",),
     "reward.cards": (None, "cards", "afflictions", "enchantments"),
     "reward.potion": ("potions",),
+    "reward.relic": ("relics",),
     "select.purpose": ("purposes",),
     "select.candidates": (None, "cards", "afflictions", "enchantments"),
 }
@@ -995,6 +996,7 @@ def run_action_layout() -> ActionLayout:
         MAX_SELECT_CANDIDATES,
         N_ACTIONS,
         POTION_BASE,
+        REWARD_CARD_SLOTS,
         SELECT_BASE,
     )
 
@@ -1017,7 +1019,7 @@ def run_action_layout() -> ActionLayout:
         ),
         choice_base=CHOICE_BASE,
         choice_row_overlays=(
-            (0, 3, "reward.cards", 0),
+            (0, REWARD_CARD_SLOTS, "reward.cards", 0),
             (0, 7, "shop.cards", 0),
             (7, 3, "shop.relics", 0),
             (10, 3, "shop.potions", 0),

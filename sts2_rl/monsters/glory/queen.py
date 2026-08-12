@@ -3,7 +3,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, Monster, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, Monster, MoveType, asc_value
 from ..state_machine import (
     ConditionalBranchState,
     MachineMonster,
@@ -17,20 +18,29 @@ if TYPE_CHECKING:
     from ...hooks import HookSystem
 
 # TorchHeadAmalgam
-_TACKLE_DMG = 18
-_WEAK_TACKLE_DMG = 14
+_TACKLE_DMG = 18            # TorchHeadAmalgam.cs:32 base
+_TACKLE_DMG_ASC = 19        # DeadlyEnemies
+_WEAK_TACKLE_DMG = 14        # TorchHeadAmalgam.cs:34 base
+_WEAK_TACKLE_DMG_ASC = 15    # DeadlyEnemies
 _BEAM_DMG = 8
 _BEAM_HITS = 3
+# TorchHeadAmalgam.cs:36 SoulBeamDamage: GetValueIfAscension(DeadlyEnemies,
+# 8, 8) -- asc value equals base value, a no-op; ported as this comment only.
 
 # Queen
 _PUPPET_CHAINS = 3
 _MINE_DEBUFF = 99
 _BURN_BRIGHT_ALLY_STR = 1
 _BURN_BRIGHT_BLOCK = 20
-_OFF_WITH_HEAD_DMG = 3
+_OFF_WITH_HEAD_DMG = 3        # Queen.cs:56 base
+_OFF_WITH_HEAD_DMG_ASC = 4    # DeadlyEnemies
 _OFF_WITH_HEAD_HITS = 5
-_EXECUTION_DMG = 15
+_EXECUTION_DMG = 15           # Queen.cs:58 base
+_EXECUTION_DMG_ASC = 18       # DeadlyEnemies
 _ENRAGE_STR = 2
+# Queen.cs:186 BurnBrightForMeMove strengthAmount: GetValueIfAscension(
+# DeadlyEnemies, 1, 1) -- asc value equals base value, a no-op; ported as
+# this comment only (_BURN_BRIGHT_ALLY_STR above stays a plain constant).
 
 
 class TorchHeadAmalgam(MachineMonster):
@@ -43,6 +53,19 @@ class TorchHeadAmalgam(MachineMonster):
 
     min_hp = 199
     max_hp = 199
+    min_hp_asc = 211   # TorchHeadAmalgam.cs:28 -- ToughEnemies (MaxInitialHp == MinInitialHp)
+    max_hp_asc = 211
+
+    def _tackle_dmg(self) -> int:
+        """TorchHeadAmalgam.cs:32 `TackleDamage` -- read at both the
+        telegraphed Intent and the executed attack."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _TACKLE_DMG_ASC, _TACKLE_DMG)
+
+    def _weak_tackle_dmg(self) -> int:
+        """TorchHeadAmalgam.cs:34 `WeakTackleDamage`."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _WEAK_TACKLE_DMG_ASC, _WEAK_TACKLE_DMG)
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
@@ -52,10 +75,10 @@ class TorchHeadAmalgam(MachineMonster):
 
     def build_machine(self) -> MonsterMoveStateMachine:
         tackle1 = MoveState(
-            "TACKLE_MOVE", self._tackle, Intent(MoveType.ATTACK, damage=_TACKLE_DMG)
+            "TACKLE_MOVE", self._tackle, lambda: Intent(MoveType.ATTACK, damage=self._tackle_dmg())
         )
         tackle2 = MoveState(
-            "TACKLE_2_MOVE", self._tackle, Intent(MoveType.ATTACK, damage=_TACKLE_DMG)
+            "TACKLE_2_MOVE", self._tackle, lambda: Intent(MoveType.ATTACK, damage=self._tackle_dmg())
         )
         beam = MoveState(
             "BEAM_MOVE", self._beam,
@@ -63,11 +86,11 @@ class TorchHeadAmalgam(MachineMonster):
         )
         weak1 = MoveState(
             "TACKLE_3_MOVE", self._weak_tackle,
-            Intent(MoveType.ATTACK, damage=_WEAK_TACKLE_DMG),
+            lambda: Intent(MoveType.ATTACK, damage=self._weak_tackle_dmg()),
         )
         weak2 = MoveState(
             "TACKLE_4_MOVE", self._weak_tackle,
-            Intent(MoveType.ATTACK, damage=_WEAK_TACKLE_DMG),
+            lambda: Intent(MoveType.ATTACK, damage=self._weak_tackle_dmg()),
         )
         tackle1.follow_up = tackle2
         tackle2.follow_up = beam
@@ -77,10 +100,10 @@ class TorchHeadAmalgam(MachineMonster):
         return MonsterMoveStateMachine([tackle1, tackle2, beam, weak1, weak2], tackle1)
 
     def _tackle(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _TACKLE_DMG, 1)
+        self._execute_attack(ctx, self._tackle_dmg(), 1)
 
     def _weak_tackle(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _WEAK_TACKLE_DMG, 1)
+        self._execute_attack(ctx, self._weak_tackle_dmg(), 1)
 
     def _beam(self, ctx: CombatCtx) -> None:
         self._execute_attack(ctx, _BEAM_DMG, _BEAM_HITS)
@@ -96,8 +119,18 @@ class Queen(MachineMonster):
     an in-progress Burn Bright as Enrage on the spot (see on_amalgam_died); the
     branch already routes every later move past Burn Bright."""
 
-    min_hp = 400
+    min_hp = 400            # Queen.cs:50 base
     max_hp = 400
+    min_hp_asc = 419        # Queen.cs:50 -- ToughEnemies (MaxInitialHp == MinInitialHp)
+    max_hp_asc = 419
+
+    def _off_with_head_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _OFF_WITH_HEAD_DMG_ASC, _OFF_WITH_HEAD_DMG)
+
+    def _execution_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _EXECUTION_DMG_ASC, _EXECUTION_DMG)
 
     def on_death(self, creature: Creature,
                  was_removal_prevented: bool = False) -> None:
@@ -148,11 +181,11 @@ class Queen(MachineMonster):
         )
         off_with_head = MoveState(
             "OFF_WITH_YOUR_HEAD_MOVE", self._off_with_head,
-            Intent(MoveType.ATTACK, damage=_OFF_WITH_HEAD_DMG, hits=_OFF_WITH_HEAD_HITS),
+            Intent(MoveType.ATTACK, damage=self._off_with_head_dmg(), hits=_OFF_WITH_HEAD_HITS),
         )
         execution = MoveState(
             "EXECUTION_MOVE", self._execution,
-            Intent(MoveType.ATTACK, damage=_EXECUTION_DMG),
+            Intent(MoveType.ATTACK, damage=self._execution_dmg()),
         )
         enrage = MoveState("ENRAGE_MOVE", self._enrage, Intent(MoveType.BUFF))
         mine_branch = ConditionalBranchState("YOURE_MINE_NOW_BRANCH")
@@ -203,10 +236,10 @@ class Queen(MachineMonster):
         BlockCmd.apply(ctx.hooks, self, _BURN_BRIGHT_BLOCK, props=ValueProp.MOVE)
 
     def _off_with_head(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _OFF_WITH_HEAD_DMG, _OFF_WITH_HEAD_HITS)
+        self._execute_attack(ctx, self._off_with_head_dmg(), _OFF_WITH_HEAD_HITS)
 
     def _execution(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _EXECUTION_DMG, 1)
+        self._execute_attack(ctx, self._execution_dmg(), 1)
 
     def _enrage(self, ctx: CombatCtx) -> None:
         from ...cmds import PowerCmd

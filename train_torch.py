@@ -73,19 +73,38 @@ from sts2_rl.vec_env import EnvSpec, make_vec_env, resolve_n_workers
 # --lr's default lives here rather than in add_argument so the flag can stay
 # None when unset: on a resume that difference decides whether we keep the
 # optimizer's restored LR or override it.
-DEFAULT_LR = 3e-4
+DEFAULT_LR = 6e-4
 
 # --n-envs/--n-steps default here for the same reason: their product is the
 # effective batch, and it lives outside the model, so a resume that silently
 # reverts it keeps training the same weights at a different batch size — a
 # config error that reads as a mysterious reward regression.
-DEFAULT_N_ENVS = 32
+DEFAULT_N_ENVS = 64
 DEFAULT_N_STEPS = 512
 
 # One row per iteration in <stem>.csv. CSV, not TensorBoard, on purpose: zero
 # dependencies, and a multi-day run's curve stays plottable from anything.
 CSV_FIELDS = ["iter", "global_step", "wall_seconds", "sps", "ep_ret", "win",
-              "ep_len", "pg", "v", "ent", "kl", "clipfrac", "lr"]
+              "ep_len", "pg", "v", "ent", "kl", "clipfrac", "lr",
+              # Behavior metrics (run-scale envs only; NaN on --env combat):
+              # mean energy left unspent per real end-turn, and the take rate
+              # over resolved card-reward screens — both over the same
+              # 100-episode window as ep_ret.
+              "energy_unspent", "card_take",
+              # v7 behavior counters (plan Task 7): per-episode means over the
+              # same 100-episode window (run-scale envs only; NaN on combat).
+              "upgrades", "removes", "elites", "potions_got", "potions_used",
+              # v8 potion ledger (plan Task 2): USE classification + timing,
+              # same per-episode-mean windowing as the v7 counters above.
+              "potions_used_elite", "potions_used_boss", "potions_used_normal",
+              "potions_expired", "potion_use_hp",
+              # v8 relic reward (plan Task 3): per-episode mean, same
+              # windowing as the v7 counters above.
+              "relics",
+              # v8 HP-economy (plan Task 1, plan Task 5 threading): mean HP
+              # lost per episode -- a sloppiness gauge, tracked independent
+              # of whether --hp-potential-scale shaping is on.
+              "hp_lost"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -146,6 +165,47 @@ def parse_args() -> argparse.Namespace:
                          "real branching StandardMap instead of a single column "
                          "(0.0 = pure column, 1.0 = pure branching). Annealing "
                          "this across stages eases the column→run transition")
+    ap.add_argument("--ascension", type=int, default=0,
+                    help="run/column envs only: the ascension level new runs "
+                         "start at (0 = no ascension, the old behavior). "
+                         "Stamped into the checkpoint alongside env_kind; "
+                         "unlike env_kind/schema/arch a resume WARNS rather "
+                         "than refuses on a mismatch -- v7 deliberately "
+                         "resumes training across ascensions.")
+    # v7 reward/curriculum knobs (plan Task 7; run/column envs only, all
+    # default OFF so a plain invocation trains exactly as before).
+    ap.add_argument("--floor-rewards", type=float, nargs=3, default=None,
+                    metavar=("ACT1", "ACT2", "ACT3"),
+                    help="per-floor reward by act (e.g. 1.0 1.5 2.0), replacing "
+                         "the flat +1/floor. Unset keeps the flat reward")
+    ap.add_argument("--reward-win", type=float, default=None,
+                    help="terminal win bonus for the run-scale envs "
+                         "(default: the env's own 3.0)")
+    ap.add_argument("--reward-upgrade", type=float, default=0.0,
+                    help="reward per permanent card upgrade gained")
+    ap.add_argument("--reward-remove", type=float, default=0.0,
+                    help="reward per card removed from the deck")
+    ap.add_argument("--reward-elite", type=float, default=0.0,
+                    help="reward per elite fight won")
+    ap.add_argument("--reward-relic", type=float, default=0.0,
+                    help="reward per relic gained (v8 plan Task 3; the "
+                         "starting relic never counts)")
+    ap.add_argument("--rest-heal-mask-above", type=float, default=None,
+                    help="v8 plan Task 4: at a rest site, above this hp/max_hp "
+                         "ratio, mask out REST_HEAL if another rest action is "
+                         "legal (forces upgrade-path data instead of always "
+                         "topping off). Unset = no masking (default)")
+    ap.add_argument("--hp-potential-scale", type=float, default=0.0,
+                    help="v8 plan Task 1: concave HP-potential shaping weight "
+                         "(0 = off, the old behavior). knee/low_share stay at "
+                         "the env's own defaults -- not exposed as flags")
+    ap.add_argument("--potion-potential-scale", type=float, default=0.0,
+                    help="v8 plan Task 2: potion-ledger shaping weight -- "
+                         "+/-scale per potion gained/lost off the belt-count "
+                         "delta (0 = off, the old behavior)")
+    ap.add_argument("--deck-random-prob", type=float, default=0.0,
+                    help="probability an episode starts with a randomized deck "
+                         "(card-exposure domain randomization; 0.0 = never)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="cpu",
                     help="cpu (default; fastest for --arch mlp), cuda "
@@ -159,6 +219,16 @@ def parse_args() -> argparse.Namespace:
                     help="continue from this checkpoint (default: auto-resume --save if it exists)")
     ap.add_argument("--fresh", action="store_true",
                     help="start a new model even if a checkpoint exists at --save")
+    ap.add_argument("--warm-start", default=None,
+                    help="cross-kind partial load (Task 6b, sts2_rl.checkpoints."
+                         "warm_start_agent): build a FRESH model for this run's "
+                         "--env/--arch and transfer whatever structurally "
+                         "matches from this checkpoint -- which may be a "
+                         "DIFFERENT env kind (run <-> combat), unlike --resume. "
+                         "Fresh optimizer/iteration/global_step either way -- "
+                         "a warm-start is a new run with warm weights, not a "
+                         "resume. Requires --arch entset on both sides. "
+                         "Mutually exclusive with --resume/--fresh.")
     ap.add_argument("--save-every", type=int, default=10, help="iterations between checkpoints")
     ap.add_argument("--keep-snapshots", type=int, default=5,
                     help="how many iter-stamped snapshots (<stem>.iter000123.pt) "
@@ -197,7 +267,7 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--gae-lambda", type=float, default=0.95)
     ap.add_argument("--clip", type=float, default=0.2)
     ap.add_argument("--epochs", type=int, default=4)
-    ap.add_argument("--minibatches", type=int, default=8)
+    ap.add_argument("--minibatches", type=int, default=16)
     ap.add_argument("--ent-coef", type=float, default=0.01)
     ap.add_argument("--ent-coef-final", type=float, default=None,
                     help="anneal the entropy bonus linearly from --ent-coef to "
@@ -277,9 +347,37 @@ def parse_args() -> argparse.Namespace:
             "(a snapshot supplies the encounter too).")
     if args.env == "combat" and args.acts:
         raise SystemExit("--acts applies to the run-scale envs only.")
+    # NOTE: --ascension is deliberately NOT rejected for --env combat. v7
+    # Task 5 rejected it here because STS2FullCombatEnv didn't take the
+    # kwarg yet; v7 Task 10 added it (gimmick probes fight at the stage's
+    # ascension) and relaxed eval.py's guard, but left this one stale. The
+    # v8 curriculum trains combat stages at asc 10 directly, so this guard
+    # must go too -- EnvSpec.ascension already threads to all three env
+    # kinds (see vec_env.EnvSpec's own comment).
+    if args.env == "combat" and (
+            args.floor_rewards is not None or args.reward_win is not None
+            or args.reward_upgrade or args.reward_remove or args.reward_elite
+            or args.reward_relic or args.rest_heal_mask_above is not None
+            or args.hp_potential_scale or args.potion_potential_scale
+            or args.deck_random_prob):
+        raise SystemExit(
+            "--floor-rewards/--reward-win/--reward-upgrade/--reward-remove/"
+            "--reward-elite/--reward-relic/--rest-heal-mask-above/"
+            "--hp-potential-scale/--potion-potential-scale/"
+            "--deck-random-prob apply to the run-scale envs only.")
     if args.branch_prob and args.env != "column":
         raise SystemExit(
             f"--branch-prob applies to --env column only (got --env {args.env})")
+    if args.warm_start and (args.resume or args.fresh):
+        raise SystemExit(
+            "--warm-start is mutually exclusive with --resume/--fresh: it is "
+            "already its own way of starting a run (fresh optimizer/"
+            "iteration, weights transferred from --warm-start's checkpoint).")
+    if args.warm_start and args.arch != "entset":
+        raise SystemExit(
+            f"--warm-start requires --arch entset (got --arch {args.arch!r}); "
+            f"the mlp/entity archs have fixed-width heads with no cross-kind "
+            f"structural correspondence to transfer.")
     return args
 
 
@@ -365,6 +463,19 @@ def env_spec(args: argparse.Namespace) -> EnvSpec:
         win_hp_bonus=args.win_hp_bonus,
         branch_prob=args.branch_prob,
         start_snapshots=getattr(args, "start_snapshots", None),
+        ascension=getattr(args, "ascension", 0),
+        floor_rewards_by_act=(tuple(args.floor_rewards)
+                              if getattr(args, "floor_rewards", None) is not None
+                              else None),
+        reward_win_run=getattr(args, "reward_win", None),
+        reward_upgrade=getattr(args, "reward_upgrade", 0.0),
+        reward_remove=getattr(args, "reward_remove", 0.0),
+        reward_elite=getattr(args, "reward_elite", 0.0),
+        reward_relic=getattr(args, "reward_relic", 0.0),
+        rest_heal_mask_above=getattr(args, "rest_heal_mask_above", None),
+        hp_potential_scale=getattr(args, "hp_potential_scale", 0.0),
+        potion_potential_scale=getattr(args, "potion_potential_scale", 0.0),
+        deck_random_prob=getattr(args, "deck_random_prob", 0.0),
     )
 
 
@@ -474,15 +585,19 @@ def main() -> None:
     # Resolve which checkpoint (if any) to continue from: an explicit --resume
     # wins; otherwise re-running auto-continues the checkpoint at --save so a
     # bare `py train_torch.py` trains the same model further. --fresh forces a
-    # new model even when one exists. This runs before the envs are built
-    # because the checkpoint carries the rollout geometry they are sized from.
+    # new model even when one exists. --warm-start (parse_args already refused
+    # combining it with --resume/--fresh) is its own path below -- it never
+    # sets resume_path, so the rollout geometry and (later) the model start
+    # fresh/explicit rather than inherited from the warm-start source. This
+    # runs before the envs are built because a --resume checkpoint carries
+    # the rollout geometry they are sized from.
     resume_path = None
     if args.fresh:
         if args.resume:
             raise SystemExit("--fresh and --resume are mutually exclusive.")
     elif args.resume:
         resume_path = args.resume
-    elif args.save and os.path.exists(args.save):
+    elif not args.warm_start and args.save and os.path.exists(args.save):
         resume_path = args.save
         print(f"Auto-resuming existing checkpoint {args.save} "
               f"(pass --fresh to start a new model).")
@@ -509,6 +624,7 @@ def main() -> None:
     best_score = -math.inf
     if resume_path:
         check_checkpoint(ckpt, args, obs_dim, n_actions)
+        checkpoints.check_ascension(ckpt, args.ascension)
         agent.load_state_dict(ckpt["model"])
         optimizer.load_state_dict(ckpt["optim"])
         start_iter = ckpt.get("iteration", 0)
@@ -524,6 +640,14 @@ def main() -> None:
             print(f"Overriding the checkpoint's learning rate with --lr {args.lr:g}")
         print(f"Resumed from {resume_path} at iteration {start_iter} "
               f"(step {start_step})")
+    elif args.warm_start:
+        # Deliberately NOT check_checkpoint/check_ascension -- those refuse
+        # exactly the cross-kind handoff --warm-start exists for. Fresh
+        # optimizer/start_iter/start_step/best_score (already the defaults
+        # set above): a warm-start is a new run with warm weights, not a
+        # resume (T6b brief). parse_args already refused --arch != entset.
+        warm_ckpt = torch.load(args.warm_start, map_location=device, weights_only=False)
+        checkpoints.warm_start_agent(agent, warm_ckpt, model_spec(args))
 
     # After the resume, so this masks the loaded weights rather than the fresh
     # ones the load would overwrite.
@@ -566,6 +690,24 @@ def main() -> None:
     ret_hist: deque[float] = deque(maxlen=100)
     len_hist: deque[int] = deque(maxlen=100)
     win_hist: deque[float] = deque(maxlen=100)
+    # Behavior metrics (StepBatch.metrics, EP_METRIC_KEYS order). Kept as
+    # per-episode (count, sum) pairs so the window average weights by events,
+    # not episodes — an episode with one card offer shouldn't count as much
+    # as one with twelve.
+    endturn_hist: deque[tuple[float, float]] = deque(maxlen=100)   # (end_turns, energy_unspent)
+    cardrew_hist: deque[tuple[float, float]] = deque(maxlen=100)   # (offers, takes)
+    # v7 counters (EP_METRIC_KEYS[4:9]): plain per-episode counts, so the
+    # window statistic is a straight mean per episode.
+    v7_hist: deque[tuple[float, ...]] = deque(maxlen=100)          # (upgrades, removes, elites, potions_got, potions_used)
+    # v8 potion ledger (plan Task 2, EP_METRIC_KEYS[9:14]): same
+    # per-episode-count windowing as v7_hist.
+    v8_potion_hist: deque[tuple[float, ...]] = deque(maxlen=100)   # (used_elite, used_boss, used_normal, expired, use_hp)
+    # v8 relic reward (plan Task 3, EP_METRIC_KEYS[14]): same per-episode-count
+    # windowing as v7_hist/v8_potion_hist.
+    v8_relic_hist: deque[float] = deque(maxlen=100)
+    # v8 HP-economy (plan Task 1, EP_METRIC_KEYS[15]): same per-episode-count
+    # windowing as v8_relic_hist.
+    v8_hplost_hist: deque[float] = deque(maxlen=100)
 
     batch_size = N * E
     mb_size = batch_size // args.minibatches
@@ -623,6 +765,18 @@ def main() -> None:
                     ret_hist.append(float(ep_ret_running[i]))
                     len_hist.append(int(ep_len_running[i]))
                     win_hist.append(1.0 if batch.successes[i] else 0.0)
+                    m = batch.metrics[i]
+                    if not math.isnan(m[0]):
+                        endturn_hist.append((float(m[0]), float(m[1])))
+                        cardrew_hist.append((float(m[2]), float(m[3])))
+                    if not math.isnan(m[4]):
+                        v7_hist.append(tuple(float(x) for x in m[4:9]))
+                    if not math.isnan(m[9]):
+                        v8_potion_hist.append(tuple(float(x) for x in m[9:14]))
+                    if not math.isnan(m[14]):
+                        v8_relic_hist.append(float(m[14]))
+                    if not math.isnan(m[15]):
+                        v8_hplost_hist.append(float(m[15]))
                     ep_ret_running[i] = 0.0
                     ep_len_running[i] = 0
 
@@ -729,13 +883,29 @@ def main() -> None:
             ret = np.mean(ret_hist) if ret_hist else float("nan")
             wr = np.mean(win_hist) if win_hist else float("nan")
             eplen = np.mean(len_hist) if len_hist else float("nan")
+            n_endturns = sum(c for c, _ in endturn_hist)
+            energy_unspent = (sum(s for _, s in endturn_hist) / n_endturns
+                              if n_endturns else float("nan"))
+            n_offers = sum(c for c, _ in cardrew_hist)
+            card_take = (sum(s for _, s in cardrew_hist) / n_offers
+                         if n_offers else float("nan"))
+            v7_means = (np.mean(np.asarray(v7_hist, dtype=np.float64), axis=0)
+                        if v7_hist else [float("nan")] * 5)
+            v8_potion_means = (
+                np.mean(np.asarray(v8_potion_hist, dtype=np.float64), axis=0)
+                if v8_potion_hist else [float("nan")] * 5)
+            v8_relic_mean = (
+                float(np.mean(v8_relic_hist)) if v8_relic_hist else float("nan"))
+            v8_hplost_mean = (
+                float(np.mean(v8_hplost_hist)) if v8_hplost_hist else float("nan"))
             lr = optimizer.param_groups[0]["lr"]
             print(
                 f"iter {iteration:4d}  step {global_step:>9d}  sps {sps:>5d}  "
                 f"ep_ret {ret:7.3f}  win {wr:5.2f}  ep_len {eplen:6.1f}  "
                 f"pg {pg_loss.item():+.3f}  v {v_loss.item():.3f}  "
                 f"ent {ent_loss.item():.3f}  kl {approx_kl:.4f}  "
-                f"clipfrac {np.mean(clipfracs):.3f}"
+                f"clipfrac {np.mean(clipfracs):.3f}  "
+                f"e_unspent {energy_unspent:4.2f}  take {card_take:4.2f}"
                 # pg/ent are still reported during the warm-up (they say how
                 # stale the advantages are) but were not applied — mark it so
                 # a flat ep_ret here doesn't read as a stalled run.
@@ -749,6 +919,17 @@ def main() -> None:
                     ep_ret=ret, win=wr, ep_len=eplen,
                     pg=pg_loss.item(), v=v_loss.item(), ent=ent_loss.item(),
                     kl=approx_kl, clipfrac=float(np.mean(clipfracs)), lr=lr,
+                    energy_unspent=energy_unspent, card_take=card_take,
+                    upgrades=float(v7_means[0]), removes=float(v7_means[1]),
+                    elites=float(v7_means[2]), potions_got=float(v7_means[3]),
+                    potions_used=float(v7_means[4]),
+                    potions_used_elite=float(v8_potion_means[0]),
+                    potions_used_boss=float(v8_potion_means[1]),
+                    potions_used_normal=float(v8_potion_means[2]),
+                    potions_expired=float(v8_potion_means[3]),
+                    potion_use_hp=float(v8_potion_means[4]),
+                    relics=v8_relic_mean,
+                    hp_lost=v8_hplost_mean,
                 ))
 
             # ── checkpointing ───────────────────────────────────────────────────
@@ -852,6 +1033,10 @@ def checkpoint_payload(agent: nn.Module, optimizer, iteration: int, args,
         "shared_encoder": getattr(args, "shared_encoder", False),
         "obs_schema": env_obs_schema(args),
         "env_kind": args.env,
+        # Stamped next to env_kind, but checked with a WARN not a refusal
+        # (checkpoints.check_ascension) -- unlike env_kind/schema/arch, v7
+        # deliberately resumes training across ascensions.
+        "ascension": getattr(args, "ascension", 0),
         # Not part of the model — recorded so a resume reproduces the batch
         # that trained these weights, and so the file says which one that was.
         "n_envs": args.n_envs,

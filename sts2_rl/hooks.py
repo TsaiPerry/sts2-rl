@@ -206,6 +206,11 @@ class HookSystem:
         # Back-reference to the owning CombatState; set by CombatState.__init__.
         # Lets powers reach combat-level state (e.g. Infested spawning Wrigglers).
         self.combat: Any = None
+        # Combat-side mirror of RunManager.Instance.HasAscension — set by
+        # RunState.create_combat from the run's ascension. Deliberately a
+        # per-combat instance attribute, NOT a module global: multiple envs
+        # at different ascension levels interleave in one process.
+        self.ascension: int = 0
         # `_epoch` counts membership changes (register/unregister). It is the
         # invalidation signal for the PRESENCE cache only -- the dispatch ORDER
         # is re-derived per dispatch now, because a pile move changes the order

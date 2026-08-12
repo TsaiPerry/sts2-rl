@@ -5,7 +5,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import (
     ConditionalBranchState,
     MachineMonster,
@@ -17,13 +18,17 @@ if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
-_SMASH_DMG = 16
-_TENDERIZER_DMG = 7
+_SMASH_DMG = 16          # Ovicopter.cs:34 base
+_SMASH_DMG_ASC = 17      # DeadlyEnemies
+_TENDERIZER_DMG = 7      # Ovicopter.cs:36 base
+_TENDERIZER_DMG_ASC = 8  # DeadlyEnemies
 _TENDERIZER_VULN = 2
-_PASTE_STR = 3
+_PASTE_STR = 3           # Ovicopter.cs:38 base
+_PASTE_STR_ASC = 4       # DeadlyEnemies
 _EGGS_PER_LAY = 3
 _EGG_SLOTS = 5
-_NIBBLE_DMG = 4
+_NIBBLE_DMG = 4          # ToughEgg.cs:60 base
+_NIBBLE_DMG_ASC = 5      # DeadlyEnemies
 
 
 class ToughEgg(MachineMonster):
@@ -32,9 +37,26 @@ class ToughEgg(MachineMonster):
 
     min_hp = 14
     max_hp = 18
+    min_hp_asc = 15   # ToughEgg.cs:52 -- ToughEnemies
+    max_hp_asc = 19   # ToughEgg.cs:54 -- ToughEnemies
 
     HATCHLING_MIN_HP = 19
     HATCHLING_MAX_HP = 22
+    HATCHLING_MIN_HP_ASC = 20   # ToughEgg.cs:56 -- ToughEnemies
+    HATCHLING_MAX_HP_ASC = 23   # ToughEgg.cs:58 -- ToughEnemies
+
+    def _hatchling_hp_range(self) -> tuple[int, int]:
+        """ToughEgg.cs:56-58 `HatchlingMinHp`/`HatchlingMaxHp` -- read once,
+        at hatch time (Hatch())."""
+        if asc_value(self._hooks, AscensionLevel.TOUGH_ENEMIES, True, False):
+            return self.HATCHLING_MIN_HP_ASC, self.HATCHLING_MAX_HP_ASC
+        return self.HATCHLING_MIN_HP, self.HATCHLING_MAX_HP
+
+    def _nibble_dmg(self) -> int:
+        """ToughEgg.cs:60 `NibbleDamage` -- read at both the telegraphed
+        Intent and the executed attack."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _NIBBLE_DMG_ASC, _NIBBLE_DMG)
 
     @property
     def name(self) -> str:
@@ -56,7 +78,7 @@ class ToughEgg(MachineMonster):
     def build_machine(self) -> MonsterMoveStateMachine:
         hatch = MoveState("HATCH_MOVE", self._hatch, Intent(MoveType.SUMMON))
         nibble = MoveState(
-            "NIBBLE_MOVE", self._nibble, Intent(MoveType.ATTACK, damage=_NIBBLE_DMG)
+            "NIBBLE_MOVE", self._nibble, lambda: Intent(MoveType.ATTACK, damage=self._nibble_dmg())
         )
         hatch.follow_up = nibble
         nibble.follow_up = nibble
@@ -73,12 +95,12 @@ class ToughEgg(MachineMonster):
         # to the Niche stream; legacy draws off the shared rng, but must use
         # randrange (exclusive) rather than randint (inclusive), or it returns
         # a 22 the game cannot roll.
+        lo, hi = self._hatchling_hp_range()
         crng = ctx.combat.combat_rng
         if crng.is_parity:
-            hp = ctx.combat._niche.next_int_range(
-                self.HATCHLING_MIN_HP, self.HATCHLING_MAX_HP)
+            hp = ctx.combat._niche.next_int_range(lo, hi)
         else:
-            hp = self._rng.randrange(self.HATCHLING_MIN_HP, self.HATCHLING_MAX_HP)
+            hp = self._rng.randrange(lo, hi)
         # ToughEgg.cs:173 — `Creature.SetMaxAndCurrentHp(hp)`
         # (creature_card_cmds/step26), routed through the real command
         # instead of a hand-rolled `on_hp_changed` dispatch that bypassed
@@ -92,7 +114,7 @@ class ToughEgg(MachineMonster):
         CreatureCmd.set_max_and_current_hp(ctx.hooks, self, hp)
 
     def _nibble(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _NIBBLE_DMG, 1)
+        self._execute_attack(ctx, self._nibble_dmg(), 1)
 
 
 class Ovicopter(MachineMonster):
@@ -102,6 +124,20 @@ class Ovicopter(MachineMonster):
 
     min_hp = 124
     max_hp = 130
+    min_hp_asc = 126   # Ovicopter.cs:30 -- ToughEnemies
+    max_hp_asc = 132   # Ovicopter.cs:32 -- ToughEnemies
+
+    def _smash_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _SMASH_DMG_ASC, _SMASH_DMG)
+
+    def _tenderizer_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _TENDERIZER_DMG_ASC, _TENDERIZER_DMG)
+
+    def _paste_str(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _PASTE_STR_ASC, _PASTE_STR)
 
     def _can_lay(self) -> bool:
         combat = self._hooks.combat
@@ -112,11 +148,11 @@ class Ovicopter(MachineMonster):
     def build_machine(self) -> MonsterMoveStateMachine:
         lay = MoveState("LAY_EGGS_MOVE", self._lay_eggs, Intent(MoveType.SUMMON))
         smash = MoveState(
-            "SMASH_MOVE", self._smash, Intent(MoveType.ATTACK, damage=_SMASH_DMG)
+            "SMASH_MOVE", self._smash, lambda: Intent(MoveType.ATTACK, damage=self._smash_dmg())
         )
         tenderizer = MoveState(
             "TENDERIZER_MOVE", self._tenderizer,
-            Intent(MoveType.ATTACK, damage=_TENDERIZER_DMG, also=(MoveType.DEBUFF,)),
+            lambda: Intent(MoveType.ATTACK, damage=self._tenderizer_dmg(), also=(MoveType.DEBUFF,)),
         )
         paste = MoveState(
             "NUTRITIONAL_PASTE_MOVE", self._paste, Intent(MoveType.BUFF)
@@ -159,10 +195,10 @@ class Ovicopter(MachineMonster):
             PowerCmd.apply(ctx.hooks, egg, MinionPower, 1, applier=self)
 
     def _smash(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _SMASH_DMG, 1)
+        self._execute_attack(ctx, self._smash_dmg(), 1)
 
     def _tenderizer(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _TENDERIZER_DMG, 1)
+        self._execute_attack(ctx, self._tenderizer_dmg(), 1)
         from ...cmds import PowerCmd
         from ...powers import VulnerablePower
         PowerCmd.apply(
@@ -172,7 +208,7 @@ class Ovicopter(MachineMonster):
     def _paste(self, ctx: CombatCtx) -> None:
         from ...cmds import PowerCmd
         from ...powers import StrengthPower
-        PowerCmd.apply(ctx.hooks, self, StrengthPower, _PASTE_STR)
+        PowerCmd.apply(ctx.hooks, self, StrengthPower, self._paste_str())
 
 
 OVICOPTER_NORMAL = Encounter(

@@ -193,7 +193,7 @@ def test_run_max_obs_id_matches_combat_and_is_reported_not_assumed():
     assert RUN_MAX_OBS_ID == COMBAT_MAX_OBS_ID == 640
 
 
-def test_schema_version_is_9():
+def test_schema_version_is_11():
     """v9 (R3, 2026-08-02): the run observation embeds the combat block
     verbatim, so full_env's v6 bump (per-enemy intent history — new
     `enemy{e}.intent_history.f` segments) silently widened this env's f_dim
@@ -202,8 +202,21 @@ def test_schema_version_is_9():
     as the v7->v8 bump (StatusIntent's card-count float) — bumped in the SAME
     change this time. See test_run_schema_version_matches_declared_dims
     below, which pins the (version, f_dim, i_dim) triple together so this
-    can't recur silently."""
-    assert RUN_OBS_SCHEMA_VERSION == 9
+    can't recur silently.
+
+    v10 (SpireBot schema audit, Task 4, 2026-08-04): pure version bump —
+    the audit found zero DROP rows and no field additions in run v9 (nor in
+    the embedded combat block's v6->v7 bump), so f_dim/i_dim are UNCHANGED
+    from v9. See `test/test_obs_game_observable.py` for the audit's
+    REDEFINE-row disposition (`phase`, `select.purpose.ids` — both
+    documentation-only, no sim-code consequence).
+
+    v11 (2026-08-07): `REWARD_CARD_SLOTS` 3 -> 4. Lasting Candy's appended
+    Power option was being truncated out of an observation whose action stayed
+    legal to pick, and the count also moves where SKIP sits in the mask — see
+    the constant's comment in run_env.py and
+    `test_reward_cards_block_shows_a_four_card_lasting_candy_offer`."""
+    assert RUN_OBS_SCHEMA_VERSION == 11
 
 
 def test_run_schema_version_matches_declared_dims():
@@ -226,7 +239,11 @@ def test_run_schema_version_matches_declared_dims():
     scratchpad): widening `full_env`'s `enemies.f` row by one more float
     without touching `RUN_OBS_SCHEMA_VERSION` turns this red."""
     layout = run_obs_layout()
-    assert (RUN_OBS_SCHEMA_VERSION, layout.f_dim, layout.i_dim) == (9, 4710, 1464)
+    # v10 -> v11: `REWARD_CARD_SLOTS` 3 -> 4 adds one 4-wide row to EACH half
+    # of `reward.cards` (4711 -> 4715, 1465 -> 1469). The preceding v10
+    # amendment (+1/+1 for `reward.relic.f`/`reward.relic.ids`) is folded into
+    # the 4711/1465 baseline these numbers move from.
+    assert (RUN_OBS_SCHEMA_VERSION, layout.f_dim, layout.i_dim) == (11, 4715, 1469)
 
     # STS2CurriculumRunEnv is STS2RunEnv with a different map/reward factory
     # only (curriculum_env.py's own docstring) — same layout, same version.
@@ -544,6 +561,52 @@ def test_reward_cards_block_shows_all_three_with_r2_fields():
     assert fs[0][2] == pytest.approx(1 / 10.0)   # cards[0] afflicted amount 1
 
 
+def test_reward_cards_block_shows_a_four_card_lasting_candy_offer():
+    """A live screen can be 4 wide, not 3: Lasting Candy APPENDS one Power
+    option to a post-encounter offer (`cards.extend(added)`,
+    relics/lasting_candy.py). At the old cap of 3 the fourth card was
+    truncated out of the observation while `legal_actions` still offered it —
+    and skip moved from index 3 to index 4 underneath a policy that had no way
+    to see why. Every slot must be present and carry its own id."""
+    cards = _heterogeneous_cards(4)
+    rewards = CombatRewards(room_type=RoomType.MONSTER)
+    rewards.cards = list(cards)
+    run = _bare_run()
+    env = _env_with(run, DecisionRequest(kind=DecisionKind.REWARD_CARD, run=run, rewards=rewards))
+    obs = env._build_obs()
+    layout = run_obs_layout()
+    ids = obs["i"][layout.i_slices["reward.cards.ids"]].reshape(-1, 4)
+
+    assert ids.shape[0] == REWARD_CARD_SLOTS >= 4
+    for c, card in enumerate(cards):
+        assert ids[c][1] == CARD_INDEX[card.id] + 1, (
+            f"reward slot {c} lost its card — the block truncated a live offer")
+
+
+def test_reward_card_slots_cover_every_option_appending_relic():
+    """Canary on the cap's ONE assumption: `CARD_REWARD_COUNT` base options
+    plus at most one appended by a relic.
+
+    `Hook.TryModifyCardRewardOptions`' early (non-Late) pass is the seam a
+    relic appends through, and Lasting Candy is the game's only implementer of
+    it (LastingCandy.cs; see `create_reward_cards`' two-pass comment). If a
+    second one is ever ported, the reward block may need to be wider than
+    `CARD_REWARD_COUNT + 1` — fail here rather than silently truncating a live
+    screen again."""
+    from sts2_rl.relics import ALL_RELICS
+    from sts2_rl.relics.base import Relic
+    from sts2_rl.rewards import CARD_REWARD_COUNT
+
+    appenders = sorted(
+        rid for rid, cls in ALL_RELICS.items()
+        if cls.modify_card_reward_options is not Relic.modify_card_reward_options
+    )
+    assert appenders == ["lasting_candy"], (
+        f"new early-pass card-reward modifier(s) {appenders} — re-check how "
+        f"many options they add and whether REWARD_CARD_SLOTS still covers it")
+    assert REWARD_CARD_SLOTS >= CARD_REWARD_COUNT + 1
+
+
 def test_reward_potion_block():
     potion = make_potion("fire_potion")
     rewards = CombatRewards(room_type=RoomType.MONSTER)
@@ -554,6 +617,72 @@ def test_reward_potion_block():
     layout = run_obs_layout()
     assert obs["i"][layout.i_slices["reward.potion.ids"]][0] == POTION_INDEX["fire_potion"] + 1
     assert obs["f"][layout.f_slices["reward.potion.f"]][0] == pytest.approx(1.0)
+
+
+def test_reward_potion_block_visible_on_the_card_ask_too():
+    """Game-parity fix: `unseeded_20260807_005254/decisions.jsonl` floor 2
+    shows `reward.potion.f == 1` already on decision_index 0 (the card ask),
+    one screen before the dedicated `REWARD_POTION` ask that used to be the
+    only place this obs block lit up (`sim_89U.jsonl` had it backwards: 0
+    then 1). The real screen shows every item still on offer — card, potion,
+    relic — on EVERY reward decision of that floor, not just the ask whose
+    own sub-kind matches the item. `CombatRewards` already models this: the
+    card ask's `rewards` object (when there is exactly one card group, no
+    Prayer-Wheel-style second group) IS the same object the potion ask later
+    reads `.potion` off of, so populating `reward.potion.*` from `rewards`
+    regardless of `request.kind` — instead of gating on
+    `kind == REWARD_POTION` — is a same-data, wider-visibility fix, not a
+    new data source."""
+    cards = _heterogeneous_cards(2)
+    potion = make_potion("fire_potion")
+    rewards = CombatRewards(room_type=RoomType.MONSTER)
+    rewards.cards = list(cards)
+    rewards.potions = [potion]
+    run = _bare_run()
+    env = _env_with(run, DecisionRequest(kind=DecisionKind.REWARD_CARD, run=run, rewards=rewards))
+    obs = env._build_obs()
+    layout = run_obs_layout()
+    assert obs["i"][layout.i_slices["reward.potion.ids"]][0] == POTION_INDEX["fire_potion"] + 1
+    assert obs["f"][layout.f_slices["reward.potion.f"]][0] == pytest.approx(1.0)
+
+
+def test_reward_potion_block_absent_when_no_potion_on_offer():
+    """No regression: a card-only reward screen must not fabricate a potion
+    presence flag."""
+    cards = _heterogeneous_cards(2)
+    rewards = CombatRewards(room_type=RoomType.MONSTER)
+    rewards.cards = list(cards)
+    run = _bare_run()
+    env = _env_with(run, DecisionRequest(kind=DecisionKind.REWARD_CARD, run=run, rewards=rewards))
+    obs = env._build_obs()
+    layout = run_obs_layout()
+    assert obs["i"][layout.i_slices["reward.potion.ids"]][0] == 0
+    assert obs["f"][layout.f_slices["reward.potion.f"]][0] == pytest.approx(0.0)
+
+
+def test_reward_relic_block():
+    """Task B: DecisionKind.REWARD_RELIC's offered relic identity — width-1,
+    mirroring `reward.potion` exactly (`RunState.offer_relic` always offers
+    exactly one relic at a time, take-or-skip)."""
+    relic = make_relic("kunai")
+    run = _bare_run()
+    env = _env_with(run, DecisionRequest(kind=DecisionKind.REWARD_RELIC, run=run, relic=relic))
+    obs = env._build_obs()
+    layout = run_obs_layout()
+    assert obs["i"][layout.i_slices["reward.relic.ids"]][0] == RELIC_INDEX["kunai"] + 1
+    assert obs["f"][layout.f_slices["reward.relic.f"]][0] == pytest.approx(1.0)
+
+
+def test_reward_relic_block_absent_outside_reward_relic_screen():
+    """Zero-fill guarantee: a relic on `run.relics` (already owned) must not
+    leak into `reward.relic.*` on an unrelated screen (§ task brief 3)."""
+    relic = make_relic("kunai")
+    run = _bare_run(relics=[relic])
+    env = _env_with(run, DecisionRequest(kind=DecisionKind.MAP, run=run, points=[]))
+    obs = env._build_obs()
+    layout = run_obs_layout()
+    assert obs["i"][layout.i_slices["reward.relic.ids"]][0] == 0
+    assert obs["f"][layout.f_slices["reward.relic.f"]][0] == pytest.approx(0.0)
 
 
 # ── 10. Event identity ─────────────────────────────────────────────────────

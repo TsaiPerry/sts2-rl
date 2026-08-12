@@ -3,7 +3,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import (
     ConditionalBranchState,
     MachineMonster,
@@ -16,13 +17,17 @@ if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
-_STRIKE_DMG = 18
-_DISINTEGRATE_DMG = 11
+_STRIKE_DMG = 18            # Fabricator.cs:45 base
+_STRIKE_DMG_ASC = 21        # DeadlyEnemies
+_DISINTEGRATE_DMG = 11      # Fabricator.cs:47 base
+_DISINTEGRATE_DMG_ASC = 13  # DeadlyEnemies
 _GUARD_BLOCK = 15
 _NOISE_DAZED = 2
-_STAB_DMG = 11
+_STAB_DMG = 11              # Stabbot.cs:25 base
+_STAB_DMG_ASC = 12          # Stabbot.cs:25 DeadlyEnemies
 _STAB_FRAIL = 1
-_ZAP_DMG = 14
+_ZAP_DMG = 14               # Zapbot.cs:25 base
+_ZAP_DMG_ASC = 15           # DeadlyEnemies
 _HIGH_VOLTAGE = 2
 _MAX_ALIVE = 4  # Fabricator stops summoning once this many enemies are alive
 
@@ -30,8 +35,10 @@ _MAX_ALIVE = 4  # Fabricator stops summoning once this many enemies are alive
 class Guardbot(MachineMonster):
     """Guards: gives 15 block to the Fabricator every turn. Source: Guardbot.cs."""
 
-    min_hp = 16
+    min_hp = 16          # Guardbot.cs:21-23
     max_hp = 20
+    min_hp_asc = 17       # ToughEnemies (asc 8+)
+    max_hp_asc = 21
 
     def build_machine(self) -> MonsterMoveStateMachine:
         guard = MoveState("GUARD_MOVE", self._guard, Intent(MoveType.DEFEND))
@@ -61,6 +68,8 @@ class Noisebot(MachineMonster):
 
     min_hp = 18
     max_hp = 23
+    min_hp_asc = 19   # Noisebot.cs:25 -- ToughEnemies
+    max_hp_asc = 24   # Noisebot.cs:27 -- ToughEnemies
 
     # Noisebot.cs:23 `private const int _noiseStatusCount = 2;`. The
     # decompiler inlined it at both use sites (the `new StatusIntent(2)` at
@@ -92,19 +101,28 @@ class Noisebot(MachineMonster):
 class Stabbot(MachineMonster):
     """Stabs for 11 and applies Frail 1 every turn. Source: Stabbot.cs."""
 
-    min_hp = 18
-    max_hp = 23
+    min_hp = 18          # Stabbot.cs:21 base
+    max_hp = 23          # Stabbot.cs:23 base
+    min_hp_asc = 19      # Stabbot.cs:21 ToughEnemies (asc 8+)
+    max_hp_asc = 24      # Stabbot.cs:23 ToughEnemies (asc 8+)
+
+    def _stab_dmg(self) -> int:
+        """Stabbot.cs:25 `StabDamage` -- a C# property re-read at both the
+        telegraphed Intent (:43) and the executed attack (:51), so both
+        sites call this rather than a value cached at construction."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _STAB_DMG_ASC, _STAB_DMG)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         stab = MoveState(
             "STAB_MOVE", self._stab,
-            Intent(MoveType.ATTACK, damage=_STAB_DMG, also=(MoveType.DEBUFF,)),
+            lambda: Intent(MoveType.ATTACK, damage=self._stab_dmg(), also=(MoveType.DEBUFF,)),
         )
         stab.follow_up = stab
         return MonsterMoveStateMachine([stab], stab)
 
     def _stab(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _STAB_DMG, 1)
+        self._execute_attack(ctx, self._stab_dmg(), 1)
         from ...cmds import PowerCmd
         from ...powers import FrailPower
         PowerCmd.apply(ctx.hooks, ctx.player, FrailPower, _STAB_FRAIL)
@@ -114,8 +132,10 @@ class Zapbot(MachineMonster):
     """Zaps for 14 every turn. Starts with High Voltage 2 (gains 2 Strength at
     the end of each of its turns). Source: Zapbot.cs."""
 
-    min_hp = 18
+    min_hp = 18          # Zapbot.cs:21 base
     max_hp = 23
+    min_hp_asc = 19       # Zapbot.cs:21 -- ToughEnemies
+    max_hp_asc = 24       # Zapbot.cs:23 -- ToughEnemies
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
@@ -123,15 +143,19 @@ class Zapbot(MachineMonster):
         from ...powers import HighVoltagePower
         PowerCmd.apply(hooks, self, HighVoltagePower, _HIGH_VOLTAGE)
 
+    def _zap_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _ZAP_DMG_ASC, _ZAP_DMG)
+
     def build_machine(self) -> MonsterMoveStateMachine:
         zap = MoveState(
-            "ZAP", self._zap, Intent(MoveType.ATTACK, damage=_ZAP_DMG)
+            "ZAP", self._zap, lambda: Intent(MoveType.ATTACK, damage=self._zap_dmg())
         )
         zap.follow_up = zap
         return MonsterMoveStateMachine([zap], zap)
 
     def _zap(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _ZAP_DMG, 1)
+        self._execute_attack(ctx, self._zap_dmg(), 1)
 
 
 _DEFENSE_SPAWNS: list[type[MachineMonster]] = [Guardbot, Noisebot]
@@ -148,12 +172,22 @@ class Fabricator(MachineMonster):
     fabricate moves from a dedicated MonsterAi RNG; the sim uses the shared
     combat RNG."""
 
-    min_hp = 150
+    min_hp = 150            # Fabricator.cs:41
     max_hp = 150
+    min_hp_asc = 155         # Fabricator.cs:41 -- ToughEnemies
+    max_hp_asc = 155
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
         self._last_spawned: type[MachineMonster] | None = None
+
+    def _strike_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _STRIKE_DMG_ASC, _STRIKE_DMG)
+
+    def _disintegrate_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _DISINTEGRATE_DMG_ASC, _DISINTEGRATE_DMG)
 
     def _alive_count(self) -> int:
         combat = self._hooks.combat
@@ -171,11 +205,11 @@ class Fabricator(MachineMonster):
         fabricate = MoveState("FABRICATE_MOVE", self._fabricate, Intent(MoveType.SUMMON))
         strike = MoveState(
             "FABRICATING_STRIKE_MOVE", self._strike,
-            Intent(MoveType.ATTACK, damage=_STRIKE_DMG, also=(MoveType.SUMMON,)),
+            Intent(MoveType.ATTACK, damage=self._strike_dmg(), also=(MoveType.SUMMON,)),
         )
         disintegrate = MoveState(
             "DISINTEGRATE_MOVE", self._disintegrate,
-            Intent(MoveType.ATTACK, damage=_DISINTEGRATE_DMG),
+            Intent(MoveType.ATTACK, damage=self._disintegrate_dmg()),
         )
         rand = RandomBranchState("RAND")
         rand.add_branch(fabricate, weight=1.0)
@@ -222,11 +256,11 @@ class Fabricator(MachineMonster):
         self._spawn_bot(ctx, _AGGRO_SPAWNS)
 
     def _strike(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _STRIKE_DMG, 1)
+        self._execute_attack(ctx, self._strike_dmg(), 1)
         self._spawn_bot(ctx, _AGGRO_SPAWNS)
 
     def _disintegrate(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _DISINTEGRATE_DMG, 1)
+        self._execute_attack(ctx, self._disintegrate_dmg(), 1)
 
 
 FABRICATOR_NORMAL = Encounter(

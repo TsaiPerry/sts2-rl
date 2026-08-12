@@ -183,9 +183,23 @@ class Creature:
         """C#'s `Creature.CombatState == null`, which is what
         `CanReceivePowers` actually refuses on (Creature.cs:308-322).
 
-        The sim never physically drops a creature from `CombatState.enemies` —
-        conformance addresses enemies by index, so a corpse holds its slot —
-        so "was it removed?" is a predicate rather than a list membership.
+        The sim keeps a removed creature in `CombatState.enemies` rather than
+        dropping it, so "was it removed?" is a predicate rather than a list
+        membership. That keeps enemy INDICES stable across a death, which the
+        observation and the combat action mask both address by (`_enemies_rows`
+        and `combat_action_mask` are positional in the raw list index).
+
+        One exception, in `CreatureCmd.add`: seating a spawn into a named
+        `Encounter.Slots` entry EVICTS a corpse still holding that slot, since
+        the free-slot query that chose it already treated the slot as free (C#
+        had removed the dead one from `Enemies` at death). Without that the
+        list grew unbounded on a recycling encounter and pushed living enemies
+        past `MAX_ENEMIES` — see that method's comment.
+
+        NOT a conformance constraint: the replays resolve a recorded target by
+        `net_id`, not position (`conformance/combat_driver._target_idx`, whose
+        docstring says a positional `tid - 1` is exactly what breaks once
+        spawns are inserted out of order).
         C# removes on exactly two paths and both are recorded here:
         `KillWithoutCheckingWinCondition` removes only when
         `Hook.ShouldCreatureBeRemovedFromCombatAfterDeath` agrees

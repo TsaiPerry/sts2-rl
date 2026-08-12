@@ -61,6 +61,31 @@ class EnvSpec:
     enemy_hp_reward: float = 0.0              # combat only
     win_hp_bonus: float = 1.0                 # combat only
     branch_prob: float = 0.0                  # column only: anneal knob
+    ascension: int = 0                        # all env kinds: the run-scale
+                                               # envs took it in Phase A
+                                               # (Tasks 1-5); the combat env
+                                               # since v7 Task 10 (gimmick
+                                               # probes fight at the stage's
+                                               # ascension).
+    # v7 reward/curriculum knobs (run/column only, plan Task 7). All default
+    # OFF so a default spec builds a bit-identical env. reward_win_run is
+    # None (not a float) so "unset" keeps the env's own reward_win default.
+    floor_rewards_by_act: tuple[float, ...] | None = None
+    reward_win_run: float | None = None
+    reward_upgrade: float = 0.0
+    reward_remove: float = 0.0
+    reward_elite: float = 0.0
+    reward_relic: float = 0.0
+    # v8 curriculum mask (plan Task 4, run/column only): None keeps the
+    # env's own default (no masking) — see `build_env`'s v7_kwargs below,
+    # same "only set when not None" pattern as reward_win_run.
+    rest_heal_mask_above: float | None = None
+    # v8 HP-economy / potion-ledger knobs (plan Tasks 1-2, run/column only).
+    # Both default OFF (0.0) so a default spec builds a bit-identical env,
+    # same as the other v7/v8 reward knobs above.
+    hp_potential_scale: float = 0.0
+    potion_potential_scale: float = 0.0
+    deck_random_prob: float = 0.0
     # combat only (phase-3 Task 3, R11): a snapshot dataset PATH (never a
     # live SnapshotDataset -- this whole dataclass must stay picklable, and
     # a SnapshotDataset carries live Card/Relic instances). Each
@@ -72,6 +97,25 @@ class EnvSpec:
 def build_env(spec: EnvSpec):
     """The single env factory — used by the serial path and by every worker."""
     acts = list(spec.acts) if spec.acts is not None else None
+    # v7 knobs, shared by both run-scale envs. deck_random_prob is passed
+    # only when opted in (the kwarg lands with Task 9's env support; 0.0 is
+    # fully inert either way), and reward_win_run only when set so the
+    # env's own reward_win default (3.0) stays authoritative.
+    v7_kwargs: dict = dict(
+        floor_rewards_by_act=spec.floor_rewards_by_act,
+        reward_upgrade=spec.reward_upgrade,
+        reward_remove=spec.reward_remove,
+        reward_elite=spec.reward_elite,
+        reward_relic=spec.reward_relic,
+        hp_potential_scale=spec.hp_potential_scale,
+        potion_potential_scale=spec.potion_potential_scale,
+    )
+    if spec.reward_win_run is not None:
+        v7_kwargs["reward_win"] = spec.reward_win_run
+    if spec.rest_heal_mask_above is not None:
+        v7_kwargs["rest_heal_mask_above"] = spec.rest_heal_mask_above
+    if spec.deck_random_prob:
+        v7_kwargs["deck_random_prob"] = spec.deck_random_prob
     if spec.kind == "column":
         from sts2_rl.curriculum_env import STS2CurriculumRunEnv
 
@@ -81,11 +125,14 @@ def build_env(spec: EnvSpec):
         return STS2CurriculumRunEnv(
             acts=acts, card_obs=spec.card_obs,
             branch_prob=spec.branch_prob,
+            ascension=spec.ascension,
+            **v7_kwargs,
         )
     if spec.kind == "run":
         from sts2_rl.run_env import STS2RunEnv
 
-        return STS2RunEnv(acts=acts, card_obs=spec.card_obs)
+        return STS2RunEnv(acts=acts, card_obs=spec.card_obs,
+                          ascension=spec.ascension, **v7_kwargs)
     if spec.kind != "combat":
         raise ValueError(f"unknown env kind {spec.kind!r}")
 
@@ -98,10 +145,30 @@ def build_env(spec: EnvSpec):
         enemy_hp_reward_scale=spec.enemy_hp_reward,
         win_hp_bonus=spec.win_hp_bonus,
         snapshots=spec.start_snapshots,
+        ascension=spec.ascension,
     )
 
 
 # ── one step's worth of batched results ───────────────────────────────────
+
+#: Per-episode behavior tallies the run-scale envs report in `info` on their
+#: terminal step (run_env `_count_behavior`). Column order of
+#: `StepBatch.metrics`.
+EP_METRIC_KEYS = (
+    "ep_end_turns", "ep_energy_unspent", "ep_card_offers", "ep_card_takes",
+    # v7 (plan Task 7): behavior counters from run_env's Task-6 tallies.
+    "ep_upgrades", "ep_removes", "ep_elites_won",
+    "ep_potions_obtained", "ep_potions_used",
+    # v8 (plan Task 2): potion ledger USE classification + timing.
+    "ep_potions_used_elite", "ep_potions_used_boss", "ep_potions_used_normal",
+    "ep_potions_expired", "ep_potion_use_hp",
+    # v8 (plan Task 3): relics gained tally.
+    "ep_relics",
+    # v8 (plan Task 1): combat sloppiness tally, independent of whether
+    # hp_potential_scale shaping is on. Appended at the END (plan Task 5) —
+    # column order is a public contract (train_torch/tests index into it).
+    "ep_hp_lost")
+
 
 class StepBatch(NamedTuple):
     obs: TensorObs                     # (E, f_dim)/(E, i_dim) halves, post-auto-reset
@@ -110,6 +177,9 @@ class StepBatch(NamedTuple):
     truncated: np.ndarray              # (E,) bool
     masks: np.ndarray                  # (E, n_actions) bool, for `obs`
     successes: np.ndarray              # (E,) bool, info["is_success"] on done
+    metrics: np.ndarray                # (E, len(EP_METRIC_KEYS)) float32; NaN
+                                       # except done envs that reported them
+                                       # (the combat env reports none)
     final_obs: dict[int, TensorObs]    # truncated envs only (see module docs)
 
 
@@ -146,6 +216,7 @@ class _EnvGroup:
         terminated = np.zeros(n, bool)
         truncated = np.zeros(n, bool)
         successes = np.zeros(n, bool)
+        metrics = np.full((n, len(EP_METRIC_KEYS)), np.nan, np.float32)
         final_obs: dict[int, TensorObs] = {}
         for idx, env in enumerate(self.envs):
             o, r, term, trunc, info = env.step(int(actions[idx]))
@@ -158,12 +229,16 @@ class _EnvGroup:
                     np.asarray(o["i"], np.int32).copy())
             if term or trunc:
                 successes[idx] = bool(info.get("is_success"))
+                for k, key in enumerate(EP_METRIC_KEYS):
+                    v = info.get(key)
+                    if v is not None:
+                        metrics[idx, k] = float(v)
                 o, _ = env.reset()
             f[idx] = o["f"]
             i[idx] = o["i"]
             masks[idx] = env.action_masks()
         return StepBatch(TensorObs(f, i), rewards, terminated, truncated, masks,
-                         successes, final_obs)
+                         successes, metrics, final_obs)
 
     def close(self) -> None:
         for env in self.envs:
@@ -314,6 +389,7 @@ class SubprocVecEnv:
             truncated=np.concatenate([b.truncated for b in batches]),
             masks=np.concatenate([b.masks for b in batches]),
             successes=np.concatenate([b.successes for b in batches]),
+            metrics=np.concatenate([b.metrics for b in batches]),
             final_obs=final_obs,
         )
 

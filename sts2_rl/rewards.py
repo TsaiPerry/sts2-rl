@@ -151,12 +151,29 @@ class CardCreationOptions:
 
 
 # CardRarityOdds.GetBaseOdds, non-ascension values: (rare, uncommon, common).
+# NOTE (verified against source): GetBaseOdds' switch only ever reads the
+# Rare and Uncommon slots — `common` is never queried by Roll/
+# RollWithoutChangingFutureOdds/RollWithBaseOdds (CardRarityOdds.cs:96-165);
+# it is carried here purely for table completeness/documentation, exactly as
+# dead in the source as it is here.
 _BASE_RARITY_ODDS: dict[RarityOddsType, tuple[float, float, float]] = {
     RarityOddsType.REGULAR: (0.03, 0.37, 0.60),
     RarityOddsType.ELITE: (0.10, 0.40, 0.50),
     RarityOddsType.BOSS: (1.0, 0.0, 0.0),
     RarityOddsType.SHOP: (0.09, 0.37, 0.54),
     RarityOddsType.UNIFORM: (0.33, 0.33, 0.33),
+}
+
+# Scarcity (Asc 7, CardRarityOdds.cs:13-41) overrides Rare and (dead/display)
+# Common per type via `AscensionHelper.GetValueIfAscension(Scarcity, ...)`;
+# the Uncommon band (`regularUncommonOdds`/`eliteUncommonOdds`/
+# `shopUncommonOdds`) is a `const` in the source — NOT ascension-gated —
+# so it is carried over unchanged from `_BASE_RARITY_ODDS` below. Boss and
+# Uniform have no Scarcity entry in the source and are absent here too.
+_SCARCITY_RARITY_ODDS: dict[RarityOddsType, tuple[float, float, float]] = {
+    RarityOddsType.REGULAR: (0.0149, 0.37, 0.615),
+    RarityOddsType.ELITE: (0.05, 0.40, 0.549),
+    RarityOddsType.SHOP: (0.045, 0.37, 0.585),
 }
 
 # Room type → the odds table its card reward rolls with (RewardsSet).
@@ -179,8 +196,21 @@ TREASURE_GOLD = (42, 52)
 # How many card choices a combat reward offers (RewardsSet: always 3).
 CARD_REWARD_COUNT = 3
 
-# CardFactory.UpgradedCardOddScaling — reward-card upgrade odds per act index.
+# CardFactory.UpgradedCardOddScaling — reward-card upgrade odds per act index
+# (CardFactory.cs:23: `AscensionHelper.GetValueIfAscension(Scarcity, 0.125m,
+# 0.25m)`). Kept as a module constant for callers that don't have a `run`
+# (matching the pre-Task-2 non-ascension convention); `upgraded_card_odd_
+# scaling(run)` below is the ascension-aware lookup used at the reward site.
 UPGRADED_CARD_ODD_SCALING = 0.25
+
+
+def upgraded_card_odd_scaling(run: "RunState") -> float:
+    """CardFactory.cs:23 — halved (0.25 -> 0.125) under Scarcity (Asc 7)."""
+    from .actmap import AscensionLevel
+
+    if run.has_ascension(AscensionLevel.SCARCITY):
+        return 0.125
+    return UPGRADED_CARD_ODD_SCALING
 
 # CardRarityExtensions.GetNextHighestRarityWithWrapping (pool-card portion).
 NEXT_RARITY_WRAP = {
@@ -212,11 +242,36 @@ class CardRarityOdds:
 
     BASE_OFFSET = -0.05    # _baseRarityOffset (also the post-rare reset value)
     MAX_OFFSET = 0.40      # _maxRarityOffset
-    GROWTH = 0.01          # RarityGrowth (non-Scarcity)
 
-    def __init__(self, rng: random.Random) -> None:
+    def __init__(self, rng: random.Random, run: "RunState | None" = None) -> None:
         self._rng = rng
         self.current_value = self.BASE_OFFSET
+        # `run`, kept for the two ascension-gated lookups below (RarityGrowth
+        # and the Rare/Common table swap under Scarcity). Optional and
+        # storable at construction time even though ascension isn't known
+        # yet at RunState.__init__ — both lookups run has_ascension() lazily,
+        # at roll time, by which point start_act has set it.
+        self.run = run
+
+    @property
+    def GROWTH(self) -> float:  # noqa: N802 - matches the C# property name
+        """RarityGrowth (CardRarityOdds.cs:29): 0.005 under Scarcity (Asc 7),
+        else 0.01."""
+        from .actmap import AscensionLevel
+
+        if self.run is not None and self.run.has_ascension(AscensionLevel.SCARCITY):
+            return 0.005
+        return 0.01
+
+    def _odds(self, odds_type: RarityOddsType) -> tuple[float, float, float]:
+        """GetBaseOdds — the (rare, uncommon, common) row for `odds_type`,
+        swapped to the Scarcity table (Asc 7) when the type has one."""
+        from .actmap import AscensionLevel
+
+        if (self.run is not None and self.run.has_ascension(AscensionLevel.SCARCITY)
+                and odds_type in _SCARCITY_RARITY_ODDS):
+            return _SCARCITY_RARITY_ODDS[odds_type]
+        return _BASE_RARITY_ODDS[odds_type]
 
     def roll(self, odds_type: RarityOddsType) -> CardRarity:
         """The mutating roll used for encounter card rewards. Boss rolls use
@@ -235,7 +290,7 @@ class CardRarityOdds:
         """The read-only roll (shops): current offset applied, not advanced."""
         if offset is None:
             offset = self.current_value
-        rare, uncommon, _ = _BASE_RARITY_ODDS[odds_type]
+        rare, uncommon, _ = self._odds(odds_type)
         roll = _uniform(self._rng)
         rare_threshold = rare + offset
         if roll < rare_threshold:
@@ -248,7 +303,7 @@ class CardRarityOdds:
         """RollWithBaseOdds: pure base-odds roll, no offset (some events).
         Note the source compares against the raw uncommon band here (not
         rare+uncommon) — transcribed as-is."""
-        rare, uncommon, _ = _BASE_RARITY_ODDS[odds_type]
+        rare, uncommon, _ = self._odds(odds_type)
         roll = _uniform(self._rng)
         if roll < rare:
             return CardRarity.RARE
@@ -289,16 +344,27 @@ def roll_gold_reward(
     room_type: RoomType,
     proportion: float = 1.0,
     gold_range: tuple[int, int] | None = None,
+    run: "RunState | None" = None,
 ) -> int:
     """GoldReward.Populate: NextInt(min, max+1) on the room type's range,
     with the Monster range scaled by the encounter's GoldProportion.
 
     `gold_range` overrides the room-type default with an encounter's own
     Min/MaxGoldReward (both are virtual on EncounterModel — the Fake Merchant
-    pins 300)."""
+    pins 300).
+
+    `run`, when given, gates Poverty (Asc 3): EncounterModel.MinGoldReward/
+    MaxGoldReward (EncounterModel.cs:75-97) multiply the double `num` by
+    `AscensionHelper.PovertyAscensionGoldMultiplier` (0.75, AscensionHelper.
+    cs:12) BEFORE the `(int)num` truncating cast — applied to both bounds,
+    ahead of the Monster GoldProportion scaling below (which operates on the
+    already-truncated ints), matching the getters' own order of operations."""
+    from .actmap import AscensionLevel
     from .rng import Rng
 
     lo, hi = gold_range if gold_range is not None else GOLD_REWARD_RANGES[room_type]
+    if run is not None and run.has_ascension(AscensionLevel.POVERTY):
+        lo, hi = int(lo * 0.75), int(hi * 0.75)
     if room_type == RoomType.MONSTER:
         lo, hi = round(lo * proportion), round(hi * proportion)
     if hi <= 0:
@@ -446,7 +512,7 @@ def create_reward_cards(
             if card.is_upgradable:
                 odds = 0.0
                 if card.rarity != CardRarity.RARE:
-                    odds = run.act_index * UPGRADED_CARD_ODD_SCALING
+                    odds = run.act_index * upgraded_card_odd_scaling(run)
                 if upgrade_roll <= odds:
                     card.upgrade()
         cards.append(card)
@@ -902,7 +968,7 @@ def generate_combat_rewards(
         got_potion = run.potion_reward_odds.roll(room_type, force=force)
         if give_gold:
             rewards.gold = roll_gold_reward(
-                rew, room_type, gold_proportion, gold_range)
+                rew, room_type, gold_proportion, gold_range, run=run)
             run.gain_gold(rewards.gold)
         if got_potion:
             from .potion_pools import generate_random_potion
@@ -927,7 +993,7 @@ def generate_combat_rewards(
         # Legacy RL path (pre-SP2 draw order on the shared run.rng).
         if give_gold:
             rewards.gold = roll_gold_reward(
-                run.rng, room_type, gold_proportion, gold_range)
+                run.rng, room_type, gold_proportion, gold_range, run=run)
             run.gain_gold(rewards.gold)
         if run.potion_reward_odds.roll(room_type, force=force):
             rewards.potion = run.random_potion()

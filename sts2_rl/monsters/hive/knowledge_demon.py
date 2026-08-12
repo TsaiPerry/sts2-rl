@@ -5,7 +5,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import (
     ConditionalBranchState,
     MachineMonster,
@@ -16,12 +17,16 @@ from ..state_machine import (
 if TYPE_CHECKING:
     from ...combat import CombatCtx
 
-_SLAP_DMG = 17
-_OVERWHELM_DMG = 8
+_SLAP_DMG = 17               # KnowledgeDemon.cs:101 base
+_SLAP_DMG_ASC = 18           # DeadlyEnemies (asc 9+)
+_OVERWHELM_DMG = 8           # KnowledgeDemon.cs:105 base
+_OVERWHELM_DMG_ASC = 9       # DeadlyEnemies (asc 9+)
 _OVERWHELM_HITS = 3
-_PONDER_DMG = 11
+_PONDER_DMG = 11             # KnowledgeDemon.cs:103 base
+_PONDER_DMG_ASC = 13         # DeadlyEnemies (asc 9+)
 _PONDER_HEAL = 30
-_PONDER_STR = 2
+_PONDER_STR = 2              # KnowledgeDemon.cs:107 base
+_PONDER_STR_ASC = 3          # DeadlyEnemies (asc 9+)
 _DISINTEGRATION_DMG = (6, 7, 8)
 
 
@@ -39,26 +44,46 @@ class KnowledgeDemon(MachineMonster):
 
     min_hp = 379
     max_hp = 379
+    min_hp_asc = 399     # KnowledgeDemon.cs:97 ToughEnemies (asc 8+)
+    max_hp_asc = 399     # KnowledgeDemon.cs:99 `MaxInitialHp => MinInitialHp`
 
     def __init__(self, hooks, rng: random.Random | None = None) -> None:
         self.curse_counter = 0
         super().__init__(hooks, rng or random.Random())
+
+    def _slap_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _SLAP_DMG_ASC, _SLAP_DMG)
+
+    def _overwhelm_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _OVERWHELM_DMG_ASC, _OVERWHELM_DMG)
+
+    def _ponder_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _PONDER_DMG_ASC, _PONDER_DMG)
+
+    def _ponder_str(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _PONDER_STR_ASC, _PONDER_STR)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         curse = MoveState(
             "CURSE_OF_KNOWLEDGE_MOVE", self._curse, Intent(MoveType.DEBUFF)
         )
         slap = MoveState(
-            "SLAP_MOVE", self._slap, Intent(MoveType.ATTACK, damage=_SLAP_DMG)
+            "SLAP_MOVE", self._slap,
+            lambda: Intent(MoveType.ATTACK, damage=self._slap_dmg()),
         )
         overwhelm = MoveState(
             "KNOWLEDGE_OVERWHELMING_MOVE", self._overwhelm,
-            Intent(MoveType.ATTACK, damage=_OVERWHELM_DMG, hits=_OVERWHELM_HITS),
+            lambda: Intent(MoveType.ATTACK, damage=self._overwhelm_dmg(),
+                            hits=_OVERWHELM_HITS),
         )
         ponder = MoveState(
             "PONDER_MOVE", self._ponder,
-            Intent(MoveType.ATTACK, damage=_PONDER_DMG,
-                   also=(MoveType.HEAL, MoveType.BUFF)),
+            lambda: Intent(MoveType.ATTACK, damage=self._ponder_dmg(),
+                            also=(MoveType.HEAL, MoveType.BUFF)),
         )
         branch = ConditionalBranchState("CurseOfKnowledgeBranch")
         curse.follow_up = slap
@@ -103,17 +128,17 @@ class KnowledgeDemon(MachineMonster):
         self.curse_counter += 1
 
     def _slap(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _SLAP_DMG, 1)
+        self._execute_attack(ctx, self._slap_dmg(), 1)
 
     def _overwhelm(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _OVERWHELM_DMG, _OVERWHELM_HITS)
+        self._execute_attack(ctx, self._overwhelm_dmg(), _OVERWHELM_HITS)
 
     def _ponder(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _PONDER_DMG, 1)
+        self._execute_attack(ctx, self._ponder_dmg(), 1)
         from ...cmds import CreatureCmd, PowerCmd
         from ...powers import StrengthPower
         CreatureCmd.heal(ctx.hooks, self, _PONDER_HEAL)
-        PowerCmd.apply(ctx.hooks, self, StrengthPower, _PONDER_STR)
+        PowerCmd.apply(ctx.hooks, self, StrengthPower, self._ponder_str())
 
 
 KNOWLEDGE_DEMON_BOSS = Encounter(

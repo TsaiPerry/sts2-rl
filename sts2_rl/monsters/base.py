@@ -9,9 +9,16 @@ from ..creatures import Creature
 from ..hooks import CAT_MONSTER
 
 if TYPE_CHECKING:
+    from ..actmap import AscensionLevel
     from ..combat import CombatCtx
     from ..hooks import HookSystem
     from ..powers import Power
+
+
+def asc_value(hooks: "HookSystem", level: "AscensionLevel", asc_val, base):
+    """AscensionHelper.GetValueIfAscension (AscensionHelper.cs:22-47): the
+    ascension value when the run has `level`, the base value otherwise."""
+    return asc_val if hooks.ascension >= int(level) else base
 
 
 class MoveType(Enum):
@@ -62,11 +69,11 @@ class Intent:
         status_count carries the C# `StatusIntent.CardCount` — how many
         status cards are about to land. The spec has EIGHTEEN
         `new StatusIntent(` sites and the sim has a 1:1 construction for
-        each; as of 2026-08-01 only FIVE set the count (Aeonglass,
-        Test Subject, The Insatiable, Vantom, Noisebot) and THIRTEEN still
-        leave it None — see `monster/_intent_count_lost`, which is open, not
-        closed. `test_monster_tier_families.py`'s census ledger goes RED the
-        moment that 5-of-18 split changes.
+        each; as of 2026-08-06 EIGHT set the count (Aeonglass, Test Subject,
+        The Insatiable, Vantom, Noisebot, LeafSlimeS, LeafSlimeM, TwigSlimeM)
+        and TEN still leave it None — see `monster/_intent_count_lost`,
+        which is open, not closed. `test_monster_tier_families.py`'s census
+        ledger goes RED the moment that 8-of-18 split changes.
         Every other Intent construction leaves it at its default (None), and
         the observation encoder (full_env.py:571) still reads only the
         STATUS_CARD flag bit, not this value — the count is carried but
@@ -175,6 +182,14 @@ class Monster(Creature):
 
     min_hp: int = 0
     max_hp: int = 0
+    # Chomper.cs:28-30 pathfinder pattern: `MinInitialHp`/`MaxInitialHp` are
+    # C# PROPERTIES read dynamically (AscensionHelper.GetValueIfAscension),
+    # not fixed fields -- a monster whose ToughEnemies (asc 8+) HP range
+    # differs from its base range sets these two class attrs; None (the
+    # default) means "no override", i.e. every monster the game itself does
+    # not scale under ToughEnemies. See __init__'s roll below for the gate.
+    min_hp_asc: int | None = None
+    max_hp_asc: int | None = None
 
     # `CombatState.IterateHookListeners` adds `creature.Monster` to the listener
     # list for every creature with no Player, immediately after that creature's
@@ -233,7 +248,19 @@ class Monster(Creature):
         the other enemies already on this side, with their final HP."""
 
     def __init__(self, hooks: HookSystem, rng: random.Random) -> None:
-        hp = rng.randint(self.min_hp, self.max_hp)
+        # Chomper.cs:28-30 pathfinder: MinInitialHp/MaxInitialHp swap to the
+        # ToughEnemies (asc 8+) range when the subclass sets one. Exactly one
+        # randint call either way -- only the BOUNDS branch, never the draw
+        # itself -- so asc-0 rng streams are byte-identical to before this.
+        from ..actmap import AscensionLevel
+        use_asc = (
+            self.min_hp_asc is not None
+            and self.max_hp_asc is not None
+            and hooks is not None
+            and hooks.ascension >= int(AscensionLevel.TOUGH_ENEMIES)
+        )
+        lo, hi = (self.min_hp_asc, self.max_hp_asc) if use_asc else (self.min_hp, self.max_hp)
+        hp = rng.randint(lo, hi)
         super().__init__(hp)
         self._hooks = hooks
         # Stable per-combat creature id (CombatState.CombatId; attach order,
@@ -242,6 +269,25 @@ class Monster(Creature):
         # survive enemy-list reordering (e.g. Ovicopter egg slots). None until
         # the creature joins a combat.
         self.net_id: int | None = None
+        # The intent that was DISPLAYED to the player for the turn this
+        # enemy is about to perform, snapshotted by
+        # `CombatState._perform_move` right before `take_turn` runs. Exists
+        # because hand-rolled monsters (no MonsterMoveStateMachine) advance
+        # their own move-key state INSIDE `take_turn` -- e.g. Vantom.cs-port
+        # `Vantom.take_turn` sets `self._move_key = _TRANSITIONS[...]` at the
+        # end of the method it just used to execute. `current_intent` reads
+        # that same `_move_key`, so a live re-read at the next player-turn
+        # start (`_record_intent_history`, called from `_roll_enemy_intents`,
+        # which fires strictly AFTER this turn's `take_turn` already ran) sees
+        # the NEXT move, not the one just performed. MachineMonster instead
+        # advances only inside `telegraph_next_move` (gated by
+        # `performed_first_move`, run later in the very same pass) so its
+        # `current_intent` stays correctly sticky across the turn boundary on
+        # its own -- capturing here is a no-op for it (the value read before
+        # `take_turn` and after are identical) and only changes behaviour for
+        # the hand-rolled monsters that needed it. See
+        # `CombatState._record_intent_history`, the sole reader.
+        self.displayed_intent: "Intent | None" = None
         # MonsterMoveStateMachine._performedFirstMove, tracked at the combat
         # level so the player-turn-start intent pass can honour
         # FindNextMoveState's `!_performedFirstMove && IsMove -> return` guard

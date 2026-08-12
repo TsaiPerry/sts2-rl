@@ -4,22 +4,28 @@ import random
 from functools import partial
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, Monster, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, Monster, MoveType, asc_value
 from ..state_machine import weighted_branch_pick
 
 if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
-_JAB_DMG = 3
-_WHIRLWIND_DMG = 2
+_JAB_DMG = 3                 # Inklet.cs:34 base
+_JAB_DMG_ASC = 4             # DeadlyEnemies (asc 9+)
+_WHIRLWIND_DMG = 2           # Inklet.cs:36 base
+_WHIRLWIND_DMG_ASC = 3       # DeadlyEnemies (asc 9+)
 _WHIRLWIND_HITS = 3
-_PIERCING_DMG = 10
+_PIERCING_DMG = 10           # Inklet.cs:38 base
+_PIERCING_DMG_ASC = 11       # DeadlyEnemies (asc 9+)
 
 
 class Inklet(Monster):
     min_hp = 11
     max_hp = 17
+    min_hp_asc = 12          # Inklet.cs:30 ToughEnemies (asc 8+)
+    max_hp_asc = 18          # Inklet.cs:32 ToughEnemies (asc 8+)
 
     def __init__(
         self,
@@ -35,22 +41,34 @@ class Inklet(Monster):
         self._rng = rng or random.Random()
         self._move_key = "WHIRLWIND" if is_middle else "JAB"
 
+    def _jab_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _JAB_DMG_ASC, _JAB_DMG)
+
+    def _whirlwind_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _WHIRLWIND_DMG_ASC, _WHIRLWIND_DMG)
+
+    def _piercing_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _PIERCING_DMG_ASC, _PIERCING_DMG)
+
     @property
     def current_intent(self) -> Intent:
         if self._move_key == "JAB":
-            return Intent(MoveType.ATTACK, damage=_JAB_DMG)
+            return Intent(MoveType.ATTACK, damage=self._jab_dmg())
         if self._move_key == "WHIRLWIND":
-            return Intent(MoveType.ATTACK, damage=_WHIRLWIND_DMG, hits=_WHIRLWIND_HITS)
-        return Intent(MoveType.ATTACK, damage=_PIERCING_DMG)  # PIERCING_GAZE
+            return Intent(MoveType.ATTACK, damage=self._whirlwind_dmg(), hits=_WHIRLWIND_HITS)
+        return Intent(MoveType.ATTACK, damage=self._piercing_dmg())  # PIERCING_GAZE
 
     def take_turn(self, ctx: CombatCtx) -> None:
         move = self._move_key
         if move == "JAB":
-            self._execute_attack(ctx, _JAB_DMG, 1)
+            self._execute_attack(ctx, self._jab_dmg(), 1)
         elif move == "WHIRLWIND":
-            self._execute_attack(ctx, _WHIRLWIND_DMG, _WHIRLWIND_HITS)
+            self._execute_attack(ctx, self._whirlwind_dmg(), _WHIRLWIND_HITS)
         else:
-            self._execute_attack(ctx, _PIERCING_DMG, 1)
+            self._execute_attack(ctx, self._piercing_dmg(), 1)
 
     def telegraph_next_move(self) -> None:
         self._move_key = self._next_move(self._move_key)

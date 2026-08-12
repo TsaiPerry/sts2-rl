@@ -91,3 +91,50 @@ def test_ironclad_seed_fully_converged(seed, resync):
     result, tw = _replay(seed, resync)
     v = assess(result, tripwire_bug_sites=tw.bug_sites())
     assert v.clean, "\n".join(v.reasons)
+
+
+@pytest.mark.parametrize("seed", IRONCLAD_SEEDS)
+def test_travelable_points_never_add_unexplained_phantoms(seed):
+    """`RunState.travelable_points` (MapTravel.GetTravelablePointsFrom) must
+    only ever offer the current point's real pruned-graph children, UNLESS a
+    free-travel relic (Winged Boots) is active — in which case the source
+    (MapTravel.cs:16-19) offers every point on the next row instead, not a
+    union. Any candidate outside `current_point.children` while no relic's
+    `should_allow_free_travel()` is true would be a phantom move an RL agent
+    or the conformance runner could pick that the real game never offers.
+
+    Regression for an investigation that first looked like a phantom-move
+    bug: at 89U21BV1TZ act-0 floor 2, the sim offers 2 map candidates where
+    `run.map.grid`'s pruned edges show only 1 child of the current point.
+    That candidate is real, though — the save (`map_history[0][0]
+    .player_stats[].relic_choices`) confirms this seed's Neow pick was
+    Winged Boots, so the extra candidate is the free-travel row, exactly
+    matching `MapTravel.GetTravelablePointsFrom`. This test drives the full
+    replay and asserts NO candidate is unexplained by that rule, for every
+    map decision in both hard-gated seeds."""
+    import sts2_rl.run as run_mod
+
+    b = REC / seed / "floor_49"
+    rec = parse_recording(b / "actions.sts2replay")
+    oracle = parse_save(b / "run.save")
+
+    orig_enter_point = run_mod.RunState.enter_point
+    unexplained: list[str] = []
+
+    def patched(self, dest):
+        points = self.travelable_points()
+        children = set(self.current_point.children)
+        extra = [p for p in points if p not in children]
+        if extra and not any(r.should_allow_free_travel() for r in self.relics):
+            unexplained.append(
+                f"{self.current_point}: unexplained extra candidates {extra}"
+            )
+        return orig_enter_point(self, dest)
+
+    run_mod.RunState.enter_point = patched
+    try:
+        ReplayRunner(rec, oracle).run(stop_after_act=2)
+    finally:
+        run_mod.RunState.enter_point = orig_enter_point
+
+    assert not unexplained, "\n".join(unexplained)

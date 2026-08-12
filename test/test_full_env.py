@@ -65,7 +65,7 @@ def _masked_rollout(env, seed, max_steps=500):
 # must still be hand-updated on every real bump, it just now also fails on
 # the "forgot to bump" case the old assert was blind to.
 _SCHEMA_FOR_WIDTHS = {
-    (1677, 606): 6,
+    (1677, 606): 7,
 }
 
 

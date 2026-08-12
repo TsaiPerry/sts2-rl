@@ -43,6 +43,7 @@ from sts2_rl.monsters.underdocks import (
     ENCOUNTERS,
     GREMLIN_MERC_NORMAL,
     LAGAVULIN_MATRIARCH_BOSS,
+    LIVING_FOG_NORMAL,
     PHANTASMAL_GARDENERS_ELITE,
     SEAPUNK_NORMAL,
     SOUL_FYSH_BOSS,
@@ -282,13 +283,13 @@ class TestHauntedShip:
 
 class TestLivingFog:
     def test_opening_gas_applies_smoggy(self):
-        cs = fresh_with(LivingFog)
+        cs = fresh_encounter(LIVING_FOG_NORMAL)
         cs.end_turn()  # ADVANCED_GAS 8 + Smoggy
         assert cs.player.hp == 80 - 8
         assert "smoggy" in cs.player.powers
 
     def test_bloat_spawns_bomb_that_explodes(self):
-        cs = fresh_with(LivingFog)
+        cs = fresh_encounter(LIVING_FOG_NORMAL)
         cs.end_turn()  # ADVANCED_GAS 8
         cs.end_turn()  # BLOAT: spawn bomb + 5
         assert cs.player.hp == 80 - 8 - 5
@@ -309,7 +310,7 @@ class TestLivingFog:
         Gas Bomb therefore lands BEFORE the Living Fog (slot index 5), and
         successive bombs fill bomb2, bomb3... behind it -- the spawn is not
         appended at the end of the enemy list."""
-        cs = fresh_with(LivingFog)
+        cs = fresh_encounter(LIVING_FOG_NORMAL)
         fog = cs.enemies[0]
         fog._bloat(cs._ctx())
         assert [type(e).__name__ for e in cs.enemies] == ["GasBomb", "LivingFog"]
@@ -324,7 +325,7 @@ class TestLivingFog:
         """GetNextSlot is FirstOrDefault(unoccupied), so once the bomb1
         occupant dies the next spawn reclaims bomb1 and sorts ahead of the
         bomb2 occupant."""
-        cs = fresh_with(LivingFog)
+        cs = fresh_encounter(LIVING_FOG_NORMAL)
         fog = cs.enemies[0]
         fog._bloat(cs._ctx())
         cs.player.hp = 80
@@ -338,7 +339,7 @@ class TestLivingFog:
         assert cs.enemies.index(live[0]) < cs.enemies.index(bomb2)
 
     def test_bomb_count_capped_at_five_slots(self):
-        cs = fresh_with(LivingFog)
+        cs = fresh_encounter(LIVING_FOG_NORMAL)
         fog = cs.enemies[0]
         for _ in range(6):
             fog._bloat(cs._ctx())
@@ -347,14 +348,14 @@ class TestLivingFog:
         assert len(bombs) == 5
 
     def test_minion_bombs_do_not_prolong_combat(self):
-        cs = fresh_with(LivingFog)
+        cs = fresh_encounter(LIVING_FOG_NORMAL)
         fog = cs.enemies[0]
         fog._bloat(cs._ctx())
         DamageCmd.deal(cs.hooks, fog, 999, dealer=cs.player)
         assert cs._all_enemies_dead()
 
     def test_smoggy_locks_other_skills_for_the_turn(self):
-        cs = fresh_with(LivingFog)
+        cs = fresh_encounter(LIVING_FOG_NORMAL)
         PowerCmd.apply(cs.hooks, cs.player, SmoggyPower, 1)
         skills = [c for c in cs.player.hand if c.card_type == CardType.SKILL]
         if len(skills) < 2:

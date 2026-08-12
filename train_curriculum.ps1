@@ -24,11 +24,11 @@ only hands off from the prior stage the first time.
   .\train_curriculum.ps1 -S1Steps 33000 -S2Steps 33000 -S3Steps 33000 -S4Steps 33000 -RunSteps 33000 -Tag smoke
 #>
 param(
-    [long]$S1Steps  = 7000000,
+    [long]$S1Steps  = 5000000,
     [long]$S2Steps  = 3000000,
     [long]$S3Steps  = 3000000,
     [long]$S4Steps  = 3000000,
-    [long]$RunSteps = 13000000,
+    [long]$RunSteps = 15000000,
     # Off by default: both envs use the SAME floor-only reward (STS2RunEnv's
     # defaults; the curriculum env overrides no reward parameter), so the
     # critic's scale carries over and advantages are not mis-signed. What does
@@ -70,8 +70,13 @@ if ((Test-Path $s1Ckpt) -and -not $Resume) {
 
 # Shared across all stages. n-envs/n-steps are passed explicitly on stage 1 so
 # the geometry is recorded in the checkpoint; later stages inherit it on resume.
-$common = @("--arch", "entity", "--device", $Device,
-            "--n-envs", "32", "--n-steps", "512")
+# --arch entset: mlp/entity are REFUSED by checkpoints.make_model against the
+# current v4/v7 {f,i} envs (unnormalized vocabulary ids would swamp the numeric
+# features), so the old "entity" value here is a hard failure now.
+# --shared-encoder: R10 A/B kept it (3/3 win). It is stamped into the
+# checkpoint and a mismatched reload is refused, so it must be set on stage 1.
+$common = @("--arch", "entset", "--shared-encoder", "--device", $Device,
+            "--n-envs", "64", "--n-steps", "512", "--lr", "6e-4", "--minibatches", "8")
 
 function Invoke-Phase {
     param([string]$Name, [string[]]$PhaseArgs)

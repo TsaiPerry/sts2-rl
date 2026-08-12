@@ -151,6 +151,69 @@ def test_branch_prob_reaches_the_built_column_env():
     assert build_env(EnvSpec(kind="column"))._branch_prob == 0.0
 
 
+def test_ascension_reaches_the_built_run_env():
+    """Ascension has to survive the pickle to a spawn worker exactly like
+    branch_prob above -- it lives on EnvSpec, not set on the env after
+    construction."""
+    import pickle
+
+    from sts2_rl.vec_env import build_env
+
+    spec = EnvSpec(kind="run", ascension=10)
+    assert pickle.loads(pickle.dumps(spec)) == spec
+    assert build_env(spec)._ascension == 10
+    assert build_env(EnvSpec(kind="run"))._ascension == 0
+    assert build_env(EnvSpec(kind="column"))._ascension == 0
+
+
+def test_v7_reward_fields_reach_the_built_run_env():
+    """The v7 reward/deck-random knobs live on EnvSpec like ascension above."""
+    import pickle
+
+    from sts2_rl.vec_env import build_env
+
+    spec = EnvSpec(kind="run", reward_upgrade=0.5, reward_remove=0.25,
+                   reward_elite=0.5, reward_win_run=12.0,
+                   floor_rewards_by_act=(1.0, 1.5, 2.0), deck_random_prob=0.5)
+    assert pickle.loads(pickle.dumps(spec)) == spec
+    env = build_env(spec)
+    assert env._reward_upgrade == 0.5
+    assert env._reward_remove == 0.25
+    assert env._reward_elite == 0.5
+    assert env._reward_win == 12.0
+    assert env._floor_rewards_by_act == (1.0, 1.5, 2.0)
+    assert env._deck_random_prob == 0.5
+    # Defaults stay inert: reward_win_run=None keeps the env's own default.
+    dflt = build_env(EnvSpec(kind="run"))
+    assert dflt._reward_upgrade == 0.0
+    assert dflt._floor_rewards_by_act is None
+    assert dflt._reward_win == 3.0
+    # Column env gets the same knobs.
+    col = build_env(EnvSpec(kind="column", reward_upgrade=0.5))
+    assert col._reward_upgrade == 0.5
+
+
+def test_v8_hp_and_potion_potential_scale_reach_the_built_run_env():
+    """v8 plan Tasks 1-2/5: hp_potential_scale/potion_potential_scale live on
+    EnvSpec like the other v7/v8 reward knobs above."""
+    import pickle
+
+    from sts2_rl.vec_env import build_env
+
+    spec = EnvSpec(kind="run", hp_potential_scale=4.0, potion_potential_scale=0.3)
+    assert pickle.loads(pickle.dumps(spec)) == spec
+    env = build_env(spec)
+    assert env._hp_potential_scale == 4.0
+    assert env._potion_potential_scale == 0.3
+    # Defaults stay inert.
+    dflt = build_env(EnvSpec(kind="run"))
+    assert dflt._hp_potential_scale == 0.0
+    assert dflt._potion_potential_scale == 0.0
+    # Column env gets the same knobs.
+    col = build_env(EnvSpec(kind="column", hp_potential_scale=4.0))
+    assert col._hp_potential_scale == 4.0
+
+
 def test_workers_exit_with_close():
     venv = SubprocVecEnv(EnvSpec(kind="combat"), n_envs=2, n_workers=2)
     procs = list(venv._procs)

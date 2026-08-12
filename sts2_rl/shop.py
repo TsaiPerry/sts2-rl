@@ -418,10 +418,15 @@ class MerchantPotionEntry(MerchantEntry):
 
 class MerchantCardRemovalEntry(MerchantEntry):
     """MerchantCardRemovalEntry.cs — remove a card from the deck. Cost climbs
-    75 + 25 × removals used (non-ascension; Inflation raises it, not modeled)."""
+    base + increase × removals used: 75 + 25 (non-ascension) or 100 + 50
+    under Inflation (Asc 6, MerchantCardRemovalEntry.cs:20-22 — both `BaseCost`
+    and `PriceIncrease` are `AscensionHelper.GetValueIfAscension(Inflation,
+    ..., ...)`)."""
 
     BASE_COST = 75
     PRICE_INCREASE = 25
+    INFLATION_BASE_COST = 100
+    INFLATION_PRICE_INCREASE = 50
 
     def __init__(self, run: "RunState") -> None:
         super().__init__(run)
@@ -433,7 +438,13 @@ class MerchantCardRemovalEntry(MerchantEntry):
         return not self.used
 
     def _calc_cost(self) -> None:
-        self._cost = self.BASE_COST + self.PRICE_INCREASE * self.run.card_shop_removals_used
+        from .actmap import AscensionLevel
+
+        if self.run.has_ascension(AscensionLevel.INFLATION):
+            base, increase = self.INFLATION_BASE_COST, self.INFLATION_PRICE_INCREASE
+        else:
+            base, increase = self.BASE_COST, self.PRICE_INCREASE
+        self._cost = base + increase * self.run.card_shop_removals_used
 
     def _buy(self) -> bool:
         removable = self.run.removable_cards()

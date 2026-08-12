@@ -28,11 +28,14 @@ class StoneOfAllTime(Event):
     an unused value for its dialogue variant); the sim keeps the draw so its
     single RNG stream stays aligned with the source's call order.
 
-    The source's CanRemovePotions=false guard is UI-only and not modeled.
+    CanRemovePotions=false (StoneOfAllTime.cs:66) is modeled --
+    `locks_potion_belt`; see that attribute for why the old "UI-only" verdict
+    went stale.
     """
 
     id = "stone_of_all_time"
     name = "Stone of All Time"
+    locks_potion_belt = True
 
     @classmethod
     def is_allowed(cls, run: RunState) -> bool:

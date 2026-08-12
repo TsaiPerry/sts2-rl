@@ -838,6 +838,37 @@ class CreatureCmd:
             combat.enemies.insert(index, creature)
         if slot_name is not None:
             creature.slot_name = slot_name
+            # Seating into a slot EVICTS the corpse that still holds it.
+            #
+            # The sim keeps corpses in `combat.enemies` rather than physically
+            # dropping them (`Creature.is_removed_from_combat` is a predicate,
+            # not list membership — see its docstring), but the free-slot
+            # queries that picked `slot_name` deliberately ignore those corpses
+            # (`Encounter._occupied`), precisely because C#'s
+            # `CombatState.RemoveCreature` already took the dead one out of
+            # `Enemies`. So the only way to reach this line with the slot
+            # occupied is a creature C# had ALREADY removed — keeping it would
+            # be the divergence, not evicting it.
+            #
+            # Without this the list grew without bound across a long fight
+            # (Ovicopter lays 3 eggs per LAY into a 5-slot row, forever), and
+            # since both the observation and the action mask address enemies by
+            # raw list index with `MAX_ENEMIES` = 6 rows, the LIVING enemies
+            # slid past the cap: measured on `OVICOPTER_NORMAL` seed 0, a
+            # 7-entry list left the Ovicopter itself at index 6 — absent from
+            # the observation and absent from `living` in `combat_action_mask`,
+            # so no card could target the one enemy whose death ends the fight.
+            #
+            # Safe for the conformance replays, which resolve a recorded target
+            # by `net_id` and not by position (`combat_driver._target_idx`), and
+            # for the recorded `Enemies:` list, which already filters exactly
+            # the creatures evicted here (`combat_driver._live_enemy_states`).
+            for i, other in enumerate(combat.enemies):
+                if (other is not creature
+                        and other.slot_name == slot_name
+                        and other.is_removed_from_combat):
+                    del combat.enemies[i]
+                    break
             combat.sort_enemies_by_slot_name()
         # CreatureCmd.cs:70 — AfterCreatureAdded runs after the slot re-sort
         # and before Hook.AfterCreatureAddedToCombat (:80). It rolls the
@@ -1794,6 +1825,44 @@ class CardPileCmd:
             player.discard_pile.append(card)
         CardPileCmd._enter_combat(hooks, card)
         CardPileCmd._generated_for_combat(hooks, card)
+
+    @staticmethod
+    def move_to_hand(player: PlayerCombatState, card: Card) -> str:
+        """`CardPileCmd.Add(card, PileType.Hand)` for a card MOVED into the
+        hand from another pile — Liquid Memories, Droplet of Precognition,
+        Aggression. Returns the pile the card actually landed in.
+
+        A FULL hand redirects to the discard pile, at the model level:
+
+            bool isFullHandAdd = targetPile.Type == PileType.Hand
+                && targetPile.Cards.Count >= CardPile.MaxCardsInHand;   // 10
+            if (isFullHandAdd)
+                targetPile = CardPile.Get(PileType.Discard, card.Owner);
+            ...
+            targetPile.AddInternal(card2, ...);
+
+        (CardPileCmd.cs:419-421 and :510 — the reassigned `targetPile` is what
+        `AddInternal` appends to, so this is the real destination, not just
+        where the card animates; the player also gets the "HAND_FULL"
+        message at :522.)
+
+        Distinct from `add_to_hand`, which is the GENERATED-card path
+        (`AddGeneratedCardToCombat`) and fires the entered-combat /
+        generated-for-combat hooks a pile move must not.
+
+        Callers used to `player.hand.append(card)` unconditionally, which
+        produced an 11-card hand — over the game's own limit, and past
+        `full_env.MAX_HAND`, so the extra card was truncated out of the
+        observation AND unreachable by `combat_action_mask` (which iterates
+        `hand[:MAX_HAND]`): a card the policy could neither see nor play.
+        """
+        if len(player.hand) < player.MAX_HAND_SIZE:
+            CardPileCmd._assert_not_present(player.hand, card, "hand")
+            player.hand.append(card)
+            return "hand"
+        CardPileCmd._assert_not_present(player.discard_pile, card, "discard")
+        player.discard_pile.append(card)
+        return "discard"
 
 
 class CardSelectCmd:

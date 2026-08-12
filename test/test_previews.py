@@ -37,6 +37,7 @@ from sts2_rl.previews import (
     preview_incoming_damage,
     preview_total_incoming,
 )
+from sts2_rl.valueprops import ValueProp
 
 TWO_CRAWLERS = Encounter(
     id="two_crawlers_test", monster_classes=[FuzzyWurmCrawler, FuzzyWurmCrawler]
@@ -139,9 +140,14 @@ def test_card_damage_preview_pipeline():
     PowerCmd.apply(c.hooks, c.player, StrengthPower, 3)
     assert preview_card_damage(c, strike, e) == 9
     PowerCmd.apply(c.hooks, e, VulnerablePower, 2, applier=c.player)
-    assert preview_card_damage(c, strike, e) == 13      # int(9 * 1.5)
+    # Round-6 obs-parity fix: the game's own preview pipeline
+    # (Hook.ModifyDamageInternal, decimal arithmetic — Hook.cs:2511-2539)
+    # never truncates mid-pipeline; only its UI text call (DynamicVar.
+    # ToHighlightedString) casts to int, a call site this preview module
+    # doesn't reach. 9 * 1.5 stays 13.5, not int(9 * 1.5) == 13.
+    assert preview_card_damage(c, strike, e) == 13.5
     PowerCmd.apply(c.hooks, c.player, WeakPower, 1)
-    assert preview_card_damage(c, strike, e) == 10      # int(9 * 1.5 * 0.75)
+    assert preview_card_damage(c, strike, e) == pytest.approx(10.125)  # 9 * 1.5 * 0.75
 
 
 def test_card_damage_preview_dynamic_cards():
@@ -165,6 +171,45 @@ def test_card_block_preview_pipeline():
     PowerCmd.apply(c.hooks, c.player, FrailPower, 1)
     assert preview_card_block(c, defend) == 6           # int(8 * 0.75)
     assert preview_card_block(c, make_card("strike")) is None
+
+
+def test_card_block_preview_props_none_skips_modifiers():
+    """Obs-parity fix (89U diff vs live game dump, `hand.f` field offset
+    21): the game's own DecisionDumper (SpireBot's
+    `CombatObsWriter.cs:470`) reads this observation field via
+    `Hook.ModifyBlock(..., default, card, null, ...)` — `default(ValueProp)`
+    carries no `.Move` flag, so Dexterity's `ModifyBlockAdditive` and
+    Frail's `ModifyBlockMultiplicative` (both gated on
+    `props.IsPoweredCardOrMonsterMoveBlock()`, which requires `.Move`) are
+    no-ops for that specific call. `preview_card_block(..., props=
+    ValueProp.NONE)` must reproduce that — the raw base block, unaffected
+    by any modifier — while the default (`ValueProp.MOVE`, used by every
+    other caller: probes.py, the test above) keeps applying them."""
+    c = _combat()
+    defend = make_card("defend")
+    PowerCmd.apply(c.hooks, c.player, DexterityPower, 3)
+    PowerCmd.apply(c.hooks, c.player, FrailPower, 1)
+    assert preview_card_block(c, defend, props=ValueProp.NONE) == 5
+
+
+def test_hand_f_block_preview_field_unaffected_by_dexterity_or_frail():
+    """`full_env.card_features`'s field 21 (`hand.f`'s block-preview slot)
+    must equal field 20 (raw base block) whenever Dexterity/Frail are
+    active — the game's DecisionDumper captures this field with no `.Move`
+    prop, so those modifiers never apply to it (see `preview_card_block`'s
+    docstring). Regression test for the 89U obs-parity diff (224 hand.f
+    field-21 mismatches, all Defend/Impervious/True Grit-shaped: sim showed
+    a Frail/Dexterity-adjusted value, the live game dump showed the raw
+    base block)."""
+    from sts2_rl.full_env import card_features
+
+    c = _combat()
+    defend = make_card("defend")
+    PowerCmd.apply(c.hooks, c.player, DexterityPower, 3)
+    PowerCmd.apply(c.hooks, c.player, FrailPower, 1)
+    f = card_features(c, defend)
+    assert f[20] == f[21]                                # both == base_block/ABS_SCALE
+    assert f[20] == pytest.approx(5 / 100.0)
 
 
 def test_card_energy_cost_preview():

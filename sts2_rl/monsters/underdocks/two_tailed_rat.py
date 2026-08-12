@@ -4,7 +4,8 @@ import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, Monster, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, Monster, MoveType, asc_value
 from ..state_machine import (
     MachineMonster,
     MonsterMoveStateMachine,
@@ -17,8 +18,10 @@ if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
-_SCRATCH_DMG = 8
-_DISEASE_BITE_DMG = 6
+_SCRATCH_DMG = 8            # TwoTailedRat.cs:54 base
+_SCRATCH_DMG_ASC = 9        # DeadlyEnemies (asc 9+)
+_DISEASE_BITE_DMG = 6       # TwoTailedRat.cs:56 base
+_DISEASE_BITE_DMG_ASC = 7   # DeadlyEnemies (asc 9+)
 _SCREECH_FRAIL = 1
 _SUMMON_CHANCE = 0.75
 _OTHER_WEIGHT_WHEN_SUMMONABLE = 1.0 / 12.0
@@ -34,8 +37,22 @@ class TwoTailedRat(MachineMonster):
     summoned rats)."""
     name = "Two-Tailed Rat"
 
-    min_hp = 17
-    max_hp = 21
+    min_hp = 17          # TwoTailedRat.cs:50 base
+    max_hp = 21           # TwoTailedRat.cs:52 base
+    min_hp_asc = 18       # TwoTailedRat.cs:50 ToughEnemies (asc 8+)
+    max_hp_asc = 22       # TwoTailedRat.cs:52 ToughEnemies (asc 8+)
+
+    def _scratch_dmg(self) -> int:
+        """TwoTailedRat.cs:54 `ScratchDamage` -- read at both the
+        telegraphed Intent and the executed attack."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _SCRATCH_DMG_ASC, _SCRATCH_DMG)
+
+    def _disease_bite_dmg(self) -> int:
+        """TwoTailedRat.cs:56 `DiseaseBiteDamage` -- read at both the
+        telegraphed Intent and the executed attack."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _DISEASE_BITE_DMG_ASC, _DISEASE_BITE_DMG)
 
     def __init__(
         self,
@@ -52,11 +69,11 @@ class TwoTailedRat(MachineMonster):
     def build_machine(self) -> MonsterMoveStateMachine:
         scratch = MoveState(
             "SCRATCH_MOVE", self._scratch,
-            Intent(MoveType.ATTACK, damage=_SCRATCH_DMG),
+            lambda: Intent(MoveType.ATTACK, damage=self._scratch_dmg()),
         )
         bite = MoveState(
             "DISEASE_BITE_MOVE", self._disease_bite,
-            Intent(MoveType.ATTACK, damage=_DISEASE_BITE_DMG),
+            lambda: Intent(MoveType.ATTACK, damage=self._disease_bite_dmg()),
         )
         screech = MoveState(
             "SCREECH_MOVE", self._screech, Intent(MoveType.DEBUFF)
@@ -116,11 +133,11 @@ class TwoTailedRat(MachineMonster):
 
     def _scratch(self, ctx: CombatCtx) -> None:
         self.turns_until_summonable -= 1
-        self._execute_attack(ctx, _SCRATCH_DMG, 1)
+        self._execute_attack(ctx, self._scratch_dmg(), 1)
 
     def _disease_bite(self, ctx: CombatCtx) -> None:
         self.turns_until_summonable -= 1
-        self._execute_attack(ctx, _DISEASE_BITE_DMG, 1)
+        self._execute_attack(ctx, self._disease_bite_dmg(), 1)
 
     def _screech(self, ctx: CombatCtx) -> None:
         self.turns_until_summonable -= 1

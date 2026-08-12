@@ -185,6 +185,48 @@ def test_pull_relic_from_back_shop_rarity_uses_the_parity_bag():
         "on the SP2 parity path")
 
 
+def test_reconcile_node_relics_reconciles_the_grab_bag_too():
+    """The runner's relic swap must mirror the game's BAG state, not just the
+    relic list. When the sim's chest/elite pull granted relic X but the save
+    says the player picked Y, the game's bag still contains X (it was never
+    pulled) and no longer contains Y. Before the fix the reconcile only
+    swapped `run.relics`: X stayed out of the sim's bag and Y stayed IN it,
+    so a later shop re-offered Y — a relic the player already owned (89U
+    act-2: the floor-8 chest's Vajra resurfaced as floor-9 shop stock where
+    the game stocked Pendulum)."""
+    from sts2_rl.conformance.runner import ReplayRunner
+
+    run = RunState(string_seed="89U21BV1TZ")
+    run.start_run(acts=["overgrowth", "hive", "glory"], ascension=0)
+    n_before = len(run.relics)
+    bag_before = list(run.relic_grab_bag)
+    granted = run.obtain_relic_from_grab_bag(
+        rarity_rng=run.rng_set.treasure_room_relics)
+    picked_id = next(r for r in run.relic_grab_bag if r != granted.id)
+    picked_pos_before = run.relic_grab_bag.index(picked_id)
+
+    class _Stub:
+        def _node_picked_relics(self, act_index, room_index):
+            return [picked_id]
+
+    ReplayRunner._reconcile_node_relics(
+        _Stub(), run, 0, 5, n_before, bag_before=bag_before)
+
+    owned = [r.id for r in run.relics]
+    assert picked_id in owned and granted.id not in owned
+    assert picked_id not in run.relic_grab_bag, (
+        "the save-picked relic is owned now — the game pulled it from its "
+        "bag, so the sim's bag must lose it too")
+    assert granted.id in run.relic_grab_bag, (
+        "the un-picked sim grant was never pulled in the game — it must "
+        "return to the bag for later pulls")
+    assert run.relic_grab_bag == [r for r in bag_before if r != picked_id], (
+        "the final bag must be exactly the game's: the pre-room bag minus "
+        "the relic actually picked — every other id at its original "
+        "relative position")
+    assert picked_pos_before >= 0  # sanity: it really was in the bag
+
+
 def test_pull_relic_from_back_escalates_and_falls_back_to_circlet():
     """relic_pools/step6: `RelicFactory.PullNextRelicFromBack` shares
     `GetAvailableDeque`'s escalation ladder (Shop -> Common -> Uncommon ->

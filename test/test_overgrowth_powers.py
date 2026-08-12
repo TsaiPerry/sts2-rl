@@ -725,6 +725,20 @@ class TestPhrogParasiteInfect:
         assert "infested" in parasite.powers
         assert parasite.powers["infested"].amount == 4
 
+    def test_infect_telegraphs_the_status_intent_count(self):
+        # Round-6 obs-parity fix (monster/_intent_count_lost): INFECT adds
+        # exactly 3 Infection cards (`test_infect_adds_three_infection_to_
+        # discard` above), but its intent used to carry only the bare
+        # STATUS_CARD flag, not the count -- so `combat.enemies.f`'s
+        # status_count field read 0 instead of 0.3. Confirmed against seed
+        # 89U21BV1TZ act 0 floors 13/15's game dump.
+        cs = fresh_with(PhrogParasite)
+        parasite = cs.enemies[0]
+        assert parasite._move_key == "INFECT"
+        intent = parasite.current_intent
+        assert intent.has(MoveType.STATUS_CARD)
+        assert intent.status_count == 3
+
     def test_infect_then_lash_then_infect_again(self):
         cs = fresh_with(PhrogParasite)
         parasite = cs.enemies[0]
@@ -770,6 +784,19 @@ class TestWrigglerWriggle:
         before = len(cs.player.discard_pile)
         wriggler.take_turn(ctx)
         assert len(cs.player.discard_pile) == before
+
+    def test_wriggle_telegraphs_the_status_intent_count(self):
+        # Round-6 obs-parity fix (monster/_intent_count_lost): WRIGGLE adds
+        # exactly 1 Infection card (`take_turn` above), but its intent used
+        # to carry only the bare STATUS_CARD flag, not the count -- so
+        # `combat.enemies.f`'s status_count field read 0 instead of 0.1.
+        # Confirmed against seed 89U21BV1TZ act 0 floor 4's game dump.
+        cs = fresh_with(Wriggler)
+        wriggler = cs.enemies[0]
+        wriggler._move_key = "WRIGGLE"
+        intent = wriggler.current_intent
+        assert intent.has(MoveType.STATUS_CARD)
+        assert intent.status_count == 1
 
 
 class TestVantomDismember:

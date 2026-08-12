@@ -124,6 +124,7 @@ from .previews import (
     preview_incoming_damage,
     preview_total_incoming,
 )
+from .valueprops import ValueProp
 
 # Bump whenever the observation layout changes (any change invalidates saved
 # models — retrain). v2: absolute HP/block/damage encoding, pipeline-accurate
@@ -147,7 +148,25 @@ from .previews import (
 # living_fog_normal) can't hand one creature's history to another. New
 # `enemy{e}.intent_history.f` segments (no `.ids` half — a history slot
 # carries no id, only a `recorded` presence float; see OBS_SCHEMA.md §5.2).
-OBS_SCHEMA_VERSION = 6
+# v7 (SpireBot schema audit, docs/superpowers/specs/
+# 2026-08-04-spirebot-schema-audit.md): the audit walked every combat v6
+# field against the live game's readable API surface and found ZERO fields
+# requiring DROP — every segment has either a direct C# read (KEEP), a
+# stated proxy (REDEFINE), or a stated accumulation rule (ACCUMULATE). No
+# segment is added or removed and no width changes; v7 only reclassifies
+# semantics. The one REDEFINE with an actual behavioral consequence here:
+# `cards.f`'s `effective_cost` (the draw/discard/exhaust multiset,
+# `_pile_card_row`) now reads the card's PLAIN printed `energy_cost`
+# instead of running it through `previews.preview_card_energy_cost`'s hook
+# pipeline. Rationale: those piles are not `Hand`, so the game's own
+# `UpdateDynamicVarPreview`'s `runGlobalHooks` gate is FALSE for them — the
+# hook-modified number was never a game-readable proxy for a pile card to
+# begin with, only for a hand card (`hand.f`'s `effective_cost`, unchanged,
+# still hook-modified). This also brings `_pile_card_row` in line with
+# `run_env._run_card_row`, which already uses the plain cost for the same
+# reason (deck/reward/select-candidate rows never have a live CombatState
+# to run hooks through).
+OBS_SCHEMA_VERSION = 7
 
 # ── Fixed-size bounds (obs/action slots). Bump + retrain if an encounter or a
 #    relic ever exceeds these. ────────────────────────────────────────────────
@@ -730,7 +749,16 @@ def card_features(state: CombatState, card: Card | None) -> list[float]:
     f[19] = _clip01(card.base_hits / 10.0)
     if card.base_block is not None:
         f[20] = _clip01(card.base_block / ABS_SCALE)
-        eff_block = preview_card_block(s, card)
+        # Obs-parity fix (89U diff, field offset 21): the game's own
+        # DecisionDumper (SpireBot's CombatObsWriter.cs:470) captures this
+        # field via `Hook.ModifyBlock(..., default, card, null, ...)` —
+        # `default(ValueProp)` carries no `.Move` flag, so every block
+        # modifier gated on `IsPoweredCardOrMonsterMoveBlock()` (Dexterity,
+        # Frail, ...) is a no-op there. Passing `ValueProp.NONE` mirrors
+        # that exactly — see `preview_card_block`'s docstring. Do NOT
+        # "fix" this to `ValueProp.MOVE`; that reintroduces the 224-mismatch
+        # regression this fix closed.
+        eff_block = preview_card_block(s, card, props=ValueProp.NONE)
         f[21] = _clip01(eff_block / ABS_SCALE)
     f[22] = _clip01(card.base_hp_loss / ABS_SCALE)
     magic = card.magic_number
@@ -738,8 +766,14 @@ def card_features(state: CombatState, card: Card | None) -> list[float]:
     # ── R2 fields (OBS_SCHEMA.md §3.4) ────────────────────────────────
     f[24] = _clip01(card.affliction.amount / 10.0) if card.affliction is not None else 0.0
     f[25] = 1.0 if card.exhaust_on_next_play else 0.0
-    f[26] = 1.0 if card._has_single_turn_retain else 0.0
-    f[27] = 1.0 if card._has_single_turn_sly else 0.0
+    # Round-13: read the game-mirroring properties, not the raw single-turn
+    # flags — C#'s ShouldRetainThisTurn/IsSlyThisTurn (CardModel.cs:590-629,
+    # ported 1:1 as `should_retain_this_turn`/`is_sly_this_turn`) are the
+    # KEYWORD "or" the single-turn grant, so a permanently-Retain card
+    # (Luminesce's canonical Retain keyword) must read 1 here; the raw-flag
+    # read left it 0 (933T (2,6) hand.f+26: game=1, sim=0).
+    f[26] = 1.0 if card.should_retain_this_turn else 0.0
+    f[27] = 1.0 if card.is_sly_this_turn else 0.0
     f[28] = _clip01(card.base_replay_count / 3.0)
     return f
 
@@ -956,14 +990,20 @@ def card_instance_row(
     `CombatState` (deck, reward cards, select candidates —
     `run_env._run_card_row`).
 
-    `effective_cost` is an explicit PARAMETER rather than computed here,
-    because the one genuine divergence between the two callers is exactly
-    how that one field is produced (OBS_SCHEMA.md §2.3): in combat it is
-    hook-modified (`previews.preview_card_energy_cost`, which runs the card
-    through `state.hooks`/`state.player.energy`); out of combat there is no
-    live `CombatState` to run hooks through, so `run_env._run_card_row`
-    passes the card's plain printed `energy_cost` instead — which is also
-    what the game's own out-of-combat screens (deck view, shop, reward) show.
+    `effective_cost` is an explicit PARAMETER rather than computed here:
+    this function only shapes the row, it never decides how the cost field
+    is produced. Each caller passes whatever value matches what the game
+    itself would show for that row (OBS_SCHEMA.md §2.3). `hand.f` rows
+    (built via `card_features`, not this function) pass a hook-modified
+    cost from `previews.preview_card_energy_cost` (runs the card through
+    `state.hooks`/`state.player.energy`), since the game's own preview
+    pipeline does the same for cards actually in `Hand`. Every row built
+    through THIS function passes the card's plain printed `energy_cost`
+    instead: combat pile cards (`_pile_card_row`, below — v7 REDEFINE,
+    draw/discard/exhaust are not in `Hand` so the game never hook-modifies
+    their cost) and every out-of-combat row with no live `CombatState`
+    (`run_env._run_card_row` — deck, reward cards, select candidates —
+    which is also what the game's own out-of-combat screens show).
     Splitting the row shape from cost computation this way means the two
     callers share ONE encoder rather than hand-keeping two copies of the row
     shape that have to agree by construction (T5b's fix — see the T5a report
@@ -982,7 +1022,22 @@ def card_instance_row(
 
 
 def _pile_card_row(state: CombatState, card: Card, pile_id: int) -> tuple[list[int], list[float]]:
-    return card_instance_row(card, pile_id, preview_card_energy_cost(state, card))
+    """v7 (SpireBot schema audit, REDEFINE): draw/discard/exhaust pile cards
+    are not in ``Hand``, so the game's own preview pipeline never hook-
+    modifies their cost — the game-readable proxy is the card's plain
+    printed ``energy_cost``, same as ``run_env._run_card_row`` already uses
+    for out-of-combat card rows (deck/reward/select-candidates), and
+    unlike ``hand.f``'s ``effective_cost`` (still hook-modified via
+    ``preview_card_energy_cost`` — cards actually in hand ARE covered by
+    the game's preview pipeline). Round-4 fix: this must be
+    ``canonical_energy_cost`` (the printed cost, immune to every live
+    modifier), not ``energy_cost`` (which still applies
+    ``_free_this_turn``/``_cost_this_turn``/``_cost_this_combat``/
+    ``_cost_delta_this_turn`` even for cards outside hand) — a whole-combat
+    discount granted while a card was in hand otherwise leaks into this
+    view after the card moves to a pile, where the game's own
+    ``EnergyCost.Canonical`` proxy never reflected it at all."""
+    return card_instance_row(card, pile_id, card.canonical_energy_cost)
 
 
 def _cards_rows(state: CombatState) -> list[tuple[list[int], list[float]]]:
@@ -1065,7 +1120,9 @@ def write_combat_obs(
     # History scalars the deck can condition on (Stomp, Spite, ...).
     cards_this_turn = sum(1 for _ in s.history.of_type(CardPlayedEntry, this_turn=True))
     dmg_taken = sum(
-        e.amount for e in s.history.of_type(DamageReceivedEntry) if e.target is p
+        e.amount
+        for e in s.history.of_type(DamageReceivedEntry, this_turn=True)
+        if e.target is p
     )
     buf.f[F("player.cards_played_this_turn")] = _clip01(cards_this_turn / 10.0)
     buf.f[F("player.attacks_this_turn")] = _clip01(s.history.attack_plays_this_turn() / 10.0)
@@ -1161,6 +1218,7 @@ class STS2FullCombatEnv(gym.Env):
         current_hp: int | None = None,
         potion_slots: Sequence[str | None] | None = None,
         snapshots: "SnapshotDataset | str | None" = None,
+        ascension: int = 0,
         card_obs: str = "hybrid",
         card_selector: Callable[[str, list[Card], int], list[Card]] | None = scripted_card_selector,
         reward_win: float = 1.0,
@@ -1253,6 +1311,10 @@ class STS2FullCombatEnv(gym.Env):
         self._snapshot_path = None if isinstance(snapshots, SnapshotDataset) else snapshots
         self._card_obs = card_obs
         self._card_selector = card_selector
+        # v7 (plan Task 10): threaded straight into CombatState(...), which
+        # seeds hooks.ascension BEFORE create_monsters — never set
+        # hooks.ascension after construction (HP rolls read it at spawn).
+        self._ascension = ascension
         self._reward_win = reward_win
         self._reward_loss = reward_loss
         self._win_hp_bonus = win_hp_bonus
@@ -1375,6 +1437,7 @@ class STS2FullCombatEnv(gym.Env):
             card_selector=self._card_selector,
             relics=relics, max_hp=max_hp, current_hp=current_hp,
             max_potions=max_potions,
+            ascension=self._ascension,
         )
         return state
 

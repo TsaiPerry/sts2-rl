@@ -87,6 +87,7 @@ from __future__ import annotations
 
 import math
 import random
+from collections import Counter
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Callable
@@ -101,6 +102,8 @@ from .cards import Card
 from .characters import DEFAULT_CHARACTER
 from .driver import (
     POTION_ACTION_BASE,
+    REST_HEAL,
+    REST_SMITH,
     DecisionKind,
     DecisionRequest,
     RunDriver,
@@ -131,8 +134,10 @@ from .full_env import (
     combat_obs_segments_i,
     write_combat_obs,
 )
+from .combat import Phase
 from .obs import ObsBuffer, ObsLayout, PAD, oid
 from .relic_obs import relic_row
+from .rooms import RoomType
 from .run import RunState
 from .vocab import capacity as vocab_capacity, frozen_ids
 
@@ -203,7 +208,48 @@ from .vocab import capacity as vocab_capacity, frozen_ids
 # (6 * 3 * 15 = 270) with `i_dim` unchanged — bumped explicitly this time
 # (learned from v8's defect: a combat-side width change propagates here and
 # must move this number in the SAME change, not be discovered later).
-RUN_OBS_SCHEMA_VERSION = 9
+# v10 (SpireBot schema audit, docs/superpowers/specs/
+# 2026-08-04-spirebot-schema-audit.md, Task 4): the audit walked every run
+# v9 field (excluding the embedded `combat.*` block, covered by the v6->v7
+# audit/bump) against the live game's readable API surface and found ZERO
+# fields requiring DROP — every segment has either a direct C# read (KEEP),
+# a stated proxy (REDEFINE), or a stated accumulation rule (ACCUMULATE). No
+# segment is added or removed and no width changes (`f_dim`/`i_dim` both
+# unchanged from v9); v10 is a pure version bump. The audit names two
+# REDEFINE rows (`phase`, `select.purpose.ids`) but BOTH are
+# documentation-only for this sim: their proxy language describes how the
+# future C# `ObsBuilder` will SOURCE the value from live game state (screen-
+# predicate dispatch for `phase`; mod-side session memory of "what action did
+# I just dispatch" for `select.purpose`), not a change to what this Python
+# env computes today — `run_obs_segments_f`'s `phase` one-hot (from
+# `DecisionKind`) and `_build_obs`'s `select.purpose.ids` (from
+# `DecisionRequest.purpose` via `PURPOSE_INDEX`) are both already exactly
+# what the audit's proxy targets, so nothing here changes. Embedded combat
+# block: v7 (see full_env.OBS_SCHEMA_VERSION's own v7 comment).
+# v10 amendment (Task B, same day, addendum to the audit above): the audit's
+# own "also noted" flagged a real content GAP outside its KEEP/DROP/REDEFINE/
+# ACCUMULATE scope — `DecisionKind.REWARD_RELIC` (added at run-obs v5) never
+# got a `reward.relic.ids/.f` block, so the policy could see THAT a relic
+# offer exists (`phase`'s one-hot, the `CHOICE` take/skip mask) but not WHICH
+# relic. Perry approved closing that gap AS PART OF v10 rather than a v11
+# bump — v10 is brand-new and uncommitted, nothing has trained on it, and
+# every doc/test/contract already reference 10, so amending in place avoids
+# a same-day double bump. `reward.relic.f`/`reward.relic.ids` (width 1 each,
+# a single scalar id + presence float, mirroring `reward.potion` exactly —
+# not `reward.cards`' multi-slot block, because `RunState.offer_relic`/
+# `DecisionRequest.relic` always offers exactly ONE relic at a time even when
+# `CombatRewards.relics` holds several) are the only width change to EITHER
+# half of this schema since v9: `f_dim`/`i_dim` each grow by 1.
+#
+# v11: `REWARD_CARD_SLOTS` 3 -> 4 (see the constant's own comment — Lasting
+# Candy's appended Power option was being truncated out of an observation
+# whose action stayed legal). `reward.cards.f`/`reward.cards.ids` each grow by
+# one 4-wide row, so `f_dim`/`i_dim` each grow by 4. Unlike the v10 relic
+# amendment above this is a real bump: v10 is no longer brand-new. There is no
+# migration function — nothing on disk claims schema 10 (runs/ was cleared
+# before the v6 curriculum), and `check_checkpoint` refuses a mismatch outright
+# rather than guessing.
+RUN_OBS_SCHEMA_VERSION = 11
 
 # ── Fixed-size bounds ────────────────────────────────────────────────────
 # Potion belt headroom. T5a Task 0 moved this from an independently-declared
@@ -248,8 +294,21 @@ MAP_GRID_NODE = 1 + len(MapPointType) + _MAP_WIDTH + 1
 SHOP_CARD_SLOTS = 7
 SHOP_RELIC_SLOTS = 3
 SHOP_POTION_SLOTS = 3
-# Reward screen card choices (RewardsSet: always 3).
-REWARD_CARD_SLOTS = 3
+# Reward screen card choices. A CardRewardGroup always draws
+# `CARD_REWARD_COUNT` = 3 (every construction site in the codebase passes 3 or
+# takes the default), but Lasting Candy APPENDS one Power option to a
+# post-encounter offer on its triggering combats (`cards.extend(added)`,
+# relics/lasting_candy.py) — the only writer in the codebase that grows this
+# list, and it adds exactly one — so a live screen is 3 or 4 wide.
+#
+# The cap has to cover 4, not 3, because the count also moves the SKIP action:
+# `DecisionRequest.legal_actions` masks `range(len(cards) + 1)` with skip last
+# (driver.py), so on a 4-card screen index 3 is the bonus Power and skip moves
+# to 4. At cap 3 the extra card was truncated out of the observation while
+# staying legal to pick, and a policy that had learned "slot 3 = skip" would
+# take an unseen card instead. `test_reward_card_slots_cover_lasting_candy`
+# (test/test_run_obs_v4.py) pins the width against the live maximum.
+REWARD_CARD_SLOTS = 4
 
 # R2 sizing (OBS_SCHEMA.md §2.3/§4): the act-0 masked-random census measured
 # a max deck of 18, which is only a floor (every census in this project is
@@ -490,6 +549,7 @@ def run_obs_segments_f(card_obs: str = "hybrid") -> list[tuple[str, int]]:
     segs.append(("shop.removal", 3))                        # present,cost,gold — R6 cost
     segs.append(("reward.cards.f", REWARD_CARD_SLOTS * 4))
     segs.append(("reward.potion.f", 1))                     # present
+    segs.append(("reward.relic.f", 1))                      # present
     segs.extend([
         ("select.count", 1),
         ("select.skippable", 1),
@@ -519,6 +579,7 @@ def run_obs_segments_i(card_obs: str = "hybrid") -> list[tuple[str, int]]:
         ("shop.potions.ids", SHOP_POTION_SLOTS * 1),
         ("reward.cards.ids", REWARD_CARD_SLOTS * 4),
         ("reward.potion.ids", 1),
+        ("reward.relic.ids", 1),
         ("select.purpose.ids", 1),
         ("select.candidates.ids", MAX_SELECT_CANDIDATES * 4),
     ]
@@ -614,8 +675,22 @@ def _run_card_row(card: Card) -> tuple[list[int], list[float]]:
     never invent a new pile id for a run-side block. Fix-pass correction
     (review item 7): this used to take an unused ``pile_id: int = PAD``
     parameter — every one of its 4 call sites relied on the default — so it
-    is hardcoded here instead of threaded through as dead flexibility."""
-    return card_instance_row(card, PAD, card.energy_cost)
+    is hardcoded here instead of threaded through as dead flexibility.
+    Round-4 fix: ``canonical_energy_cost`` (printed, modifier-immune), not
+    ``energy_cost`` — see ``full_env._pile_card_row``'s docstring for why
+    the plain getter is the wrong accessor even out of combat (a run-side
+    Card object is fresh per screen today, but the two callers should not
+    silently diverge in which accessor is "the printed cost")."""
+    return card_instance_row(card, PAD, card.canonical_energy_cost)
+
+
+def _hp_potential(ratio: float, knee: float, low_share: float) -> float:
+    """Concave HP potential: `low_share` of the value lives in [0, knee]
+    (danger zone — HP is precious), the rest in [knee, 1] (HP is currency
+    to spend on elites). Piecewise-linear, phi(0)=0, phi(1)=1."""
+    if ratio <= knee:
+        return low_share * ratio / knee
+    return low_share + (1.0 - low_share) * (ratio - knee) / (1.0 - knee)
 
 
 class STS2RunEnv(gym.Env):
@@ -632,8 +707,20 @@ class STS2RunEnv(gym.Env):
         reward_loss: float = 0.0,
         win_hp_bonus: float = 0.0,
         hp_reward_scale: float = 0.0,
+        hp_potential_scale: float = 0.0,
+        hp_potential_knee: float = 0.35,
+        hp_potential_low_share: float = 0.7,
         floor_reward: float = 1.0,
         act_reward: float = 0.0,
+        floor_rewards_by_act: "tuple[float, ...] | None" = None,
+        reward_upgrade: float = 0.0,
+        reward_remove: float = 0.0,
+        reward_elite: float = 0.0,
+        reward_relic: float = 0.0,
+        rest_heal_mask_above: float | None = None,
+        potion_potential_scale: float = 0.0,
+        deck_random_prob: float = 0.0,
+        deck_random_cards: tuple[int, int] = (4, 14),
         max_steps: int = 10_000,
         render_mode: str | None = None,
         character: str = DEFAULT_CHARACTER,
@@ -654,8 +741,54 @@ class STS2RunEnv(gym.Env):
         self._reward_loss = reward_loss
         self._win_hp_bonus = win_hp_bonus
         self._hp_reward_scale = hp_reward_scale
+        # v8 HP-economy (plan Task 1): concave HP potential shaping. Default
+        # OFF (scale 0.0) — see `_hp_potential` for the piecewise-linear
+        # curve shape.
+        self._hp_potential_scale = hp_potential_scale
+        self._hp_potential_knee = hp_potential_knee
+        self._hp_potential_low_share = hp_potential_low_share
         self._floor_reward = floor_reward
         self._act_reward = act_reward
+        # v7 reward terms (plan Task 6). All default OFF. Accepted wrinkles,
+        # by design: an upgraded card taken from a reward counts as
+        # +upgrade_level upgrades (it IS acquired power); a transform
+        # (remove+add in one step) nets zero removals. (v8 Task 2 revises the
+        # old "a potion SOLD counts as used" wrinkle below: `_ep_potions_used`
+        # now counts only actual drinks — a belt decrease with no matching
+        # drink answer, e.g. an event trading a potion away, still moves the
+        # v8 ledger but no longer inflates this count. There is no shop-sell
+        # feature in this sim; "sold" here means any non-drink belt loss.)
+        self._floor_rewards_by_act = (
+            tuple(floor_rewards_by_act) if floor_rewards_by_act is not None else None
+        )
+        self._reward_upgrade = reward_upgrade
+        self._reward_remove = reward_remove
+        self._reward_elite = reward_elite
+        # v8 relic reward (plan Task 3): +reward_relic per relic gained,
+        # measured the same way as the deck-length delta above (out-of-combat
+        # decisions only). Default OFF.
+        self._reward_relic = reward_relic
+        # v8 curriculum mask (plan Task 4): above this hp/max_hp ratio at a
+        # rest site, REST_HEAL's mask bit is cleared IF at least one other
+        # rest action is legal — forces generation of upgrade-path data
+        # instead of letting the policy always top off. Default None (off);
+        # a mask knob, not a reward term, so it is deliberately NOT stamped
+        # into checkpoints (`checkpoints.py`) — see `action_masks` below.
+        self._rest_heal_mask_above = rest_heal_mask_above
+        # v8 potion ledger (plan Task 2): potion_potential_scale * (potions
+        # held now - potions held before), off the SAME belt-count delta v7
+        # Task 6c already tracks below. No terminal term — a potion still on
+        # the belt at episode end keeps its +k (that asymmetry against the
+        # -k a drink/loss pays IS the hoarding-vs-spending weighing bar);
+        # `_ep_potions_expired` just tallies the held count at episode end
+        # for visibility, with no reward attached. Default OFF.
+        self._potion_potential_scale = potion_potential_scale
+        # v7 deck randomization (plan Task 9): card-exposure domain
+        # randomization — with probability deck_random_prob an episode
+        # starts with 4..14 extra reward-pool cards appended to the starter
+        # deck, so every card gets combat playtime regardless of drafting.
+        self._deck_random_prob = deck_random_prob
+        self._deck_random_cards = tuple(deck_random_cards)
         self._max_steps = max_steps
         self.render_mode = render_mode
         # Harvest hook (phase 3, Task 4): threaded straight to the
@@ -752,9 +885,59 @@ class STS2RunEnv(gym.Env):
         if seed is not None:
             self._rng = random.Random(seed)
         self._run = self._make_run_state()
+        # v7 deck randomization — BEFORE the driver greenlet starts, so the
+        # extra cards exist from the first decision on. The prob > 0.0
+        # short-circuit is load-bearing (branch_prob precedent,
+        # curriculum_env.py:238-244): the default env must draw no rng here.
+        if self._deck_random_prob > 0.0 and self._rng.random() < self._deck_random_prob:
+            self._randomize_deck(self._run)
         self._result = None
         self._steps = 0
         self._map_grid_cache = None
+        # Per-episode behavior tallies (`_count_behavior`), surfaced by
+        # `_info` at episode end for training-time logging.
+        self._ep_end_turns = 0
+        self._ep_energy_unspent = 0.0
+        self._ep_card_offers = 0
+        self._ep_card_takes = 0
+        self._ep_rest_visits = 0
+        self._ep_rest_heals = 0
+        self._ep_rest_upgrades = 0
+        # (act, floor) of the rest site currently being answered, plus
+        # whether it has already been credited — see `_count_behavior`.
+        self._rest_visit_key: tuple[int, int] | None = None
+        self._rest_healed_here = False
+        self._rest_upgraded_here = False
+        # v7 tallies (plan Task 6): counted always, rewarded only when the
+        # matching reward_* kwarg is non-zero.
+        self._ep_upgrades = 0
+        self._ep_removes = 0
+        # v8 (plan Task 3): relics gained tally, alongside the deck deltas.
+        self._ep_relics = 0
+        # v8 (plan Task 1): combat sloppiness tally, independent of the
+        # hp_potential_scale shaping (which can be off while this stays on).
+        self._ep_hp_lost = 0
+        self._ep_elites_won = 0
+        self._ep_potions_obtained = 0
+        self._ep_potions_used = 0
+        # v8 potion ledger (plan Task 2): USE classification + timing.
+        # `_ep_potions_used_elite/boss/normal` sum to `_ep_potions_used` (now
+        # a drinks-only count, see the __init__ comment); `_ep_potion_use_hp`
+        # is a running SUM of hp/max_hp at each drink (eval divides by uses);
+        # `_ep_potions_expired` is overwritten every step with the CURRENT
+        # held count, so it lands on the belt count at whatever step turns
+        # out to be the episode's last — no terminal-only special case.
+        self._ep_potions_used_elite = 0
+        self._ep_potions_used_boss = 0
+        self._ep_potions_used_normal = 0
+        self._ep_potions_expired = 0
+        self._ep_potion_use_hp = 0.0
+        self._elite_reward_key: tuple[int, int] | None = None
+        # v7 per-card exposure tallies (plan Task 8): card CLASS name (unique
+        # per card class, unlike display ids) -> count. Eval-only — never in
+        # vec_env.EP_METRIC_KEYS (those batch as flat floats).
+        self._ep_card_offer_ids: Counter[str] = Counter()
+        self._ep_card_take_ids: Counter[str] = Counter()
 
         run = self._run
 
@@ -773,7 +956,34 @@ class STS2RunEnv(gym.Env):
 
         self._glet = greenlet.greenlet(_drive)
         self._switch(None)   # run until the first decision
+        # Baselines for the v7 deck/belt deltas — taken AFTER the driver runs
+        # to the first decision (the run is set up, Neow pending): deck and
+        # belt are their true episode-start selves here.
+        self._deck_upgrade_base = sum(c.upgrade_level for c in run.deck)
+        self._deck_len_base = len(run.deck)
+        self._belt_base = sum(1 for p in run.potions if p is not None)
+        # v8 (plan Task 3): relic count baseline. Taken here, same as the
+        # deck/belt baselines, so the starting relic (e.g. Burning Blood) is
+        # already counted and never fires the reward.
+        self._relic_len_base = len(run.relics)
         return self._build_obs(), self._info()
+
+    def _randomize_deck(self, run: RunState) -> None:
+        """Append k ~ U[deck_random_cards] reward-pool cards (drawn with
+        replacement on the env rng), each upgraded with probability 0.25 when
+        upgradable, via the silent deck-add AscendersBane uses (run.py:1318 —
+        plain append; no hooks fire, there is no combat yet)."""
+        from .cards import make_card
+        from .cards.pool import reward_pool_card_ids
+
+        rng = self._rng
+        pool = reward_pool_card_ids(run.card_pool)
+        k = rng.randint(*self._deck_random_cards)
+        for _ in range(k):
+            card = make_card(rng.choice(pool))
+            if card.max_upgrade_level > 0 and rng.random() < 0.25:
+                card.upgrade()
+            run.deck.append(card)
 
     def step(self, action: int):
         assert self._run is not None, "call reset() before step()"
@@ -787,15 +997,37 @@ class STS2RunEnv(gym.Env):
                 # Illegal action: a no-op step (mirrors full_env semantics).
                 return self._build_obs(), 0.0, False, self._steps >= self._max_steps, self._info()
             hp_before = run.hp
+            max_hp_before = run.max_hp
             floor_before = run.total_floor
             act_before = run.act_index
+            elites_before = self._ep_elites_won
+            self._count_behavior(request, answer)
             self._switch(answer)
         else:
             hp_before, floor_before, act_before = run.hp, run.total_floor, run.act_index
+            max_hp_before = run.max_hp
+            elites_before = self._ep_elites_won
 
+        self._ep_hp_lost += max(0, hp_before - run.hp)
         reward = self._hp_reward_scale * (min(run.hp, run.max_hp) - min(hp_before, run.max_hp)) / max(1, run.max_hp)
-        reward += self._floor_reward * (run.total_floor - floor_before)
+        # v8 HP-economy (plan Task 1): concave potential-based shaping, each
+        # ratio measured against its OWN step's max_hp (before-ratio uses
+        # max_hp_before, after-ratio uses the post-step max_hp) so a max-HP
+        # gain can't fire this term backwards. Death terminal: hp=0 -> phi=0,
+        # no special case needed (the piecewise formula already gives 0).
+        ratio_before = min(hp_before, max_hp_before) / max(1, max_hp_before)
+        ratio_after = min(run.hp, run.max_hp) / max(1, run.max_hp)
+        reward += self._hp_potential_scale * (
+            _hp_potential(ratio_after, self._hp_potential_knee, self._hp_potential_low_share)
+            - _hp_potential(ratio_before, self._hp_potential_knee, self._hp_potential_low_share)
+        )
+        if self._floor_rewards_by_act is not None:
+            act_i = max(0, min(run.act_index, len(self._floor_rewards_by_act) - 1))
+            reward += self._floor_rewards_by_act[act_i] * (run.total_floor - floor_before)
+        else:
+            reward += self._floor_reward * (run.total_floor - floor_before)
         reward += self._act_reward * (run.act_index - act_before)
+        reward += self._reward_elite * (self._ep_elites_won - elites_before)
 
         terminated = self._result is not None
         if terminated:
@@ -807,7 +1039,128 @@ class STS2RunEnv(gym.Env):
                 reward += self._reward_loss
         truncated = (not terminated) and self._steps >= self._max_steps
 
+        # v7 deck/belt deltas — measured only between decisions with no live
+        # combat (in-combat temporary upgrades and mid-combat deck adds are
+        # ignored; permanent changes get credited at the first out-of-combat
+        # step).
+        if self._request is None or self._request.kind != DecisionKind.COMBAT:
+            up_now = sum(c.upgrade_level for c in run.deck)
+            if up_now > self._deck_upgrade_base:
+                gained = up_now - self._deck_upgrade_base
+                reward += self._reward_upgrade * gained
+                self._ep_upgrades += gained
+            self._deck_upgrade_base = up_now
+            n_now = len(run.deck)
+            if n_now < self._deck_len_base:
+                removed = self._deck_len_base - n_now
+                reward += self._reward_remove * removed
+                self._ep_removes += removed
+            self._deck_len_base = n_now
+            relics_now = len(run.relics)
+            if relics_now > self._relic_len_base:
+                gained_relics = relics_now - self._relic_len_base
+                reward += self._reward_relic * gained_relics
+                self._ep_relics += gained_relics
+            self._relic_len_base = relics_now
+        belt_now = sum(1 for p in run.potions if p is not None)
+        if belt_now > self._belt_base:
+            gained = belt_now - self._belt_base
+            self._ep_potions_obtained += gained
+            # v8 potion ledger (plan Task 2): +k per potion picked up. No
+            # terminal zeroing — a potion still held at episode end keeps
+            # this +k (see `_ep_potions_expired` below).
+            reward += self._potion_potential_scale * gained
+        elif belt_now < self._belt_base:
+            lost = self._belt_base - belt_now
+            reward -= self._potion_potential_scale * lost
+            # A DRINK is exactly the answer this step decoded to a belt slot
+            # (`_translate`'s POTION_BASE branch -> `POTION_ACTION_BASE +
+            # slot`; driver.py:405-411 always empties that slot on the same
+            # turn). Any OTHER belt decrease — a shop sale (no such feature
+            # exists in this sim today, but the same non-drink shape would
+            # apply) or an event trading a potion away (discard_potion) —
+            # moves the ledger but is not a "use": it never answered via a
+            # potion action this step, so it can't be attributed to a room.
+            if request is not None and answer >= POTION_ACTION_BASE:
+                self._ep_potions_used += lost
+                use_hp_ratio = min(hp_before, max_hp_before) / max(1, max_hp_before)
+                self._ep_potion_use_hp += use_hp_ratio * lost
+                room = None
+                if (request.kind == DecisionKind.COMBAT
+                        and request.combat is not None):
+                    room = request.combat.room_type
+                if room == RoomType.ELITE:
+                    self._ep_potions_used_elite += lost
+                elif room == RoomType.BOSS:
+                    self._ep_potions_used_boss += lost
+                else:
+                    self._ep_potions_used_normal += lost
+        self._belt_base = belt_now
+        # Overwritten every step with the CURRENT held count, so whichever
+        # step turns out to be the episode's last (`_info` gates on that same
+        # terminated-or-truncated condition) leaves this at the right value —
+        # no separate terminal-only branch needed.
+        self._ep_potions_expired = belt_now
+
         return self._build_obs(), float(reward), terminated, truncated, self._info()
+
+    def _count_behavior(self, request: DecisionRequest, answer: int) -> None:
+        """Per-episode behavior tallies, read back by `_info` at episode end.
+
+        End-turns count only on the player's turn — action 0 is also the
+        always-legal no-op outside it, and counting those would dilute the
+        unspent-energy average with meaningless energy readings. Card-reward
+        screens count only on their own take/skip answers: reroll and
+        sacrifice re-raise or transform the screen (counting them would tally
+        the same offer twice), and a belt drink doesn't answer it at all.
+
+        Rest sites count per VISIT, not per decision: `RunDriver._rest_site`
+        re-asks until Leave, so one visit can answer several times (Miniature
+        Tent even allows heal AND smith), and healing twice in one visit is
+        still one healed visit. A visit is keyed on (act, floor) — a rest site
+        is one room on one floor and its decisions are consecutive, so the key
+        changes exactly at a visit boundary. Every visit counts in the
+        denominator, including one the agent simply left.
+        """
+        # v7 elite tally: any request carrying a rewards screen from an elite
+        # room means the elite was beaten; dedupe per room like rest visits
+        # (the rewards screen re-asks per item taken).
+        rewards = getattr(request, "rewards", None)
+        if rewards is not None and rewards.room_type == RoomType.ELITE:
+            key = (request.run.act_index, request.run.total_floor)
+            if key != self._elite_reward_key:
+                self._elite_reward_key = key
+                self._ep_elites_won += 1
+        if (request.kind == DecisionKind.COMBAT and answer == 0
+                and request.combat is not None
+                and request.combat.phase == Phase.PLAYER_TURN):
+            self._ep_end_turns += 1
+            self._ep_energy_unspent += request.combat.player.energy
+        elif (request.kind == DecisionKind.REWARD_CARD
+                and answer < POTION_ACTION_BASE
+                and answer <= len(request.rewards.cards)):
+            self._ep_card_offers += 1
+            self._ep_card_takes += int(answer < len(request.rewards.cards))
+            # v7 per-card exposure (plan Task 8): tally every offered card,
+            # and the taken one, by class name.
+            for card in request.rewards.cards:
+                self._ep_card_offer_ids[type(card).__name__] += 1
+            if answer < len(request.rewards.cards):
+                self._ep_card_take_ids[
+                    type(request.rewards.cards[answer]).__name__] += 1
+        elif request.kind == DecisionKind.REST and answer < POTION_ACTION_BASE:
+            key = (request.run.act_index, request.run.total_floor)
+            if key != self._rest_visit_key:
+                self._rest_visit_key = key
+                self._ep_rest_visits += 1
+                self._rest_healed_here = False
+                self._rest_upgraded_here = False
+            if answer == REST_HEAL and not self._rest_healed_here:
+                self._rest_healed_here = True
+                self._ep_rest_heals += 1
+            elif answer == REST_SMITH and not self._rest_upgraded_here:
+                self._rest_upgraded_here = True
+                self._ep_rest_upgrades += 1
 
     def close(self) -> None:
         self._kill_driver()
@@ -908,6 +1261,20 @@ class STS2RunEnv(gym.Env):
             )
             for i in legal:
                 mask[CHOICE_BASE + i] = True
+            # v8 (plan Task 4): rest_heal_mask_above curriculum mask. Only
+            # at a rest-site decision, only above the HP-ratio threshold,
+            # and only when REST_HEAL is not the sole legal action — never
+            # mask away the only option (`driver.py`'s REST_HEAL/REST_SMITH/
+            # REST_LEAVE=0,1,2; REST_HEAL always legal unless already used
+            # this visit).
+            if (kind == DecisionKind.REST
+                    and self._rest_heal_mask_above is not None
+                    and REST_HEAL in legal
+                    and len(legal) > 1):
+                run = self._run
+                ratio = run.hp / max(1, run.max_hp)
+                if ratio >= self._rest_heal_mask_above:
+                    mask[CHOICE_BASE + REST_HEAL] = False
         assert mask.any()
         return mask
 
@@ -1023,7 +1390,21 @@ class STS2RunEnv(gym.Env):
         overflow: dict[str, bool] = {}
 
         # ── Potion belt (run-level; combat exposes its own rows too) ─────
-        potions = run.potions
+        # Round-6 obs-parity fix: `RunState.potions` is a pre-combat
+        # SNAPSHOT — `RunState.finish_combat` only copies the live
+        # `combat.player.potions` back into it once the combat ENDS (see
+        # `run.py:finish_combat`'s `self.potions = list(combat.player.
+        # potions)`). The game has no such split (one Player, one belt), so
+        # a potion drunk MID-combat (e.g. Skill Potion's card-add, surfaced
+        # here as a SELECT_CARDS decision) empties its game-side belt slot
+        # immediately, while this block used to keep reading the stale
+        # RunState list until the combat's `finish_combat` call — confirmed
+        # against seed 89U21BV1TZ act 0 floor 15 (game dump: belt slot 2
+        # already empty from Combat decision 4 onward; sim dump: still
+        # filled for the whole rest of the combat). Read the LIVE belt off
+        # `request.combat.player.potions` whenever a combat is active.
+        live_combat = request.combat if request is not None else None
+        potions = live_combat.player.potions if live_combat is not None else run.potions
         potion_rows = []
         for p in range(max(MAX_POTION_SLOTS, len(potions))):
             potion = potions[p] if p < len(potions) else None
@@ -1214,11 +1595,41 @@ class STS2RunEnv(gym.Env):
                 rows.append(([PAD, PAD, PAD, PAD], [0.0, 0.0, 0.0, 0.0]) if card is None
                             else _run_card_row(card))
             buf.write_rows("reward.cards", rows, cap=REWARD_CARD_SLOTS, n_int=4, n_float=4, sort=False)
-        if rewards is not None and request.kind == DecisionKind.REWARD_POTION:
+        # `reward.potion.*` is screen-scoped, not ask-scoped: the game shows
+        # the full offer (card + potion + relic still pending) on EVERY
+        # reward decision of a floor, not only the ask whose own sub-kind
+        # matches that item (game dump `unseeded_20260807_005254/
+        # decisions.jsonl` floor 2, decision_index 0 — the card ask — already
+        # has `reward.potion.f == 1`; the old `kind == REWARD_POTION` gate
+        # only lit it on the later dedicated potion ask). `rewards` here is
+        # the SAME `CombatRewards` object the potion ask reads `.potion`
+        # off of (see driver.py `_offer_rewards`: the single-card-group case
+        # reuses one object across both asks), so reading it unconditionally
+        # off `rewards` — instead of gating on `request.kind` — surfaces data
+        # that was already present on the object, not a new source.
+        if rewards is not None:
             potion = rewards.potion
             if potion is not None:
                 buf.i[I("reward.potion.ids")] = [oid(POTION_INDEX.get(potion.id))]
                 buf.f[F("reward.potion.f")] = 1.0
+        # REWARD_RELIC (RunState.offer_relic / RelicReward, RunState.reward_
+        # selector's "relic" seam, driver.py's `_offer`/`_offer_card_group`'s
+        # sacrifice path): unlike REWARD_CARD/REWARD_POTION the offered item
+        # lives on the DecisionRequest itself (`request.relic`), never on
+        # `request.rewards` — a reward set can carry SEVERAL RelicRewards
+        # (`CombatRewards.relics`, e.g. Lava Rock's two on the act-1 boss),
+        # but each is surfaced as its own independent take-or-skip
+        # DecisionKind.REWARD_RELIC screen (one relic at a time), same
+        # shape as the single-potion pity-drop offer above — so this is a
+        # width-1 identity+presence pair, mirroring `reward.potion` exactly,
+        # not a multi-slot block like `reward.cards`.
+        if request is not None and request.kind == DecisionKind.REWARD_RELIC:
+            relic = request.relic
+            if relic is not None:
+                idx = RELIC_INDEX.get(relic.id)
+                if idx is not None:
+                    buf.i[I("reward.relic.ids")] = [oid(idx)]
+                    buf.f[F("reward.relic.f")] = 1.0
 
         # ── Select block ─────────────────────────────────────────────────
         selecting = request is not None and request.kind in (
@@ -1286,6 +1697,31 @@ class STS2RunEnv(gym.Env):
             info["is_success"] = self._result.victory
             info["hp_left"] = self._result.hp
             info["decisions"] = self._result.decisions
+        # Episode-end only (termination above, truncation below — the step
+        # that trips _max_steps is this episode's last observation-bearing
+        # step either way): the `_count_behavior` tallies.
+        if self._result is not None or self._steps >= self._max_steps:
+            info["ep_end_turns"] = self._ep_end_turns
+            info["ep_energy_unspent"] = self._ep_energy_unspent
+            info["ep_card_offers"] = self._ep_card_offers
+            info["ep_card_takes"] = self._ep_card_takes
+            info["ep_rest_visits"] = self._ep_rest_visits
+            info["ep_rest_heals"] = self._ep_rest_heals
+            info["ep_rest_upgrades"] = self._ep_rest_upgrades
+            info["ep_upgrades"] = self._ep_upgrades
+            info["ep_removes"] = self._ep_removes
+            info["ep_relics"] = self._ep_relics
+            info["ep_elites_won"] = self._ep_elites_won
+            info["ep_potions_obtained"] = self._ep_potions_obtained
+            info["ep_potions_used"] = self._ep_potions_used
+            info["ep_potions_used_elite"] = self._ep_potions_used_elite
+            info["ep_potions_used_boss"] = self._ep_potions_used_boss
+            info["ep_potions_used_normal"] = self._ep_potions_used_normal
+            info["ep_potions_expired"] = self._ep_potions_expired
+            info["ep_potion_use_hp"] = self._ep_potion_use_hp
+            info["ep_hp_lost"] = self._ep_hp_lost
+            info["ep_card_offer_ids"] = dict(self._ep_card_offer_ids)
+            info["ep_card_take_ids"] = dict(self._ep_card_take_ids)
         return info
 
     def render(self) -> None:

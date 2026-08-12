@@ -5,7 +5,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import MachineMonster, MonsterMoveStateMachine, MoveState
 
 if TYPE_CHECKING:
@@ -13,21 +14,31 @@ if TYPE_CHECKING:
     from ...hooks import HookSystem
 
 # Crusher (left arm)
-_THRASH_DMG = 12
+_THRASH_DMG = 12        # Crusher.cs:81 base
+_THRASH_DMG_ASC = 14    # DeadlyEnemies
+# Crusher.cs:83 EnlargingStrikeDamage: GetValueIfAscension(DeadlyEnemies, 4, 4)
+# -- asc value equals base value, a no-op; ported as this comment only.
 _ENLARGING_DMG = 4
-_BUG_STING_DMG = 6
+_BUG_STING_DMG = 6      # Crusher.cs:85 base
+_BUG_STING_DMG_ASC = 7  # DeadlyEnemies
 _BUG_STING_HITS = 2
 _BUG_STING_WEAK = 2
 _BUG_STING_FRAIL = 2
-_ADAPT_STR = 2
-_GUARDED_DMG = 12
+_ADAPT_STR = 2          # Crusher.cs:89 base
+_ADAPT_STR_ASC = 3      # DeadlyEnemies
+_GUARDED_DMG = 12       # Crusher.cs:91 base
+_GUARDED_DMG_ASC = 14   # DeadlyEnemies
 _GUARDED_BLOCK = 18
 
 # Rocket (right arm)
-_RETICLE_DMG = 3
-_PRECISION_DMG = 18
-_CHARGE_STR = 2
-_LASER_DMG = 31
+_RETICLE_DMG = 3        # Rocket.cs:61 base
+_RETICLE_DMG_ASC = 4    # DeadlyEnemies
+_PRECISION_DMG = 18     # Rocket.cs:63 base
+_PRECISION_DMG_ASC = 20 # DeadlyEnemies
+_CHARGE_STR = 2         # Rocket.cs:67 base
+_CHARGE_STR_ASC = 3     # DeadlyEnemies
+_LASER_DMG = 31         # Rocket.cs:65 base
+_LASER_DMG_ASC = 35     # DeadlyEnemies
 
 
 class Crusher(MachineMonster):
@@ -36,8 +47,10 @@ class Crusher(MachineMonster):
     GUARDED_STRIKE (12 + 18 block). Back-attacks for 50% more while you face
     the Rocket; rages (+6 Strength, 99 block) if the Rocket dies first."""
 
-    min_hp = 209
+    min_hp = 209           # Crusher.cs:77
     max_hp = 209
+    min_hp_asc = 219        # Crusher.cs:77 -- ToughEnemies
+    max_hp_asc = 219
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
@@ -46,9 +59,25 @@ class Crusher(MachineMonster):
         PowerCmd.apply(hooks, self, BackAttackLeftPower, 1)
         PowerCmd.apply(hooks, self, CrabRagePower, 1)
 
+    def _thrash_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _THRASH_DMG_ASC, _THRASH_DMG)
+
+    def _bug_sting_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _BUG_STING_DMG_ASC, _BUG_STING_DMG)
+
+    def _adapt_str(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _ADAPT_STR_ASC, _ADAPT_STR)
+
+    def _guarded_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _GUARDED_DMG_ASC, _GUARDED_DMG)
+
     def build_machine(self) -> MonsterMoveStateMachine:
         thrash = MoveState(
-            "THRASH_MOVE", self._thrash, Intent(MoveType.ATTACK, damage=_THRASH_DMG)
+            "THRASH_MOVE", self._thrash, Intent(MoveType.ATTACK, damage=self._thrash_dmg())
         )
         enlarging = MoveState(
             "ENLARGING_STRIKE_MOVE", self._enlarging,
@@ -56,13 +85,13 @@ class Crusher(MachineMonster):
         )
         bug_sting = MoveState(
             "BUG_STING_MOVE", self._bug_sting,
-            Intent(MoveType.ATTACK, damage=_BUG_STING_DMG, hits=_BUG_STING_HITS,
+            Intent(MoveType.ATTACK, damage=self._bug_sting_dmg(), hits=_BUG_STING_HITS,
                    also=(MoveType.DEBUFF,)),
         )
         adapt = MoveState("ADAPT_MOVE", self._adapt, Intent(MoveType.BUFF))
         guarded = MoveState(
             "GUARDED_STRIKE_MOVE", self._guarded,
-            Intent(MoveType.ATTACK, damage=_GUARDED_DMG, also=(MoveType.DEFEND,)),
+            Intent(MoveType.ATTACK, damage=self._guarded_dmg(), also=(MoveType.DEFEND,)),
         )
         thrash.follow_up = enlarging
         enlarging.follow_up = bug_sting
@@ -74,13 +103,13 @@ class Crusher(MachineMonster):
         )
 
     def _thrash(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _THRASH_DMG, 1)
+        self._execute_attack(ctx, self._thrash_dmg(), 1)
 
     def _enlarging(self, ctx: CombatCtx) -> None:
         self._execute_attack(ctx, _ENLARGING_DMG, 1)
 
     def _bug_sting(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _BUG_STING_DMG, _BUG_STING_HITS)
+        self._execute_attack(ctx, self._bug_sting_dmg(), _BUG_STING_HITS)
         from ...cmds import PowerCmd
         from ...powers import FrailPower, WeakPower
         PowerCmd.apply(ctx.hooks, ctx.player, WeakPower, _BUG_STING_WEAK, applier=self)
@@ -89,10 +118,10 @@ class Crusher(MachineMonster):
     def _adapt(self, ctx: CombatCtx) -> None:
         from ...cmds import PowerCmd
         from ...powers import StrengthPower
-        PowerCmd.apply(ctx.hooks, self, StrengthPower, _ADAPT_STR)
+        PowerCmd.apply(ctx.hooks, self, StrengthPower, self._adapt_str())
 
     def _guarded(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _GUARDED_DMG, 1)
+        self._execute_attack(ctx, self._guarded_dmg(), 1)
         from ...cmds import BlockCmd
         BlockCmd.apply(ctx.hooks, self, _GUARDED_BLOCK)
 
@@ -102,8 +131,26 @@ class Rocket(MachineMonster):
     Fixed cycle: TARGETING_RETICLE (3) → PRECISION_BEAM (18) → CHARGE_UP (+2
     Strength) → LASER (31) → RECHARGE (nothing)."""
 
-    min_hp = 199
+    min_hp = 199            # Rocket.cs:57 base
     max_hp = 199
+    min_hp_asc = 209        # Rocket.cs:57 -- ToughEnemies (MaxInitialHp == MinInitialHp)
+    max_hp_asc = 209
+
+    def _reticle_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _RETICLE_DMG_ASC, _RETICLE_DMG)
+
+    def _precision_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _PRECISION_DMG_ASC, _PRECISION_DMG)
+
+    def _charge_str(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _CHARGE_STR_ASC, _CHARGE_STR)
+
+    def _laser_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _LASER_DMG_ASC, _LASER_DMG)
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
@@ -118,15 +165,15 @@ class Rocket(MachineMonster):
     def build_machine(self) -> MonsterMoveStateMachine:
         reticle = MoveState(
             "TARGETING_RETICLE_MOVE", self._reticle,
-            Intent(MoveType.ATTACK, damage=_RETICLE_DMG),
+            Intent(MoveType.ATTACK, damage=self._reticle_dmg()),
         )
         precision = MoveState(
             "PRECISION_BEAM_MOVE", self._precision,
-            Intent(MoveType.ATTACK, damage=_PRECISION_DMG),
+            Intent(MoveType.ATTACK, damage=self._precision_dmg()),
         )
         charge = MoveState("CHARGE_UP_MOVE", self._charge, Intent(MoveType.BUFF))
         laser = MoveState(
-            "LASER_MOVE", self._laser, Intent(MoveType.ATTACK, damage=_LASER_DMG)
+            "LASER_MOVE", self._laser, Intent(MoveType.ATTACK, damage=self._laser_dmg())
         )
         recharge = MoveState("RECHARGE_MOVE", self._recharge, Intent(MoveType.SLEEP))
         reticle.follow_up = precision
@@ -139,18 +186,18 @@ class Rocket(MachineMonster):
         )
 
     def _reticle(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _RETICLE_DMG, 1)
+        self._execute_attack(ctx, self._reticle_dmg(), 1)
 
     def _precision(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _PRECISION_DMG, 1)
+        self._execute_attack(ctx, self._precision_dmg(), 1)
 
     def _charge(self, ctx: CombatCtx) -> None:
         from ...cmds import PowerCmd
         from ...powers import StrengthPower
-        PowerCmd.apply(ctx.hooks, self, StrengthPower, _CHARGE_STR)
+        PowerCmd.apply(ctx.hooks, self, StrengthPower, self._charge_str())
 
     def _laser(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _LASER_DMG, 1)
+        self._execute_attack(ctx, self._laser_dmg(), 1)
 
     def _recharge(self, ctx: CombatCtx) -> None:
         pass

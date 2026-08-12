@@ -57,11 +57,16 @@ from sts2_rl.models import (
 )
 from sts2_rl.run_env import (
     CHOICE_BASE,
+    MAP_SLOTS,
     MAX_POTION_SLOTS,
     MAX_SELECT_CANDIDATES,
     N_ACTIONS,
     POTION_BASE,
+    REWARD_CARD_SLOTS,
     SELECT_BASE,
+    SHOP_CARD_SLOTS,
+    SHOP_POTION_SLOTS,
+    SHOP_RELIC_SLOTS,
     STS2RunEnv,
     run_obs_layout,
 )
@@ -69,12 +74,6 @@ from sts2_rl.tensor_obs import TensorObs
 
 _DRIVE_SEED = 0
 _DRIVE_STEP_BOUND = 100
-
-SHOP_CARD_SLOTS = 7
-SHOP_RELIC_SLOTS = 3
-SHOP_POTION_SLOTS = 3
-REWARD_CARD_SLOTS = 3
-MAP_SLOTS = 7
 
 
 def _build_model(hidden=(32,)) -> EntitySetActorCritic:

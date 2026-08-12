@@ -4,15 +4,20 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import MachineMonster, MonsterMoveStateMachine, MoveState
 
 if TYPE_CHECKING:
     from ...combat import CombatCtx
 
-_BITE_DMG = 13
-_BURROW_BLOCK = 32
-_BELOW_DMG = 23
+_BITE_DMG = 13          # Tunneler.cs:50 base
+_BITE_DMG_ASC = 15      # DeadlyEnemies
+_BURROW_BLOCK = 32      # Tunneler.cs:52 base -- ToughEnemies (note: gated by
+                        # ToughEnemies, not DeadlyEnemies)
+_BURROW_BLOCK_ASC = 37
+_BELOW_DMG = 23         # Tunneler.cs:54 base
+_BELOW_DMG_ASC = 26     # DeadlyEnemies
 
 
 class Tunneler(MachineMonster):
@@ -22,17 +27,36 @@ class Tunneler(MachineMonster):
 
     min_hp = 87
     max_hp = 87
+    min_hp_asc = 92   # Tunneler.cs:40 -- ToughEnemies (MaxInitialHp == MinInitialHp)
+    max_hp_asc = 92
+
+    def _bite_dmg(self) -> int:
+        """Tunneler.cs:50 `BiteDamage` -- read at both the telegraphed
+        Intent and the executed attack."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _BITE_DMG_ASC, _BITE_DMG)
+
+    def _block_gain(self) -> int:
+        """Tunneler.cs:52 `BlockGain` -- gated by ToughEnemies (asc 8+), not
+        DeadlyEnemies, per the source call."""
+        return asc_value(self._hooks, AscensionLevel.TOUGH_ENEMIES,
+                          _BURROW_BLOCK_ASC, _BURROW_BLOCK)
+
+    def _below_dmg(self) -> int:
+        """Tunneler.cs:54 `BelowDamage`."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _BELOW_DMG_ASC, _BELOW_DMG)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         bite = MoveState(
-            "BITE_MOVE", self._bite, Intent(MoveType.ATTACK, damage=_BITE_DMG)
+            "BITE_MOVE", self._bite, lambda: Intent(MoveType.ATTACK, damage=self._bite_dmg())
         )
         burrow = MoveState(
             "BURROW_MOVE", self._burrow,
             Intent(MoveType.BUFF, also=(MoveType.DEFEND,)),
         )
         below = MoveState(
-            "BELOW_MOVE", self._below, Intent(MoveType.ATTACK, damage=_BELOW_DMG)
+            "BELOW_MOVE", self._below, lambda: Intent(MoveType.ATTACK, damage=self._below_dmg())
         )
         dizzy = MoveState("DIZZY_MOVE", self._dizzy, Intent(MoveType.STUN))
         bite.follow_up = burrow
@@ -48,16 +72,16 @@ class Tunneler(MachineMonster):
         self._current_move = dizzy
 
     def _bite(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _BITE_DMG, 1)
+        self._execute_attack(ctx, self._bite_dmg(), 1)
 
     def _burrow(self, ctx: CombatCtx) -> None:
         from ...cmds import BlockCmd, PowerCmd
         from ...powers import BurrowedPower
         PowerCmd.apply(ctx.hooks, self, BurrowedPower, 1)
-        BlockCmd.apply(ctx.hooks, self, _BURROW_BLOCK)
+        BlockCmd.apply(ctx.hooks, self, self._block_gain())
 
     def _below(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _BELOW_DMG, 1)
+        self._execute_attack(ctx, self._below_dmg(), 1)
 
     def _dizzy(self, ctx: CombatCtx) -> None:
         pass

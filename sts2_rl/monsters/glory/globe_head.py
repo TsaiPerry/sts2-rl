@@ -3,18 +3,22 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import MachineMonster, MonsterMoveStateMachine, MoveState
 
 if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
-_THUNDER_DMG = 6
+_THUNDER_DMG = 6           # GlobeHead.cs:33 base
+_THUNDER_DMG_ASC = 7       # DeadlyEnemies (asc 9+)
 _THUNDER_HITS = 3
-_SLAP_DMG = 13
+_SLAP_DMG = 13              # GlobeHead.cs:35 base
+_SLAP_DMG_ASC = 14          # DeadlyEnemies (asc 9+)
 _SLAP_FRAIL = 2
-_BURST_DMG = 16
+_BURST_DMG = 16             # GlobeHead.cs:37 base
+_BURST_DMG_ASC = 17         # DeadlyEnemies (asc 9+)
 _BURST_STR = 2
 _GALVANIC = 6
 
@@ -27,8 +31,26 @@ class GlobeHead(MachineMonster):
     Source: GlobeHead.cs (non-ascension values)."""
     name = "Globe Head"
 
-    min_hp = 148
+    min_hp = 148          # GlobeHead.cs:29 base (MaxInitialHp == MinInitialHp)
     max_hp = 148
+    min_hp_asc = 158       # ToughEnemies (asc 8+)
+    max_hp_asc = 158
+
+    def _thunder_dmg(self) -> int:
+        """GlobeHead.cs:33 `ThunderStrikeDamage` -- re-read at both the
+        telegraphed Intent and the executed attack."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _THUNDER_DMG_ASC, _THUNDER_DMG)
+
+    def _slap_dmg(self) -> int:
+        """GlobeHead.cs:35 `ShockingSlapDamage`."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _SLAP_DMG_ASC, _SLAP_DMG)
+
+    def _burst_dmg(self) -> int:
+        """GlobeHead.cs:37 `GalvanicBurstDamage`."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _BURST_DMG_ASC, _BURST_DMG)
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
@@ -39,15 +61,15 @@ class GlobeHead(MachineMonster):
     def build_machine(self) -> MonsterMoveStateMachine:
         thunder = MoveState(
             "THUNDER_STRIKE", self._thunder,
-            Intent(MoveType.ATTACK, damage=_THUNDER_DMG, hits=_THUNDER_HITS),
+            lambda: Intent(MoveType.ATTACK, damage=self._thunder_dmg(), hits=_THUNDER_HITS),
         )
         slap = MoveState(
             "SHOCKING_SLAP", self._slap,
-            Intent(MoveType.ATTACK, damage=_SLAP_DMG, also=(MoveType.DEBUFF,)),
+            lambda: Intent(MoveType.ATTACK, damage=self._slap_dmg(), also=(MoveType.DEBUFF,)),
         )
         burst = MoveState(
             "GALVANIC_BURST", self._burst,
-            Intent(MoveType.ATTACK, damage=_BURST_DMG, also=(MoveType.BUFF,)),
+            lambda: Intent(MoveType.ATTACK, damage=self._burst_dmg(), also=(MoveType.BUFF,)),
         )
         slap.follow_up = thunder
         thunder.follow_up = burst
@@ -55,16 +77,16 @@ class GlobeHead(MachineMonster):
         return MonsterMoveStateMachine([slap, thunder, burst], slap)
 
     def _thunder(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _THUNDER_DMG, _THUNDER_HITS)
+        self._execute_attack(ctx, self._thunder_dmg(), _THUNDER_HITS)
 
     def _slap(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _SLAP_DMG, 1)
+        self._execute_attack(ctx, self._slap_dmg(), 1)
         from ...cmds import PowerCmd
         from ...powers import FrailPower
         PowerCmd.apply(ctx.hooks, ctx.player, FrailPower, _SLAP_FRAIL)
 
     def _burst(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _BURST_DMG, 1)
+        self._execute_attack(ctx, self._burst_dmg(), 1)
         from ...cmds import PowerCmd
         from ...powers import StrengthPower
         PowerCmd.apply(ctx.hooks, self, StrengthPower, _BURST_STR)

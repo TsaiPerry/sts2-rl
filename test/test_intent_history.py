@@ -250,6 +250,60 @@ def test_dead_enemys_history_reads_fully_unrecorded_even_though_it_has_real_entr
 # ── 4. No leakage across combats / env.reset() ───────────────────────────────
 
 
+# ── 5. Hand-rolled monsters: displayed intent, not the next one ─────────────
+
+
+def test_vantom_history_shows_the_move_actually_performed_not_the_next_one():
+    """Round-7 regression: hand-rolled monsters (no MonsterMoveStateMachine)
+    like Vantom advance their own ``_move_key`` INSIDE ``take_turn`` --
+    ``Vantom.take_turn``'s last line is ``self._move_key =
+    _TRANSITIONS[self._move_key]``. ``_record_intent_history`` runs at the
+    START of the next player turn (`_roll_enemy_intents`), strictly AFTER
+    that ``take_turn`` already ran, so a live ``current_intent`` re-read at
+    that point already reflects the NEXT move -- history slot 0 would show
+    turn N+1's move instead of turn N's. Vantom's INK_BLOT -> INKY_LANCE ->
+    DISMEMBER -> PREPARE cycle exercises three distinct, unambiguous moves
+    in a row."""
+    from sts2_rl.monsters.overgrowth.vantom import VANTOM_BOSS
+
+    cs = _combat(encounter=VANTOM_BOSS)
+    vantom = cs.enemies[0]
+    assert vantom.current_intent.move_type == MoveType.ATTACK  # INK_BLOT, dmg 7
+
+    cs.end_turn()  # performs INK_BLOT (dmg 7); next telegraphed = INKY_LANCE
+    obs = build_combat_obs(cs)
+    rows = _history_block(obs, 0)
+    assert rows[0][RECORDED] == 1.0
+    assert rows[0][ATTACK] == 1.0
+    assert rows[0][PER_HIT] == pytest.approx(_clip01(7 / ABS_SCALE))
+    assert rows[0][HITS] == pytest.approx(_clip01(1 / 10.0))
+
+    cs.end_turn()  # performs INKY_LANCE (dmg 6 x2); next = DISMEMBER
+    obs = build_combat_obs(cs)
+    rows = _history_block(obs, 0)
+    assert rows[0][RECORDED] == 1.0
+    assert rows[0][ATTACK] == 1.0
+    assert rows[0][PER_HIT] == pytest.approx(_clip01(6 / ABS_SCALE))
+    assert rows[0][HITS] == pytest.approx(_clip01(2 / 10.0))
+    # Slot 1 = the prior turn's INK_BLOT, still correctly recorded.
+    assert rows[1][RECORDED] == 1.0
+    assert rows[1][PER_HIT] == pytest.approx(_clip01(7 / ABS_SCALE))
+
+    cs.end_turn()  # performs DISMEMBER (dmg 26 + StatusIntent(3)); next = PREPARE
+    obs = build_combat_obs(cs)
+    rows = _history_block(obs, 0)
+    assert rows[0][RECORDED] == 1.0
+    assert rows[0][ATTACK] == 1.0
+    assert rows[0][STATUS_CARD] == 1.0
+    assert rows[0][PER_HIT] == pytest.approx(_clip01(26 / ABS_SCALE))
+    assert rows[0][STATUS_COUNT] == pytest.approx(_clip01(3 / 10.0))
+    # Slot 1 = INKY_LANCE, not overwritten/skewed by the mutation-order bug.
+    assert rows[1][RECORDED] == 1.0
+    assert rows[1][PER_HIT] == pytest.approx(_clip01(6 / ABS_SCALE))
+    assert rows[1][HITS] == pytest.approx(_clip01(2 / 10.0))
+    assert rows[1][STATUS_CARD] == 0.0
+
+
 def test_no_leakage_across_combats_with_the_same_net_id():
     """A fresh CombatState's first enemy gets net_id 1 again (the counter
     restarts) -- so a history dict keyed by net_id ALONE, without also being
@@ -271,3 +325,51 @@ def test_no_leakage_across_combats_with_the_same_net_id():
     assert cs_b._intent_history == {}
     obs_b = build_combat_obs(cs_b)
     assert list(_history_block(obs_b, 0)[:, RECORDED]) == [0.0, 0.0, 0.0]
+
+
+# ── 5. Spawn-stun turn records the STUN that was displayed ────────────────────
+
+
+class _StunGatedDummy(Monster):
+    """Mirrors Wriggler's spawn pattern: `stunned`-gated `current_intent`
+    (no synthetic STUN_STATE move), so its stunned turn never runs
+    `take_turn` and the flag auto-clears in `_run_enemy_turns`'s stunned
+    arm."""
+
+    min_hp = max_hp = 100
+
+    def __init__(self, hooks, rng: random.Random | None = None) -> None:
+        super().__init__(hooks, rng or random.Random())
+        self.stunned = True
+
+    @property
+    def current_intent(self) -> Intent:
+        if self.stunned:
+            return Intent(MoveType.STUN)
+        return Intent(MoveType.ATTACK, damage=6)
+
+    def take_turn(self, ctx) -> None:
+        self._execute_attack(ctx, 6, 1)
+
+
+def test_stunned_spawn_turn_records_stun_not_the_next_move():
+    """A monster whose stun is its own `stunned`-gated `current_intent`
+    (Wriggler) displays STUN for the whole stunned turn — the history row
+    pushed at the next roll must record that STUN, never the post-wake next
+    move the live-read fallback used to see (89U (0,15): four Wrigglers'
+    turn-3 rows read the turn-4 attack/buff, while the game — agreeing with
+    the sim's own live rows — showed stun all turn)."""
+    enc = Encounter(id="v4_history_stun_spawn", monster_classes=[_StunGatedDummy])
+    cs = _combat(encounter=enc)
+    assert cs.enemies[0].current_intent.move_type == MoveType.STUN
+
+    cs.end_turn()  # stunned turn: no take_turn, flag clears, nothing acted
+
+    obs = build_combat_obs(cs)
+    rows = _history_block(obs, 0)
+    assert rows[0][RECORDED] == 1.0
+    assert rows[0][STUN] == 1.0, (
+        "the stunned turn's row must record the STUN that was displayed")
+    assert rows[0][ATTACK] == 0.0, (
+        "the row must NOT be the post-wake next move (live-read fallback bug)")
+    assert rows[1][RECORDED] == 0.0

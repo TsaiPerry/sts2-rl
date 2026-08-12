@@ -3,19 +3,22 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import MachineMonster, MonsterMoveStateMachine, MoveState
 
 if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
-_SMOG_STEAL = 2
-_EYE_LASERS_DMG = 4
+_SMOG_STEAL = 2          # TheLost.cs:27 -- DeadlyEnemies value is also 2 (no-op)
+_EYE_LASERS_DMG = 4      # TheLost.cs:25 base
+_EYE_LASERS_DMG_ASC = 5  # DeadlyEnemies
 _EYE_LASERS_HITS = 2
-_MIASMA_STEAL = 2
+_MIASMA_STEAL = 2         # TheForgotten.cs:33 -- DeadlyEnemies value is also 2 (no-op)
 _MIASMA_BLOCK = 8
-_DREAD_BASE = 13
+_DREAD_BASE = 13         # TheForgotten.cs:28 base
+_DREAD_BASE_ASC = 15     # DeadlyEnemies
 
 
 class TheLost(MachineMonster):
@@ -26,14 +29,22 @@ class TheLost(MachineMonster):
     Source: TheLost.cs (non-ascension values)."""
     name = "The Lost"
 
-    min_hp = 93
+    min_hp = 93          # TheLost.cs:21
     max_hp = 93
+    min_hp_asc = 99       # ToughEnemies (asc 8+)
+    max_hp_asc = 99
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
         from ...cmds import PowerCmd
         from ...powers import PossessStrengthPower
         PowerCmd.apply(hooks, self, PossessStrengthPower, 1)
+
+    def _lasers_dmg(self) -> int:
+        """TheLost.cs:25 `EyeLasersDamage` -- a C# PROPERTY re-read at both the
+        telegraphed Intent and the executed attack, so both sites call this."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _EYE_LASERS_DMG_ASC, _EYE_LASERS_DMG)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         smog = MoveState(
@@ -42,20 +53,23 @@ class TheLost(MachineMonster):
         )
         lasers = MoveState(
             "EYE_LASERS", self._lasers,
-            Intent(MoveType.ATTACK, damage=_EYE_LASERS_DMG, hits=_EYE_LASERS_HITS),
+            lambda: Intent(MoveType.ATTACK, damage=self._lasers_dmg(), hits=_EYE_LASERS_HITS),
         )
         smog.follow_up = lasers
         lasers.follow_up = smog
         return MonsterMoveStateMachine([smog, lasers], smog)
 
     def _smog(self, ctx: CombatCtx) -> None:
+        # TheLost.cs:27 `DebilitatingSmogStrengthStealAmount` -- DeadlyEnemies
+        # value (2) equals the base value (2): a no-op gate, left as a plain
+        # constant.
         from ...cmds import PowerCmd
         from ...powers import StrengthPower
         PowerCmd.apply(ctx.hooks, ctx.player, StrengthPower, -_SMOG_STEAL, applier=self)
         PowerCmd.apply(ctx.hooks, self, StrengthPower, _SMOG_STEAL)
 
     def _lasers(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _EYE_LASERS_DMG, _EYE_LASERS_HITS)
+        self._execute_attack(ctx, self._lasers_dmg(), _EYE_LASERS_HITS)
 
 
 class TheForgotten(MachineMonster):
@@ -66,8 +80,10 @@ class TheForgotten(MachineMonster):
     Source: TheForgotten.cs (non-ascension values)."""
     name = "The Forgotten"
 
-    min_hp = 106
+    min_hp = 106         # TheForgotten.cs:20
     max_hp = 106
+    min_hp_asc = 111      # ToughEnemies (asc 8+)
+    max_hp_asc = 111
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
@@ -76,8 +92,13 @@ class TheForgotten(MachineMonster):
         PowerCmd.apply(hooks, self, PossessSpeedPower, 1)
 
     def _dread_damage(self) -> int:
+        """TheForgotten.cs:24-30 `DreadDamage` -- a C# PROPERTY re-read at both
+        the telegraphed Intent and the executed attack, so both sites call
+        this."""
+        base = asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _DREAD_BASE_ASC, _DREAD_BASE)
         dex = self.powers.get("dexterity")
-        return _DREAD_BASE + (dex.amount if dex is not None else 0)
+        return base + (dex.amount if dex is not None else 0)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         miasma = MoveState(
@@ -93,6 +114,9 @@ class TheForgotten(MachineMonster):
         return MonsterMoveStateMachine([miasma, dread], miasma)
 
     def _miasma(self, ctx: CombatCtx) -> None:
+        # TheForgotten.cs:33 `DebilitatingSmogDexStealAmount` -- DeadlyEnemies
+        # value (2) equals the base value (2): a no-op gate, left as a plain
+        # constant.
         from ...cmds import BlockCmd, PowerCmd
         from ...powers import DexterityPower
         from ...valueprops import ValueProp

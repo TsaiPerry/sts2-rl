@@ -47,7 +47,9 @@ A two-leaf `spaces.Dict({"f": float32 Box, "i": int32 Box})` — the
 integer/entity contract of **`OBS_SCHEMA.md`**, which is the normative
 description (padding rule `id == 0`, segment tables, admissibility rule).
 Combat schema 6 (`f` 1677 / `i` 606); the run envs embed the combat block
-under a `combat.` prefix (run schema 9, `f` 4710 / `i` 1464). The design
+under a `combat.` prefix (run schema 10, `f` 4711 / `i` 1465 — the v10
+amendment adds `reward.relic.f`/`reward.relic.ids`, see `OBS_SCHEMA.md`
+§5A). The design
 principle is unchanged: *the agent sees everything a human sees — and
 nothing a human cannot* (§6's display-path rule), with absolute numbers so
 lethal math is computable. The `damage_matrix` segment stays a H×E float

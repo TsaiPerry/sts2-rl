@@ -4,14 +4,17 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import MachineMonster, MonsterMoveStateMachine, MoveState
 
 if TYPE_CHECKING:
     from ...combat import CombatCtx
 
-_LASH_DMG = 17
-_EXPLOSION_DMG = 23
+_LASH_DMG = 17          # SpinyToad.cs:33 base
+_LASH_DMG_ASC = 19      # SpinyToad.cs:33 DeadlyEnemies
+_EXPLOSION_DMG = 23     # SpinyToad.cs:35 base
+_EXPLOSION_DMG_ASC = 25  # SpinyToad.cs:35 DeadlyEnemies
 _THORNS = 5
 
 
@@ -22,6 +25,20 @@ class SpinyToad(MachineMonster):
     name = "Spiny Toad"  # localization/eng/monsters.json SPINY_TOAD.name
     min_hp = 116
     max_hp = 119
+    min_hp_asc = 121  # SpinyToad.cs:29 ToughEnemies
+    max_hp_asc = 124  # SpinyToad.cs:31 ToughEnemies
+
+    def _lash_dmg(self) -> int:
+        """SpinyToad.cs:33 `LashDamage` -- a C# PROPERTY re-read at both the
+        telegraphed Intent (:61) and the executed attack (:98)."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _LASH_DMG_ASC, _LASH_DMG)
+
+    def _explosion_dmg(self) -> int:
+        """SpinyToad.cs:35 `ExplosionDamage` -- a C# PROPERTY re-read at both
+        the telegraphed Intent (:60) and the executed attack (:88)."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _EXPLOSION_DMG_ASC, _EXPLOSION_DMG)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         spikes = MoveState(
@@ -29,10 +46,11 @@ class SpinyToad(MachineMonster):
         )
         explosion = MoveState(
             "SPIKE_EXPLOSION_MOVE", self._explosion,
-            Intent(MoveType.ATTACK, damage=_EXPLOSION_DMG),
+            lambda: Intent(MoveType.ATTACK, damage=self._explosion_dmg()),
         )
         lash = MoveState(
-            "TONGUE_LASH_MOVE", self._lash, Intent(MoveType.ATTACK, damage=_LASH_DMG)
+            "TONGUE_LASH_MOVE", self._lash,
+            lambda: Intent(MoveType.ATTACK, damage=self._lash_dmg()),
         )
         spikes.follow_up = explosion
         explosion.follow_up = lash
@@ -45,13 +63,13 @@ class SpinyToad(MachineMonster):
         PowerCmd.apply(ctx.hooks, self, ThornsPower, _THORNS)
 
     def _explosion(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _EXPLOSION_DMG, 1)
+        self._execute_attack(ctx, self._explosion_dmg(), 1)
         from ...cmds import PowerCmd
         from ...powers import ThornsPower
         PowerCmd.apply(ctx.hooks, self, ThornsPower, -_THORNS)
 
     def _lash(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _LASH_DMG, 1)
+        self._execute_attack(ctx, self._lash_dmg(), 1)
 
 
 SPINY_TOAD_NORMAL = Encounter(

@@ -20,3 +20,15 @@ monitor.csv
 tensorboard/
 runs/
 .worktrees/
+
+# Generated SpireBot live-bot contract (sts2_rl/live/export_contract.py) —
+# a build artifact, not source.
+/contract.json
+
+# Generated SpireBot live-bot ONNX exports (sts2_rl/live/export_onnx.py) —
+# build artifacts, not source.
+*.onnx
+
+# Generated SpireBot sim-side obs dumps (sts2_rl/live/sim_obs_dump.py) —
+# build artifacts, not source.
+*.jsonl

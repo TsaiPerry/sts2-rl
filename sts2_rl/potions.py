@@ -1124,7 +1124,10 @@ class DropletOfPrecognition(Potion):
             "from_draw", list(player.draw_pile), 1, is_draw_pile=True)
         for card in chosen:
             player.draw_pile.remove(card)
-            player.hand.append(card)
+            # `CardPileCmd.Add(card, PileType.Hand)` — a full hand sends it to
+            # the discard pile instead (see `CardPileCmd.move_to_hand`).
+            from .cmds import CardPileCmd
+            CardPileCmd.move_to_hand(player, card)
 
 
 @register_potion
@@ -1145,7 +1148,12 @@ class LiquidMemories(Potion):
         for card in chosen:
             player.discard_pile.remove(card)
             card.set_free_this_turn()
-            player.hand.append(card)
+            # `SetToFreeThisTurn` then `CardPileCmd.Add(card, PileType.Hand)`:
+            # a full hand redirects to the discard pile, so the card returns
+            # where it came from — still flagged free, exactly as in C# (the
+            # flag is set on the card before the Add either way).
+            from .cmds import CardPileCmd
+            CardPileCmd.move_to_hand(player, card)
 
 
 @register_potion

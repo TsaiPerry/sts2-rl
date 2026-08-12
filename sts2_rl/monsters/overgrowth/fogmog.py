@@ -3,7 +3,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, Monster, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, Monster, MoveType, asc_value
 from ..state_machine import (
     MachineMonster,
     MonsterMoveStateMachine,
@@ -16,9 +17,11 @@ if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
-_SWIPE_DMG = 8
+_SWIPE_DMG = 8            # Fogmog.cs:32 SwipeDamage base
+_SWIPE_DMG_ASC = 9        # DeadlyEnemies (asc 9+)
 _SWIPE_STR = 1
-_HEADBUTT_DMG = 14
+_HEADBUTT_DMG = 14        # Fogmog.cs:34 HeadbuttDamage base
+_HEADBUTT_DMG_ASC = 16    # DeadlyEnemies (asc 9+)
 
 
 class EyeWithTeeth(Monster):
@@ -43,7 +46,7 @@ class EyeWithTeeth(Monster):
         illusion = self._illusion
         if illusion is not None and illusion.is_reviving:
             return Intent(MoveType.HEAL)  # revive turn
-        return Intent(MoveType.STATUS_CARD)  # DISTRACT: 3 Dazed cards
+        return Intent(MoveType.STATUS_CARD, status_count=3)  # DISTRACT: 3 Dazed cards
 
     def take_turn(self, ctx: CombatCtx) -> None:
         illusion = self._illusion
@@ -61,22 +64,36 @@ class Fogmog(MachineMonster):
     60% HEADBUTT (each weight-zeroed if it was the previous move); the random
     SWIPE is always followed by HEADBUTT, and HEADBUTT returns to SWIPE, which
     branches again. A faithful port of the source's move state machine."""
-    min_hp = 74
+    min_hp = 74           # Fogmog.cs:28-30
     max_hp = 74
+    min_hp_asc = 78        # ToughEnemies (asc 8+); MaxInitialHp = MinInitialHp
+    max_hp_asc = 78
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
 
+    def _swipe_dmg(self) -> int:
+        """Fogmog.cs:32 `SwipeDamage` -- a C# PROPERTY re-read at both the
+        telegraphed Intent (:42-43) and the executed attack (:72), so both
+        sites call this rather than a value cached at construction."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _SWIPE_DMG_ASC, _SWIPE_DMG)
+
+    def _headbutt_dmg(self) -> int:
+        """Fogmog.cs:34 `HeadbuttDamage` -- same re-read pattern (:44, :81)."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _HEADBUTT_DMG_ASC, _HEADBUTT_DMG)
+
     def build_machine(self) -> MonsterMoveStateMachine:
-        swipe_intent = Intent(
-            MoveType.ATTACK, damage=_SWIPE_DMG, also=(MoveType.BUFF,)
+        swipe_intent = lambda: Intent(
+            MoveType.ATTACK, damage=self._swipe_dmg(), also=(MoveType.BUFF,)
         )
         illusion = MoveState("ILLUSION_MOVE", self._illusion_move, Intent(MoveType.SUMMON))
         swipe = MoveState("SWIPE_MOVE", self._swipe_move, swipe_intent)
         swipe_random = MoveState("SWIPE_RANDOM_MOVE", self._swipe_move, swipe_intent)
         headbutt = MoveState(
             "HEADBUTT_MOVE", self._headbutt_move,
-            Intent(MoveType.ATTACK, damage=_HEADBUTT_DMG),
+            lambda: Intent(MoveType.ATTACK, damage=self._headbutt_dmg()),
         )
         branch = RandomBranchState("BRANCH")
         branch.add_branch(swipe_random, weight=0.4, repeat_type=MoveRepeatType.CANNOT_REPEAT)
@@ -100,13 +117,13 @@ class Fogmog(MachineMonster):
         )
 
     def _swipe_move(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _SWIPE_DMG, 1)
+        self._execute_attack(ctx, self._swipe_dmg(), 1)
         from ...cmds import PowerCmd
         from ...powers import StrengthPower
         PowerCmd.apply(ctx.hooks, self, StrengthPower, _SWIPE_STR)
 
     def _headbutt_move(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _HEADBUTT_DMG, 1)
+        self._execute_attack(ctx, self._headbutt_dmg(), 1)
 
 
 FOGMOG_NORMAL = Encounter(

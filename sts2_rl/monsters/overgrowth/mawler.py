@@ -3,7 +3,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import (
     MachineMonster,
     MonsterMoveStateMachine,
@@ -16,9 +17,11 @@ if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
-_CLAW_DMG = 4
+_CLAW_DMG = 4           # Mawler.cs:27 base
+_CLAW_DMG_ASC = 5       # DeadlyEnemies
 _CLAW_HITS = 2
-_RIP_DMG = 14
+_RIP_DMG = 14           # Mawler.cs:25 base
+_RIP_DMG_ASC = 16       # DeadlyEnemies
 _VULNERABLE_AMT = 3
 
 
@@ -28,17 +31,27 @@ class Mawler(MachineMonster):
     (no consecutive repeats), all with equal weight."""
     min_hp = 72
     max_hp = 72
+    min_hp_asc = 76   # Mawler.cs:21 -- ToughEnemies (MaxInitialHp == MinInitialHp)
+    max_hp_asc = 76
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
 
+    def _claw_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _CLAW_DMG_ASC, _CLAW_DMG)
+
+    def _rip_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _RIP_DMG_ASC, _RIP_DMG)
+
     def build_machine(self) -> MonsterMoveStateMachine:
         claw = MoveState(
             "CLAW", self._claw,
-            Intent(MoveType.ATTACK, damage=_CLAW_DMG, hits=_CLAW_HITS),
+            lambda: Intent(MoveType.ATTACK, damage=self._claw_dmg(), hits=_CLAW_HITS),
         )
         rip = MoveState(
-            "RIP_AND_TEAR", self._rip, Intent(MoveType.ATTACK, damage=_RIP_DMG)
+            "RIP_AND_TEAR", self._rip, lambda: Intent(MoveType.ATTACK, damage=self._rip_dmg())
         )
         roar = MoveState("ROAR", self._roar, self._roar_intent)
         branch = RandomBranchState("BRANCH")
@@ -56,10 +69,10 @@ class Mawler(MachineMonster):
         return Intent(MoveType.DEBUFF, buffs=[(VulnerablePower, _VULNERABLE_AMT)])
 
     def _claw(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _CLAW_DMG, _CLAW_HITS)
+        self._execute_attack(ctx, self._claw_dmg(), _CLAW_HITS)
 
     def _rip(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _RIP_DMG, 1)
+        self._execute_attack(ctx, self._rip_dmg(), 1)
 
     def _roar(self, ctx: CombatCtx) -> None:
         from ...cmds import PowerCmd

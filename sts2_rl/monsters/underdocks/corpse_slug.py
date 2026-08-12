@@ -4,7 +4,8 @@ import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, Monster, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, Monster, MoveType, asc_value
 from ..state_machine import MachineMonster, MonsterMoveStateMachine, MoveState
 
 if TYPE_CHECKING:
@@ -13,9 +14,11 @@ if TYPE_CHECKING:
 
 _WHIP_SLAP_DMG = 3
 _WHIP_SLAP_HITS = 2
-_GLOMP_DMG = 8
+_GLOMP_DMG = 8          # CorpseSlug.cs:47 base
+_GLOMP_DMG_ASC = 9      # DeadlyEnemies
 _GOOP_FRAIL = 2
-_RAVENOUS_STR = 4
+_RAVENOUS_STR = 4       # CorpseSlug.cs:51 base
+_RAVENOUS_STR_ASC = 5   # DeadlyEnemies
 
 
 class CorpseSlug(MachineMonster):
@@ -25,8 +28,10 @@ class CorpseSlug(MachineMonster):
     +4 Strength."""
 
     name = "Corpse Slug"  # localization/eng/monsters.json CORPSE_SLUG.name
-    min_hp = 25
-    max_hp = 27
+    min_hp = 25             # CorpseSlug.cs:39
+    max_hp = 27             # CorpseSlug.cs:41
+    min_hp_asc = 27         # CorpseSlug.cs:39 -- ToughEnemies
+    max_hp_asc = 29         # CorpseSlug.cs:41 -- ToughEnemies
 
     def __init__(
         self,
@@ -39,7 +44,17 @@ class CorpseSlug(MachineMonster):
         super().__init__(hooks, rng or random.Random())
         from ...cmds import PowerCmd
         from ...powers import RavenousPower
-        PowerCmd.apply(hooks, self, RavenousPower, _RAVENOUS_STR)
+        PowerCmd.apply(hooks, self, RavenousPower, self._ravenous_str())
+
+    def _glomp_dmg(self) -> int:
+        """CorpseSlug.cs:47 `GlompDamage` -- read at both the Intent (build_machine)
+        and the executed attack (_glomp)."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _GLOMP_DMG_ASC, _GLOMP_DMG)
+
+    def _ravenous_str(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _RAVENOUS_STR_ASC, _RAVENOUS_STR)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         whip_slap = MoveState(
@@ -47,7 +62,7 @@ class CorpseSlug(MachineMonster):
             Intent(MoveType.ATTACK, damage=_WHIP_SLAP_DMG, hits=_WHIP_SLAP_HITS),
         )
         glomp = MoveState(
-            "GLOMP_MOVE", self._glomp, Intent(MoveType.ATTACK, damage=_GLOMP_DMG)
+            "GLOMP_MOVE", self._glomp, Intent(MoveType.ATTACK, damage=self._glomp_dmg())
         )
         goop = MoveState("GOOP_MOVE", self._goop, Intent(MoveType.DEBUFF))
         whip_slap.follow_up = glomp
@@ -60,7 +75,7 @@ class CorpseSlug(MachineMonster):
         self._execute_attack(ctx, _WHIP_SLAP_DMG, _WHIP_SLAP_HITS)
 
     def _glomp(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _GLOMP_DMG, 1)
+        self._execute_attack(ctx, self._glomp_dmg(), 1)
 
     def _goop(self, ctx: CombatCtx) -> None:
         from ...cmds import PowerCmd

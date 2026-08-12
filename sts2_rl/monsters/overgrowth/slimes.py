@@ -4,7 +4,8 @@ import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, Monster, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, Monster, MoveType, asc_value
 from ..state_machine import weighted_branch_pick
 
 if TYPE_CHECKING:
@@ -19,6 +20,8 @@ class LeafSlimeS(Monster):
     name = "Leaf Slime (S)"
     min_hp = 11
     max_hp = 15
+    min_hp_asc = 12      # LeafSlimeS.cs:20 ToughEnemies (asc 8+)
+    max_hp_asc = 16      # LeafSlimeS.cs:22 ToughEnemies (asc 8+)
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         rng = rng or random.Random()
@@ -29,15 +32,20 @@ class LeafSlimeS(Monster):
             hooks.combat.combat_rng.monster_ai, ["TACKLE", "GOOP"], [1, 1]
         )
 
+    def _tackle_dmg(self) -> int:
+        """LeafSlimeS.cs:24 `TackleDamage` -- read at both the telegraphed
+        Intent (current_intent) and the executed attack (take_turn)."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES, 4, 3)
+
     @property
     def current_intent(self) -> Intent:
         if self._move_key == "TACKLE":
-            return Intent(MoveType.ATTACK, damage=3)
-        return Intent(MoveType.STATUS_CARD)  # GOOP: adds a Slimed card
+            return Intent(MoveType.ATTACK, damage=self._tackle_dmg())
+        return Intent(MoveType.STATUS_CARD, status_count=1)  # GOOP: adds a Slimed card
 
     def take_turn(self, ctx: CombatCtx) -> None:
         if self._move_key == "TACKLE":
-            self._execute_attack(ctx, 3, 1)
+            self._execute_attack(ctx, self._tackle_dmg(), 1)
         else:
             from ...cards import SlimedCard
             from ...cmds import CardPileCmd
@@ -58,18 +66,25 @@ class LeafSlimeS(Monster):
 class TwigSlimeS(Monster):
     """Always tackles."""
     name = "Twig Slime (S)"
-    min_hp = 7
-    max_hp = 11
+    min_hp = 7            # TwigSlimeS.cs:15 base
+    max_hp = 11            # TwigSlimeS.cs:17 base
+    min_hp_asc = 8         # TwigSlimeS.cs:15 ToughEnemies (asc 8+)
+    max_hp_asc = 12        # TwigSlimeS.cs:17 ToughEnemies (asc 8+)
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
 
+    def _tackle_dmg(self) -> int:
+        """TwigSlimeS.cs:19 `TackleDamage` -- read at both the telegraphed
+        Intent and the executed attack."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES, 5, 4)
+
     @property
     def current_intent(self) -> Intent:
-        return Intent(MoveType.ATTACK, damage=4)
+        return Intent(MoveType.ATTACK, damage=self._tackle_dmg())
 
     def take_turn(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, 4, 1)
+        self._execute_attack(ctx, self._tackle_dmg(), 1)
 
 
 # ── Medium Slimes ─────────────────────────────────────────────────────────
@@ -79,16 +94,23 @@ class LeafSlimeM(Monster):
     name = "Leaf Slime (M)"
     min_hp = 32
     max_hp = 35
+    min_hp_asc = 33      # LeafSlimeM.cs:22 ToughEnemies (asc 8+)
+    max_hp_asc = 36      # LeafSlimeM.cs:24 ToughEnemies (asc 8+)
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
         self._move_key = "STICKY_SHOT"
 
+    def _clump_dmg(self) -> int:
+        """LeafSlimeM.cs:26 `ClumpDamage` -- read at both the telegraphed
+        Intent (current_intent) and the executed attack (take_turn)."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES, 9, 8)
+
     @property
     def current_intent(self) -> Intent:
         if self._move_key == "STICKY_SHOT":
-            return Intent(MoveType.STATUS_CARD)  # adds 2 Slimed cards
-        return Intent(MoveType.ATTACK, damage=8)
+            return Intent(MoveType.STATUS_CARD, status_count=2)  # adds 2 Slimed cards
+        return Intent(MoveType.ATTACK, damage=self._clump_dmg())
 
     def take_turn(self, ctx: CombatCtx) -> None:
         if self._move_key == "STICKY_SHOT":
@@ -98,7 +120,7 @@ class LeafSlimeM(Monster):
                 CardPileCmd.add_to_discard(ctx.hooks, ctx.player, SlimedCard())
             self._move_key = "CLUMP_SHOT"
         else:
-            self._execute_attack(ctx, 8, 1)
+            self._execute_attack(ctx, self._clump_dmg(), 1)
             self._move_key = "STICKY_SHOT"
 
 
@@ -109,8 +131,10 @@ class TwigSlimeM(Monster):
     max 2 in a row, base weight 1), STICKY is ``AddBranch(state, CannotRepeat)``
     (base weight 1). So after one POKEY it's a true 50/50, not 2:1."""
     name = "Twig Slime (M)"
-    min_hp = 26
-    max_hp = 28
+    min_hp = 26            # TwigSlimeM.cs:23 base
+    max_hp = 28             # TwigSlimeM.cs:25 base
+    min_hp_asc = 27         # TwigSlimeM.cs:23 ToughEnemies (asc 8+)
+    max_hp_asc = 29         # TwigSlimeM.cs:25 ToughEnemies (asc 8+)
 
     def __init__(self, hooks: HookSystem, rng: random.Random | None = None) -> None:
         super().__init__(hooks, rng or random.Random())
@@ -118,11 +142,16 @@ class TwigSlimeM(Monster):
         self._move_key = "STICKY_SHOT"
         self._pokey_streak = 0  # consecutive POKEY_POUNCE at the tail of the log
 
+    def _clump_dmg(self) -> int:
+        """TwigSlimeM.cs:29 `ClumpDamage` -- read at both the telegraphed
+        Intent and the executed attack."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES, 12, 11)
+
     @property
     def current_intent(self) -> Intent:
         if self._move_key == "STICKY_SHOT":
-            return Intent(MoveType.STATUS_CARD)  # adds 1 Slimed card
-        return Intent(MoveType.ATTACK, damage=11, hits=1)
+            return Intent(MoveType.STATUS_CARD, status_count=1)  # adds 1 Slimed card
+        return Intent(MoveType.ATTACK, damage=self._clump_dmg(), hits=1)
 
     def take_turn(self, ctx: CombatCtx) -> None:
         if self._move_key == "STICKY_SHOT":
@@ -130,7 +159,7 @@ class TwigSlimeM(Monster):
             from ...cmds import CardPileCmd
             CardPileCmd.add_to_discard(ctx.hooks, ctx.player, SlimedCard())
         else:
-            self._execute_attack(ctx, 11, 1)
+            self._execute_attack(ctx, self._clump_dmg(), 1)
 
     def telegraph_next_move(self) -> None:
         # Mirror RandomBranchState.GetStateWeight for TwigSlimeM.cs's two

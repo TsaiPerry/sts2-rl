@@ -9,6 +9,8 @@
     py eval.py runs/sts2_column_torch.pt --env column        # raw-torch full runs (curriculum)
     py eval.py runs/sts2_run_torch.pt --env run --episodes 50 --baselines
     py eval.py runs/sts2_run_torch.pt --env run --sample     # stochastic instead of greedy
+    py eval.py runs/x.pt --env column --reward-hist          # + return distribution
+    py eval.py runs/x.pt --env column --csv out              # + out.episodes.csv / out.hist.csv
 
 A ``.pt`` model is a ``train_torch.py`` checkpoint (the current training path);
 anything else is loaded as a stable-baselines3 MaskablePPO zip (the legacy
@@ -25,7 +27,14 @@ there.
 
 For the run-scale envs, floors reached is the headline number: win rate stays
 near zero for a long time, so how far a policy gets is what actually
-distinguishes two checkpoints.
+distinguishes two checkpoints. Those envs also report two behavior metrics in
+every row — ``e_unspent`` (energy left unspent per end-turn) and ``take`` (share
+of card rewards taken) — the same two ``train_torch.py`` logs per training
+window, so an eval row and a CSV row are directly comparable, plus
+``rest_heal`` / ``rest_up`` (share of rest-site visits spent healing /
+upgrading; both are per visit, so they can sum above 100%). ``--reward-hist``
+adds the episode-return distribution, and ``--csv`` exports both the per-episode
+rows and that distribution for a spreadsheet.
 """
 import argparse
 import random
@@ -47,6 +56,9 @@ from sts2_rl.evaluation import (
     masked_random_policy,
     model_policy,
     probe_summary,
+    reward_histogram_lines,
+    write_cards_csv,
+    write_run_csv,
 )
 from sts2_rl.probes import lethal_oracle
 
@@ -100,14 +112,14 @@ def load_sb3(model_path: str, env=None):
     return MaskablePPO.load(model_path, device="cpu")
 
 
-def make_run_env(env_kind: str, acts: list[str] | None):
+def make_run_env(env_kind: str, acts: list[str] | None, ascension: int = 0):
     if env_kind == "column":
         from sts2_rl.curriculum_env import STS2CurriculumRunEnv
 
-        return STS2CurriculumRunEnv(acts=acts)
+        return STS2CurriculumRunEnv(acts=acts, ascension=ascension)
     from sts2_rl.run_env import STS2RunEnv
 
-    return STS2RunEnv(acts=acts)
+    return STS2RunEnv(acts=acts, ascension=ascension)
 
 
 def evaluate_simple(model_path: str, n_episodes: int = 1000) -> None:
@@ -205,6 +217,51 @@ def evaluate_full(
         )
 
 
+def gimmick_probes(
+    model_path: str | None,
+    ascension: int,
+    seed: int,
+    sample: bool,
+    device: str,
+    episodes: int = 100,
+) -> None:
+    """v7 gimmick-fight probes (plan Task 10): the three fights Perry watched
+    the bot fail mechanically, each rolled as a dedicated combat-env eval at
+    the given ascension — turns "couldn't understand the gimmick" into a
+    tracked number. Encounters are resolved BY CONSTANT from the top-level
+    package (they live in the hive/glory registries, NOT vec_env's
+    overgrowth-only ENCOUNTERS dict)."""
+    from sts2_rl.monsters import (
+        DECIMILLIPEDE_ELITE,
+        TEST_SUBJECT_BOSS,
+        THE_INSATIABLE_BOSS,
+    )
+
+    probes = [("decimillipede", DECIMILLIPEDE_ELITE),
+              ("the_insatiable", THE_INSATIABLE_BOSS),
+              ("test_subject", TEST_SUBJECT_BOSS)]
+    print(f"\ngimmick probes (asc {ascension}, {episodes} episodes each):")
+    for key, encounter in probes:
+        env = STS2FullCombatEnv(encounter=encounter, ascension=ascension)
+        if model_path is not None:
+            try:
+                policy, _ = load_torch_policy(
+                    model_path, env_kind="combat", env=env,
+                    device=device, sample=sample, seed=seed)
+            except Exception as exc:
+                # e.g. a run-scale checkpoint: its obs layout can't drive the
+                # combat env — report and keep the rest of the eval usable.
+                print(f"  probes skipped: {exc}")
+                return
+        else:
+            policy = masked_random_policy(seed)
+        env.reset(seed=seed)
+        max_hp = env.unwrapped._state.player.max_hp
+        report = evaluate_win_rate(policy, episodes=episodes, seed=seed, env=env)
+        print(f"  {key:<16} win {100 * report.win_rate:5.1f}%  "
+              f"mean_hp_lost {max_hp - report.mean_hp_left:6.1f}")
+
+
 def label(model_path: str, ckpt: dict) -> str:
     """"runs/x.pt (entity, iter 500)" — provenance in the report row.
 
@@ -221,7 +278,10 @@ def run_row(name: str, report: RunEvalReport) -> str:
     return (
         f"{name:<{LABEL_WIDTH}} {100 * report.win_rate:>5.1f}% "
         f"{report.mean_floor:>7.1f} {report.median_floor:>5.0f}  "
-        f"{acts:<16} {win_hp:>7} {report.mean_decisions:>8.1f}"
+        f"{acts:<16} {win_hp:>7} {report.mean_decisions:>8.1f} "
+        f"{report.energy_unspent_per_turn:>9.2f} {100 * report.card_take_rate:>5.0f}%"
+        f" {100 * report.rest_heal_rate:>9.0f}% {100 * report.rest_upgrade_rate:>7.0f}%"
+        f" {100 * report.potion_use_rate:>9.0f}%"
     )
 
 
@@ -234,6 +294,9 @@ def evaluate_run_scale(
     baselines: bool,
     sample: bool,
     device: str,
+    reward_hist: bool = False,
+    csv_path: str | None = None,
+    ascension: int = 0,
 ) -> None:
     """Run-scale evaluation: N seeded full runs on STS2RunEnv/STS2CurriculumRunEnv."""
     from sts2_rl.run_env import masked_random_run_policy
@@ -241,7 +304,7 @@ def evaluate_run_scale(
     rows: list[tuple[str, RunEvalReport]] = []
 
     if baselines or model_path is None:
-        env = make_run_env(env_kind, acts)
+        env = make_run_env(env_kind, acts, ascension)
         rows.append((
             "masked-random",
             evaluate_run(masked_random_run_policy(random.Random(seed)),
@@ -249,7 +312,7 @@ def evaluate_run_scale(
         ))
 
     if model_path is not None:
-        env = make_run_env(env_kind, acts)
+        env = make_run_env(env_kind, acts, ascension)
         policy, ckpt = load_torch_policy(
             model_path, env_kind=env_kind, env=env,
             device=device, sample=sample, seed=seed)
@@ -263,11 +326,26 @@ def evaluate_run_scale(
     print(f"\n{n_episodes} full runs on the {env_kind!r} env, seed {seed}, "
           f"{mode} ({act_str})\n")
     header = (f"{'policy':<{LABEL_WIDTH}} {'win%':>6} {'floor~':>7} {'med':>5}  "
-              f"{'acts reached':<16} {'hp@win':>7} {'dec/ep':>8}")
+              f"{'acts reached':<16} {'hp@win':>7} {'dec/ep':>8} "
+              f"{'e_unspent':>9} {'take':>6} {'rest_heal':>10} {'rest_up':>8}"
+              f" {'potion_use':>10}")
     print(header)
     print("-" * len(header))
     for name, report in rows:
         print(run_row(name, report))
+
+    # v8 HP-economy / potion-ledger / relic summary (plan Task 5) --
+    # informational, no targets: hp_lost is the combat-sloppiness gauge,
+    # potion elite-share is (elite+boss uses)/all uses pooled over episodes,
+    # potions_used/potions_expired are raw per-episode means (hoarding
+    # gauge), and relics is the per-episode mean gained.
+    print("\nv8 HP/potion/relic summary:")
+    for name, report in rows:
+        print(f"  {name:<{LABEL_WIDTH}} hp_lost {report.mean_hp_lost:6.1f}  "
+              f"potion_elite_share {100 * report.potion_elite_share:5.1f}%  "
+              f"potions_used {report.mean_potions_used:5.2f}  "
+              f"potions_expired {report.mean_potions_expired:5.2f}  "
+              f"relics {report.mean_relics:5.2f}")
 
     print("\ndeaths (floor reached, losses only):")
     for name, report in rows:
@@ -281,6 +359,29 @@ def evaluate_run_scale(
               f"median {np.median(d):>4.0f}  max {d.max():>3}"
               + (f"  ({report.truncated} truncated)" if report.truncated else ""))
 
+    if reward_hist:
+        for name, report in rows:
+            print()
+            print("\n".join(reward_histogram_lines(name, report)))
+
+    # The archetype-forcing signal (plan Task 8): cards the policy keeps
+    # being offered and never takes.
+    for name, report in rows:
+        never = [(card, offered) for card, (offered, taken)
+                 in report.card_take_counts.items() if taken == 0]
+        if never:
+            top = ", ".join(f"{c}x{o}" for c, o in never[:10])
+            print(f"\nmost-offered never-taken ({name}): {top}")
+
+    if csv_path is not None:
+        ep_path, hist_path = write_run_csv(csv_path, rows)
+        stem = csv_path[:-4] if csv_path.lower().endswith(".csv") else csv_path
+        cards_path = f"{stem}.cards.csv"
+        write_cards_csv(cards_path, rows)
+        print(f"\nwrote {ep_path} ({sum(r.episodes for _, r in rows)} episode rows)"
+              f"\nwrote {hist_path}"
+              f"\nwrote {cards_path}")
+
 
 def compare_checkpoints(
     ckpt_a: str,
@@ -290,6 +391,7 @@ def compare_checkpoints(
     acts: list[str] | None,
     sample: bool,
     device: str,
+    ascension: int = 0,
 ) -> None:
     """``--compare``: paired-seed A/B of two run-scale checkpoints on the
     SAME ``EVAL_SEEDS`` slice — per-seed floor/win/hp deltas plus the
@@ -298,7 +400,7 @@ def compare_checkpoints(
     def make_policy(path: str):
         # A fresh env is only needed to read obs_dim/n_actions for the load
         # check; compare_runs supplies the env each arm actually plays on.
-        env = make_run_env(env_kind, acts)
+        env = make_run_env(env_kind, acts, ascension)
         policy, ckpt = load_torch_policy(
             path, env_kind=env_kind, env=env, device=device, sample=sample)
         return policy, ckpt
@@ -313,7 +415,7 @@ def compare_checkpoints(
     seeds = EVAL_SEEDS[:n_episodes]
     delta: PairedRunDelta = compare_runs(
         lambda: policy_a, lambda: policy_b,
-        seeds=seeds, env_factory=lambda: make_run_env(env_kind, acts))
+        seeds=seeds, env_factory=lambda: make_run_env(env_kind, acts, ascension))
 
     name_a = label(ckpt_a, ckpt_a_data)
     name_b = label(ckpt_b, ckpt_b_data)
@@ -349,6 +451,10 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=0, help="full/run/column envs only")
     parser.add_argument("--acts", nargs="+", default=None,
                         help="run/column envs only: the act list (default: rolled per episode)")
+    parser.add_argument("--ascension", type=int, default=0,
+                        help="run/column envs only: the ascension level to evaluate at "
+                             "(0 = no ascension, the old behavior); matches "
+                             "train_torch.py --ascension")
     parser.add_argument("--ablated", action="store_true",
                         help="the model was trained on AblatedObsEnv observations (full env only)")
     parser.add_argument("--baselines", action="store_true",
@@ -358,12 +464,37 @@ if __name__ == "__main__":
                         help="torch checkpoints: sample from the policy instead of "
                              "acting greedily (still deterministic given --seed)")
     parser.add_argument("--device", default="cpu", help="torch checkpoints (default: cpu)")
+    parser.add_argument("--reward-hist", action="store_true",
+                        help="run/column envs only: also print the episode-return "
+                             "distribution as an ASCII bar chart (one row per "
+                             "distinct return value)")
+    parser.add_argument("--csv", default=None, metavar="PATH",
+                        help="run/column envs only: export the evaluation as two "
+                             "spreadsheet-ready CSVs — PATH.episodes.csv (one row "
+                             "per episode: outcome, return, and the behavior "
+                             "tallies) and PATH.hist.csv (the return histogram). "
+                             "A trailing '.csv' on PATH is stripped")
+    parser.add_argument("--gimmick-probes", action="store_true",
+                        help="also roll the three gimmick fights "
+                             "(Decimillipede, The Insatiable, Test Subject) "
+                             "as dedicated combat-env probes at --ascension: "
+                             "per-encounter win rate + mean HP lost over 100 "
+                             "seeded combats (--env full/run/column)")
     parser.add_argument("--compare", nargs=2, metavar=("CKPT_A", "CKPT_B"), default=None,
                         help="paired-seed A/B of two run-scale checkpoints on EVAL_SEEDS "
                              "(--env run/column only); prints per-seed floor/win/hp deltas "
                              "plus aggregate mean/median delta and better/worse/tie counts. "
                              "--episodes N uses the first N of EVAL_SEEDS (default: all 200)")
     args = parser.parse_args()
+
+    # --reward-hist / --csv read RunEvalReport fields that only the run-scale
+    # report path produces. --compare returns a PairedRunDelta, which carries
+    # neither the per-episode returns nor the behavior tallies.
+    if args.env not in RUN_SCALE or args.compare is not None:
+        for flag, value in (("--reward-hist", args.reward_hist), ("--csv", args.csv)):
+            if value:
+                parser.error(f"{flag} applies to the --env run/column report "
+                             f"(not --compare, not the combat envs)")
 
     if args.compare is not None:
         if args.env not in RUN_SCALE:
@@ -381,7 +512,7 @@ if __name__ == "__main__":
         # default (1000) already means "all of EVAL_SEEDS" with no sentinel
         # needed.
         compare_checkpoints(args.compare[0], args.compare[1], args.env, args.episodes,
-                            args.acts, args.sample, args.device)
+                            args.acts, args.sample, args.device, args.ascension)
     elif args.env in RUN_SCALE:
         if args.model is None and not args.baselines:
             parser.error(f"--env {args.env} needs a model, --baselines, or both")
@@ -391,16 +522,25 @@ if __name__ == "__main__":
         if args.ablated:
             parser.error("--ablated applies to --env full only")
         evaluate_run_scale(args.model, args.env, args.episodes, args.seed,
-                           args.acts, args.baselines, args.sample, args.device)
+                           args.acts, args.baselines, args.sample, args.device,
+                           args.reward_hist, args.csv, args.ascension)
+        if args.gimmick_probes:
+            gimmick_probes(args.model, args.ascension, args.seed,
+                           args.sample, args.device)
     elif args.env == "full":
         if args.model is None and not args.baselines:
             parser.error("--env full needs a model, --baselines, or both")
         if args.acts:
             parser.error("--acts applies to the run-scale envs only")
+        # --ascension is allowed here since v7 Task 10: the combat env takes
+        # an ascension kwarg (gimmick probes fight at the stage's level).
         if args.ablated and args.model is not None and is_torch_checkpoint(args.model):
             parser.error("--ablated is an SB3-path flag; train_torch.py has no ablated arm")
         evaluate_full(args.model, args.episodes, args.seed, args.ablated,
                       args.baselines, args.sample, args.device)
+        if args.gimmick_probes:
+            gimmick_probes(args.model, args.ascension, args.seed,
+                           args.sample, args.device)
     else:
         if args.model is None:
             parser.error("--env simple needs a model path")

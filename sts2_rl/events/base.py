@@ -82,6 +82,18 @@ class Event:
     # EventModel.CanonicalEncounter — what a Combat-layout event pre-generates
     # at room entry and its fight option then hands to the driver.
     canonical_encounter: "Encounter | None" = None
+    # `Player.CanRemovePotions = false` for the whole event
+    # (`BeforeEventStarted` -> `OnEventFinished`). The source's only three are
+    # TheFutureOfPotions.cs:92, RanwidTheElder.cs:42 and StoneOfAllTime.cs:66,
+    # and `NPotionPopup` reads the flag to DISABLE the Use and Discard buttons
+    # (NPotionPopup.cs:139-142) -- so the belt is not usable while one of them
+    # is open. All three ports used to record this as "UI-only and not
+    # modeled", which was true only until `DecisionRequest.potion_actions`
+    # made the out-of-combat belt reachable at all. It is load-bearing now:
+    # these events hand out options that NAME held potions, and draining a
+    # named slot mid-event left an option referring to a potion no longer held
+    # (`RunState.discard_potion` -> `ValueError: ... is not in list`).
+    locks_potion_belt: bool = False
 
     def __init__(self, run: RunState) -> None:
         self.run = run

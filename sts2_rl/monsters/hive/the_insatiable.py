@@ -5,16 +5,20 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..state_machine import MachineMonster, MonsterMoveStateMachine, MoveState
 
 if TYPE_CHECKING:
     from ...combat import CombatCtx
 
-_THRASH_DMG = 8
+_THRASH_DMG = 8          # TheInsatiable.cs:62 base
+_THRASH_DMG_ASC = 9      # DeadlyEnemies
 _THRASH_HITS = 2
-_BITE_DMG = 28
-_SALIVATE_STR = 2
+_BITE_DMG = 28           # TheInsatiable.cs:64 base
+_BITE_DMG_ASC = 31       # DeadlyEnemies
+_SALIVATE_STR = 2        # TheInsatiable.cs:66 base
+_SALIVATE_STR_ASC = 3    # DeadlyEnemies
 _SANDPIT = 4
 _ESCAPE_DRAW = 3
 _ESCAPE_DISCARD = 3
@@ -27,8 +31,29 @@ class TheInsatiable(MachineMonster):
     → LUNGING_BITE (28) → SALIVATE (+2 Strength) → THRASH_2 (8x2) → THRASH."""
     name = "The Insatiable"
 
-    min_hp = 321
+    min_hp = 321          # TheInsatiable.cs:58
     max_hp = 321
+    min_hp_asc = 341       # ToughEnemies (asc 8+)
+    max_hp_asc = 341
+
+    def _thrash_dmg(self) -> int:
+        """TheInsatiable.cs:62 `ThrashDamage` -- a C# PROPERTY re-read at both
+        the telegraphed Intent (two sites: THRASH_MOVE and THRASH_MOVE_2) and
+        the executed attack, so all three sites call this."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _THRASH_DMG_ASC, _THRASH_DMG)
+
+    def _bite_dmg(self) -> int:
+        """TheInsatiable.cs:64 `BiteDamage` -- re-read at both the telegraphed
+        Intent and the executed attack."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _BITE_DMG_ASC, _BITE_DMG)
+
+    def _salivate_str(self) -> int:
+        """TheInsatiable.cs:66 `SalivateStrength` -- re-read at both the
+        telegraphed Intent (BUFF, amount not encoded) and the applied power."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _SALIVATE_STR_ASC, _SALIVATE_STR)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         liquify = MoveState(
@@ -41,15 +66,15 @@ class TheInsatiable(MachineMonster):
         )
         thrash = MoveState(
             "THRASH_MOVE", self._thrash,
-            Intent(MoveType.ATTACK, damage=_THRASH_DMG, hits=_THRASH_HITS),
+            lambda: Intent(MoveType.ATTACK, damage=self._thrash_dmg(), hits=_THRASH_HITS),
         )
         thrash2 = MoveState(
             "THRASH_MOVE_2", self._thrash,
-            Intent(MoveType.ATTACK, damage=_THRASH_DMG, hits=_THRASH_HITS),
+            lambda: Intent(MoveType.ATTACK, damage=self._thrash_dmg(), hits=_THRASH_HITS),
         )
         bite = MoveState(
             "LUNGING_BITE_MOVE", self._bite,
-            Intent(MoveType.ATTACK, damage=_BITE_DMG),
+            lambda: Intent(MoveType.ATTACK, damage=self._bite_dmg()),
         )
         salivate = MoveState("SALIVATE_MOVE", self._salivate, Intent(MoveType.BUFF))
         liquify.follow_up = thrash
@@ -97,15 +122,15 @@ class TheInsatiable(MachineMonster):
         CardPileCmd._enter_combat(ctx.hooks, card)
 
     def _thrash(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _THRASH_DMG, _THRASH_HITS)
+        self._execute_attack(ctx, self._thrash_dmg(), _THRASH_HITS)
 
     def _bite(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _BITE_DMG, 1)
+        self._execute_attack(ctx, self._bite_dmg(), 1)
 
     def _salivate(self, ctx: CombatCtx) -> None:
         from ...cmds import PowerCmd
         from ...powers import StrengthPower
-        PowerCmd.apply(ctx.hooks, self, StrengthPower, _SALIVATE_STR)
+        PowerCmd.apply(ctx.hooks, self, StrengthPower, self._salivate_str())
 
 
 THE_INSATIABLE_BOSS = Encounter(

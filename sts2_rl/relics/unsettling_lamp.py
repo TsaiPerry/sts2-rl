@@ -31,6 +31,19 @@ class UnsettlingLamp(Relic):
         self._triggering = None
         self._finished = False
 
+    def on_combat_end(self) -> None:
+        # UnsettlingLamp.cs:147-154 AfterCombatEnd — the game clears
+        # TriggeringCard/DoubledPowers AND IsFinishedTriggering (and drops
+        # Status back to Normal) when the combat ENDS, not only at the next
+        # combat's start. Without this the sim's `_finished` stayed True on
+        # every out-of-combat decision after a combat where the lamp
+        # triggered, while the game (and the obs flag reading its finished
+        # latch) reads False — 933T act-1 f13+ Map/Event/Rest lines, 38
+        # cells.
+        self._in_flight = None
+        self._triggering = None
+        self._finished = False
+
     # target=None keeps this compatible with the hook both before and after
     # the card-play hook carries its target.
     def before_card_played(self, card, target=None) -> None:

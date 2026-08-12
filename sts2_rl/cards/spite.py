@@ -29,9 +29,14 @@ class SpiteCard(Card):
         self._energy_cost = 0
         self._damage = 5
         self._repeat = 2
+        # RepeatVar's printed base value (Spite.cs CanonicalVars) — this is
+        # what base_hits/the game obs writer report regardless of the
+        # runtime lost-hp-this-turn condition checked in on_play() below.
+        self._hits = 2
 
     def _on_upgrade(self) -> None:
         self._repeat += 1
+        self._hits = self._repeat
 
     def on_play(self, ctx: CombatCtx, target_idx: int | None = None) -> None:
         from ..cmds import DamageCmd

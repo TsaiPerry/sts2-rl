@@ -5,14 +5,16 @@ import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, Monster, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, Monster, MoveType, asc_value
 from ..state_machine import MachineMonster, MonsterMoveStateMachine, MoveState
 
 if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
-_CLAMP_DMG = 8
+_CLAMP_DMG = 8          # Chomper.cs:32 base
+_CLAMP_DMG_ASC = 9      # DeadlyEnemies (asc 9+)
 _CLAMP_HITS = 2
 _SCREECH_DAZED = 3
 _ARTIFACT = 2
@@ -22,8 +24,17 @@ class Chomper(MachineMonster):
     """Alternates CLAMP (8x2) and SCREECH (3 Dazed into the discard pile);
     spawns with Artifact 2. The second Chomper in the pair screams first."""
 
-    min_hp = 60
+    min_hp = 60          # Chomper.cs:28-30
     max_hp = 64
+    min_hp_asc = 63
+    max_hp_asc = 67
+
+    def _clamp_dmg(self) -> int:
+        """Chomper.cs:32 `ClampDamage` -- a C# PROPERTY re-read at both the
+        telegraphed Intent (:58) and the executed attack (:69), so both
+        sites call this rather than a value cached at construction."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _CLAMP_DMG_ASC, _CLAMP_DMG)
 
     def __init__(
         self,
@@ -40,10 +51,11 @@ class Chomper(MachineMonster):
     def build_machine(self) -> MonsterMoveStateMachine:
         clamp = MoveState(
             "CLAMP_MOVE", self._clamp,
-            Intent(MoveType.ATTACK, damage=_CLAMP_DMG, hits=_CLAMP_HITS),
+            lambda: Intent(MoveType.ATTACK, damage=self._clamp_dmg(), hits=_CLAMP_HITS),
         )
         screech = MoveState(
-            "SCREECH_MOVE", self._screech, Intent(MoveType.STATUS_CARD)
+            "SCREECH_MOVE", self._screech,
+            Intent(MoveType.STATUS_CARD, status_count=_SCREECH_DAZED),
         )
         clamp.follow_up = screech
         screech.follow_up = clamp
@@ -51,7 +63,7 @@ class Chomper(MachineMonster):
         return MonsterMoveStateMachine([clamp, screech], initial)
 
     def _clamp(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _CLAMP_DMG, _CLAMP_HITS)
+        self._execute_attack(ctx, self._clamp_dmg(), _CLAMP_HITS)
 
     def _screech(self, ctx: CombatCtx) -> None:
         from ...cards import DazedCard

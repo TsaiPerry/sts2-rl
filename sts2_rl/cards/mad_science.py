@@ -90,13 +90,21 @@ class MadScienceCard(Card):
         self.rider = rider
         return self
 
+    # Round-13 (933T (2,6) hand.f fields 17-21): the game's CanonicalVars carry
+    # BOTH `DamageVar(12)` and `BlockVar(8)` UNCONDITIONALLY (MadScience.cs:96-108
+    # — the var list does not depend on TinkerTimeType; only OnPlay's dispatch
+    # does), so the printed damage/block are present on the card whatever type it
+    # was configured to, and the live obs reads them that way. The old
+    # type-gated properties zeroed both for a Power-configured Mad Science where
+    # the game dump showed 12/8. Gameplay is unaffected — on_play still
+    # dispatches on `tinker_type`.
     @property
     def base_damage(self) -> int | None:
-        return self._damage if self.tinker_type == CardType.ATTACK else None
+        return self._damage
 
     @property
     def base_block(self) -> int | None:
-        return self._block if self.tinker_type == CardType.SKILL else None
+        return self._block
 
     @property
     def gains_block(self) -> bool:  # type: ignore[override]

@@ -153,10 +153,22 @@ def test_card_number_pins():
     strike, defend = _hand_slot(env, "strike"), _hand_slot(env, "defend")
     np.testing.assert_allclose(hand_f[strike][17:24], [0.06, 0.012, 0.1, 0, 0, 0, 0], rtol=1e-6)
     np.testing.assert_allclose(hand_f[defend][17:24], [0, 0, 0.1, 0.05, 0.05, 0, 0], rtol=1e-6)
-    # Dexterity moves the effective block, not the printed base.
+    # Obs-parity fix (89U diff vs a live game dump): field 21 (eff_block)
+    # must NOT move with Dexterity (or Frail) — the game's own
+    # DecisionDumper (SpireBot's CombatObsWriter.cs:470) captures this field
+    # via `Hook.ModifyBlock(..., default, card, null, ...)`, and
+    # `default(ValueProp)` carries no `.Move` flag, so every block modifier
+    # gated on `IsPoweredCardOrMonsterMoveBlock()` (Dexterity's
+    # ModifyBlockAdditive, Frail's ModifyBlockMultiplicative, ...) is a
+    # no-op for that specific field. See `preview_card_block`'s docstring
+    # (sts2_rl/previews.py) and `card_features`'s field-21 comment
+    # (sts2_rl/full_env.py). Previously this test pinned the OLD (fully
+    # hook-modified) behavior — 0.07 — which is exactly the bug the diff
+    # found: 224 hand.f field-21 mismatches, sim showing a Dexterity/Frail-
+    # adjusted value where the live game dump showed the raw base block.
     PowerCmd.apply(env._state.hooks, env._state.player, DexterityPower, 2)
     hand_f = env._build_obs()["f"][layout.f_slices["hand.f"]].reshape(-1, N_CARD_FEATURES)
-    np.testing.assert_allclose(hand_f[defend][17:24], [0, 0, 0.1, 0.05, 0.07, 0, 0], rtol=1e-6)
+    np.testing.assert_allclose(hand_f[defend][17:24], [0, 0, 0.1, 0.05, 0.05, 0, 0], rtol=1e-6)
 
 
 def test_damage_matrix_pins_strength_and_vulnerable():
@@ -170,11 +182,16 @@ def test_damage_matrix_pins_strength_and_vulnerable():
         return env._build_obs()["f"][dm_slice][cell]
 
     assert dm() == pytest.approx(0.06)
-    # Strength is additive before Vulnerable multiplies: (6+3) → int(9×1.5) = 13.
+    # Strength is additive before Vulnerable multiplies: (6+3) x 1.5 = 13.5.
+    # Round-6 obs-parity fix: the game's own preview pipeline (decimal
+    # arithmetic, Hook.cs:2511-2539) never truncates mid-pipeline — only its
+    # UI text call does, a call site this observation doesn't reach — so
+    # damage_matrix keeps the fractional 13.5, not int(9x1.5) == 13 (see
+    # previews.py's `_modified_damage` docstring).
     PowerCmd.apply(s.hooks, s.player, StrengthPower, 3)
     assert dm() == pytest.approx(0.09)
     PowerCmd.apply(s.hooks, s.enemies[0], VulnerablePower, 1)
-    assert dm() == pytest.approx(0.13)
+    assert dm() == pytest.approx(0.135)
 
 
 def test_cards_block_pins_a_played_cards_pile_and_identity():

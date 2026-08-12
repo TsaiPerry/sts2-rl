@@ -3,7 +3,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..base import Encounter, Intent, MoveType
+from ...actmap import AscensionLevel
+from ..base import Encounter, Intent, MoveType, asc_value
 from ..hive.flail_knight import FlailKnight
 from ..state_machine import (
     MachineMonster,
@@ -17,13 +18,19 @@ if TYPE_CHECKING:
     from ...combat import CombatCtx
     from ...hooks import HookSystem
 
-_POWER_SHIELD_DMG = 6
-_POWER_SHIELD_BLOCK = 5
-_SPEAR_DMG = 10
-_BOMB_DMG = 35
+_POWER_SHIELD_DMG = 6          # MagiKnight.cs:47 base
+_POWER_SHIELD_DMG_ASC = 7      # DeadlyEnemies
+_POWER_SHIELD_BLOCK = 5        # MagiKnight.cs:49 base
+_POWER_SHIELD_BLOCK_ASC = 9    # ToughEnemies
+_SPEAR_DMG = 10                # MagiKnight.cs:51 base
+_SPEAR_DMG_ASC = 11            # DeadlyEnemies
+_BOMB_DMG = 35                 # MagiKnight.cs:53 base
+_BOMB_DMG_ASC = 40             # DeadlyEnemies
 _HEX_AMOUNT = 2
-_SOUL_SLASH_DMG = 15
-_SOUL_FLAME_DMG = 3
+_SOUL_SLASH_DMG = 15          # SpectralKnight.cs:38 base
+_SOUL_SLASH_DMG_ASC = 17      # DeadlyEnemies (asc 9+)
+_SOUL_FLAME_DMG = 3           # SpectralKnight.cs:40 base
+_SOUL_FLAME_DMG_ASC = 4       # DeadlyEnemies
 _SOUL_FLAME_HITS = 3
 
 
@@ -37,19 +44,37 @@ class MagiKnight(MachineMonster):
 
     min_hp = 82
     max_hp = 82
+    min_hp_asc = 89   # MagiKnight.cs:41 -- ToughEnemies (MaxInitialHp == MinInitialHp)
+    max_hp_asc = 89
+
+    def _power_shield_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _POWER_SHIELD_DMG_ASC, _POWER_SHIELD_DMG)
+
+    def _power_shield_block(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.TOUGH_ENEMIES,
+                          _POWER_SHIELD_BLOCK_ASC, _POWER_SHIELD_BLOCK)
+
+    def _spear_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _SPEAR_DMG_ASC, _SPEAR_DMG)
+
+    def _bomb_dmg(self) -> int:
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _BOMB_DMG_ASC, _BOMB_DMG)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         power_shield = MoveState(
             "POWER_SHIELD_MOVE", self._power_shield,
-            Intent(MoveType.ATTACK, damage=_POWER_SHIELD_DMG, also=(MoveType.DEFEND,)),
+            lambda: Intent(MoveType.ATTACK, damage=self._power_shield_dmg(), also=(MoveType.DEFEND,)),
         )
         dampen = MoveState("DAMPEN_MOVE", self._dampen, Intent(MoveType.DEBUFF))
         spear = MoveState(
-            "RAM_MOVE", self._spear, Intent(MoveType.ATTACK, damage=_SPEAR_DMG)
+            "RAM_MOVE", self._spear, lambda: Intent(MoveType.ATTACK, damage=self._spear_dmg())
         )
         prep = MoveState("PREP_MOVE", self._prep, Intent(MoveType.DEFEND))
         bomb = MoveState(
-            "MAGIC_BOMB", self._bomb, Intent(MoveType.ATTACK, damage=_BOMB_DMG)
+            "MAGIC_BOMB", self._bomb, lambda: Intent(MoveType.ATTACK, damage=self._bomb_dmg())
         )
         power_shield.follow_up = dampen
         dampen.follow_up = spear
@@ -61,10 +86,10 @@ class MagiKnight(MachineMonster):
         )
 
     def _power_shield(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _POWER_SHIELD_DMG, 1)
+        self._execute_attack(ctx, self._power_shield_dmg(), 1)
         from ...cmds import BlockCmd
         from ...valueprops import ValueProp
-        BlockCmd.apply(ctx.hooks, self, _POWER_SHIELD_BLOCK, props=ValueProp.MOVE)
+        BlockCmd.apply(ctx.hooks, self, self._power_shield_block(), props=ValueProp.MOVE)
 
     def _dampen(self, ctx: CombatCtx) -> None:
         from ...cmds import PowerCmd
@@ -90,15 +115,15 @@ class MagiKnight(MachineMonster):
             existing.add_caster(self)
 
     def _spear(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _SPEAR_DMG, 1)
+        self._execute_attack(ctx, self._spear_dmg(), 1)
 
     def _prep(self, ctx: CombatCtx) -> None:
         from ...cmds import BlockCmd
         from ...valueprops import ValueProp
-        BlockCmd.apply(ctx.hooks, self, _POWER_SHIELD_BLOCK, props=ValueProp.MOVE)
+        BlockCmd.apply(ctx.hooks, self, self._power_shield_block(), props=ValueProp.MOVE)
 
     def _bomb(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _BOMB_DMG, 1)
+        self._execute_attack(ctx, self._bomb_dmg(), 1)
 
 
 class SpectralKnight(MachineMonster):
@@ -109,18 +134,30 @@ class SpectralKnight(MachineMonster):
     Source: SpectralKnight.cs (non-ascension values)."""
     name = "Spectral Knight"
 
-    min_hp = 93
+    min_hp = 93          # SpectralKnight.cs:32 base (MaxInitialHp == MinInitialHp)
     max_hp = 93
+    min_hp_asc = 97       # ToughEnemies (asc 8+) -- SpectralKnight.cs:32
+    max_hp_asc = 97
+
+    def _soul_slash_dmg(self) -> int:
+        """SpectralKnight.cs:38 `SoulSlashDamage`."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _SOUL_SLASH_DMG_ASC, _SOUL_SLASH_DMG)
+
+    def _soul_flame_dmg(self) -> int:
+        """SpectralKnight.cs:40 `SoulFlameDamage`."""
+        return asc_value(self._hooks, AscensionLevel.DEADLY_ENEMIES,
+                          _SOUL_FLAME_DMG_ASC, _SOUL_FLAME_DMG)
 
     def build_machine(self) -> MonsterMoveStateMachine:
         hex_move = MoveState("HEX", self._hex, Intent(MoveType.DEBUFF))
         soul_slash = MoveState(
             "SOUL_SLASH", self._soul_slash,
-            Intent(MoveType.ATTACK, damage=_SOUL_SLASH_DMG),
+            lambda: Intent(MoveType.ATTACK, damage=self._soul_slash_dmg()),
         )
         soul_flame = MoveState(
             "SOUL_FLAME", self._soul_flame,
-            Intent(MoveType.ATTACK, damage=_SOUL_FLAME_DMG, hits=_SOUL_FLAME_HITS),
+            lambda: Intent(MoveType.ATTACK, damage=self._soul_flame_dmg(), hits=_SOUL_FLAME_HITS),
         )
         branch = RandomBranchState("RAND")
         hex_move.follow_up = soul_slash
@@ -142,10 +179,10 @@ class SpectralKnight(MachineMonster):
         PowerCmd.apply(ctx.hooks, ctx.player, HexPower, _HEX_AMOUNT, applier=self)
 
     def _soul_slash(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _SOUL_SLASH_DMG, 1)
+        self._execute_attack(ctx, self._soul_slash_dmg(), 1)
 
     def _soul_flame(self, ctx: CombatCtx) -> None:
-        self._execute_attack(ctx, _SOUL_FLAME_DMG, _SOUL_FLAME_HITS)
+        self._execute_attack(ctx, self._soul_flame_dmg(), _SOUL_FLAME_HITS)
 
 
 KNIGHTS_ELITE = Encounter(
