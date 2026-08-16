@@ -57,11 +57,9 @@ def _cost(card: Card) -> int:
     `base(-1, CardType.Status, ...)`). That -1 is a flag meaning "cannot be
     played", immune to every cost modifier; reading it as a NUMBER made an
     unplayable card rank cheaper than a genuinely free 0-cost card. Clamped
-    to 0 so it TIES instead (round 12 gave unplayable cards -1; round 13 R11
-    item 3, clamp kept shared across all three consumers in the fix pass).
+    to 0 so it TIES instead.
 
-    THREE consumers read this (round 13 R11 fix pass re-enumerated them; the
-    round-13 first pass named only the first two):
+    THREE consumers read this:
 
     * `"upgrade"` (:121, negated) -- INERT. Its leading sort key is
       `not is_upgradable`, and none of the 29 unplayable cards is upgradable
@@ -77,13 +75,9 @@ def _cost(card: Card) -> int:
       currently UNREACHABLE delta. `_is_junk` is STATUS|CURSE only, so the
       three QUEST unplayables (Lantern Key, Byrdonis Egg, Spoils Map) sort
       past the junk key and reach `_cost`; post-clamp they tie a free
-      playable instead of out-ranking it. Every live call site generates its
-      candidates from a pool (Toolbox and the generator potions from
-      COLORLESS_POOL / `combat.card_pool`, Choice's Paradox from
-      `combat.card_pool`) and no unplayable card is in any pool, so nothing
-      can offer one today. Both facts are pinned in test_selectors.py
-      (`test_choose_a_card_clamp_reaches_the_quest_unplayables_too`,
-      `test_choose_a_card_screens_cannot_offer_an_unplayable_card_today`).
+      playable instead of out-ranking it. No live call site can offer one
+      today (candidates always come from a pool with no unplayable cards),
+      pinned in test_selectors.py.
     """
     return _X_COST_RANK if card.energy_cost_x else max(0, card.energy_cost)
 

@@ -249,28 +249,20 @@ _COUNTER_REBUILD: dict[str, Callable[["Relic", int], None]] = {
 # ─────────────────────────────────────────────────────────────────────────
 
 
-# Every encounter an EVENT (not a map room) can launch a combat against —
+# Every encounter an EVENT (not a map room) can launch a combat against:
 # Combat-layout events' `canonical_encounter` plus the plain `Encounter`
-# constants other events assign to `pending_encounter` directly. Fix report 2
-# (event encounters): `encounter_registry()` originally covered only the four
-# per-act monster packages, so a run-harvested snapshot whose fight came from
-# an event (e.g. Dense Vegetation's `dense_vegetation_event`, four Wrigglers —
-# `events/dense_vegetation.py`) resolved against a registry that had never
-# heard of it and `build_start_state` raised `KeyError`. Each entry here is
-# the same module-level constant `sts2_rl/events/__init__.py` (lines 41-51)
-# already re-exports for exactly this reason (see that module's docstring);
-# gathered by hand rather than walking `ALL_EVENTS` because an event's
-# encounter is reachable from arbitrary code inside its `_fight`/`_setting_N`
-# methods, not from a common attribute every `Event` subclass carries —
-# `Event.canonical_encounter` (the base-class attribute) only covers the
-# three Combat-layout events (Punch-Off, The Lantern Key, and the unported
-# The Architect); Dense Vegetation, Fake Merchant and Battleworn Dummy build
-# their combat off a plain non-Combat-layout `pending_encounter` assignment
-# instead. `test_encounter_registry_covers_every_event_encounter` in
-# test_snapshots.py ties this tuple to every `Encounter` instance
-# `sts2_rl.events` itself exports, so a future event that follows the same
-# export convention and is missed here fails that test loudly instead of
-# resurfacing as a silent `KeyError` on a harvested dataset.
+# constants other events assign to `pending_encounter` directly.
+# `encounter_registry()` alone only covers the four per-act monster
+# packages, so an event-launched fight needs these too or `build_start_state`
+# raises `KeyError`. Gathered by hand (not via `ALL_EVENTS`) because an
+# event's encounter can live inside arbitrary `_fight`/`_setting_N` code, not
+# a common attribute — `Event.canonical_encounter` only covers the three
+# Combat-layout events (Punch-Off, The Lantern Key, the unported Architect);
+# Dense Vegetation, Fake Merchant and Battleworn Dummy assign
+# `pending_encounter` directly instead. `test_encounter_registry_covers_
+# every_event_encounter` in test_snapshots.py ties this tuple to every
+# `Encounter` instance `sts2_rl.events` exports, so a missed one fails loudly
+# instead of surfacing as a silent `KeyError` on a harvested dataset.
 _EVENT_ENCOUNTERS: tuple[Encounter, ...] = (
     DENSE_VEGETATION_EVENT_ENCOUNTER,
     PUNCH_OFF_EVENT_ENCOUNTER,

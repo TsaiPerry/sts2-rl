@@ -17,13 +17,13 @@ Three architectures, selected by ``train_torch.py --arch``:
   reshapes weights. Frozen at the v3-era flat-``Box`` obs schema — see the
   next arch for the schema-v4 replacement.
 * ``EntitySetActorCritic`` (``--arch entset``, "entity-set") — the v4
-  ``{"f", "i"}`` observation's own architecture (OBS_SCHEMA.md §2.2, T6
-  brief §4): a masked sum-pool of per-row embeddings over each ``.ids``
-  block, using the id/float pair directly rather than a flat-obs slice.
-  ``mlp``/``entity`` still work against the new envs (T6 brief §4.1) — they
-  just see a flattened ``concat(f, i)`` with ids as plain numbers, no
-  embedding, which is a deliberate degeneration, not a bug: they are the
-  frozen v3-era archs, and ``entset`` is the schema-v4 replacement.
+  ``{"f", "i"}`` observation's own architecture (OBS_SCHEMA.md §2.2): a
+  masked sum-pool of per-row embeddings over each ``.ids`` block, using the
+  id/float pair directly rather than a flat-obs slice. ``mlp``/``entity``
+  still work against the new envs — they just see a flattened ``concat(f,
+  i)`` with ids as plain numbers, no embedding, which is a deliberate
+  degeneration, not a bug: they are the frozen v3-era archs, and ``entset``
+  is the schema-v4 replacement.
 
 ``train_torch.py`` and the env stay put when architectures change, because the
 PPO loop only depends on ``get_value`` / ``get_action_and_value``. Those two
@@ -54,15 +54,14 @@ _MASK_FILL = -1e8
 
 
 def _as_flat(obs: torch.Tensor | TensorObs) -> torch.Tensor:
-    """``mlp``/``entity``'s half of the T6 bridge: they keep the pre-v4 flat-
-    tensor contract, so a :class:`TensorObs` (what the real training loop
-    now passes uniformly, T6 brief §4.1) is flattened to
-    ``concat(f, i.float())`` before it reaches either architecture's first
-    ``Linear``. A plain ``torch.Tensor`` (every direct unit-test call site)
-    passes straight through unchanged. This is a deliberate degeneration,
-    not a bug to fix: ids become plain numbers with no embedding, because
-    ``mlp``/``entity`` are the frozen v3-era archs and ``entset`` is the
-    schema-v4 replacement (see the module docstring)."""
+    """``mlp``/``entity`` keep the pre-v4 flat-tensor contract, so a
+    :class:`TensorObs` (what the real training loop passes uniformly) is
+    flattened to ``concat(f, i.float())`` before it reaches either
+    architecture's first ``Linear``. A plain ``torch.Tensor`` (every direct
+    unit-test call site) passes straight through unchanged. Deliberate
+    degeneration, not a bug: ids become plain numbers with no embedding,
+    because ``mlp``/``entity`` are the frozen v3-era archs and ``entset`` is
+    the schema-v4 replacement (see the module docstring)."""
     if isinstance(obs, TensorObs):
         return torch.cat([obs.f, obs.i.to(obs.f.dtype)], dim=-1)
     return obs
@@ -93,8 +92,8 @@ def _trunk(in_dim: int, hidden: tuple[int, ...]) -> neural_network.Sequential:
     (``Linear -> Tanh`` per hidden width, orthogonal init) whose output is a
     ``hidden[-1]``-wide context vector for downstream heads to consume,
     rather than logits itself. Used by ``EntitySetActorCritic``'s tied
-    action head (T7 brief): the old design's final ``Linear(hidden[-1],
-    n_actions)`` is replaced by several heads reading this same ``ctx``."""
+    action head: several heads read this same ``ctx`` instead of one final
+    ``Linear(hidden[-1], n_actions)``."""
     layers: list[neural_network.Module] = []
     last = in_dim
     for h in hidden:
@@ -344,7 +343,7 @@ class EntityActorCritic(neural_network.Module):
 #
 # The schema-v4 replacement for EntityActorCritic above: it consumes the
 # {"f", "i"} pair DIRECTLY (as a TensorObs) instead of a flat obs slice, one
-# row per entity instance rather than one dict slot per id (T6 brief §4.2).
+# row per entity instance rather than one dict slot per id.
 
 N_AFFLICTIONS = CAPACITIES["afflictions"]
 N_ENCHANTMENTS = CAPACITIES["enchantments"]
@@ -372,14 +371,14 @@ _ENTSET_VOCAB_ROWS: dict[str, int] = {
     "enchantments": N_ENCHANTMENTS,
 }
 
-# The explicit segment -> per-int-field vocabulary map T6 brief §4.3 asks
-# for, replacing _segment_plan's name-suffix-plus-width-match inference
-# (which stays as EntityActorCritic's own, frozen, v3-era mechanism — see
-# that class). Keyed by the LOGICAL block name: an ``.ids`` segment name
-# with any leading run-env "combat." prefix and the trailing ".ids" both
-# stripped, so one entry covers a segment whether it's read from
-# ``full_env.combat_obs_layout()`` directly (--env combat) or folded into
-# ``run_env.run_obs_layout()`` under the "combat." prefix (--env run/column).
+# Explicit segment -> per-int-field vocabulary map, replacing _segment_plan's
+# name-suffix-plus-width-match inference (which stays as EntityActorCritic's
+# own, frozen, v3-era mechanism). Keyed by the LOGICAL block name: an
+# ``.ids`` segment name with any leading run-env "combat." prefix and the
+# trailing ".ids" both stripped, so one entry covers a segment whether it's
+# read from ``full_env.combat_obs_layout()`` directly (--env combat) or
+# folded into ``run_env.run_obs_layout()`` under the "combat." prefix
+# (--env run/column).
 #
 # ``None`` marks a literal field that indexes no vocabulary (OBS_SCHEMA.md
 # §5.1's ``cards.ids``/``run.deck.ids`` etc. leading ``pile_id``) — declared
@@ -420,7 +419,7 @@ def _entset_logical_name(ids_segment_name: str) -> str:
     # today, but a future segment name that broke that convention would
     # otherwise pass through and corrupt `entset_segment_plan`'s vocab
     # lookup silently. Raise explicitly instead (same fix as
-    # run_env.py's T5a MAX_OBS_ID check).
+    # run_env.py's MAX_OBS_ID check).
     if not ids_segment_name.endswith(".ids"):
         raise ValueError(
             f"_entset_logical_name: {ids_segment_name!r} does not end in "
@@ -462,10 +461,10 @@ def entset_segment_plan(
       above (plain numeric segments: vitals, the map grid, every
       ``.overflow`` flag, ...), in layout order.
 
-    This is also the completeness check T6 brief §4.3 asks for: called
-    against both envs' REAL layouts (as the model-construction path does),
-    an undeclared ``.ids`` segment or a width that doesn't divide evenly
-    raises immediately — see ``test_tensor_obs.py``'s sibling,
+    This also serves as a completeness check: called against both envs'
+    REAL layouts (as the model-construction path does), an undeclared
+    ``.ids`` segment or a width that doesn't divide evenly raises
+    immediately — see ``test_tensor_obs.py``'s sibling,
     ``test/test_models.py``-equivalent coverage in this lane's own tests.
     """
     f_widths = dict(f_segments)
@@ -504,9 +503,7 @@ def entset_segment_plan(
 
 
 class _EntsetEncoder(neural_network.Module):
-    """The provisional entset encoder (T6 brief §4.2) — "masked sum/mean plus
-    per-field projections", the phase-2 plan's own stated starting point,
-    not the tied action head phase 2 builds.
+    """Masked sum-pool of per-row embeddings, plus per-field projections.
 
     One ``nn.Embedding(capacity + 1, dim, padding_idx=0)`` per vocabulary
     kind (OBS_SCHEMA.md §2.1's PAD convention: id 0 is reserved, so an
@@ -584,22 +581,20 @@ class _EntsetEncoder(neural_network.Module):
             self.out_spans[name] = (out_start, out_dim)
             self._raw_slices.append((name, f_slices[name]))
         self.out_dim = out_dim
-        # R8: named lookup into EVERY named ``.f`` segment's slice of
-        # ``obs.f`` -- both the ones no row block consumes (``choice_float_
-        # overlays``' need, e.g. one ``map{k}`` slot or ``shop.removal``)
-        # AND the ones a row block DOES consume for its own pooled/embedded
-        # row features (R9: the play head's pair-feature tensor needs the
-        # ``enemies.f`` segment's raw floats -- specifically the incoming-
-        # attack preview columns -- even though ``enemies.f`` is also the
-        # float sibling of the ``enemies.ids`` row block; the same slice
-        # answers both callers, so one dict covers both rather than
-        # duplicating span arithmetic). Built from the full ``f_slices`` map
-        # (not just ``self._raw_slices``) for exactly that reason.
+        # Named lookup into EVERY named ``.f`` segment's slice of ``obs.f``
+        # -- both the ones no row block consumes (``choice_float_overlays``'
+        # need, e.g. one ``map{k}`` slot or ``shop.removal``) AND the ones a
+        # row block DOES consume for its own pooled/embedded row features
+        # (the play head's pair-feature tensor needs ``enemies.f``'s raw
+        # incoming-attack preview columns even though ``enemies.f`` is also
+        # the float sibling of the ``enemies.ids`` row block; one dict
+        # covers both callers rather than duplicating span arithmetic).
+        # Built from the full ``f_slices`` map, not just ``self._raw_slices``.
         self.raw_f_index: dict[str, slice] = dict(f_slices)
 
     def raw(self, obs: TensorObs, name: str) -> torch.Tensor:
-        """Slice one named ``.f`` segment straight out of ``obs.f`` -- R8's
-        ``choice_float_overlays`` float-segment content, and (R9) the play
+        """Slice one named ``.f`` segment straight out of ``obs.f`` --
+        ``choice_float_overlays`` float-segment content, and the play
         head's pair-feature segments, some of which (``enemies.f``) are
         ALSO a row block's float sibling elsewhere in this encoder."""
         return obs.f[..., self.raw_f_index[name]]
@@ -607,7 +602,7 @@ class _EntsetEncoder(neural_network.Module):
     def play_pair_features(
         self, obs: TensorObs, dm_name: str, enemy_f_name: str, S: int, T: int,
     ) -> torch.Tensor:
-        """R9: the play ``PairPointerHead``'s per-(hand, enemy) pair-feature
+        """The play ``PairPointerHead``'s per-(hand, enemy) pair-feature
         tensor, ``(..., S, T, 7)``.
 
         Feature 0 is the ``dm_name`` segment (``damage_matrix`` / ``combat.
@@ -621,10 +616,7 @@ class _EntsetEncoder(neural_network.Module):
         each enemy's 25-float row (``full_env._enemy_floats``: ``pb = 18``
         starts ``per_hit, hits, total_fine, total_coarse, post_block_fine,
         post_block_coarse``) -- broadcast across the hand axis, since the
-        preview is a property of the ENEMY, not the (card, enemy) pair (the
-        richer per-pair ``(per_hit, hits, total, post_block)`` tuple this
-        brief could have built instead does not exist at pair granularity
-        and is explicitly out of scope).
+        preview is a property of the ENEMY, not the (card, enemy) pair.
         """
         batch_shape = obs.f.shape[:-1]
         dm = self.raw(obs, dm_name).reshape(*batch_shape, S, T, 1)
@@ -636,9 +628,9 @@ class _EntsetEncoder(neural_network.Module):
 
     def encode(self, obs: TensorObs) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """Like :meth:`forward`, but also returns the per-row-block,
-        mask-multiplied row tensors ``forward``/the old code discarded after
-        pooling (T7 brief: the tied action head needs these same per-row
-        features). ``rows`` is keyed by each block's LOGICAL name (the
+        mask-multiplied row tensors ``forward`` discards after pooling --
+        the tied action head needs these same per-row features. ``rows`` is
+        keyed by each block's LOGICAL name (the
         ``_entset_logical_name``-stripped form the ``combat.`` run-env prefix
         collapses onto the combat env's own names) -- collisions within one
         layout are a construction-time error (see ``__init__``), not a
@@ -690,11 +682,10 @@ class _EntsetEncoder(neural_network.Module):
         return self.encode(obs)[0]
 
 
-#: R9: the play head's per-pair preview slice into each enemy's 25-float
+#: The play head's per-pair preview slice into each enemy's 25-float
 #: `enemies.f` row -- `full_env._enemy_floats`'s `pb = 18` starts
 #: `per_hit, hits, total_fine, total_coarse, post_block_fine,
-#: post_block_coarse` (6 fields). Verified against `full_env.py` directly
-#: (the R9 brief's own instruction), not trusted from the brief's prose.
+#: post_block_coarse` (6 fields).
 _PLAY_PAIR_PREVIEW_SLICE = slice(18, 24)
 #: 1 (damage_matrix) + 6 (the preview slice above) = the play head's
 #: `pair_dim` whenever `ActionLayout.play_pair_feature_segments` is set.
@@ -720,19 +711,19 @@ _PLAY_PAIR_DIM = 1 + (_PLAY_PAIR_PREVIEW_SLICE.stop - _PLAY_PAIR_PREVIEW_SLICE.s
 #: The narrow "weights laid out" rule above would let that through; this
 #: broader rule is the guard until a layout fingerprint is stamped instead.
 #:
-#: * 1 -- phase 1: one opaque positional ``nn.Linear(hidden[-1], n_actions)``
-#:   action head.
-#: * 2 -- phase 2 (T7 brief, "tied action head"): the positional head is
-#:   replaced by ``ActionLayout`` + a handful of ``PairPointerHead``s tied to
-#:   the encoder's own row embeddings (see ``EntitySetActorCritic`` below).
-#: * 3 -- R8 brief ("pointer scoring for content-carrying run decisions"):
-#:   the run env's SELECT and belt-POTION ranges move from a positional
-#:   ``Linear`` to a ``PointerHead`` each (``ActionLayout.pointer_blocks``),
-#:   and the CHOICE range gains additive ``PointerHead``/``FloatPointerHead``
+#: * 1 -- one opaque positional ``nn.Linear(hidden[-1], n_actions)`` action
+#:   head.
+#: * 2 -- "tied action head": the positional head is replaced by
+#:   ``ActionLayout`` + a handful of ``PairPointerHead``s tied to the
+#:   encoder's own row embeddings (see ``EntitySetActorCritic`` below).
+#: * 3 -- "pointer scoring for content-carrying run decisions": the run
+#:   env's SELECT and belt-POTION ranges move from a positional ``Linear``
+#:   to a ``PointerHead`` each (``ActionLayout.pointer_blocks``), and the
+#:   CHOICE range gains additive ``PointerHead``/``FloatPointerHead``
 #:   overlays scored from the same-decision content rows/float segments
 #:   (``ActionLayout.choice_row_overlays`` / ``choice_float_overlays``) --
 #:   new parameters with no state-dict counterpart in a version-2 checkpoint.
-#: * 4 -- R9 brief ("pair features in the tied combat head"): the play
+#: * 4 -- "pair features in the tied combat head": the play
 #:   ``PairPointerHead``'s first ``Linear`` widens from
 #:   ``src_dim + tgt_dim + 32`` to ``src_dim + tgt_dim + 32 + 7`` (the
 #:   ``damage_matrix`` scalar plus the 6-float incoming-attack preview, per
@@ -765,17 +756,16 @@ class ActionLayout:
     (``_validate_action_layout``) rather than waiting for a shape mismatch
     inside ``forward``.
 
-    R8 brief ("pointer scoring for content-carrying run decisions") adds
-    ``pointer_blocks`` (a whole-range REPLACEMENT for a positional ``Linear``
-    -- SELECT-by-candidate, the belt-POTION block) and two overlay groups
-    that add ADDITIVE content-derived terms onto one ``positional`` range
+    ``pointer_blocks`` is a whole-range REPLACEMENT for a positional
+    ``Linear`` (SELECT-by-candidate, the belt-POTION block). Two overlay
+    groups add ADDITIVE content-derived terms onto one ``positional`` range
     (CHOICE, named by ``choice_base``) rather than replacing it: CHOICE's own
     ``Linear`` still runs (REST/EVENT/SELECT_OPTION/REWARD_POTION have no
-    content rows -- see the R8 brief's own choice-mapping census -- so the
-    positional score is the only signal for those slots), and content rows
-    for the mechanisms that DO carry them (REWARD_CARD, SHOP, MAP) add an
-    extra per-slot term on top, computed straight from the same encoder rows
-    the observation already produced -- no obs schema change.
+    content rows, so the positional score is the only signal for those
+    slots), and content rows for the mechanisms that DO carry them
+    (REWARD_CARD, SHOP, MAP) add an extra per-slot term on top, computed
+    straight from the same encoder rows the observation already produced --
+    no obs schema change.
     """
 
     n_actions: int
@@ -806,10 +796,9 @@ class ActionLayout:
     # dims then scored by a FloatPointerHead, presence-gated on the raw
     # floats being not-all-zero.
     play_pair_feature_segments: tuple[str, ...] = ()
-    # (damage_matrix_segment_name, enemies_f_segment_name): R9 brief ("pair
-    # features in the tied combat head"). Either empty (no pair features --
-    # every layout before R9, and `potion_pairs` always) or exactly these
-    # two RAW `.f` segment names, in this order:
+    # (damage_matrix_segment_name, enemies_f_segment_name). Either empty (no
+    # pair features -- `potion_pairs` always has none) or exactly these two
+    # RAW `.f` segment names, in this order:
     #
     # * feature 0 -- `damage_matrix` (combat) / `combat.damage_matrix`
     #   (run), reshaped to (S, T, 1): one clipped per-hit scalar per (hand,
@@ -833,27 +822,25 @@ class ActionLayout:
 def _validate_action_layout(layout: ActionLayout) -> None:
     """Structural tiling check: end_turn(1) + play(S*T) +
     potion_pairs(S_used*T) + every ``positional``-or-``pointer_blocks``
-    range's width (the two groups merged and sorted by ``base`` -- R8 lets
-    a range be EITHER mechanism, so the tiling check must see them as one
-    ordered sequence) sums to exactly ``n_actions``, with no gap, no
-    overlap. Raises ``ValueError`` (a loud construction-time error, T7
-    brief) rather than silently building a model whose logits don't cover
-    -- or overlap -- the action space.
+    range's width (the two groups merged and sorted by ``base``, since a
+    range can be either mechanism) sums to exactly ``n_actions``, with no
+    gap, no overlap. Raises ``ValueError`` (a loud construction-time error)
+    rather than silently building a model whose logits don't cover -- or
+    overlap -- the action space.
 
-    R8 addition: if either overlay group is declared, ``choice_base`` must
-    name one of ``positional``'s own ranges, and every overlay entry
+    If either overlay group is declared, ``choice_base`` must name one of
+    ``positional``'s own ranges, and every overlay entry
     (``choice_row_overlays``/``choice_float_overlays``) must lie entirely
     inside that range's ``[0, width)`` -- an overlay that pokes outside the
     CHOICE range it's meant to augment is a construction-time error, not a
     silent out-of-bounds add at forward time.
 
-    R9 addition: ``play_pair_feature_segments``, if non-empty, must have
-    exactly 2 entries (the ``damage_matrix``/``enemies.f`` pair, in that
-    order) and ``play`` must be set -- pair features with no play range to
-    attach them to is a construction-time error, not a silently-ignored
-    field. (Segment existence and width consistency need the encoder's
-    real segment plan, so those checks live in
-    ``EntitySetActorCritic.__init__``, not here.)
+    ``play_pair_feature_segments``, if non-empty, must have exactly 2
+    entries (the ``damage_matrix``/``enemies.f`` pair, in that order) and
+    ``play`` must be set -- pair features with no play range to attach them
+    to is a construction-time error, not a silently-ignored field. (Segment
+    existence and width consistency need the encoder's real segment plan,
+    so those checks live in ``EntitySetActorCritic.__init__``, not here.)
     """
     if layout.play_pair_feature_segments:
         if layout.play is None:
@@ -925,14 +912,14 @@ def _validate_action_layout(layout: ActionLayout) -> None:
 
 
 def combat_action_layout(max_potions: int) -> ActionLayout:
-    """The combat env's own action layout (T7 brief): end-turn scalar, a
-    play pointer pairing every ``hand`` row against every ``enemies`` row,
-    and a potion pointer pairing the first ``max_potions`` ``potions`` rows
-    against every ``enemies`` row -- exactly ``full_env.decode_combat_action``'s
+    """The combat env's own action layout: end-turn scalar, a play pointer
+    pairing every ``hand`` row against every ``enemies`` row, and a potion
+    pointer pairing the first ``max_potions`` ``potions`` rows against every
+    ``enemies`` row -- exactly ``full_env.decode_combat_action``'s
     ``h*MAX_ENEMIES + e`` / ``p*MAX_ENEMIES + e`` ordering. No positional
     ranges: combat has nothing else to score.
 
-    R9: the play pointer also gets ``play_pair_feature_segments`` --
+    The play pointer also gets ``play_pair_feature_segments`` --
     ``damage_matrix`` and ``enemies.f`` are both already real ``.f``
     segments in this env's own layout (no obs schema change), so the play
     head can see the one number that most decides a play: the damage THIS
@@ -954,32 +941,28 @@ def run_action_layout() -> ActionLayout:
     row-block names ``_entset_logical_name`` already strips back to
     ``"hand"``/``"enemies"``/``"potions"`` -- see ``models._entset_logical_name``),
     sized to ``run_env.MAX_POTION_SLOTS`` (the belt's true worst case),
-    followed by the CHOICE/SELECT/belt-POTION ranges (T7 brief built these
-    as three plain positional ``Linear``s; R8 brief re-scores the
-    content-carrying ones from the same entity rows / float segments the
-    observation encoder already computes):
+    followed by the CHOICE/SELECT/belt-POTION ranges:
 
     * CHOICE stays positional (``positional``) -- REST/EVENT/SELECT_OPTION/
-      REWARD_POTION have no per-option content rows in the observation (see
-      the R8 brief's own choice-mapping census), so a plain ``Linear(ctx)``
-      is the only signal those slots can get -- but gains ADDITIVE overlays
-      (``choice_row_overlays``/``choice_float_overlays``) from the
-      mechanisms that DO carry content: REWARD_CARD (``reward.cards``),
-      SHOP (``shop.cards``/``shop.relics``/``shop.potions`` rows, plus the
-      ``shop.removal`` float triple for the removal slot -- its only content
-      is cost, and cost IS content), and MAP (the ``map0``..``map6`` float
-      blocks). Offsets are the CHOICE-relative slot indices the R8 census
-      pinned: reward cards 0-2, shop cards 0-6, shop relics 7-9, shop
+      REWARD_POTION have no per-option content rows in the observation, so a
+      plain ``Linear(ctx)`` is the only signal those slots can get -- but
+      gains ADDITIVE overlays (``choice_row_overlays``/``choice_float_overlays``)
+      from the mechanisms that DO carry content: REWARD_CARD
+      (``reward.cards``), SHOP (``shop.cards``/``shop.relics``/``shop.potions``
+      rows, plus the ``shop.removal`` float triple for the removal slot --
+      its only content is cost, and cost IS content), and MAP (the
+      ``map0``..``map6`` float blocks). Offsets are CHOICE-relative slot
+      indices: reward cards 0-2, shop cards 0-6, shop relics 7-9, shop
       potions 10-12, shop removal 13, map options 0-6 -- all sharing offset
-      0 across kinds is intentional and safe, because exactly one kind's
-      rows/floats are ever non-PAD/non-zero for a given decision (T7's
-      presence gating makes every other kind's contribution exactly 0).
+      0 across kinds is safe because exactly one kind's rows/floats are ever
+      non-PAD/non-zero for a given decision (presence gating makes every
+      other kind's contribution exactly 0).
     * SELECT and belt-POTION are REPLACED by ``pointer_blocks`` entries --
       ``select.candidates``/``run.potions`` rows are already in the SAME
-      order the action space indexes (R8 census: CHOICE_BASE+i /
-      SELECT_BASE+i / POTION_BASE+i answer ``own_actions()``'s entry i,
-      unreordered), so a PointerHead over those rows scores each option
-      from its own content instead of an opaque per-slot bias.
+      order the action space indexes (CHOICE_BASE+i / SELECT_BASE+i /
+      POTION_BASE+i answer ``own_actions()``'s entry i, unreordered), so a
+      PointerHead over those rows scores each option from its own content
+      instead of an opaque per-slot bias.
 
     ``run_env`` is imported lazily (function-local), mirroring
     ``checkpoints.py``'s own "env/run-scale imports are lazy" convention --
@@ -1008,10 +991,10 @@ def run_action_layout() -> ActionLayout:
         positional=(
             (CHOICE_BASE, CHOICE_SLOTS),
         ),
-        # R9: same play_pair_feature_segments mechanism as
-        # combat_action_layout, but naming the run env's OWN `combat.`-
-        # prefixed segments (the raw `.f` index is keyed by literal segment
-        # name, unlike the row blocks above -- those key by logical name).
+        # Same play_pair_feature_segments mechanism as combat_action_layout,
+        # but naming the run env's OWN `combat.`-prefixed segments (the raw
+        # `.f` index is keyed by literal segment name, unlike the row blocks
+        # above -- those key by logical name).
         play_pair_feature_segments=("combat.damage_matrix", "combat.enemies.f"),
         pointer_blocks=(
             (SELECT_BASE, MAX_SELECT_CANDIDATES, "select.candidates"),
@@ -1033,23 +1016,23 @@ def run_action_layout() -> ActionLayout:
 
 class EntitySetActorCritic(neural_network.Module):
     """``--arch entset`` — the schema-v4 architecture (module docstring;
-    OBS_SCHEMA.md §2.2, T6 brief §4). Same masked-categorical policy contract
+    OBS_SCHEMA.md §2.2). Same masked-categorical policy contract
     as the other two archs (separate actor/critic trunks AND encoders); the
     one difference is that ``obs`` here is a
     :class:`~sts2_rl.tensor_obs.TensorObs`, not a flat tensor — the encoder
     needs both halves together to embed by id and attach that id's floats.
 
-    T7 brief (tied action head): the actor side is no longer one opaque
-    positional ``Linear(hidden[-1], n_actions)``. The actor trunk becomes a
-    pure FEATURE trunk (``_trunk``, same widths/init, no final layer) whose
-    output ``ctx`` feeds a handful of heads assembled per ``action_layout``:
-    an end-turn scalar head, a ``PairPointerHead`` over (play) row pairs, a
+    Tied action head: the actor side is not one opaque positional
+    ``Linear(hidden[-1], n_actions)``. The actor trunk is a pure FEATURE
+    trunk (``_trunk``, same widths/init, no final layer) whose output
+    ``ctx`` feeds a handful of heads assembled per ``action_layout``: an
+    end-turn scalar head, a ``PairPointerHead`` over (play) row pairs, a
     second (separately-weighted) ``PairPointerHead`` over (potion) row
     pairs, and one plain ``Linear(ctx)`` per still-positional range. The
     critic side (separate encoder, pooled ``forward``, value head) is
     UNTOUCHED. ``action_layout`` is a required argument (no positional
     fallback) -- a wrong layout must fail loudly at construction, not
-    silently degrade (T7 brief, controller decision).
+    silently degrade.
     """
 
     arch = "entset"
@@ -1083,20 +1066,16 @@ class EntitySetActorCritic(neural_network.Module):
 
         self.actor_encoder = _EntsetEncoder(f_segments, i_segments, embed_dims)
         if shared_encoder:
-            # R10: one shared `_EntsetEncoder` instance serves BOTH the actor
-            # and the critic -- the whole per-row embed/project/pool stack,
-            # not tables-only sharing (the fallback experiment nobody is
-            # running today; sharing granularity was a controller decision,
-            # not this task's to make). `object.__setattr__` bypasses
-            # nn.Module's own `__setattr__`, which would otherwise register
-            # this SAME encoder object a second time under the name
-            # "critic_encoder" -- harmless for forward (it's still the same
-            # tensors either way) but would duplicate every one of its
-            # parameters under two keys in state_dict()/named_parameters(),
-            # which is exactly the "double-register" this comment is here to
-            # avoid. The two separate trunks (`self.actor`/`self.critic`)
-            # and heads are UNCHANGED by this flag -- only the encoder is
-            # shared.
+            # One shared `_EntsetEncoder` instance serves BOTH the actor and
+            # the critic -- the whole per-row embed/project/pool stack, not
+            # tables-only sharing. `object.__setattr__` bypasses nn.Module's
+            # own `__setattr__`, which would otherwise register this SAME
+            # encoder object a second time under the name "critic_encoder"
+            # -- harmless for forward (it's still the same tensors either
+            # way) but would duplicate every one of its parameters under two
+            # keys in state_dict()/named_parameters(). The two separate
+            # trunks (`self.actor`/`self.critic`) and heads are UNCHANGED by
+            # this flag -- only the encoder is shared.
             object.__setattr__(self, "critic_encoder", self.actor_encoder)
         else:
             self.critic_encoder = _EntsetEncoder(f_segments, i_segments, embed_dims)
@@ -1105,7 +1084,7 @@ class EntitySetActorCritic(neural_network.Module):
         # actually exists in this encoder's segment plan -- and, where the
         # layout also declares a row count, that it agrees with the block's
         # real cap -- rather than waiting for a KeyError/shape mismatch on
-        # the first forward (T7 brief).
+        # the first forward.
         row_blocks, _raw_f = entset_segment_plan(f_segments, i_segments)
         block_caps = {
             _entset_logical_name(name): cap for name, cap, _n_float, _vocabs in row_blocks
@@ -1136,12 +1115,12 @@ class EntitySetActorCritic(neural_network.Module):
             src, tgt, S_used, T = action_layout.potion_pairs
             _check_block(src, S_used, sliceable=True)
             _check_block(tgt, T)
-        # R8: pointer_blocks (whole-range replacements) and choice_row_
-        # overlays (additive, offset INTO a row block) get the same
-        # construction-time existence/cap check as play/potion_pairs above
-        # -- an undeclared row block or an overlay that wants more rows
-        # than the block has is a loud ValueError here, not a KeyError or a
-        # silent out-of-bounds slice inside `action_logits`.
+        # pointer_blocks (whole-range replacements) and choice_row_overlays
+        # (additive, offset INTO a row block) get the same construction-time
+        # existence/cap check as play/potion_pairs above -- an undeclared
+        # row block or an overlay that wants more rows than the block has is
+        # a loud ValueError here, not a KeyError or a silent out-of-bounds
+        # slice inside `action_logits`.
         for _base, width, row_block in action_layout.pointer_blocks:
             _check_block(row_block, width, sliceable=True)
         for _offset, n_slots, row_block, row_offset in action_layout.choice_row_overlays:
@@ -1157,7 +1136,7 @@ class EntitySetActorCritic(neural_network.Module):
                     f"[{row_offset}, {row_offset + n_slots}) from block "
                     f"{row_block!r} but that block only has {cap} rows.")
 
-        # R8: choice_float_overlays resolve against the encoder's own RAW
+        # choice_float_overlays resolve against the encoder's own RAW
         # (unconsumed-by-any-row-block) float segments -- `entset_segment_
         # plan`'s second return value, already computed above as `_raw_f`.
         raw_f_widths = dict(_raw_f)
@@ -1192,7 +1171,7 @@ class EntitySetActorCritic(neural_network.Module):
             self._choice_float_seg_names.append(names)
             choice_float_seg_widths.append(widths[0])
 
-        # R9: play_pair_feature_segments existence + width consistency --
+        # play_pair_feature_segments existence + width consistency --
         # `_validate_action_layout` already checked the tuple shape (empty,
         # or exactly 2 entries with `play` set); this checks the two names
         # actually resolve to `.f` segments (regardless of whether a row
@@ -1261,15 +1240,14 @@ class EntitySetActorCritic(neural_network.Module):
 
         self.play_head = None
         if action_layout.play is not None:
-            # R9: `pair_dim` is 0 (no `pair=` argument at forward time,
-            # same as before R9) unless play_pair_feature_segments is set.
+            # `pair_dim` is 0 (no `pair=` argument at forward time) unless
+            # play_pair_feature_segments is set.
             self.play_head = PairPointerHead(
                 block_dim, block_dim, ctx_dim, pair_dim=self._play_pair_dim)
 
         self.potion_head = None
         if action_layout.potion_pairs is not None:
-            # Potions have no damage matrix -- always pair_dim=0 (R9 brief
-            # requirement 2).
+            # Potions have no damage matrix -- always pair_dim=0.
             self.potion_head = PairPointerHead(block_dim, block_dim, ctx_dim)
 
         self.positional_heads = neural_network.ModuleList([
@@ -1277,11 +1255,10 @@ class EntitySetActorCritic(neural_network.Module):
             for _base, width in action_layout.positional
         ])
 
-        # R8: one PointerHead per pointer_blocks entry / choice_row_overlays
+        # One PointerHead per pointer_blocks entry / choice_row_overlays
         # entry, and one FloatPointerHead per choice_float_overlays entry --
         # independent weights each (a relic row and a card row have
-        # different projection semantics even at the same block_dim, per
-        # the brief).
+        # different projection semantics even at the same block_dim).
         self.pointer_heads = neural_network.ModuleList([
             PointerHead(block_dim, ctx_dim) for _base, _width, _row_block in action_layout.pointer_blocks
         ])
@@ -1292,6 +1269,17 @@ class EntitySetActorCritic(neural_network.Module):
             FloatPointerHead(w, ctx_dim) for w in choice_float_seg_widths
         ])
 
+        # v10 aux head (spec 2026-08-13-aux-hp-head-gae-lambda-design):
+        # supervised "hp lost over the next 3 floors" prediction off the
+        # critic/shared encoder. MUST stay registered LAST: Adam state is
+        # positional; checkpoints.load_agent's aux-lenient overlay and
+        # train_torch's optimizer-group patch both assume pre-existing
+        # params keep their positions and aux params occupy the tail.
+        self.aux_hp3_head = neural_network.Sequential(
+            neural_network.Linear(self.critic_encoder.out_dim, 64), neural_network.Tanh(),
+            neural_network.Linear(64, 1),
+        )
+
     def get_value(self, obs: TensorObs) -> torch.Tensor:
         return self.critic(self.critic_encoder(obs)).squeeze(-1)
 
@@ -1299,7 +1287,7 @@ class EntitySetActorCritic(neural_network.Module):
         self, ctx: torch.Tensor, rows: dict[str, torch.Tensor], obs: TensorObs,
     ) -> torch.Tensor:
         """``(..., choice_width)`` additive overlay contribution for the
-        CHOICE range, summed over every declared row/float overlay (R8) --
+        CHOICE range, summed over every declared row/float overlay --
         factored out of ``action_logits`` so tests can inspect the overlay
         in isolation from the positional base score.
 
@@ -1307,9 +1295,9 @@ class EntitySetActorCritic(neural_network.Module):
         ``choice_width`` at that entry's declared offset before summing --
         entries are independent (and, in practice, mutually exclusive per
         decision kind: presence gating makes every out-of-phase entry's
-        contribution exactly 0, T7/R8's shared invariant), so a plain sum
-        is correct even when two entries share an offset (e.g. REWARD_CARD
-        and SHOP both start at slot 0).
+        contribution exactly 0), so a plain sum is correct even when two
+        entries share an offset (e.g. REWARD_CARD and SHOP both start at
+        slot 0).
         """
         assert self._choice_width is not None
         overlay = torch.zeros(
@@ -1334,7 +1322,7 @@ class EntitySetActorCritic(neural_network.Module):
         ``MaskedActorCritic.action_logits``. Logits are assembled from the
         tied heads in ``action_layout`` order (end_turn, play, potion_pairs,
         then every positional/pointer_blocks range in ascending ``base``
-        order -- R8 lets a range be either mechanism) and concatenated into
+        order -- a range can be either mechanism) and concatenated into
         one ``(..., n_actions)`` tensor before the illegal-action mask fill
         -- the tiling ``_validate_action_layout`` checked at construction is
         exactly what makes this concatenation land on ``n_actions`` wide.
@@ -1386,10 +1374,21 @@ class EntitySetActorCritic(neural_network.Module):
         obs: TensorObs,
         mask: torch.Tensor,
         action: torch.Tensor | None = None,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        with_aux: bool = False,
+    ) -> tuple[torch.Tensor, ...]:
         """Returns ``(action, log_prob, entropy, value)`` — same contract as
-        ``MaskedActorCritic.get_action_and_value``."""
+        ``MaskedActorCritic.get_action_and_value`` — or, when
+        ``with_aux=True`` (v10, spec 2026-08-13-aux-hp-head-gae-lambda-design),
+        a 5-tuple ``(action, log_prob, entropy, value, aux_pred)`` with the
+        aux head's "hp lost over the next 3 floors" prediction appended,
+        computed off the SAME critic-encoder features as ``value`` (no extra
+        encoder forward pass)."""
         dist = self._dist(obs, mask)
         if action is None:
             action = dist.sample()
-        return action, dist.log_prob(action), dist.entropy(), self.get_value(obs)
+        cf = self.critic_encoder(obs)
+        value = self.critic(cf).squeeze(-1)
+        if with_aux:
+            return (action, dist.log_prob(action), dist.entropy(), value,
+                    self.aux_hp3_head(cf).squeeze(-1))
+        return action, dist.log_prob(action), dist.entropy(), value

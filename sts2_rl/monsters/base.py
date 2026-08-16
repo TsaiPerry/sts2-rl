@@ -192,36 +192,19 @@ class Monster(Creature):
     max_hp_asc: int | None = None
 
     # `CombatState.IterateHookListeners` adds `creature.Monster` to the listener
-    # list for every creature with no Player, immediately after that creature's
-    # Powers (CombatState.cs:417-421) — THAT is the load-bearing citation.
-    # `MonsterModel.cs:51`'s `ShouldReceiveCombatHooks => true` corroborates it
-    # but is decorative: `grep -rn ShouldReceiveCombatHooks src/` finds
-    # declarations and zero readers in this build. The sim's Monster IS its own
-    # MonsterModel, so the Monster object is the listener and `__init__`
-    # registers it (hook_dispatch/G5). Twelve C# monster models override an
-    # AbstractModel hook; before this the sim had no listener category to hang
-    # one on and the two ported cases (Aeonglass, Queen) each carried a
-    # private stand-in listener registered in the Powers+1 slot.
+    # list right after that creature's Powers (CombatState.cs:417-421); the sim's
+    # Monster IS its own MonsterModel, so it registers itself as that listener.
     hook_category = CAT_MONSTER
 
-    # `Creature.CombatState == null`, as the hook walk needs it: an EVENT, set
-    # at the two statements that call `CombatState.RemoveCreature` (which is
-    # what nulls the back-pointer, CombatState.cs:299-302) —
-    # `CreatureCmd.cs:529` on the death path and `:601` -> `CombatState.
-    # CreatureEscaped` (CombatState.cs:266-270) on the escape path.
-    #
-    # Deliberately NOT `Creature.is_removed_from_combat`, which is the same
-    # fact computed as a PREDICTION: `is_gone and not retained_after_death` is
-    # true the instant HP reaches zero, i.e. before `_resolve_death` is even
-    # entered, where C# does not null the back-pointer until two statements
-    # AFTER `Hook.AfterDeath` (CreatureCmd.cs:519 vs :523-531). Reading the
-    # prediction here dropped a dying monster from its OWN AfterDeath, and
-    # from the `ShouldDie` (:505) / `ShouldCreatureBeRemovedFromCombatAfterDeath`
-    # (:508) consultations that precede it. Eight of the ten C# monster
-    # AfterDeath overrides are self-death-only, KinPriest.cs:104-107 among
-    # them, so that window is where the first content port lands.
-    # The prediction stays correct for its own callers (`can_receive_powers`,
-    # the enemy-turn filters, teammate membership) and is left alone.
+    # Mirrors `Creature.CombatState == null` as an EVENT (set when
+    # `CombatState.RemoveCreature` actually nulls the back-pointer, at
+    # CreatureCmd.cs:529 death / :601 escape) -- NOT the same as
+    # `is_removed_from_combat`, which is a PREDICTION true as soon as HP hits 0,
+    # before the C# back-pointer is nulled (two statements after `Hook.AfterDeath`,
+    # CreatureCmd.cs:519 vs :523-531). Using the prediction here would drop a
+    # dying monster from its own AfterDeath / ShouldDie checks (KinPriest.cs:
+    # 104-107 is one of eight self-death-only AfterDeath overrides affected).
+    # `is_removed_from_combat` stays correct for its own callers and is untouched.
     combat_removal_committed: bool = False
 
     def hook_contains(self) -> bool:
@@ -269,76 +252,39 @@ class Monster(Creature):
         # survive enemy-list reordering (e.g. Ovicopter egg slots). None until
         # the creature joins a combat.
         self.net_id: int | None = None
-        # The intent that was DISPLAYED to the player for the turn this
-        # enemy is about to perform, snapshotted by
-        # `CombatState._perform_move` right before `take_turn` runs. Exists
-        # because hand-rolled monsters (no MonsterMoveStateMachine) advance
-        # their own move-key state INSIDE `take_turn` -- e.g. Vantom.cs-port
-        # `Vantom.take_turn` sets `self._move_key = _TRANSITIONS[...]` at the
-        # end of the method it just used to execute. `current_intent` reads
-        # that same `_move_key`, so a live re-read at the next player-turn
-        # start (`_record_intent_history`, called from `_roll_enemy_intents`,
-        # which fires strictly AFTER this turn's `take_turn` already ran) sees
-        # the NEXT move, not the one just performed. MachineMonster instead
-        # advances only inside `telegraph_next_move` (gated by
-        # `performed_first_move`, run later in the very same pass) so its
-        # `current_intent` stays correctly sticky across the turn boundary on
-        # its own -- capturing here is a no-op for it (the value read before
-        # `take_turn` and after are identical) and only changes behaviour for
-        # the hand-rolled monsters that needed it. See
-        # `CombatState._record_intent_history`, the sole reader.
+        # Intent DISPLAYED for the turn this enemy is about to perform, snapshotted
+        # by `CombatState._perform_move` right before `take_turn` runs. Needed
+        # because hand-rolled monsters advance their own move-key INSIDE
+        # `take_turn`, so a live re-read at the next player-turn start would see
+        # the NEXT move, not the one just performed. MachineMonster advances only
+        # in `telegraph_next_move` so it stays sticky and needs no snapshot; this
+        # is a no-op for it. Sole reader: `CombatState._record_intent_history`.
         self.displayed_intent: "Intent | None" = None
-        # MonsterMoveStateMachine._performedFirstMove, tracked at the combat
-        # level so the player-turn-start intent pass can honour
-        # FindNextMoveState's `!_performedFirstMove && IsMove -> return` guard
-        # (MonsterMoveStateMachine.cs:60-63) for the hand-rolled monsters too:
-        # they have no machine, so nothing else would stop the pass advancing a
-        # monster that has not acted yet (a turn-1 enemy, or a mid-combat
-        # spawn). Set by CombatState._run_enemy_turns, which is where
-        # MonsterModel.PerformMove calls OnMovePerformed.
+        # MonsterMoveStateMachine._performedFirstMove, tracked here so hand-rolled
+        # monsters (no machine) also honour FindNextMoveState's
+        # `!_performedFirstMove && IsMove -> return` guard
+        # (MonsterMoveStateMachine.cs:60-63). Set by CombatState._run_enemy_turns.
         self.performed_first_move = False
-        # `MonsterModel.SpawnedThisTurn` (MonsterModel.cs:247-258). Every
-        # creature addition — the initial roster (SetUpCombat's AddCreature
-        # loop) and every mid-combat spawn (CreatureCmd.Add ->
-        # CombatManager.AddCreature) alike — calls `SetUpForCombat()`
-        # (MonsterModel.cs:409-413), which sets this True; there is no gap
-        # between "constructed" and "added to combat" in the sim's own
-        # architecture (a Monster is built and appended to `combat.enemies`
-        # in the same step, for both paths), so defaulting True here at
-        # construction reproduces both call sites without a separate
-        # registration hook. Cleared once per enemy turn — see
-        # `CombatState._run_enemy_turns` (`OnSideSwitch`,
-        # MonsterModel.cs:479-483) — and read by `CombatState._run_enemy_
-        # turns`' move loop (`Creature.TakeTurn`'s guard, Creature.cs:706-716)
-        # to skip PerformMove for a creature that joined the fight this same
-        # enemy turn (e.g. InfestedPower/StockPower/SurprisePower spawning a
-        # replacement while Poison is still resolving in AfterSideTurnStart,
-        # before the move loop's own snapshot is taken).
+        # `MonsterModel.SpawnedThisTurn` (MonsterModel.cs:247-258): both the
+        # initial roster and every mid-combat spawn call SetUpForCombat(), which
+        # sets this True, so defaulting True at construction covers both. Cleared
+        # once per enemy turn (`CombatState._run_enemy_turns`' OnSideSwitch) and
+        # read by the move loop to skip PerformMove for a creature that joined
+        # the fight this same enemy turn (Creature.cs:706-716).
         self.spawned_this_turn = True
-        # `MonsterModel.IsPerformingMove` (MonsterModel.cs:137, set at :440 and
-        # cleared at :447). Read by CreatureCmd.cs:527, which REFUSES the
-        # `combatState.RemoveCreature` half of the death removal while the
-        # monster is mid-move; `MonsterModel.PerformMove`'s own tail
-        # (MonsterModel.cs:448-451) completes the deferred removal once the
-        # move returns. `CombatState._run_enemy_turns` is the sim's PerformMove.
+        # `MonsterModel.IsPerformingMove` (MonsterModel.cs:137/440/447). Read by
+        # CreatureCmd.cs:527 to REFUSE the death-removal RemoveCreature call while
+        # the monster is mid-move; PerformMove's tail (:448-451) completes the
+        # deferred removal once the move returns.
         self.is_performing_move = False
-        # The MonsterModel joins the hook walk (CombatState.cs:420). Registered
-        # at construction because that is where the sim's Monster becomes real:
-        # both creature-addition paths (the encounter's `create_monsters` and
-        # `CreatureCmd.add`) build the object and put it in `combat.enemies` in
-        # the same step. The one exception is combat SETUP —
-        # `Encounter.create_monsters` builds the whole roster before
-        # `CombatState.enemies` is assigned (see the round-13 R1 report, F7) —
-        # so for the few dispatches inside `CombatState.__init__` a monster is
-        # registered but not yet reachable by the walk, and `_merge_extras`
-        # seats it in its category tail. `_ordered()` otherwise places it from
-        # `combat.enemies`, so registration ORDER here is immaterial — only
-        # membership is.
-        #
-        # `hooks` is None for a monster built outside any combat (the
-        # state-machine construction tests do exactly that); such a creature is
-        # in no `CombatState.Enemies` either, so C# has no listener for it and
-        # there is nothing here to register it with.
+        # MonsterModel joins the hook walk (CombatState.cs:420); registered here
+        # at construction since both creature-addition paths build the object and
+        # append it to `combat.enemies` in the same step. Exception: combat SETUP
+        # builds the whole roster before `CombatState.enemies` is assigned, so
+        # `_merge_extras` seats those in their category tail instead -- membership
+        # matters here, not registration order.
+        # `hooks` is None for a monster built outside any combat (state-machine
+        # construction tests); nothing to register with in that case.
         if hooks is not None:
             hooks.register(self)
 

@@ -222,47 +222,18 @@ class Event:
         a potion can be declined to keep the belt slot and a card reward can be
         skipped to keep the deck lean.
 
-        Resolution order (R6, 2026-08-01):
-
-        1. `run.reward_offer_selector` — a callable (purpose, payload) -> bool,
-           if one is explicitly installed. This is the finest-grained override
-           (it sees `purpose`, unlike `reward_selector` below) and is what
-           `test/test_event_offer_screens.py` installs directly on a bare
-           `RunState` to unit-test one event in isolation, no driver required.
-        2. For `purpose == "potion"`, with no (1): fall back onto
-           `run.reward_selector` — the seam a real `RunDriver` ALREADY wires
-           unconditionally (`driver.py:303` -> `_reward_selector`) for
-           `RunState.offer_relic` / `RunState.offer_potion`. `_reward_selector`
-           treats any kind other than `"relic"` as a potion offer and asks a
-           REWARD_POTION decision — exactly the shape `RunState.offer_potion`
-           itself already calls it with (`run.py:592`, `selector("potion",
-           potion)`). Before this fallback existed, `reward_offer_selector`
-           was defined NOWHERE outside the test helper above, so a real
-           driver (real play, and the conformance `_ForceWinDriver`) had
-           nothing to ask and every potion event offer auto-accepted.
-        3. `purpose == "card_reward"` — HISTORICAL, and dead code today.
-           `Event.offer_card_reward` was the only method that ever passed this
-           purpose and was removed 2026-08-01 (R2, round 13,
-           event/the_future_of_potions/g15; see the tombstone comment below),
-           so nothing in the tree reaches this branch — it falls straight to
-           the true-default below. It is kept, rather than raising, for any
-           future `OfferCustom`-style caller that reintroduces the purpose, in
-           which case the same reasoning applies and is why it must stay
-           un-wired to `reward_selector`: a CardReward's real take-or-skip
-           decision belongs on the ONE screen C#'s protocol models
-           (`CardReward.OnSelect` picks a card, `OnSkipped` declines, and
-           `CardRewardAlternative.Generate` puts Skip / REROLL / SACRIFICE on
-           that same index space — CardRewardAlternative.cs:53-74), which the
-           sim spells as `pending_rewards` -> the driver's REWARD_CARD
-           decision -> `_offer_card_group` (driver.py). Asking here as well
-           would ask a driver-attached policy TWICE for what C# shows once.
-           (The surviving empirical evidence for this method is the POTION
-           leg, step 2 above:
-           `test_drowning_beacon_declines_through_a_real_driver_with_no_
-           explicit_selector` in test_event_offer_screens.py.)
-        4. With none of the above (no selector installed anywhere, e.g. a
-           bare RunState in most unit tests) every offer is taken — preserved
-           unchanged from before R6."""
+        Resolution order: (1) `run.reward_offer_selector` if installed —
+        finest-grained, sees `purpose`, used by
+        test_event_offer_screens.py to unit-test one event in isolation;
+        (2) for `purpose == "potion"` only, fall back to `run.reward_selector`
+        — the seam a real `RunDriver` already wires for offer_relic/
+        offer_potion (driver.py -> _reward_selector -> REWARD_POTION);
+        (3) `purpose == "card_reward"` is dead code (no caller since
+        `offer_card_reward` was removed in favor of `pending_rewards` ->
+        REWARD_CARD -> `_offer_card_group`, which models C#'s single
+        CardReward/CardRewardAlternative screen instead of asking twice) —
+        left un-wired intentionally, kept only for a future OfferCustom-style
+        caller; (4) with nothing installed, every offer is taken."""
         selector = getattr(self.run, "reward_offer_selector", None)
         if selector is not None:
             return bool(selector(purpose, payload))
@@ -279,26 +250,12 @@ class Event:
             return False
         return self.run.add_potion(potion)
 
-    # `offer_card_reward` (RewardsCmd.OfferCustom with a single CardReward,
-    # TheFutureOfPotions.cs:127-130) was REMOVED 2026-08-01 (R2, round 13,
-    # event/the_future_of_potions/g15): its `run.select_cards("card_reward",
-    # ...)` protocol was a boolean take-or-skip with no reroll/sacrifice slot
-    # and never called `apply_reward_modifiers`, so Driftwood/Pael's Wing
-    # could never reach this screen — C#'s CardReward.OnSelect shows ONE
-    # screen with cards + Skip + REROLL alternatives together
-    # (CardRewardAlternative.cs:53-74), which is what `pending_rewards` ->
-    # the driver's REWARD_CARD decision -> `_offer_card_group` already
-    # models (driver.py:519-542). `the_future_of_potions.py:95` was this
-    # method's sole caller (verified: `grep -rn offer_card_reward`) and now
-    # builds its own `CombatRewards`/`CardRewardGroup` and sets
-    # `self.pending_rewards` directly, the same channel brain_leech.py's Rip
-    # and trial.py's Nondescript Guilty already use. `_accept_offer`'s
-    # `purpose == "card_reward"` branch (above) is accordingly now dead code
-    # with no caller left anywhere in the tree — left in place rather than
-    # removed here, since `_accept_offer` itself is outside this task's
-    # footprint (R2-brief.md scopes sts2_rl/events/base.py to "the
-    # `offer_card_reward` block only"); see R2-report.md for the exact
-    # docstring diff proposed for `_accept_offer` at fold time.
+    # `offer_card_reward` (formerly RewardsCmd.OfferCustom with a single
+    # CardReward, TheFutureOfPotions.cs:127-130) was removed: its take-or-skip
+    # protocol had no reroll/sacrifice slot, unlike C#'s single CardReward/
+    # CardRewardAlternative screen. Card-reward events now build their own
+    # CardRewardGroup and set `self.pending_rewards` directly (same channel as
+    # brain_leech.py's Rip and trial.py's Nondescript Guilty).
 
     @property
     def options(self) -> list[EventOption]:

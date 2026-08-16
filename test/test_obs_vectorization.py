@@ -1,36 +1,14 @@
-"""Buffer-safety tests for the v4/v7 observation builders
-(OBS_SCHEMA.md).
+"""Buffer-safety tests for the v4/v7 observation builders (OBS_SCHEMA.md).
 
-**What this file used to be** (v3): a reference-equality harness. It froze
-the pre-vectorization pure-Python builders (``_ref_*``) as an oracle and
-asserted, over seeded episodes, that the live vectorized ``ObsBuffer``-based
-builders matched them bit-for-bit. Phase 1 replaced the whole observation
-representation (dense per-vocab-id float blocks -> sparse id/float row
-blocks over a two-leaf ``{"f", "i"}`` Dict, OBS_SCHEMA.md Sec.2/Sec.5), so
-those frozen references no longer describe anything real — ``power_triples``,
-``pile_composition``, ``ENEMY_ROW_DIM`` and the flat-Box builders they were
-written against are gone, not renamed. Reference-equality against a v3 oracle
-is retired: there is no meaningful "old shape" left to compare against.
-
-**What survives**, per the project brief: this file's real job was never the
-literal reference comparison, it was catching a reused-buffer/aliasing class
-of bug that a same-shape-and-close-enough-values test would miss. Two
-concrete instances of that class still exist in this codebase and are both
-still worth pinning:
-
+Pins two reused-buffer/aliasing hazards:
 1. ``STS2FullCombatEnv``/``build_combat_obs`` allocate a fresh ``ObsBuffer``
-   per call but still promise callers independent copies (their own
-   docstrings) — a caller mutating one returned observation must never affect
-   a previously returned one.
-2. ``STS2RunEnv`` keeps ONE ``ObsBuffer`` for the WHOLE episode, reset() and
-   rewritten every step (``STS2RunEnv._build_obs``'s own docstring names the
-   exact hazard: "a block that is not live this step ... is exactly that:
-   PAD/zero, never stale content from a previous step"). This is the
-   highest-value surviving property in this file, and nothing in
-   ``test_run_obs_v4.py`` drives an actual multi-phase episode to check it —
-   that file's tests are unit-style (surgically set ``env._request`` and call
-   ``_build_obs()`` once), so a leak that only shows up ACROSS a phase
-   transition would slip past it.
+   per call but promise callers independent copies — a caller mutating one
+   returned observation must never affect a previously returned one.
+2. ``STS2RunEnv`` keeps ONE ``ObsBuffer`` for the WHOLE episode, rewritten
+   every step; a block not live this step must be PAD/zero, never stale
+   content from a previous step. test_run_obs_v4.py is unit-style (builds
+   one request via surgery, calls _build_obs() once), so it can't catch a
+   leak that only appears ACROSS a phase transition — this file does.
 
 Run with:  py -m pytest test/test_obs_vectorization.py -q
 """
@@ -203,58 +181,3 @@ def test_run_env_phase_blocks_do_not_leak_stale_data_across_a_phase_switch():
         "least two distinct phase-specific blocks actually populated for "
         "the cross-phase zero check above to mean anything"
     )
-
-
-# ═════════════════════════════════════════════════════════════════════════
-# Retired (see report for the full accounting)
-# ═════════════════════════════════════════════════════════════════════════
-#
-# - The entire `_ref_*` frozen-reference block (combat AND run-env) is
-#   DELETED. It hard-codes the v3 dense/flat representation field-by-field
-#   (one-hot hand/enemy identity, `power_triples`, `pile_composition`,
-#   `ENEMY_ROW_DIM`-shaped rows, a flat run-obs concatenation) — none of
-#   which corresponds to anything the v4/v7 builders produce. There is no
-#   "same property, new address" rewrite available here: the thing it
-#   checked (byte-for-byte agreement with THAT SPECIFIC OLD SHAPE) doesn't
-#   apply to a schema where the shape itself changed on purpose. Content
-#   correctness for the new schema is covered by test_combat_obs_v4.py and
-#   test_run_obs_v4.py (built TDD-first against OBS_SCHEMA.md, per their own
-#   docstrings) — re-deriving a second, hand-rolled oracle here would be the
-#   "two divergent versions" trap the project brief warns against.
-#
-# - test_rich_combat_matches_reference / test_combat_episodes_match_reference
-#   / test_run_env_matches_reference_all_phases /
-#   test_curriculum_run_env_matches_reference: DELETED along with the
-#   reference they compared against, for the same reason. The part of their
-#   value that survives independently of the reference — driving many
-#   seeds/steps without crashing or leaving the declared bounds — is already
-#   covered by test_full_env.py::test_every_encounter_runs_to_completion
-#   (masked-random rollout to completion, asserting observation_space.
-#   contains(obs) every step) and test_run_obs_v4.py's own coverage sweep
-#   (test_run_env_matches_reference_all_phases in THAT file, which requires
-#   MAP/EVENT/COMBAT/REWARD_CARD/SELECT_CARDS/REST to all be visited).
-#   test_curriculum_run_env_matches_reference specifically: STS2CurriculumRunEnv
-#   does not override `_build_obs`, `reset`, or `step` (verified by reading
-#   curriculum_env.py) — it inherits STS2RunEnv's exact buffer-reuse code
-#   path, so the two new STS2RunEnv tests above already exercise curriculum
-#   runs' only distinct machinery (RunState subclassing) indirectly through
-#   the same method; a third copy of the buffer-safety tests parametrized
-#   over the curriculum env would test the RunState swap, not the
-#   observation builder, which is out of this file's scope.
-#
-# - test_step_returns_independent_copy (STS2FullCombatEnv only, "f" half
-#   only): SUPERSEDED by test_full_env_step_returns_independent_copy above,
-#   which checks both halves.
-#
-# - test_public_sub_builders_still_return_lists: DELETED. It pinned that
-#   `full_env.power_triples`/`full_env.pile_composition` still existed as a
-#   public list-returning API alongside the vectorized in-place builder. Both
-#   functions are gone, not renamed — v4 represents powers/piles as sparse
-#   id/float ROWS (`_power_rows`/`_cards_rows`, module-private, feeding
-#   `ObsBuffer.write_rows`), not a dense list over the full vocabulary, so
-#   there is no "list-returning sub-builder" API left for this property to be
-#   about. The underlying content (a power's encoded triple, a pile's
-#   composition) is pinned in its new sparse-row form by
-#   test_combat_obs_v4.py (e.g. test_the_bomb_two_instances_are_two_rows_
-#   with_distinct_aux, test_cards_block_is_exact_multiset_of_the_three_piles)
-#   and by test_full_env.py::test_full_power_vocabulary_and_power_row_encoding.

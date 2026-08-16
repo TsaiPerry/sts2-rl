@@ -30,6 +30,7 @@ from sts2_rl.powers import (
     WeakPower,
 )
 from sts2_rl.previews import (
+    card_base_block,
     card_base_damage,
     preview_card_block,
     preview_card_damage,
@@ -210,6 +211,24 @@ def test_hand_f_block_preview_field_unaffected_by_dexterity_or_frail():
     f = card_features(c, defend)
     assert f[20] == f[21]                                # both == base_block/ABS_SCALE
     assert f[20] == pytest.approx(5 / 100.0)
+
+
+def test_card_base_block_prefers_calc_block():
+    # calc_block is the block analog of calc_damage (card_base_damage,
+    # previews.py:168-180): preferred over the static declaration.
+    c = _combat()
+    card = make_card("iron_wave")
+    assert card_base_block(c, card) == card.base_block
+    card.calc_block = lambda ctx, target=None: 42   # stub hook
+    assert card_base_block(c, card) == 42
+
+
+def test_preview_card_block_routes_through_base_helper():
+    c = _combat()
+    card = make_card("iron_wave")
+    card.calc_block = lambda ctx, target=None: 42
+    # 42 then flows through the MOVE pipeline (dex 0 here -> unchanged)
+    assert preview_card_block(c, card) == 42
 
 
 def test_card_energy_cost_preview():

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import random
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -50,6 +51,7 @@ from sts2_rl.relic_obs import EXCLUDED_RELIC_STATE
 from sts2_rl.rewards import CombatRewards
 from sts2_rl.rooms import RoomType
 from sts2_rl.run_env import (
+    DECK_OVERFLOW_LOG_ENV,
     GOLD_LOG_COARSE_DENOM,
     GOLD_LOG_FINE_DENOM,
     MAX_BOSS_IDS,
@@ -67,6 +69,7 @@ from sts2_rl.run_env import (
     EVENT_INDEX,
     _log1p_scale,
     _run_card_row,
+    deck_overflow_log_path,
     run_obs_layout,
     run_obs_segments_f,
     run_obs_segments_i,
@@ -193,7 +196,7 @@ def test_run_max_obs_id_matches_combat_and_is_reported_not_assumed():
     assert RUN_MAX_OBS_ID == COMBAT_MAX_OBS_ID == 640
 
 
-def test_schema_version_is_11():
+def test_schema_version_is_12():
     """v9 (R3, 2026-08-02): the run observation embeds the combat block
     verbatim, so full_env's v6 bump (per-enemy intent history — new
     `enemy{e}.intent_history.f` segments) silently widened this env's f_dim
@@ -215,8 +218,12 @@ def test_schema_version_is_11():
     Power option was being truncated out of an observation whose action stayed
     legal to pick, and the count also moves where SKIP sits in the mask — see
     the constant's comment in run_env.py and
-    `test_reward_cards_block_shows_a_four_card_lasting_candy_offer`."""
-    assert RUN_OBS_SCHEMA_VERSION == 11
+    `test_reward_cards_block_shows_a_four_card_lasting_candy_offer`.
+
+    v12 (task 3, v14 mechanics-exposure): follows full_env.OBS_SCHEMA_VERSION
+    7 -> 8 in lockstep — the embedded combat hand.f block grew by 2 fields
+    per hand row (f[29] glow_gold, f[30] block_preview_move)."""
+    assert RUN_OBS_SCHEMA_VERSION == 12
 
 
 def test_run_schema_version_matches_declared_dims():
@@ -243,7 +250,10 @@ def test_run_schema_version_matches_declared_dims():
     # of `reward.cards` (4711 -> 4715, 1465 -> 1469). The preceding v10
     # amendment (+1/+1 for `reward.relic.f`/`reward.relic.ids`) is folded into
     # the 4711/1465 baseline these numbers move from.
-    assert (RUN_OBS_SCHEMA_VERSION, layout.f_dim, layout.i_dim) == (11, 4715, 1469)
+    # v11 -> v12: full_env's hand.f row grows by 2 fields (f[29] glow_gold,
+    # f[30] block_preview_move); MAX_HAND (10) x 2 = +20 f_dim, i_dim
+    # unchanged (no new id columns): 4715 -> 4735, 1469 stays 1469.
+    assert (RUN_OBS_SCHEMA_VERSION, layout.f_dim, layout.i_dim) == (12, 4735, 1469)
 
     # STS2CurriculumRunEnv is STS2RunEnv with a different map/reward factory
     # only (curriculum_env.py's own docstring) — same layout, same version.
@@ -935,6 +945,48 @@ def test_deck_overflow_truncates_without_raising():
     assert obs["f"][layout.f_slices["run.deck.overflow"]][0] == pytest.approx(1.0)
     ids = obs["i"][layout.i_slices["run.deck.ids"]].reshape(-1, 4)
     assert len(ids) == MAX_DECK_ROWS
+
+
+def test_deck_overflow_logs_deck_contents_to_file():
+    deck = _heterogeneous_cards(MAX_DECK_ROWS + 12)
+    run = _bare_run(deck=list(deck))
+    env = _env_with(run, DecisionRequest(kind=DecisionKind.MAP, run=run, points=[]))
+    with pytest.warns(UserWarning, match="run.deck"):
+        env._build_obs()
+
+    path = Path(deck_overflow_log_path())
+    assert path.exists(), "the warning must be accompanied by a deck dump"
+    text = path.read_text(encoding="utf-8")
+    assert f"{len(deck)} cards exceeds cap {MAX_DECK_ROWS}" in text
+    # EVERY card, not just the surviving 96 — the point is to see what blew it.
+    for i, card in enumerate(deck):
+        assert f"[{i:3d}] {card.id} +{card.upgrade_level}" in text
+    assert sum(1 for line in text.splitlines() if "] " in line) == len(deck)
+
+
+def test_deck_overflow_log_is_written_once_per_process():
+    deck = _heterogeneous_cards(MAX_DECK_ROWS + 12)
+    run = _bare_run(deck=list(deck))
+    env = _env_with(run, DecisionRequest(kind=DecisionKind.MAP, run=run, points=[]))
+    with pytest.warns(UserWarning, match="run.deck"):
+        env._build_obs()
+    first = Path(deck_overflow_log_path()).read_text(encoding="utf-8")
+    for _ in range(3):
+        env._build_obs()
+    assert Path(deck_overflow_log_path()).read_text(encoding="utf-8") == first, (
+        "a hot loop must not append a dump per step")
+
+
+def test_deck_overflow_log_failure_does_not_break_obs(monkeypatch):
+    monkeypatch.setenv(
+        DECK_OVERFLOW_LOG_ENV, str(Path(deck_overflow_log_path()).parent / "no" / "such" / "dir" / "x.log"))
+    deck = _heterogeneous_cards(MAX_DECK_ROWS + 12)
+    run = _bare_run(deck=list(deck))
+    env = _env_with(run, DecisionRequest(kind=DecisionKind.MAP, run=run, points=[]))
+    with pytest.warns(UserWarning):
+        obs = env._build_obs()
+    layout = run_obs_layout()
+    assert obs["f"][layout.f_slices["run.deck.overflow"]][0] == pytest.approx(1.0)
 
 
 def test_relics_overflow_truncates_without_raising():

@@ -112,16 +112,10 @@ class WaterfallGiant(MachineMonster):
         )
         explode = MoveState(
             "EXPLODE_MOVE", self._explode,
-            # DeathBlowIntent : SingleAttackIntent : AttackIntent
-            # (src/Core/MonsterMoves/Intents/DeathBlowIntent.cs:10) -- it IS
-            # an AttackIntent, so NIntent.cs:135's `intent is AttackIntent`
-            # check renders its damage number, and MonsterModel.IntendsToAttack
-            # (MonsterModel.cs:241-245) explicitly treats DeathBlow as an
-            # attack for gameplay purposes. `also=(MoveType.ATTACK,)` mirrors
-            # that: it lights up `Intent.has(MoveType.ATTACK)` for the
-            # observation's attack flag and damage preview without changing
-            # the primary DEATH_BLOW type (still distinct for anything that
-            # cares which icon/animation the game shows).
+            # DeathBlowIntent : SingleAttackIntent : AttackIntent (DeathBlowIntent.cs:10)
+            # IS an AttackIntent (MonsterModel.IntendsToAttack, MonsterModel.cs:241-245);
+            # also=(MoveType.ATTACK,) mirrors that for obs/damage-preview without
+            # changing the primary DEATH_BLOW type used for icon/animation.
             lambda: Intent(MoveType.DEATH_BLOW,
                            damage=self._steam_eruption_dmg,
                            also=(MoveType.ATTACK,)),

@@ -51,13 +51,9 @@ class Guardbot(MachineMonster):
         combat = ctx.hooks.combat
         if combat is None:
             return
-        # Guardbot.cs:51 `Enemies.Where(c => c.Monster is Fabricator)` -- the
-        # ONLY test is membership of CombatState.Enemies, which C# still
-        # holds a death-vetoed retained corpse in. `is_removed_from_combat`
-        # (not `is_gone`) is the sim's mirror of that membership test: it is
-        # False for a retained corpse (still "in Enemies") and True only for
-        # a creature C# has actually dropped from Enemies (an ordinary kill,
-        # or an escape -- both real removals).
+        # Guardbot.cs:51 -- membership test is CombatState.Enemies, which still
+        # holds a death-vetoed retained corpse; use `is_removed_from_combat`
+        # (not `is_gone`) as the sim's mirror of that membership test.
         for enemy in combat.enemies:
             if isinstance(enemy, Fabricator) and not enemy.is_removed_from_combat:
                 BlockCmd.apply(ctx.hooks, enemy, _GUARD_BLOCK, props=ValueProp.UNPOWERED)
@@ -71,18 +67,13 @@ class Noisebot(MachineMonster):
     min_hp_asc = 19   # Noisebot.cs:25 -- ToughEnemies
     max_hp_asc = 24   # Noisebot.cs:27 -- ToughEnemies
 
-    # Noisebot.cs:23 `private const int _noiseStatusCount = 2;`. The
-    # decompiler inlined it at both use sites (the `new StatusIntent(2)` at
-    # :45 and the `new CardPileAddResult[2]` at :58), so one constant serving
-    # the intent and the two Dazed adds is a faithful de-inlining.
+    # Noisebot.cs:23 `_noiseStatusCount = 2`, inlined by the decompiler at both
+    # use sites (:45 StatusIntent(2), :58 CardPileAddResult[2]); de-inlined here.
     _NOISE_STATUS_COUNT = 2
 
     def build_machine(self) -> MonsterMoveStateMachine:
-        # Noisebot.cs:45 `new StatusIntent(2)` -- StatusIntent.CardCount is
-        # telegraphed to the player, so the intent must carry it and not just
-        # the STATUS_CARD flag bit. 5th site of monster/_intent_count_lost
-        # (13 of the mechanism's 18 sites are still open; see
-        # test_monster_tier_families.py's census ledger).
+        # Noisebot.cs:45 -- StatusIntent.CardCount must be telegraphed, not just
+        # the STATUS_CARD flag (monster/_intent_count_lost, see census ledger).
         noise = MoveState("NOISE_MOVE", self._noise,
                           Intent(MoveType.STATUS_CARD,
                                  status_count=self._NOISE_STATUS_COUNT))
@@ -229,22 +220,18 @@ class Fabricator(MachineMonster):
         if combat is None:
             return
         choices = [m for m in options if m is not self._last_spawned]
-        # Fabricator.cs:115 — base.RunRng.MonsterAi.NextItem(items), the same
-        # dedicated stream MonsterModel.RollMove draws from, not the shared rng.
+        # Fabricator.cs:115 -- draws from the dedicated MonsterAi rng stream
+        # (same as MonsterModel.RollMove), not the shared combat rng.
         cls = combat.combat_rng.monster_ai.choice(choices)
         self._last_spawned = cls
         bot = cls(ctx.hooks, combat._rng)
         from ...cmds import CreatureCmd, PowerCmd
         from ...powers import MinionPower
-        # Fabricator.cs:115 passes `CombatState.Encounter.GetNextSlot(
-        # CombatState)` to CreatureCmd.Add — the FIRST unoccupied entry of
-        # [bot1, bot2, fabricator, bot3, bot4]. Since the Fabricator itself holds
-        # the middle entry, the first two bots seat IN FRONT of it: the game's
-        # Enemies after the opening FABRICATE are [bot, bot, Fabricator]. The sim
-        # appended, so the Fabricator came out FIRST — the same reversal
-        # monster/living_fog is verdicted live for, and it also arms the
-        # turn_structure block-clearing gap, because Guardbot's GUARD grants
-        # block to a creature LATER in the list.
+        # Fabricator.cs:115 -- GetNextSlot seats new bots in the FIRST unoccupied
+        # slot of [bot1, bot2, fabricator, bot3, bot4], so the first two bots land
+        # IN FRONT of the Fabricator (same reversal as monster/living_fog); this
+        # also arms the turn_structure block-clearing gap since Guardbot's GUARD
+        # grants block to a creature later in the list.
         slot = None
         if combat.encounter is not None and combat.encounter.slots:
             slot = combat.encounter.get_next_slot(combat)

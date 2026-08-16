@@ -81,62 +81,27 @@ N_REST_OPTIONS = 3
 
 # select_cards purposes where declining is a real choice (a card offer, not a
 # mandatory selection): the action index == len(candidates) means "skip".
-# Selection purposes whose screen is genuinely optional — `CardSelectorPrefs`
-# with **MinSelect 0**, so the player may confirm having picked fewer cards than
-# MaxSelect (or none at all). `_card_selector` offers a skip action for these and
-# never auto-resolves them. `*_optional` names the up-to-N pickup screens
-# (Claws.cs:24 `CardSelectorPrefs(prompt, 0, CardsVar(6))`, RequireManualConfirmation).
-# "gambling_chip" is GamblingChip.cs:20's `CardSelectorPrefs(prompt, 0,
-# 999999999)` — the same MinSelect-0 shape, so "discard nothing" is a
-# first-class outcome and the whole-hand offer must not be short-circuited.
-# "choose_a_card_optional" is `FromChooseACardScreen(..., canSkip: true)`
-# (CardSelectCmd.cs:216-261) — the three-card generator potions. Skippability
-# is a per-SCREEN flag in C#, not a property of the kind of screen: Toolbox.cs:28
-# and ChoicesParadox.cs:46 open the very same choose-a-card screen and forbid the
-# decline, so the two need separate purposes here (same split as
-# "transform" / "transform_optional").
-# "enchant_optional" is Kifuda.cs:26-29's `new CardSelectorPrefs(
-# EnchantSelectionPrompt, 0, Cards.IntValue) { Cancelable = false,
-# RequireManualConfirmation = true }` — MinSelect 0 / MaxSelect 3, same shape
-# as Claws' "transform_optional": the player may confirm 0, 1, 2 or 3
-# enchants but the SCREEN AS A WHOLE is not cancelable (Cancelable = false
-# only gates a separate "back out entirely" affordance, which SELECT_CARDS
-# never models here — there is no legal action for it, skippable or not).
-# CAVEAT (round-13 review): the 0..3 range is the PREFS range that
-# `CardSelectCmd.FromDeckForEnchantment`'s automated-selector arm
-# (`Selector.GetSelectedCards(list, MinSelect, MaxSelect)`, CardSelectCmd.cs:582)
-# and this driver both operate at — it is NOT a literal description of the
-# shipped single-player screen. `NDeckEnchantSelectScreen.ConfirmSelection`
-# (NDeckEnchantSelectScreen.cs:258-264) opens with
-# `if (_selectedCards.Count != 0)`, so a 0-card
-# selection can never be finalized by clicking Confirm there, and
-# `CloseSelection` (:186-190) — the only path that DOES resolve with zero
-# cards — is gated behind `Cancelable` (false for Kifuda), so it is
-# unreachable too. The shipped UI's actual reachable floor is 1. Modelling
-# the prefs range rather than that button-state machine is a deliberate
-# choice: the sim already operates at the `ICardSelector`/driver
-# abstraction (a policy callback, not a button click), which is the level
-# `AutoSlayCardSelector` and every headless choice in the source operates at
-# too. (NOT "remote": CardSelectCmd.cs:600's remote arm is screen-level.) See relics/kifuda.py's docstring for the full citation.
-# GnarledHammer.cs:30-34 builds the identical CardSelectorPrefs shape
-# (0..CardsVar(3), Cancelable = false, RequireManualConfirmation = true) as
-# Kifuda; relics/gnarled_hammer.py was fixed in round 14 (lane R7) to also
-# pass "enchant_optional" with min_select=0, so it shares this purpose and no
-# longer force-fills 3. Named "enchant_optional" rather than reusing
-# "enchant" because "enchant" also covers six other relics/events whose own
-# CardSelectorPrefs constructors are the exact-count overload
-# (`CardSelectorPrefs(prompt, N)`, MinSelect == MaxSelect —
-# beautiful_bracelet/electric_shrymp/paels_growth/royal_stamp/tri_boomerang
-# and every "enchant"-purpose event site) — those must keep force-filling, so
-# they must NOT share a purpose string with Kifuda's/GnarledHammer's genuine
-# range.
-# "exhaust_any" is Ashwater.cs:30's `CardSelectorPrefs(prompt, 0,
-# 999999999)`; "discard_any" is GamblersBrew.cs:26's identical MinSelect-0
-# shape; "from_discard" is NeowsFury.cs:39's `CardSelectorPrefs(prompt, 0,
-# num)`. All three are already-correct call sites (potions.py, cards/
-# neows_fury.py) that were being force-filled here because the registry
-# lacked their purpose strings — round 14 lane R7-F closes that gap (see
-# R7-report.md / R7-review.md).
+# These are MinSelect-0 `CardSelectorPrefs` screens (RequireManualConfirmation),
+# so 0 picks is a legal outcome that must never be force-filled:
+#   - "choose_a_card_optional": FromChooseACardScreen(canSkip: true)
+#     (CardSelectCmd.cs:216-261, the three-card generator potions). Same
+#     underlying screen as "transform"/"transform_optional", but skippability
+#     is per-site (Toolbox.cs:28, ChoicesParadox.cs:46 forbid the decline),
+#     hence the separate purpose string.
+#   - "enchant_optional": Kifuda.cs:26-29 and GnarledHammer.cs:30-34, both
+#     `CardSelectorPrefs(prompt, 0, N) { Cancelable = false,
+#     RequireManualConfirmation = true }`. Distinct from plain "enchant"
+#     (exact-count MinSelect==MaxSelect sites — beautiful_bracelet/
+#     electric_shrymp/paels_growth/royal_stamp/tri_boomerang and event
+#     "enchant" sites), which must keep force-filling. Sim models the PREFS
+#     range (0..3) rather than the shipped UI's true reachable floor of 1
+#     (NDeckEnchantSelectScreen won't confirm 0 cards) — deliberate, since the
+#     sim operates at the ICardSelector/driver level, same as
+#     AutoSlayCardSelector. See relics/kifuda.py's docstring for detail.
+#   - "gambling_chip": GamblingChip.cs:20, CardSelectorPrefs(prompt, 0,
+#     999999999) — whole-hand offer, "discard nothing" is legal.
+#   - "exhaust_any": Ashwater.cs:30. "discard_any": GamblersBrew.cs:26.
+#     "from_discard": NeowsFury.cs:39. Same MinSelect-0 shape.
 SKIPPABLE_PURPOSES = frozenset({
     "card_reward", "choose_a_card_optional", "discard_any",
     "enchant_optional", "exhaust_any", "from_discard",
@@ -223,13 +188,9 @@ class DecisionRequest:
             if potion is not None
             and potion.usage == USAGE_ANY_TIME
             # `PotionModel.PassesCustomUsabilityCheck` DISABLES the Use button
-            # (NPotionPopup.cs:144-147), so a potion it refuses is not an
-            # option on this screen at all -- it must not reach the mask.
-            # Foul Potion is the source's only override (shop stall / Fake
-            # Merchant only). `RunState.use_potion` has consulted this gate
-            # since the potion_pipeline/G1 fix; this list did not, so the mask
-            # promised a slot the executor refused and `RunDriver._ask` tripped
-            # its own `assert drunk` -- killing the env worker mid-training.
+            # (NPotionPopup.cs:144-147) — a refused potion must not reach the
+            # mask. Foul Potion is the only override (shop stall / Fake
+            # Merchant only).
             and potion.passes_custom_usability_check(run=self.run)
         ]
 
@@ -357,11 +318,8 @@ class RunDriver:
         self._ascension = ascension
         self._include_neow = include_neow
         self._include_ancients = include_ancients
-        # Harvest hook (phase 3, R11, locked decision 4): fired in
-        # `_run_combat` immediately after `create_combat`, before the first
-        # decision of that combat is asked. `None` (the default) is a
-        # complete no-op — every existing caller that doesn't pass this
-        # kwarg gets byte-identical behavior.
+        # Fired in `_run_combat` right after `create_combat`, before the
+        # first decision of that combat. `None` (default) is a no-op.
         self.on_combat_start = on_combat_start
         self.decisions = 0
         # act name -> the shared ancients allotted to it this run (filled by
@@ -576,13 +534,12 @@ class RunDriver:
 
     def _offer_rewards(self, rewards: "CombatRewards") -> None:
         run = self.run
-        # Offer-time backstop (R10): mirrors `RewardsSet.Offer` calling
+        # Offer-time backstop: mirrors `RewardsSet.Offer` calling
         # `GenerateWithoutOffering` again at RewardsSet.cs:159 no matter how
-        # the set was built. Every real construction site already calls
-        # `apply_reward_modifiers` itself, so this is normally a harmless
-        # repeat (`CombatRewards.generated` guards it) — but a FUTURE site
-        # that forgets the explicit call still gets dispatched exactly once,
-        # here, instead of silently skipping every reward-modifying relic.
+        # the set was built. Real construction sites already call
+        # `apply_reward_modifiers` themselves (`CombatRewards.generated`
+        # guards the repeat), so a future site that forgets still gets
+        # dispatched here instead of silently skipping reward-modifying relics.
         apply_reward_modifiers(run, rewards)
         # A reward set holds a LIST of Rewards, and each CardReward on it is
         # its own pick-one-of-N screen taken separately (RewardsSet.cs:49) —

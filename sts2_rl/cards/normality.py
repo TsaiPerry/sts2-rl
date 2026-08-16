@@ -62,13 +62,9 @@ class NormalityCard(Card):
         if self.combat is None or self not in self.combat.player.hand:
             return True
         from ..history import CardPlayStartedEntry
-        # Normality.cs:33 counts `History.CardPlaysStarted`, i.e. plays STARTED
-        # (CardModel.cs:1930, before OnPlay) — not plays finished. The two agree
-        # for simple sequential plays and diverge whenever a play is IN FLIGHT
-        # while another card's playability is tested, which is what every
-        # auto-play does: with two plays behind you, the card Havoc auto-plays
-        # is the FOURTH started play and the game blocks it. Counting finished
-        # plays let it through.
+        # Normality.cs:33 counts plays STARTED (CardModel.cs:1930, before
+        # OnPlay), not finished — diverges from finished-count whenever a
+        # play is in flight, e.g. Havoc auto-playing a 4th card mid-turn.
         started = sum(
             1
             for _ in self.combat.history.of_type(CardPlayStartedEntry,

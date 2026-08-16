@@ -39,3 +39,8 @@ class ForgottenRitualCard(Card):
         from ..cmds import EnergyCmd
         if ctx.combat.history.card_exhausted_this_turn():
             EnergyCmd.gain(ctx.hooks, ctx.player, self._energy)
+
+    def _should_glow_gold_internal(self, ctx) -> bool:
+        # ForgottenRitual.cs:19,33: WasCardExhaustedThisTurn -- same condition
+        # as Evil Eye
+        return ctx.combat.history.card_exhausted_this_turn()

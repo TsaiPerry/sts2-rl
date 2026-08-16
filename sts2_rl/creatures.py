@@ -229,8 +229,7 @@ class Creature:
         just the ones that read it (DrawCardsNextTurnPower, HelloWorldPower).
 
         The attribute is set here via plain assignment rather than declared
-        on `Power.__init__` — `power_cmd/G5`-adjacent code elsewhere in
-        `powers.py` is owned by a concurrent task this wave, so readers use
+        on `Power.__init__`, so readers use
         `getattr(power, "amount_on_turn_start", 0)`, which is exactly what an
         un-snapshotted (freshly-applied-this-turn) power's C# field would
         read: the type's zero default.

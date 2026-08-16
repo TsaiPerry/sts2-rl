@@ -44,7 +44,7 @@ The blocks (see OBS_SCHEMA.md §5 for the exact layout table):
   ``(relic_id, counter, flag)``, delegating the two aux floats to
   ``relic_obs.relic_row`` (which already applies every admissibility rule).
 * ``hand`` — POSITIONAL (row *is* the action index): ``(card_id,
-  affliction_id, enchantment_id)`` plus the 29 hand floats (``card_features``
+  affliction_id, enchantment_id)`` plus the 31 hand floats (``card_features``
   plus five R2 per-instance fields).
 * ``enemies`` — POSITIONAL, monster identity id plus the 25-float enemy row
   (vitals, 9 intent flags, 6 intent-preview floats, 1 StatusIntent card-count
@@ -117,6 +117,7 @@ from .selectors import scripted_card_selector
 from .snapshots import SnapshotDataset, build_start_state, load_snapshots
 from .vocab import capacity as vocab_capacity, frozen_ids
 from .previews import (
+    card_base_block,
     card_base_damage,
     preview_card_block,
     preview_card_damage,
@@ -127,46 +128,30 @@ from .previews import (
 from .valueprops import ValueProp
 
 # Bump whenever the observation layout changes (any change invalidates saved
-# models — retrain). v2: absolute HP/block/damage encoding, pipeline-accurate
-# intent + card previews, full power vocabulary, enemy identity, history
-# scalars, dexterity fix. v3: capacity-padded frozen vocabularies (vocab.py) —
-# dims are reserved capacities, so future content additions no longer bump
-# this. v4 (OBS_SCHEMA.md, entity-obs-schema phase 1): the flat
-# float Box is replaced by the {"f": Box(0,1), "i": Box(0, MAX_ID)} Dict —
-# every entity is a row addressed by id, not a slot in a one-hot, so two
-# instances of one power are two rows instead of one dict slot overwriting
-# the other. No dual-path / back-compat encoding: the old flat builders are
-# deleted outright (see the module docstring's block list). v5: the enemy
-# row grows from 24 to 25 floats — StatusIntent's displayed card count
-# (NIntent.cs:133-136 writes a number for AttackIntent AND StatusIntent; only
-# the former was encoded) is admitted as field 24, closing the last
-# documented-but-unimplemented admissible number in the intent renderer
-# sweep (OBS_SCHEMA.md §7's R3 discussion). v6 (R3, superseding §7's earlier
-# "stays deferred" decision): per-enemy intent HISTORY — the last
-# MAX_INTENT_HISTORY (3) DISPLAYED intents per enemy, keyed by net_id so the
-# three slot-reordering encounters (ovicopter_normal, fabricator_normal,
-# living_fog_normal) can't hand one creature's history to another. New
-# `enemy{e}.intent_history.f` segments (no `.ids` half — a history slot
-# carries no id, only a `recorded` presence float; see OBS_SCHEMA.md §5.2).
-# v7 (SpireBot schema audit, docs/superpowers/specs/
-# 2026-08-04-spirebot-schema-audit.md): the audit walked every combat v6
-# field against the live game's readable API surface and found ZERO fields
-# requiring DROP — every segment has either a direct C# read (KEEP), a
-# stated proxy (REDEFINE), or a stated accumulation rule (ACCUMULATE). No
-# segment is added or removed and no width changes; v7 only reclassifies
-# semantics. The one REDEFINE with an actual behavioral consequence here:
-# `cards.f`'s `effective_cost` (the draw/discard/exhaust multiset,
-# `_pile_card_row`) now reads the card's PLAIN printed `energy_cost`
-# instead of running it through `previews.preview_card_energy_cost`'s hook
-# pipeline. Rationale: those piles are not `Hand`, so the game's own
-# `UpdateDynamicVarPreview`'s `runGlobalHooks` gate is FALSE for them — the
-# hook-modified number was never a game-readable proxy for a pile card to
-# begin with, only for a hand card (`hand.f`'s `effective_cost`, unchanged,
-# still hook-modified). This also brings `_pile_card_row` in line with
-# `run_env._run_card_row`, which already uses the plain cost for the same
-# reason (deck/reward/select-candidate rows never have a live CombatState
-# to run hooks through).
-OBS_SCHEMA_VERSION = 7
+# models — retrain).
+# v4 (OBS_SCHEMA.md): flat float Box -> {"f": Box(0,1), "i": Box(0, MAX_ID)}
+#   Dict; every entity is a row addressed by id, not a one-hot slot.
+# v5: enemy row grows 24->25 floats — StatusIntent's displayed card count
+#   (NIntent.cs:133-136 writes a number for AttackIntent AND StatusIntent;
+#   only the former was encoded) is field 24.
+# v6 (R3): per-enemy intent HISTORY — last MAX_INTENT_HISTORY (3) DISPLAYED
+#   intents per enemy, keyed by net_id (not slot position) so the
+#   slot-reordering encounters (ovicopter_normal, fabricator_normal,
+#   living_fog_normal) can't cross-contaminate histories. New
+#   `enemy{e}.intent_history.f` segments (no `.ids` half — see §5.2).
+# v7: schema audit reclassified semantics only, no width change, except
+#   `cards.f`'s `effective_cost` (`_pile_card_row`) now reads the card's
+#   PLAIN printed `energy_cost` instead of `previews.preview_card_energy_cost`
+#   — draw/discard/exhaust piles aren't `Hand`, so the game's own
+#   `UpdateDynamicVarPreview` hook gate is FALSE for them (matches
+#   `run_env._run_card_row`'s existing behavior).
+# v8: two new hand.f fields (OBS_SCHEMA.md §5.2) — f[29] glow_gold
+#   (CardModel.ShouldGlowGold, the ONLY obs carrier for on_play-only
+#   conditions like Pact's End's exhaust-pile check) and f[30]
+#   block_preview_move (the full MOVE-pipeline block preview: Dexterity,
+#   Frail, enchantments, Fasten). Field 21 deliberately keeps its old
+#   ValueProp.NONE parity value — see card_features's field-21 comment.
+OBS_SCHEMA_VERSION = 8
 
 # ── Fixed-size bounds (obs/action slots). Bump + retrain if an encounter or a
 #    relic ever exceeds these. ────────────────────────────────────────────────
@@ -174,49 +159,22 @@ MAX_HAND = PlayerCombatState.MAX_HAND_SIZE      # 10
 MAX_POTIONS = PlayerCombatState.MAX_POTIONS      # 3
 MAX_ENEMIES = 6                                  # initial lineup ≤4; headroom for summons
 
-# T5a Task 0: the combat `potions` OBSERVATION block used to be sized to
-# MAX_POTIONS (3) — the belt's DEFAULT size — but `PlayerCombatState.__init__`
-# (player.py:136-139) accepts a `max_potions` grown past 3, and `run.py`'s
-# `RunState.create_combat` (run.py:1601) passes the RUN's `max_potions` into
-# every combat it builds. `driver.py:267` masks combat actions with
-# `combat_action_masks(self.combat, self.run.max_potions)`, so a run holding a
-# belt-growing relic hands the policy a legal potion action for a slot this
-# block had no row for. MAX_POTION_ROWS is the observation-only ceiling that
-# closes that gap; it does NOT touch the action space (COMBAT_POTION_BASE,
-# combat_action_count, STS2FullCombatEnv.n_actions all stay keyed on
-# MAX_POTIONS, per the T5a brief) — only how many rows the `potions` block
-# reserves.
-#
-# CORRECTION to the T5a brief, which cited only Phial Holster: THREE relics
-# grow the belt via `RunState.add_potion_slots` (run.py:808-813) —
-# `phial_holster.py:18` (+1), `potion_belt.py:19` (+2, COMMON rarity, always
-# reachable) and `alchemical_coffer.py:27` (+4, ANCIENT rarity like Phial
-# Holster). Phial Holster is a Neow bonus (events/neow.py:40) and Alchemical
-# Coffer an Orobas pick (events/orobas.py:22) — two DIFFERENT one-shot
-# offers, both reachable in the same run alongside a normally-rewarded
-# Potion Belt — so the true worst case is base 3 + 1 + 2 + 4 = 10 (re-verified
-# at source by T5b: each relic is unique and grants once, `RunState.MAX_
-# POTIONS` is 3). T5a kept this at 4 (base 3 + one belt-growing relic) on the
-# stated ground that widening it would grow run_env's action space
-# (N_COMBAT_ACTIONS / POTION_BASE / N_ACTIONS all derive from
-# MAX_POTION_SLOTS, which is wired onto this constant) and that was declared
-# out of scope for that lane.
-#
-# T5b CORRECTION: that deferral left a live crash, not just an undersized
-# static ceiling. `run_env.py`'s `action_masks` writes
-# `mask[POTION_BASE + (answer - POTION_ACTION_BASE)]` for every belt slot
-# `request.potion_actions()` yields — one per ACTUAL slot, not per
-# `MAX_POTION_SLOTS` — so a run holding a Potion Belt (a single COMMON relic,
-# reachable from any ordinary relic reward) already grows the belt to 5 and
-# raises `IndexError` the first time `action_masks()` runs with 5 AnyTime
-# potions held. Reproduced: `IndexError: index 1385 is out of bounds for axis
-# 0 with size 1385`. So the ceiling is widened to the true worst case (10)
-# here; `run_env.MAX_POTION_SLOTS`/`N_COMBAT_ACTIONS`/`POTION_BASE`/
-# `N_ACTIONS` all derive from this constant (never hardcoded), so the fix
-# lands in exactly one place. `STS2FullCombatEnv`'s OWN action space is
-# unaffected — it stays keyed on `MAX_POTIONS` (3), per its module docstring;
-# only the `potions` OBSERVATION block (this constant) and, through it,
-# `run_env`'s action space, change.
+# The `potions` OBSERVATION block is sized past MAX_POTIONS (3, the belt's
+# default) because `PlayerCombatState.__init__` (player.py:136-139) accepts a
+# `max_potions` grown past 3, and `RunState.create_combat` (run.py:1601)
+# passes the run's grown `max_potions` into every combat it builds. Three
+# relics grow the belt via `RunState.add_potion_slots` (run.py:808-813):
+# `phial_holster.py:18` (+1), `potion_belt.py:19` (+2, COMMON, always
+# reachable), `alchemical_coffer.py:27` (+4, ANCIENT) — each unique/one-shot,
+# so worst case is base 3 + 1 + 2 + 4 = 10. This constant is the
+# observation-only ceiling; it does NOT touch the action space
+# (COMBAT_POTION_BASE / combat_action_count / STS2FullCombatEnv.n_actions
+# stay keyed on MAX_POTIONS). `run_env.py`'s `action_masks` writes
+# `mask[POTION_BASE + (answer - POTION_ACTION_BASE)]` per ACTUAL belt slot,
+# so an undersized ceiling there raises IndexError once a held Potion Belt
+# grows the belt past it — `run_env.MAX_POTION_SLOTS` /
+# `N_COMBAT_ACTIONS` / `POTION_BASE` / `N_ACTIONS` all derive from this
+# constant so the fix lands in one place.
 MAX_POTION_ROWS = 10
 
 # OBS_SCHEMA.md §4 — every one of these traces to a measurement in the phase-1
@@ -304,13 +262,15 @@ _TARGET_TYPES = [
 ]
 
 # card_features()'s per-hand-row / per-pile-row-adjacent width: the 24
-# existing engineered features (cost/type/target/flags/numbers) plus 5 new R2
+# existing engineered features (cost/type/target/flags/numbers) plus 5 R2
 # fields (OBS_SCHEMA.md §3.4) — affliction amount and three per-instance
-# flags/counters no vocabulary can express. Fields 17..23 of the original 24
-# are still "the card's numbers" (see _HAND_NUMERIC_OFFSETS below); the 5 new
-# fields are deliberately NOT part of that numeric-ablation subset (see
-# numeric_obs_indices).
-N_CARD_FEATURES = 29
+# flags/counters no vocabulary can express — plus 2 v14 fields (§5.2):
+# f[29] glow_gold (a flag) and f[30] block_preview_move (a preview number).
+# Fields 17..23 of the original 24 are still "the card's numbers" (see
+# _HAND_NUMERIC_OFFSETS below); the 5 R2 fields are deliberately NOT part of
+# that numeric-ablation subset (see numeric_obs_indices) — f[30] IS, f[29]
+# is not.
+N_CARD_FEATURES = 31
 # Enemy-row scalars (see _enemy_floats): present + hp ratio + hp×2 + max_hp×2
 # + block×2 + strength + 9 intent flags + per_hit + hits + total×2 +
 # post_block×2 + status_count. The first 24 are UNCHANGED from v3 — only the
@@ -428,16 +388,14 @@ def combat_obs_layout(card_obs: str = "hybrid") -> ObsLayout:
 
 
 # ── Numeric ablation (OBS_PLAN Phase 4, step 12) ─────────────────────────────
-# Ported onto the v4 layout: v3 addressed whole SEGMENTS by name (a hand row's
-# "numbers" and an enemy row's "hp_abs"/"intent_preview" were each their own
-# named sub-segment). v4 packs a whole hand/enemy row into one "hand.f" /
-# "enemies.f" segment, so the numeric subset is now a set of WITHIN-ROW
-# offsets instead of whole segment names — same features, different
-# addressing. See OBS_SCHEMA.md's "what breaks, deliberately" framing: this
-# ablation still means "what the agent saw before the schema-v2 numeric
-# overhaul", so the 5 new R2 hand fields (indices 24..28 — they did not exist
-# at schema v2) are deliberately NOT included below.
-_HAND_NUMERIC_OFFSETS = tuple(range(17, 24))    # dmg×2, hits, block, eff_block, hp_loss, magic
+# v4 packs a whole hand/enemy row into one "hand.f" / "enemies.f" segment, so
+# the numeric subset is WITHIN-ROW offsets rather than whole segment names.
+# Still means "what the agent saw before the schema-v2 numeric overhaul", so
+# the 5 R2 hand fields (indices 24..28, added after v2) are deliberately
+# excluded below. v14's f[30] (block_preview_move) IS a preview/numeric
+# field, like f[17..23] — it joins this set. f[29] (glow_gold) is a flag,
+# like f[25]-f[27], and stays excluded.
+_HAND_NUMERIC_OFFSETS = tuple(range(17, 24)) + (30,)    # dmg×2, hits, block, eff_block, hp_loss, magic, block_preview_move
 _ENEMY_NUMERIC_OFFSETS = (2, 3, 4, 5, 6, 7, 18, 19, 20, 21, 22, 23, 24)   # hp/max_hp/block_abs, preview, status_count
 _PLAYER_NUMERIC_SEGMENTS = (
     "player.hp_abs", "player.max_hp_abs", "player.block_abs", "player.incoming_post_block",
@@ -717,9 +675,10 @@ def _enchantment_id_int(card: Card) -> int:
 
 
 def card_features(state: CombatState, card: Card | None) -> list[float]:
-    """29 floats: the original 24 engineered card features (fields 0..23,
-    UNCHANGED — do not re-tune), plus 5 new R2 per-instance fields
-    (OBS_SCHEMA.md §3.4) no vocabulary can express."""
+    """31 floats: the original 24 engineered card features (fields 0..23,
+    UNCHANGED — do not re-tune), 5 R2 per-instance fields (OBS_SCHEMA.md
+    §3.4), and 2 v14 fields (§5.2: glow_gold, block_preview_move) no
+    vocabulary can express."""
     f = [0.0] * N_CARD_FEATURES
     if card is None:
         return f
@@ -747,8 +706,9 @@ def card_features(state: CombatState, card: Card | None) -> list[float]:
     if base_dmg is not None:
         f[17], f[18] = _abs2(base_dmg)
     f[19] = _clip01(card.base_hits / 10.0)
-    if card.base_block is not None:
-        f[20] = _clip01(card.base_block / ABS_SCALE)
+    base_blk = card_base_block(s, card)
+    if base_blk is not None:
+        f[20] = _clip01(base_blk / ABS_SCALE)
         # Obs-parity fix (89U diff, field offset 21): the game's own
         # DecisionDumper (SpireBot's CombatObsWriter.cs:470) captures this
         # field via `Hook.ModifyBlock(..., default, card, null, ...)` —
@@ -766,15 +726,25 @@ def card_features(state: CombatState, card: Card | None) -> list[float]:
     # ── R2 fields (OBS_SCHEMA.md §3.4) ────────────────────────────────
     f[24] = _clip01(card.affliction.amount / 10.0) if card.affliction is not None else 0.0
     f[25] = 1.0 if card.exhaust_on_next_play else 0.0
-    # Round-13: read the game-mirroring properties, not the raw single-turn
-    # flags — C#'s ShouldRetainThisTurn/IsSlyThisTurn (CardModel.cs:590-629,
-    # ported 1:1 as `should_retain_this_turn`/`is_sly_this_turn`) are the
-    # KEYWORD "or" the single-turn grant, so a permanently-Retain card
-    # (Luminesce's canonical Retain keyword) must read 1 here; the raw-flag
-    # read left it 0 (933T (2,6) hand.f+26: game=1, sim=0).
+    # Read the game-mirroring properties, not the raw single-turn flags —
+    # C#'s ShouldRetainThisTurn/IsSlyThisTurn (CardModel.cs:590-629, ported
+    # 1:1 as `should_retain_this_turn`/`is_sly_this_turn`) are the KEYWORD
+    # "or" the single-turn grant, so a permanently-Retain card (Luminesce)
+    # must read 1 here.
     f[26] = 1.0 if card.should_retain_this_turn else 0.0
     f[27] = 1.0 if card.is_sly_this_turn else 0.0
     f[28] = _clip01(card.base_replay_count / 3.0)
+    # ── v14 fields (schema 8; OBS_SCHEMA.md §5.2) ─────────────────────
+    # f[29]: the game's gold-glow "condition armed" signal
+    # (CardModel.ShouldGlowGold) — the ONLY obs carrier for on_play-only
+    # conditions like Pact's End; the parity-pinned damage/block fields
+    # deliberately keep the card-face printed numbers.
+    f[29] = 1.0 if card.should_glow_gold(s._ctx()) else 0.0
+    # f[30]: the true block this card grants right now — the full MOVE
+    # pipeline (Dexterity, Frail, enchantments, Fasten), unlike f[21]'s
+    # ValueProp.NONE parity field.
+    mv_block = preview_card_block(s, card, props=ValueProp.MOVE)
+    f[30] = _clip01(mv_block / ABS_SCALE) if mv_block is not None else 0.0
     return f
 
 
@@ -963,10 +933,7 @@ def _potions_rows(state: CombatState) -> list[tuple[list[int], list[float]]]:
     Builds ``max(MAX_POTION_ROWS, len(potions))`` rows (see ``_hand_rows``'s
     docstring for why) — a belt grown past ``MAX_POTION_ROWS`` now sets
     ``potions.overflow`` instead of silently hiding the extra slot with the
-    flag stuck at 0.0. (T5a Task 0: this cap was ``MAX_POTIONS`` — the
-    belt's default size, 3 — which is narrower than a grown belt's real
-    slot count; see ``MAX_POTION_ROWS``'s own comment for the fix and the
-    still-open gap beyond 4.)"""
+    flag stuck at 0.0."""
     potions = state.player.potions
     rows = []
     for p_i in range(max(MAX_POTION_ROWS, len(potions))):
@@ -1006,10 +973,7 @@ def card_instance_row(
     which is also what the game's own out-of-combat screens show).
     Splitting the row shape from cost computation this way means the two
     callers share ONE encoder rather than hand-keeping two copies of the row
-    shape that have to agree by construction (T5b's fix — see the T5a report
-    this closes: that lane's brief asked to reuse this function while also
-    restricting it from touching this file for anything but Task 0, so it
-    correctly left the duplication in place and reported the conflict).
+    shape that have to agree by construction.
     """
     ints = [pile_id, oid(CARD_INDEX.get(card.id)), _affliction_id_int(card), _enchantment_id_int(card)]
     floats = [
@@ -1029,7 +993,7 @@ def _pile_card_row(state: CombatState, card: Card, pile_id: int) -> tuple[list[i
     for out-of-combat card rows (deck/reward/select-candidates), and
     unlike ``hand.f``'s ``effective_cost`` (still hook-modified via
     ``preview_card_energy_cost`` — cards actually in hand ARE covered by
-    the game's preview pipeline). Round-4 fix: this must be
+    the game's preview pipeline). This must be
     ``canonical_energy_cost`` (the printed cost, immune to every live
     modifier), not ``energy_cost`` (which still applies
     ``_free_this_turn``/``_cost_this_turn``/``_cost_this_combat``/
@@ -1311,9 +1275,9 @@ class STS2FullCombatEnv(gym.Env):
         self._snapshot_path = None if isinstance(snapshots, SnapshotDataset) else snapshots
         self._card_obs = card_obs
         self._card_selector = card_selector
-        # v7 (plan Task 10): threaded straight into CombatState(...), which
-        # seeds hooks.ascension BEFORE create_monsters — never set
-        # hooks.ascension after construction (HP rolls read it at spawn).
+        # Threaded straight into CombatState(...), which seeds
+        # hooks.ascension BEFORE create_monsters — never set hooks.ascension
+        # after construction (HP rolls read it at spawn).
         self._ascension = ascension
         self._reward_win = reward_win
         self._reward_loss = reward_loss

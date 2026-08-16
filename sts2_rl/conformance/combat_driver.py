@@ -118,17 +118,11 @@ class ReplayCombatDriver:
         game auto-resolved. When the game *did* auto-resolve it emitted no
         command at all, so this peek cannot steal a later screen's pick."""
         cmd = self.cursor.peek()
-        # `CardSelectCmd.FromChooseACardScreen` — the OTHER screen kind, and
-        # the recording writes it as `SelectCardFromScreen N` (an index into
-        # the offered cards), not as a grid pick. The sim resolves most of
-        # those asynchronously through `_pending_screen_cards`, but the ones
-        # the game blocks on mid-move (Knowledge Demon's Curse of Knowledge,
-        # KnowledgeDemon.cs:183) come through here instead, and used to fall
-        # off the end of this function as "no choice made" — the recorded
-        # command was then dispatched into an empty `_pending_screen_cards`
-        # and did nothing at all. Taking it here is safe precisely BECAUSE the
-        # deferred kind parks its cards first: if a screen is already pending,
-        # the command belongs to that one.
+        # `CardSelectCmd.FromChooseACardScreen` — recorded as `SelectCardFromScreen N`.
+        # Most resolve async via `_pending_screen_cards`, but ones the game blocks
+        # on mid-move (Knowledge Demon's Curse, KnowledgeDemon.cs:183) reach here
+        # instead; safe to consume only because the deferred kind parks its cards
+        # first — if one is already pending, the command belongs to that one.
         if (cmd is not None and cmd.name == "SelectCardFromScreen"
                 and self.combat._pending_screen_cards is None):
             self.cursor.advance()
@@ -305,16 +299,10 @@ class ReplayCombatDriver:
             self.combat.play_card(hand_idx, target_idx=target_idx)
         elif cmd.name == "UsePotion":
             slot = int(cmd.args[0])
-            # `UsePotion N` names a real BELT SLOT: the sim's belt is now a
-            # fixed-length list[Potion | None] like Player.cs's
-            # `_potionSlots` (using a potion nulls its slot rather than
-            # compacting; a new one backfills the first null slot —
-            # AddPotionInternal: `_potionSlots.IndexOf(null)`). Still resolve
-            # by the recorded IDENTITY (`# POTION.SWIFT_POTION`) rather than
-            # trusting `slot` outright — that's robustness against the
-            # OUT-OF-SCOPE potion-retention divergence (the sim holding a
-            # different potion than the game in that slot), not a belt-model
-            # workaround. Only report when the potion genuinely isn't held.
+            # `UsePotion N` names a belt SLOT (fixed list[Potion|None] per
+            # Player.cs's _potionSlots; AddPotionInternal backfills first null).
+            # Resolve by recorded potion IDENTITY, not `slot`, for robustness
+            # against the out-of-scope potion-retention divergence.
             live = {i: p.id for i, p in enumerate(self.combat.player.potions)
                     if p is not None}
             want = self._recorded_potion_id(cmd)

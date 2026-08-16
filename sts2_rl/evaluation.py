@@ -238,6 +238,9 @@ class RunEvalReport:
     upgrades: tuple[int, ...] = ()         # permanent card upgrades gained
     removes: tuple[int, ...] = ()          # cards removed from the deck
     elites_won: tuple[int, ...] = ()       # elite fights won
+    # v11.1: elite rooms ENTERED (win or lose) — `elites_won` misses every
+    # death at an elite (the win tally fires on the rewards screen).
+    elites_fought: tuple[int, ...] = ()
     potions_obtained: tuple[int, ...] = ()
     potions_used: tuple[int, ...] = ()
     # v8 (plan Task 2): potion ledger USE classification + timing.
@@ -251,10 +254,23 @@ class RunEvalReport:
     # v8 (plan Task 1, plan Task 5 threading): HP lost per episode -- a
     # sloppiness gauge, tracked independent of --hp-potential-scale shaping.
     hp_lost: tuple[int, ...] = ()
+    # v8 s7 gate ("mean hp overall" < "mean hp-at-use"): the env keeps no
+    # running mean-hp counter of its own, so `evaluate_run` samples the
+    # `run.hp_ratio` observation feature (OBS_SCHEMA.md -- the same number
+    # already shown to the policy every decision, via the env's own
+    # `_layout`) at each decision point. Per-episode sum + count rather than
+    # a running mean so pooling across episodes is exact (see
+    # `mean_hp_overall`'s docstring for why pooled, not mean-of-means).
+    hp_ratio_sum: tuple[float, ...] = ()
+    hp_ratio_steps: tuple[int, ...] = ()
     # Merged over all episodes: card class name -> count. `field` defaults
     # because dicts are mutable (still treated as immutable once built).
     card_offer_counts: dict[str, int] = field(default_factory=dict)
     card_take_counts_raw: dict[str, int] = field(default_factory=dict)
+    # Merged over all episodes: rarity value -> {card class name -> copies}
+    # in the deck each run ENDED with (sts2_rl.deck_stats). Starter,
+    # colorless, curse and quest cards are already filtered out upstream.
+    deck_rarity_counts: dict[str, dict[str, int]] = field(default_factory=dict)
 
     @property
     def wins(self) -> int:
@@ -401,11 +417,96 @@ class RunEvalReport:
         return float(np.mean(self.relics)) if self.relics else 0.0
 
     @property
+    def mean_elites(self) -> float:
+        """Mean elites per episode (v8 s7 gate's "elites/episode").
+
+        This is elite WINS (`ep_elites_won`) under the gate's name -- a lost
+        elite fight isn't counted here; the per-episode `elites_fought`
+        column (v11.1) carries attempts, win or lose."""
+        return float(np.mean(self.elites_won)) if self.elites_won else 0.0
+
+    @property
+    def hp_lost_per_floor(self) -> float:
+        """`mean_hp_lost` / `mean_floor` (v8 s7 gate's "hp_lost/floor").
+
+        A ratio of the two aggregate means, NOT a per-episode mean of
+        per-episode ratios: early deaths can reach floor 0-1, where a
+        per-episode hp_lost/floor blows up or needs an arbitrary floor-0
+        guard; dividing the pooled means sidesteps that and matches how
+        every other pooled rate on this class is built. 0.0 when
+        `mean_floor` is 0 (no episodes, or a report built with none run)."""
+        floor = self.mean_floor
+        return self.mean_hp_lost / floor if floor else 0.0
+
+    @property
+    def mean_potions_expired_deaths(self) -> float:
+        """Mean belt count held at episode end, over DEATH episodes only
+        (v8 s7 gate: `potions_expired` <= 1.5 ON DEATHS specifically --
+        dying with a full belt means the timing bar beat survival; the same
+        thing on a WIN is fine play and excluded here). 0.0 when there were
+        no deaths (or no `potions_expired` tuple at all)."""
+        if not self.potions_expired:
+            return 0.0
+        deaths = [p for p, won, tr in
+                  zip(self.potions_expired, self.victories, self.truncations)
+                  if not won and not tr]
+        return float(np.mean(deaths)) if deaths else 0.0
+
+    @property
+    def mean_hp_overall(self) -> float:
+        """Mean `run.hp_ratio` (hp/max_hp) sampled at every decision point,
+        pooled over episodes like `energy_unspent_per_turn` -- the v8 s7
+        gate's "mean hp overall" side of "mean hp-at-use < mean hp overall".
+
+        PROXY, clearly labeled per plan Task 7: the env keeps no running
+        mean-hp counter (`ep_*`) of its own, so this doesn't compare to
+        `potion_use_hp_mean` via a new env counter -- it reads the SAME
+        `run.hp_ratio` observation feature the policy already sees each
+        decision (see `hp_ratio_sum`'s docstring), so both sides of the gate
+        are the identical hp/max_hp ratio, just sampled at different
+        moments (every decision vs. potion-drink decisions only). 0.0 if the
+        report's env exposed no such feature (e.g. a hand-built report in a
+        test, or a non-run env)."""
+        steps = sum(self.hp_ratio_steps)
+        return sum(self.hp_ratio_sum) / steps if steps else 0.0
+
+    @property
     def card_take_counts(self) -> dict[str, tuple[int, int]]:
         """card class name -> (offered, taken), most-offered first."""
         return {name: (count, self.card_take_counts_raw.get(name, 0))
                 for name, count in sorted(self.card_offer_counts.items(),
                                           key=lambda kv: (-kv[1], kv[0]))}
+
+    @property
+    def deck_histogram(self) -> list[tuple[str, str, int, float, float]]:
+        """``(rarity, card, copies, share_of_rarity, copies_per_run)`` rows.
+
+        Rarity blocks come out in COMMON/UNCOMMON/RARE order (the drop-tier
+        order a reader expects, not the dict's insertion order); inside a
+        block, cards descend by copies with ties broken on name so the export
+        is deterministic.
+
+        ``share_of_rarity`` is pooled over episodes like every other rate on
+        this class -- copies / that rarity's total copies. ``copies_per_run``
+        divides by ``episodes``; 0.0 rather than a ZeroDivisionError on a
+        report built with no episodes.
+        """
+        order = ("common", "uncommon", "rare")
+        rows: list[tuple[str, str, int, float, float]] = []
+        for rarity in order:
+            cards = self.deck_rarity_counts.get(rarity)
+            if not cards:
+                continue
+            total = sum(cards.values())
+            for name, copies in sorted(cards.items(), key=lambda kv: (-kv[1], kv[0])):
+                rows.append((
+                    rarity,
+                    name,
+                    copies,
+                    copies / total if total else 0.0,
+                    copies / self.episodes if self.episodes else 0.0,
+                ))
+        return rows
 
     @property
     def return_histogram(self) -> dict[float, int]:
@@ -459,6 +560,7 @@ def evaluate_run(
     upgrades: list[int] = []
     removes: list[int] = []
     elites_won: list[int] = []
+    elites_fought: list[int] = []
     potions_obtained: list[int] = []
     potions_used: list[int] = []
     potions_used_elite: list[int] = []
@@ -468,8 +570,18 @@ def evaluate_run(
     potion_use_hp: list[float] = []
     relics: list[int] = []
     hp_lost: list[int] = []
+    hp_ratio_sum: list[float] = []
+    hp_ratio_steps: list[int] = []
     card_offer_counts: dict[str, int] = {}
     card_take_counts: dict[str, int] = {}
+    deck_rarity_counts: dict[str, dict[str, int]] = {}
+
+    # `mean_hp_overall`'s proxy signal (v8 s7 gate): the "run.hp_ratio" slot
+    # of the observation the env already hands the policy each decision --
+    # located once per env instance via its own layout, not a new env
+    # counter. None on any env that doesn't expose one (e.g. a hand-rolled
+    # test double), so the sampling below just no-ops.
+    hp_ratio_slice = getattr(getattr(env, "_layout", None), "f_slices", {}).get("run.hp_ratio")
 
     for ep in range(episodes):
         obs, info = env.reset(seed=seed + ep)
@@ -477,8 +589,13 @@ def evaluate_run(
         max_act = int(info.get("act", 0))
         steps = 0
         total_reward = 0.0
+        hp_ratio_sum_ep = 0.0
+        hp_ratio_steps_ep = 0
         terminated = truncated = False
         while not (terminated or truncated):
+            if hp_ratio_slice is not None:
+                hp_ratio_sum_ep += float(obs["f"][hp_ratio_slice][0])
+                hp_ratio_steps_ep += 1
             mask = env.action_masks()
             action = int(policy(env, obs, mask))
             if not mask[action]:
@@ -490,6 +607,8 @@ def evaluate_run(
             max_floor = max(max_floor, int(info.get("floor", 0)))
             max_act = max(max_act, int(info.get("act", 0)))
 
+        hp_ratio_sum.append(hp_ratio_sum_ep)
+        hp_ratio_steps.append(hp_ratio_steps_ep)
         floors.append(max_floor)
         acts.append(max_act)
         victories.append(bool(info.get("is_success", False)))
@@ -511,6 +630,7 @@ def evaluate_run(
         upgrades.append(int(info.get("ep_upgrades", 0)))
         removes.append(int(info.get("ep_removes", 0)))
         elites_won.append(int(info.get("ep_elites_won", 0)))
+        elites_fought.append(int(info.get("ep_elites_fought", 0)))
         potions_obtained.append(int(info.get("ep_potions_obtained", 0)))
         potions_used.append(int(info.get("ep_potions_used", 0)))
         potions_used_elite.append(int(info.get("ep_potions_used_elite", 0)))
@@ -524,6 +644,10 @@ def evaluate_run(
             card_offer_counts[name] = card_offer_counts.get(name, 0) + int(count)
         for name, count in info.get("ep_card_take_ids", {}).items():
             card_take_counts[name] = card_take_counts.get(name, 0) + int(count)
+        for rarity, cards in info.get("ep_final_deck", {}).items():
+            bucket = deck_rarity_counts.setdefault(rarity, {})
+            for name, count in cards.items():
+                bucket[name] = bucket.get(name, 0) + int(count)
 
     return RunEvalReport(
         episodes=episodes,
@@ -545,6 +669,7 @@ def evaluate_run(
         upgrades=tuple(upgrades),
         removes=tuple(removes),
         elites_won=tuple(elites_won),
+        elites_fought=tuple(elites_fought),
         potions_obtained=tuple(potions_obtained),
         potions_used=tuple(potions_used),
         potions_used_elite=tuple(potions_used_elite),
@@ -554,8 +679,11 @@ def evaluate_run(
         potion_use_hp=tuple(potion_use_hp),
         relics=tuple(relics),
         hp_lost=tuple(hp_lost),
+        hp_ratio_sum=tuple(hp_ratio_sum),
+        hp_ratio_steps=tuple(hp_ratio_steps),
         card_offer_counts=card_offer_counts,
         card_take_counts_raw=card_take_counts,
+        deck_rarity_counts=deck_rarity_counts,
     )
 
 
@@ -566,13 +694,20 @@ EPISODE_CSV_FIELDS = ("policy", "seed", "floor", "act", "win", "truncated",
                       "hp_left", "decisions", "ep_return", "end_turns",
                       "energy_unspent", "card_offers", "card_takes",
                       "rest_visits", "rest_heals", "rest_upgrades",
-                      "upgrades", "removes", "elites",
+                      "upgrades", "removes", "elites", "elites_fought",
                       "potions_got", "potions_used",
                       "potions_used_elite", "potions_used_boss",
                       "potions_used_normal", "potions_expired",
-                      "potion_use_hp", "relics", "hp_lost")
+                      "potion_use_hp", "relics", "hp_lost",
+                      # v8 s7 gate ("mean hp overall" proxy, see
+                      # RunEvalReport.mean_hp_overall): mean run.hp_ratio
+                      # over this episode's decisions.
+                      "hp_ratio_mean")
 
 CARDS_CSV_FIELDS = ("policy", "card", "offered", "taken", "take_rate")
+
+DECK_CSV_FIELDS = ("policy", "rarity", "card", "copies", "share_of_rarity",
+                   "copies_per_run")
 
 HIST_CSV_FIELDS = ("policy", "ep_return", "count", "freq")
 
@@ -645,6 +780,7 @@ def write_run_csv(
                     report.upgrades[i] if report.upgrades else 0,
                     report.removes[i] if report.removes else 0,
                     report.elites_won[i] if report.elites_won else 0,
+                    report.elites_fought[i] if report.elites_fought else 0,
                     report.potions_obtained[i] if report.potions_obtained else 0,
                     report.potions_used[i] if report.potions_used else 0,
                     report.potions_used_elite[i] if report.potions_used_elite else 0,
@@ -654,6 +790,8 @@ def write_run_csv(
                     report.potion_use_hp[i] if report.potion_use_hp else 0.0,
                     report.relics[i] if report.relics else 0,
                     report.hp_lost[i] if report.hp_lost else 0,
+                    (report.hp_ratio_sum[i] / report.hp_ratio_steps[i]
+                     if report.hp_ratio_steps and report.hp_ratio_steps[i] else 0.0),
                 ])
 
     with open(hist_path, "w", newline="") as fh:
@@ -680,6 +818,38 @@ def write_cards_csv(
             for card, (offered, taken) in report.card_take_counts.items():
                 rate = round(taken / offered, 6) if offered else 0.0
                 writer.writerow([name, card, offered, taken, rate])
+
+    if hasattr(path_or_file, "write"):
+        _write(path_or_file)
+    else:
+        with open(path_or_file, "w", newline="") as fh:
+            _write(fh)
+
+
+def write_deck_csv(
+    path_or_file, rows: Sequence[tuple[str, RunEvalReport]]
+) -> None:
+    """Final-deck rarity census: one row per (policy, rarity, card).
+
+    Rarity blocks in COMMON/UNCOMMON/RARE order, cards descending by copies
+    inside each block (see `RunEvalReport.deck_histogram`) -- so each block
+    reads as its own histogram and the whole file pivots in a spreadsheet.
+    Starter, colorless, curse and quest cards were filtered out upstream in
+    `sts2_rl.deck_stats`, and upgraded copies are folded into their base card.
+
+    ``copies_per_run`` and ``share_of_rarity`` are pooled over ALL episodes
+    including short ones, so a single long run contributes more copies than
+    several early deaths and can dominate the profile.
+
+    ``path_or_file`` is a filesystem path or an open text file, matching
+    `write_cards_csv`."""
+    def _write(fh) -> None:
+        writer = csv.writer(fh)
+        writer.writerow(DECK_CSV_FIELDS)
+        for name, report in rows:
+            for rarity, card, copies, share, per_run in report.deck_histogram:
+                writer.writerow([name, rarity, card, copies,
+                                 round(share, 6), round(per_run, 6)])
 
     if hasattr(path_or_file, "write"):
         _write(path_or_file)

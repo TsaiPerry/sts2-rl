@@ -286,11 +286,8 @@ class GamblersBrew(Potion):
         if not chosen:
             return
         # GamblersBrew.cs:27 is literally `CardCmd.DiscardAndDraw(picked,
-        # picked.Count)`. This loop used to be open-coded here, and it fired
-        # `AfterCardDiscarded` BEFORE the append where C# appends first
-        # (CardCmd.cs:192-194) — the opposite of the way `relics/
-        # gambling_chip.py` open-coded the same command. It also had no Sly
-        # tail. creature_card_cmds/step50 + step51.
+        # picked.Count)`; C# appends to the draw pile before firing
+        # `AfterCardDiscarded` (CardCmd.cs:192-194).
         from .cmds import CardCmd
         CardCmd.discard_and_draw(ctx.hooks, player, chosen, len(chosen))
 
@@ -533,10 +530,7 @@ class FoulPotion(Potion):
         The room decides which: at a real shop the merchant is driven off
         (NMerchantRoom.FoulPotionThrown) and the thrower gains GoldVar(100);
         in the Fake Merchant event the potion instead exposes the stall and
-        starts that fight (`fakeMerchant.FoulPotionThrown(this)`). The sim used
-        to run the shop arm unconditionally, which was harmless only while the
-        potion could be drunk anywhere — `passes_custom_usability_check` now
-        admits the event room too, so the arm has to be picked properly.
+        starts that fight (`fakeMerchant.FoulPotionThrown(this)`).
         """
         event = getattr(run, "current_event", None)
         if event is not None and event.id == "fake_merchant":
@@ -555,8 +549,7 @@ class SkillPotion(Potion):
     choose-a-card screen; the pick is SetToFreeThisTurn and added to hand.
     Parity draws the three off the CombatCardGeneration stream (game
     UnstableShuffle) and defers the pick to the recording's
-    `SelectCardFromScreen`; legacy adds the first candidate (the RL agent's own
-    choice is unmodeled — the potion was an inert placeholder before)."""
+    `SelectCardFromScreen`; legacy adds the first candidate."""
 
     id = "skill_potion"
     name = "Skill Potion"
@@ -1095,11 +1088,9 @@ class DistilledChaos(Potion):
 
     def use(self, ctx: CombatCtx, target: Creature | None = None) -> None:
         # One statement in the source, like Cascade's and Havoc's: the whole
-        # OnUse is `CardPileCmd.AutoPlayFromDrawPile(...)`. The inline
-        # reimplementation this replaces parked its phase-1 picks in NO pile
-        # (C# parks them in `PileType.Play`, CardPileCmd.cs:954) and broke on
-        # `combat.is_over` where C# breaks only on the owner's death (:958).
-        # Round 13, R5 — creature_card_cmds/step99's last residue.
+        # OnUse is `CardPileCmd.AutoPlayFromDrawPile(...)`. Phase-1 picks sit
+        # in `PileType.Play` (CardPileCmd.cs:954); the loop breaks only on the
+        # owner's death (:958), not on combat.is_over.
         from .cmds import CardPileCmd
         CardPileCmd.auto_play_from_draw_pile(
             ctx.hooks, ctx.player, self.CARDS, position="top",
@@ -1333,9 +1324,7 @@ class EntropicBrew(Potion):
 
     `CreateRandomPotionOutOfCombat` is deliberate even mid-combat
     (EntropicBrew.cs:23), so the three `CanBeGeneratedInCombat=false` potions
-    (Fairy in a Bottle, Fruit Juice, Regen Potion) ARE reachable from the brew
-    — the legacy arm used to call the in-combat factory, which filters exactly
-    those three and picks uniformly instead of rolling a rarity."""
+    (Fairy in a Bottle, Fruit Juice, Regen Potion) ARE reachable from the brew."""
 
     id = "entropic_brew"
     name = "Entropic Brew"
@@ -1450,9 +1439,7 @@ def _choose_a_card_screen(ctx: CombatCtx, cards: list) -> None:
     caller's `if (cardModel != null)` means declining adds nothing. Parity
     defers the pick to the recording's `SelectCardFromScreen`; the legacy arm
     resolves it inline through `CombatState.select_cards`, so the installed
-    selector is the policy (it may return [] to take the skip). The legacy arm
-    used to take `cards[0]` unconditionally, so the other two candidates did
-    not exist and the screen could never be declined.
+    selector is the policy (it may return [] to take the skip).
     """
     combat = ctx.combat
     combat.offer_screen_selection(cards)
@@ -1460,14 +1447,11 @@ def _choose_a_card_screen(ctx: CombatCtx, cards: list) -> None:
         return
     # `Selector.GetSelectedCards(cards, 0, 1)` + `ShowScreen(..., canSkip:
     # true)` (CardSelectCmd.cs:230,239): MinSelect 0, MaxSelect 1. The
-    # `_optional` purpose is what puts the decline in front of a driver-mediated
-    # policy (driver.SKIPPABLE_PURPOSES); `min_select=0` is what lets the
-    # selectorless engine default reach it. Toolbox keeps the plain
-    # "choose_a_card" purpose — its screen forbids the decline. `min_select=0`
-    # already keeps `require_manual_confirmation` true here (0 != count 1), so
-    # `has_shortcut=False` is redundant today, but FromChooseACardScreen has no
-    # shortcut in C# at all (CardSelectCmd.cs:216-261) — pass it explicitly so
-    # this doesn't rely on that coincidence.
+    # `_optional` purpose puts the decline in front of a driver-mediated
+    # policy (driver.SKIPPABLE_PURPOSES); Toolbox keeps the plain
+    # "choose_a_card" purpose, whose screen forbids the decline.
+    # `has_shortcut=False` matches FromChooseACardScreen, which has no
+    # shortcut in C# (CardSelectCmd.cs:216-261).
     picked = combat.select_cards(
         "choose_a_card_optional", cards, 1, min_select=0, has_shortcut=False)
     combat.resolve_screen_selection(cards.index(picked[0]) if picked else None)

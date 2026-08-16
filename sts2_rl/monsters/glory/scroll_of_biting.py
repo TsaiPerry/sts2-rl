@@ -42,10 +42,8 @@ class ScrollOfBiting(MachineMonster):
     max_hp_asc = 39          # ScrollOfBiting.cs:39 -- ToughEnemies
 
     def _chomp_dmg(self) -> int:
-        # getattr guard: test_monster_branch_audit._build_machine constructs
-        # via cls.__new__(cls) (no __init__, so no _hooks attribute at all)
-        # to inspect build_machine()'s pure branch structure -- base value
-        # there matches Monster.__init__'s own hooks=None convention.
+        # getattr guard: test_monster_branch_audit builds via cls.__new__(cls)
+        # (no __init__/_hooks) to inspect build_machine()'s branch structure.
         hooks = getattr(self, "_hooks", None)
         if hooks is None:
             return _CHOMP_DMG
@@ -122,9 +120,9 @@ class _ScrollsEncounter(Encounter):
         self._count = count
 
     def create_monsters(self, hooks: HookSystem, rng: random.Random, selection_rng=None) -> list[Monster]:
-        # Parity (ScrollsOfBiting{Weak,Normal}.cs:22-23): one
-        # `base.Rng.NextInt(3)` on the PER-ENCOUNTER Rng sets the first scroll's
-        # StarterMoveIdx. Legacy keeps the shared-rng draw.
+        # ScrollsOfBiting{Weak,Normal}.cs:22-23: one NextInt(3) on the
+        # per-encounter Rng sets the first scroll's StarterMoveIdx; legacy
+        # keeps the shared-rng draw.
         if selection_rng is not None:
             base = selection_rng.next_int(3)
         else:

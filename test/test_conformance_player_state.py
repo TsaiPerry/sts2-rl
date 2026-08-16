@@ -86,32 +86,9 @@ SEEDS = ["89U21BV1TZ", "933T39V18D",
 
 # Task 6 convergence gate. Two of the six seeds are IRONCLAD runs — the single
 # character this sim models (run.py: "This single-character sim is Ironclad";
-# start_run always grants burning_blood + ironclad_starting_deck()) — and BOTH
-# NOW PASS OUTRIGHT through act 2, so neither carries a mark any more. They
-# converged on 2026-08-03 when the two REPLAY-HARNESS bugs behind the act-2
-# wall were fixed:
-#
-#   1. `combat_card_db.py` reconstructed `NetCombatCardDb` ids post-draw
-#      instead of stamping them as cards were ADDED, so 89U's turn-1 generated
-#      cards (Blessed Antler's 3 Dazed into the draw pile at BeforeHandDraw,
-#      Vexing Puzzlebox's card into the hand after the draw) got the wrong ids
-#      and `PlayCard 26` resolved to a Dazed. 89U act-2 forced_combats 8 -> 5.
-#   2. `StableShuffle`'s stabilizing sort is `List<T>.Sort()`, an UNSTABLE
-#      introsort, and the sim used Python's stable `list.sort`. Two identical
-#      un-upgraded Forgotten Rituals came out of a 20-plus-card turn-4
-#      reshuffle in the opposite order from the game, so `PlayCard 12` named
-#      the twin still in the draw pile. Ported in `sts2_rl/dotnet_sort.py`;
-#      89U act-2 forced_combats 5 -> 0, and 933T's last force-win (its Test
-#      Subject boss) and its room-593 `Inferno+` mismatch went with it.
-#
-# Measured after both, three identical runs: both seeds reach the act-2 boss
-# with forced_combats=0, matching final-boundary HP/max-HP and no stream-counter
-# divergence; 933T39V18D also reaches zero per-command mismatches, and
-# 89U21BV1TZ reaches zero divergent floors under per-floor triage. (933T's
-# per-floor triage still flags floors 47/49 — that path runs resync ON, which
-# pins to floor-ENTRY snapshots and disagrees with this gate by construction;
-# see the queue's `resync_floors` open-work item.) Anything that reopens the
-# assertions below is a regression, which is what dropping the marks asserts.
+# start_run always grants burning_blood + ironclad_starting_deck()) — and both
+# reach the act-2 boss with forced_combats=0 and no HP/stream divergence.
+# Anything that reopens the assertions below is a regression.
 #
 # The other four seeds are DIFFERENT, un-ported characters (Regent / Silent /
 # Necrobinder / Defect). None of their starting cards or relics exist in the

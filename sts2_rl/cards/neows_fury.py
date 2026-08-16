@@ -34,13 +34,10 @@ class NeowsFuryCard(Card):
     card_type = CardType.ATTACK
     rarity = CardRarity.ANCIENT
     target_type = TargetType.ANY_ENEMY
-    # NeowsFury.cs:15 — `CanBeGeneratedInCombat => false`. The Ancient rarity
-    # already keeps this out of pool_card_ids's rarity clause, but
-    # CardModel.CanBeGeneratedInCombat (CardModel.cs:642) is the flag
-    # FilterForCombat actually reads regardless of rarity, so it is set
-    # explicitly here too — the same idiom as Feed / Hand of Greed / Hidden
-    # Gem (cards/feed.py, cards/colorless_attacks.py, cards/colorless_skills.py)
-    # — rather than relying on the rarity filter as an incidental proxy.
+    # NeowsFury.cs:15 — `CanBeGeneratedInCombat => false`. Set explicitly
+    # since FilterForCombat reads CardModel.CanBeGeneratedInCombat directly
+    # (CardModel.cs:642), not just rarity — same idiom as Feed / Hand of
+    # Greed / Hidden Gem.
     can_be_generated_in_combat = False
     exhausts = True
 
@@ -63,12 +60,10 @@ class NeowsFuryCard(Card):
         count = min(self._cards, room)
         if count <= 0:
             return
-        # NeowsFury.cs:39 — `new CardSelectorPrefs(prompt, 0, num)`, a genuine
-        # 0..num RANGE (RequireManualConfirmation derives true whenever
-        # MinSelect != MaxSelect, CardSelectorPrefs.cs:77), so the auto-select
-        # shortcut never fires here even with <= count candidates in the
-        # discard pile — the screen (or an installed selector/fallback) is
-        # always consulted, and confirming NONE is legal.
+        # NeowsFury.cs:39 — `CardSelectorPrefs(prompt, 0, num)` is a genuine
+        # 0..num range (RequireManualConfirmation whenever MinSelect !=
+        # MaxSelect), so the auto-select shortcut never fires; confirming
+        # NONE is legal.
         chosen = CardSelectCmd.from_pile(
             ctx.hooks, ctx.player.discard_pile, "from_discard",
             count=count, min_select=0,

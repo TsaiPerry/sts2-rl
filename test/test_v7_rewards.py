@@ -184,3 +184,90 @@ def test_default_kwargs_inert():
     assert env._reward_upgrade == 0.0
     assert env._reward_remove == 0.0
     assert env._reward_elite == 0.0
+
+
+def test_run_eval_report_deck_histogram():
+    from sts2_rl.evaluation import RunEvalReport
+
+    report = RunEvalReport(
+        episodes=2, floors=(5, 9), acts=(0, 0), victories=(False, False),
+        truncations=(False, False), hp_left=(0, 0), decisions=(10, 12),
+        deck_rarity_counts={
+            "rare": {"DemonFormCard": 1},
+            "common": {"AngerCard": 3, "ArmamentsCard": 1},
+            "uncommon": {"InflameCard": 2},
+        },
+    )
+    # Rarity blocks in COMMON/UNCOMMON/RARE order (not the dict's insertion
+    # order, not alphabetical); cards descending by copies inside a block.
+    assert report.deck_histogram == [
+        ("common", "AngerCard", 3, 0.75, 1.5),
+        ("common", "ArmamentsCard", 1, 0.25, 0.5),
+        ("uncommon", "InflameCard", 2, 1.0, 1.0),
+        ("rare", "DemonFormCard", 1, 1.0, 0.5),
+    ]
+
+    empty = RunEvalReport(
+        episodes=1, floors=(1,), acts=(0,), victories=(False,),
+        truncations=(False,), hp_left=(0,), decisions=(1,))
+    assert empty.deck_histogram == []
+
+
+def test_deck_histogram_ties_break_on_card_name():
+    from sts2_rl.evaluation import RunEvalReport
+
+    report = RunEvalReport(
+        episodes=1, floors=(1,), acts=(0,), victories=(False,),
+        truncations=(False,), hp_left=(0,), decisions=(1,),
+        deck_rarity_counts={"common": {"ZzzCard": 2, "AaaCard": 2}},
+    )
+    assert [row[1] for row in report.deck_histogram] == ["AaaCard", "ZzzCard"]
+
+
+def test_deck_histogram_zero_episodes_does_not_divide_by_zero():
+    from sts2_rl.evaluation import RunEvalReport
+
+    report = RunEvalReport(
+        episodes=0, floors=(), acts=(), victories=(), truncations=(),
+        hp_left=(), decisions=(),
+        deck_rarity_counts={"common": {"AngerCard": 3}},
+    )
+    assert report.deck_histogram == [("common", "AngerCard", 3, 1.0, 0.0)]
+
+
+def test_write_deck_csv():
+    import io
+
+    from sts2_rl.evaluation import RunEvalReport, write_deck_csv
+
+    report = RunEvalReport(
+        episodes=2, floors=(5, 9), acts=(0, 0), victories=(False, False),
+        truncations=(False, False), hp_left=(0, 0), decisions=(10, 12),
+        deck_rarity_counts={
+            # common total is 6 (3+2+1), not a power of 2/5, so BodySlamCard's
+            # and ArmamentsCard's shares are repeating decimals -- this pins
+            # the round(x, 6) behavior (0.75/0.25-style fixtures can't
+            # distinguish round(x, 6) from round(x, 2)).
+            "common": {"AngerCard": 3, "ArmamentsCard": 1, "BodySlamCard": 2},
+            "rare": {"DemonFormCard": 1},
+        },
+    )
+    buf = io.StringIO()
+    write_deck_csv(buf, [("p", report)])
+    rows = buf.getvalue().strip().splitlines()
+    assert rows[0] == "policy,rarity,card,copies,share_of_rarity,copies_per_run"
+    # common total = 6; sorted by copies desc, ties on name.
+    assert rows[1] == "p,common,AngerCard,3,0.5,1.5"
+    assert rows[2] == "p,common,BodySlamCard,2,0.333333,1.0"
+    # 1/6 = 0.1666666...; pins the round(x, 6) precision, not round(x, 2).
+    assert rows[3] == "p,common,ArmamentsCard,1,0.166667,0.5"
+    assert rows[4] == "p,rare,DemonFormCard,1,1.0,0.5"
+
+    # A report with no census writes the header and nothing else.
+    empty = RunEvalReport(
+        episodes=1, floors=(1,), acts=(0,), victories=(False,),
+        truncations=(False,), hp_left=(0,), decisions=(1,))
+    buf2 = io.StringIO()
+    write_deck_csv(buf2, [("p", empty)])
+    assert buf2.getvalue().strip().splitlines() == [
+        "policy,rarity,card,copies,share_of_rarity,copies_per_run"]

@@ -103,8 +103,6 @@ class Affliction:
 
     def can_afflict(self, card: "Card") -> bool:
         """AfflictionModel.CanAfflict (AfflictionModel.cs:190-205).
-        creature_card_cmds/N2 + step65 — `CardCmd.afflict` (cmds.py)
-        previously consulted no such predicate at all.
 
         The `CanAfflictUnplayableCards` clause (AfflictionModel.cs:196-199)
         is not modeled: the sim has no Unplayable-keyword surface on `Card`,

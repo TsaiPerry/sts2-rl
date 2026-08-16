@@ -4,17 +4,14 @@ import random
 
 from .base import Card, CardRarity, CardType, make_card, _CARD_CLASSES
 
-# The implemented portion of the Ironclad card pool (IroncladCardPool.cs), in
-# the game's exact GenerateAllCards() declaration order (alphabetical by C#
-# class name). This ORDER is parity-critical: reward/transform generation does
+# Ironclad card pool (IroncladCardPool.cs), in the game's exact
+# GenerateAllCards() declaration order (alphabetical by C# class name).
+# ORDER IS PARITY-CRITICAL: reward/transform generation does
 # `Rng.NextItem(pool.Where(rarity == r))`, indexing into the rarity-filtered
-# candidate list *in pool order* — a different order picks a different card for
-# the same RNG draw. The game's 87-card list minus the two cards
-# CardFactory.FilterForPlayerCount removes in single player (Tank, Demonic
-# Shield), which are therefore never in the single-player candidate set.
-# Basics (Strike/Defend/Bash) and Ancients (Break/Corruption) stay in the list
-# for completeness but are filtered out of generation (CardFactory.FilterForCombat
-# / the reward rarity roll). Tokens/statuses/curses are not pool cards.
+# list in pool order. 87-card list minus Tank/Demonic Shield (removed by
+# CardFactory.FilterForPlayerCount in single player). Basics/Ancients stay for
+# completeness but are filtered out of generation; tokens/statuses/curses
+# are not pool cards.
 IRONCLAD_POOL: tuple[str, ...] = (
     "aggression", "anger", "armaments", "ashen_strike", "barricade", "bash",
     "battle_trance", "blood_wall", "bloodletting", "bludgeon", "body_slam",
@@ -35,13 +32,10 @@ IRONCLAD_POOL: tuple[str, ...] = (
 )
 
 
-# The Colorless card pool (ColorlessCardPool.cs), in the source's order,
-# minus the 11 multiplayer-only cards (Beacon of Hope, Believe in You,
-# Coordinate, Gang Up, Huddle Up, Intercept, Knockdown, Lift, Mimic, Rally,
-# Tag Team) that CardFactory.FilterForPlayerCount removes in single player —
-# the same treatment as Ironclad's Tank / Demonic Shield. Colorless cards
-# are only Uncommon or Rare; the shop's two Colorless slots and transforms
-# of Event/Ancient/Token/Quest cards draw from here.
+# Colorless card pool (ColorlessCardPool.cs), source order, minus the 11
+# multiplayer-only cards CardFactory.FilterForPlayerCount removes (same
+# treatment as Ironclad's Tank/Demonic Shield). Uncommon/Rare only; feeds
+# the shop's two Colorless slots and Event/Ancient/Token/Quest transforms.
 COLORLESS_POOL: tuple[str, ...] = (
     "alchemize", "anointed", "automation", "beat_down", "bolas", "calamity",
     "catastrophe", "dark_shackles", "discovery", "dramatic_entrance",
@@ -247,15 +241,11 @@ def get_distinct_for_combat_parity(
     return [make_card(card_id) for card_id in ids[:count]]
 
 
-# The status card pool (StatusCardPool.cs:19-34), in the source's declaration
-# order — which is NOT alphabetical: Wither sits between Infection and Slimed.
-# The order is parity-critical for the same reason the character pools' is: a
-# transform indexes into the filtered candidate list IN POOL ORDER, so
-# alphabetizing moves Wither four slots and shifts Slimed/Soot/Toxic/Void down
-# one each. Debris and Void are not ported yet, which shifts the indices after
-# them on its own — a separate, unfiled content gap, not this ordering one.
-# FranticEscape and Soot are kept here for completeness and filtered out of
-# generation by CanBeGeneratedInCombat, exactly as in the game.
+# Status card pool (StatusCardPool.cs:19-34), source declaration order —
+# NOT alphabetical (Wither sits between Infection and Slimed). Order is
+# parity-critical: transforms index into the filtered list in pool order.
+# Debris/Void not ported yet (separate content gap). FranticEscape/Soot kept
+# for completeness, filtered out of generation by CanBeGeneratedInCombat.
 STATUS_POOL: tuple[str, ...] = (
     "beckon", "burn", "dazed", "frantic_escape", "infection", "wither",
     "slimed", "soot", "toxic", "wound",

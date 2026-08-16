@@ -138,9 +138,8 @@ def _overgrowth_rooms() -> ActRooms:
         # Game order: AllEncounters (Overgrowth.GenerateAllEncounters,
         # alphabetical-by-class) filtered by RoomType/IsWeak. The first-run
         # ApplyActDiscoveryOrderModifications lineup is `first_run_swaps`
-        # below; it applies to a zero-run PROFILE, not to a "tutorial mode" —
-        # `ShouldApplyTutorialModifications` is TRUE for ordinary play, which
-        # this comment used to have backwards.
+        # below; it applies to a zero-run PROFILE, not a "tutorial mode" —
+        # `ShouldApplyTutorialModifications` is TRUE for ordinary play.
         weak_keys=(
             "fuzzy_wurm_weak", "nibbits_weak", "shrinker_beetle_weak",
             "slimes_weak",

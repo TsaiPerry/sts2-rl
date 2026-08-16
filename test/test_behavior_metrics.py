@@ -173,17 +173,18 @@ def test_csv_has_behavior_metric_columns(tmp_path):
         upgrades=2.0, removes=1.0, elites=0.5, potions_got=1.5, potions_used=1.0,
         potions_used_elite=0.2, potions_used_boss=0.1, potions_used_normal=0.7,
         potions_expired=0.3, potion_use_hp=0.55, relics=0.8, hp_lost=12.5,
+        aux=0.02,
     ))
     with open(path) as fh:
         header, row = fh.read().strip().splitlines()
-    assert header.split(",")[-14:] == [
+    assert header.split(",")[-15:] == [
         "energy_unspent", "card_take",
         "upgrades", "removes", "elites", "potions_got", "potions_used",
         "potions_used_elite", "potions_used_boss", "potions_used_normal",
-        "potions_expired", "potion_use_hp", "relics", "hp_lost"]
-    assert row.split(",")[-14:] == [
+        "potions_expired", "potion_use_hp", "relics", "hp_lost", "aux"]
+    assert row.split(",")[-15:] == [
         "1.25", "0.4", "2.0", "1.0", "0.5", "1.5", "1.0",
-        "0.2", "0.1", "0.7", "0.3", "0.55", "0.8", "12.5"]
+        "0.2", "0.1", "0.7", "0.3", "0.55", "0.8", "12.5", "0.02"]
 
 
 # ── Rest sites: heal / upgrade share of visits ────────────────────────────────
@@ -440,16 +441,17 @@ def test_write_run_csv_exports_episode_and_histogram_tables(tmp_path):
                        "hp_left", "decisions", "ep_return", "end_turns",
                        "energy_unspent", "card_offers", "card_takes",
                        "rest_visits", "rest_heals", "rest_upgrades",
-                       "upgrades", "removes", "elites",
+                       "upgrades", "removes", "elites", "elites_fought",
                        "potions_got", "potions_used",
                        "potions_used_elite", "potions_used_boss",
                        "potions_used_normal", "potions_expired",
-                       "potion_use_hp", "relics", "hp_lost"]
+                       "potion_use_hp", "relics", "hp_lost",
+                       "hp_ratio_mean"]
     assert len(rows) == 1 + report.episodes
     assert rows[1] == ["ckpt.pt", "100", "17", "0", "0", "0", "0", "2",
                        "3.0", "2", "5.0", "2", "1", "3", "2", "1",
-                       "0", "0", "0", "0", "0",
-                       "0", "0", "0", "0", "0.0", "0", "0"]
+                       "0", "0", "0", "0", "0", "0",
+                       "0", "0", "0", "0", "0.0", "0", "0", "0.0"]
     assert rows[2][:8] == ["ckpt.pt", "101", "23", "1", "1", "0", "44", "3"]
 
     with open(hist_path) as fh:

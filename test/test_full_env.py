@@ -66,6 +66,7 @@ def _masked_rollout(env, seed, max_steps=500):
 # the "forgot to bump" case the old assert was blind to.
 _SCHEMA_FOR_WIDTHS = {
     (1677, 606): 7,
+    (1697, 606): 8,
 }
 
 
@@ -223,35 +224,3 @@ def test_win_gives_terminal_reward():
         if info.get("is_success"):
             return
     pytest.skip("no win in 20 seeds (random policy) — reward path still exercised")
-
-
-# ── Retired / relocated (see report for the full accounting) ────────────────
-#
-# - test_features_mode_is_smaller: DELETED. It pinned that card_obs="features"
-#   produced a smaller flat observation than "hybrid" (11473 vs 17873). That
-#   property is genuinely gone: v4's combat_obs_segments_i/f() are IDENTICAL
-#   for both card_obs values (an id is one int either way; only whether
-#   hand.ids' card_id column is PAD or real differs) — there is no longer a
-#   size difference to pin. The real remaining behavioral difference (features
-#   mode blanks the hand card id but keeps pile identity and row presence) is
-#   pinned by test_combat_obs_v4.py::
-#   test_card_obs_features_blanks_hand_card_id_but_keeps_pile_identity_and_row_presence.
-#
-# - test_obs_within_declared_space_at_reset: DELETED as a pure duplicate.
-#   test_combat_obs_v4.py::test_layout_self_consistency already asserts
-#   observation_space.contains(obs) and the f/i bounds at both reset() and
-#   step(), for both card_obs modes.
-#
-# - test_absolute_hp_encoding_in_player_vitals: DELETED as a pure duplicate.
-#   test_obs_pins.py::test_player_vitals_pins (rewritten for v4 in this same
-#   pass) pins the identical property — player.hp_ratio/hp_abs/max_hp_abs
-#   under a controlled dummy — more rigorously (fixed HP/damage instead of a
-#   live default encounter).
-#
-# - test_damage_matrix_alignment: DELETED, not because the property is gone
-#   but because it is now duplicated, more thoroughly, by
-#   test_combat_obs_v4.py::
-#   test_damage_matrix_cell_matches_decoded_action_with_a_dead_enemy_in_slot_0
-#   (which additionally exercises a dead enemy in slot 0 and cross-checks
-#   every cell against decode_combat_action). Keeping a second, divergent
-#   copy here is exactly what the project brief warns against.

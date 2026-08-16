@@ -56,35 +56,14 @@ def masked_random_episode(env, seed, max_steps=20_000):
 # ═════════════════════════════════════════════════════════════════════════
 
 def test_action_layout():
-    # v2: capacity-padded frozen vocabularies; v3: the shop's Colorless
-    # section (SHOP_CARD_SLOTS 5 → 7); v4: run.boss.identity +
-    # run.map.grid/meta (boss + whole-map visibility); v5: DecisionKind gained
-    # REWARD_RELIC (the take-or-skip relic offer, relic/_auto_keep), widening
-    # the leading phase segment; v6: the out-of-combat potion block appended
-    # to the ACTION layout (potion/_any_time_usage); v7 (T5a+T5b,
-    # entity-obs-schema phase 1): the flat float Box observation
-    # becomes the {"f", "i"} Dict contract, the SELECT_CARDS (card id,
-    # upgraded)-PAIR block (2*N_CARDS wide, one FIRST-MATCH action per pair)
-    # is replaced by a per-CANDIDATE-index block (MAX_SELECT_CANDIDATES
-    # wide, R4 — see run_env.py's `_sorted_candidate_order`), and
-    # MAX_POTION_SLOTS widens from 4 to 10 (the true worst-case belt: base 3
-    # + Phial Holster + Potion Belt + Alchemical Coffer, T5b Task A); v8
-    # (defect fix, 2026-08-02): the embedded combat block's enemy row grew
-    # by one float (full_env.OBS_SCHEMA_VERSION 4->5, StatusIntent's card
-    # count) without this version moving — this is the action layout's own
-    # pin, unaffected by that widening (it lives in the observation), but
-    # the version bump is recorded here for the ledger; v9 (R3, 2026-08-02):
-    # same shape of bump — the embedded combat block grew again (per-enemy
-    # intent history), again unaffecting this action-layout pin, again
-    # recorded here for the ledger; v10 (SpireBot schema audit, Task 4,
-    # 2026-08-04): pure version bump, zero width change (audit found no
-    # DROP/added rows in run v9 or combat v6->v7) — again unaffecting this
-    # action-layout pin; v11 (2026-08-07): REWARD_CARD_SLOTS 3->4, an
-    # OBSERVATION widening (Lasting Candy's appended option) that likewise
-    # leaves the action layout alone — the reward screen's options already
-    # lived in the 16-wide CHOICE block, which had the room all along. That
-    # was the whole defect: the action was legal, the observation was not.
-    assert RUN_OBS_SCHEMA_VERSION == 11
+    # RUN_OBS_SCHEMA_VERSION 12: {"f", "i"} Dict obs contract, SELECT_CARDS
+    # uses a per-CANDIDATE-index block (MAX_SELECT_CANDIDATES wide, see
+    # run_env.py's `_sorted_candidate_order`), MAX_POTION_SLOTS is the true
+    # worst-case belt (base 3 + Phial Holster + Potion Belt + Alchemical
+    # Coffer = 10). Recent version bumps (v8-v12) were observation-only
+    # widenings (combat enemy row, intent history, REWARD_CARD_SLOTS,
+    # glow_gold/block_preview_move) that don't affect this action layout.
+    assert RUN_OBS_SCHEMA_VERSION == 12
     # Combat block sized for the true worst-case belt: 1 + 10×6 + 10×6 = 121.
     assert N_COMBAT_ACTIONS == combat_action_count(MAX_POTION_SLOTS) == 121
     assert CHOICE_BASE == 121
@@ -376,3 +355,81 @@ def test_select_phase_masks_candidate_indices():
             if term or trunc:
                 break
     pytest.fail("no SELECT_CARDS phase reached in 40 seeds")
+
+
+def test_ep_final_deck_reported_at_episode_end_only():
+    """The deck census rides the same episode-end block as the ep_* tallies."""
+    env = STS2RunEnv()
+    env.reset(seed=0)
+    mid_info = {}
+    term = trunc = False
+    for _ in range(20_000):
+        mask = env.action_masks()
+        a = int(np.flatnonzero(mask)[0])
+        _, _, term, trunc, info = env.step(a)
+        if term or trunc:
+            break
+        mid_info = info
+    assert term or trunc, "episode never ended in 20k steps -- repin"
+    assert mid_info, "no mid-episode step was recorded -- episode ended on " \
+        "its first step, so the next assertion would pass vacuously"
+    # Mid-episode steps carry no census (it is an end-of-run measurement).
+    assert "ep_final_deck" not in mid_info
+    deck = info["ep_final_deck"]
+    assert isinstance(deck, dict)
+    assert set(deck) <= {"common", "uncommon", "rare"}
+    for cards in deck.values():
+        assert cards, "an emitted rarity must not be empty"
+        assert all(isinstance(k, str) and isinstance(v, int)
+                   for k, v in cards.items())
+    # Starters are excluded, so a first-legal run that dies early is empty.
+    assert "StrikeCard" not in {c for cards in deck.values() for c in cards}
+
+
+def test_deck_hist_writes_a_csv_next_to_the_others(tmp_path):
+    """`write_deck_csv` writes the expected header + row to a real path.
+
+    This exercises the writer itself (path-or-file handling, header, row
+    formatting) given a hand-built RunEvalReport -- it does NOT exercise
+    eval.py's ``f"{stem}.deck.csv"`` naming derivation or its
+    ``if deck_hist:`` CLI wiring, since it calls `write_deck_csv` directly
+    rather than going through eval.py."""
+    from sts2_rl.evaluation import RunEvalReport, write_deck_csv
+
+    report = RunEvalReport(
+        episodes=1, floors=(3,), acts=(0,), victories=(False,),
+        truncations=(False,), hp_left=(0,), decisions=(4,),
+        deck_rarity_counts={"common": {"AngerCard": 2}},
+    )
+    path = tmp_path / "out.deck.csv"
+    write_deck_csv(str(path), [("p", report)])
+    text = path.read_text().strip().splitlines()
+    assert text[0].startswith("policy,rarity,card")
+    assert text[1] == "p,common,AngerCard,2,1.0,2.0"
+
+
+def test_eval_cli_rejects_deck_hist_without_csv():
+    """--deck-hist has no output of its own, so it must not silently no-op."""
+    import subprocess
+    import sys
+
+    proc = subprocess.run(
+        [sys.executable, "eval.py", "runs/nonexistent.pt", "--env", "run",
+         "--deck-hist"],
+        capture_output=True, text=True)
+    assert proc.returncode != 0
+    assert "--deck-hist" in proc.stderr and "--csv" in proc.stderr
+
+
+def test_eval_cli_rejects_deck_hist_on_combat_env():
+    import subprocess
+    import sys
+
+    # No --csv here on purpose: with it, the shared run-scale-only loop would
+    # reject --csv first and this test would pass for the wrong reason.
+    proc = subprocess.run(
+        [sys.executable, "eval.py", "--env", "full", "--baselines",
+         "--deck-hist"],
+        capture_output=True, text=True)
+    assert proc.returncode != 0
+    assert "--deck-hist" in proc.stderr and "run/column" in proc.stderr

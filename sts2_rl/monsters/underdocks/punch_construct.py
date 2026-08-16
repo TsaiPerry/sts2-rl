@@ -47,13 +47,9 @@ class PunchConstruct(MachineMonster):
         starts_with_fast_punch: bool = False,
     ) -> None:
         self._starts_with_fast_punch = starts_with_fast_punch  # read by build_machine
-        # `PunchConstruct.StartingHpReduction` (PunchConstruct.cs:60-69) — a
-        # FIELD the encounter sets on the model, spent later by
-        # AfterAddedToRoom. Keeping it a field rather than applying it at
-        # construction is what makes the lifecycle right: the reduction is
-        # taken off the CURRENT HP the Niche roll has already assigned, where
-        # applying it in create_monsters put it before that roll, which then
-        # overwrote it (`_roll_parity_hp` sets hp = max_hp = rolled).
+        # `StartingHpReduction` (PunchConstruct.cs:60-69) is spent in AfterAddedToRoom,
+        # AFTER the Niche HP roll -- applying it earlier would get overwritten by
+        # `_roll_parity_hp` (hp = max_hp = rolled), so it stays a field until then.
         self.starting_hp_reduction = 0
         super().__init__(hooks, rng or random.Random())
         from ...cmds import PowerCmd

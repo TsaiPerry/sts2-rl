@@ -73,12 +73,10 @@ class Enchantment:
         inside the per-Replay loop, after the card's own OnPlay (:1931) and
         before Hook.AfterCardPlayed (:1959). It is not a hook.
 
-        The sim wired its two implementers to `before_card_played`, which is
-        wrong twice over: the position (a Corrupted Strike with Rupture 1 dealt
-        10 in the sim and 9 in the game, because the self-damage fired first
-        and Rupture's +1 Strength landed on the Strike) and the count (under
-        Throwing Axe the card is played twice and the game takes 4 self-damage
-        where the sim took 2).
+        Must fire per-Replay (not via `before_card_played`): wrong timing
+        misorders self-damage vs. Strength gain (Corrupted Strike+Rupture:
+        10 dmg vs game's 9) and wrong count under Throwing Axe (2 self-damage
+        vs game's 4).
         """
 
     def enchant_damage_additive(self, amount: int, props) -> int:
@@ -93,17 +91,22 @@ class Enchantment:
     def enchant_block_multiplicative(self, amount: int, props) -> float:
         return 1
 
+    def should_glow_gold(self, ctx, card: Card) -> bool:
+        """EnchantmentModel.ShouldGlowGold default (consulted as CardModel's
+        fallback, CardModel.cs:834-837). No enchantment in the game source
+        overrides it (src/Core/Models/Enchantments/*.cs has zero
+        ShouldGlowGold hits), so every enchantment uses this default."""
+        return False
+
     def modify_card_play_count(self, card: Card, target, count: int) -> int:
         """`EnchantmentModel.EnchantPlayCount` (EnchantmentModel.cs:456-459) —
         `virtual int EnchantPlayCount(int originalPlayCount) => originalPlayCount`.
 
         Not a hook: `CardModel.GetEnchantedReplayCount` (CardModel.cs:1129-1132)
-        calls it directly on `card.enchantment`. Exactly two enchantments
-        override it in the game (Glam.cs, Spiral.cs) and exactly two override
-        it here — but the sim shipped the overrides WITHOUT this default, so
-        every other enchantment raised AttributeError through
-        `Card.enchanted_replay_count`. Reachable in ordinary play: Hidden Gem's
-        eligibility filter (cards/colorless_skills.py:369) calls it on every
+        calls it directly on `card.enchantment`. Only Glam/Spiral override it;
+        this base default matters because `Card.enchanted_replay_count` is
+        called on every enchantment unconditionally — e.g. Hidden Gem's
+        eligibility filter (cards/colorless_skills.py:369) hits it for every
         card in hand."""
         return count
 
@@ -240,12 +243,10 @@ class SlitherEnchantment(Enchantment):
         if card is not self.card:
             return
         # Slither.cs:55-62 rolls on `Owner.RunState.Rng.CombatEnergyCosts.
-        # NextInt(4)`. The port used `combat._rng`, the shared combat Random, so a
-        # parity run both took a number off a stream the game never touches AND
-        # failed to advance CombatEnergyCosts — desyncing every later cost roll,
-        # Snecko Oil included. potions.py already uses `combat_rng.energy` for
-        # Snecko Oil, which is the SAME C# call. Legacy maps every accessor onto
-        # the one shared Random, so nothing changes for RL play.
+        # NextInt(4)` — must use `combat_rng.energy` (same stream Snecko Oil
+        # uses in potions.py), not the shared combat Random, or later cost
+        # rolls desync. Legacy maps every accessor onto one shared Random, so
+        # nothing changes for RL play.
         card.set_cost_this_combat(self.combat.combat_rng.energy.randrange(4))
 
 
@@ -310,15 +311,13 @@ class PerfectFitEnchantment(Enchantment):
     def modify_shuffle_order(self, player, cards: list,
                              is_initial_shuffle: bool) -> None:
         # PerfectFit.cs:10-16 — `if (!isInitialShuffle && cards.Contains(Card))
-        # { cards.Remove(Card); cards.Insert(0, Card); }`. The initial-shuffle
-        # early return is the source's, and the sim's list is top-at-END, so
-        # C#'s Insert(0) is an append here.
+        # { cards.Remove(Card); cards.Insert(0, Card); }`. Initial-shuffle
+        # early return is the source's; sim list is top-at-END, so C#'s
+        # Insert(0) is an append here.
         #
-        # This used to be `on_shuffle` = Hook.AfterShuffle, a DIFFERENT hook
-        # (CardPileCmd.cs:917, after the pile is rebuilt). The substitution
-        # worked for a lone enchanted card and broke for two, because which of
-        # two competing listeners lands its card on top is decided by DISPATCH
-        # ORDER — see HookSystem.modify_shuffle_order.
+        # Must be ModifyShuffleOrder, not Hook.AfterShuffle (CardPileCmd.cs:917)
+        # — with two competing enchantments, which one lands its card on top
+        # is decided by DISPATCH ORDER; see HookSystem.modify_shuffle_order.
         if is_initial_shuffle or self.card is None:
             return
         if self.card in cards:
@@ -398,16 +397,11 @@ class ImbuedEnchantment(Enchantment):
 
     def after_auto_pre_play_phase_entered(self, player) -> None:
         """Imbued.cs:19-25 — AfterAutoPrePlayPhaseEntered, guarded only by
-        `player == Card.Owner && TurnNumber <= 1`.
-
-        The sim carried an extra `self.card in player.hand` clause C# does not
-        have. That was survivable while the card could turn up in the opening
-        hand; once the turn-1 ShouldStartAtBottomOfDrawPile pass was ported
-        (turn_structure/G14) the card is guaranteed NOT to be in hand, and the
-        extra clause turned Imbued into a no-op. The bottom-of-pile pass exists
-        precisely SO the card is auto-played from the draw pile rather than
-        occupying an opening-hand slot — `CardCmd.AutoPlay` takes it from
-        whichever pile holds it.
+        `player == Card.Owner && TurnNumber <= 1`. Must NOT also require
+        `self.card in player.hand`: since the turn-1 bottom-of-pile pass
+        guarantees the card is NOT in hand, that extra clause would make
+        Imbued a no-op. `CardCmd.AutoPlay` takes the card from whichever pile
+        holds it.
         """
         if self.card is None or self.combat is None:
             return

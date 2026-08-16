@@ -39,3 +39,7 @@ class PactsEndCard(Card):
         if len(ctx.player.exhaust_pile) < self._cards:
             return
         DamageCmd.deal(ctx.hooks, ctx.resolve_target(target_idx), self._damage, dealer=ctx.player, card=self)
+
+    def _should_glow_gold_internal(self, ctx) -> bool:
+        # PactsEnd.cs:21-23: CanDealDamage = exhaust pile count >= Cards (3)
+        return len(ctx.player.exhaust_pile) >= self._cards

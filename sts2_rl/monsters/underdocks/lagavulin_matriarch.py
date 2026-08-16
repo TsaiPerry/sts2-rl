@@ -106,20 +106,13 @@ class LagavulinMatriarch(MachineMonster):
             return
         self.is_awake = True
         if stunned:
-            # AsleepPower.cs:33 — CreatureCmd.Stun(Owner, WakeUpMove,
-            # "SLASH_MOVE"): the id is the stun's FollowUpStateId, so she
-            # resumes at SLASH after the stunned turn rather than being moved
-            # there immediately.
+            # AsleepPower.cs:33 -- CreatureCmd.Stun(Owner, WakeUpMove, "SLASH_MOVE"):
+            # id is the stun's FollowUpStateId, so she resumes at SLASH after the stun.
             from ...cmds import CreatureCmd
             CreatureCmd.stun(self._hooks, self, next_move_key="SLASH_MOVE")
             return
-        # The natural wake touches the machine not at all: WakeUpMove
-        # (LagavulinMatriarch.cs:189-199) only flips IsAwake, and SLEEP_MOVE's
-        # follow-up is the SLEEP_BRANCH conditional whose second arm is
-        # `!HasPower<AsleepPower>` (LagavulinMatriarch.cs:168-174) — the next
-        # player-turn-start roll walks it to SLASH on its own. Force-setting
-        # SLASH here (the old roll-inside-the-move world's stand-in) now makes
-        # that roll transition SLASH -> DISEMBOWEL and eat her SLASH turn.
+        # Natural wake: WakeUpMove (LagavulinMatriarch.cs:189-199) only flips IsAwake;
+        # SLEEP_MOVE's SLEEP_BRANCH follow-up walks to SLASH on its own next turn.
 
     def _sleep(self, ctx: CombatCtx) -> None:
         pass

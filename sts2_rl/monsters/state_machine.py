@@ -120,13 +120,9 @@ class MonsterState:
         raise NotImplementedError
 
     def register_states(self, states: dict[str, MonsterState]) -> None:
-        # Every C# RegisterStates is `monsterStates.Add(Id, this)`
-        # (MonsterState.cs's three concretes: RandomBranchState.cs:171,
-        # MoveState.cs:74, ConditionalBranchState.cs:58) and Dictionary.Add
-        # THROWS on a duplicate key, so a monster whose graph reuses an id
-        # fails loudly at machine construction. A silent overwrite would let
-        # the second definition win and quietly redirect every follow_up
-        # aimed at the first.
+        # C# RegisterStates is `monsterStates.Add(Id, this)` and Dictionary.Add
+        # THROWS on a duplicate key (MoveState.cs:74 etc.) -- fail loudly here too
+        # rather than silently letting a reused id redirect earlier follow_ups.
         if self.id in states and states[self.id] is not self:
             raise ValueError(
                 f"duplicate state id {self.id!r} in the move graph: "
@@ -222,20 +218,13 @@ class RandomBranchState(MonsterState):
         max_times: int | None = None,
         cooldown: int = 0,
     ) -> None:
-        # RandomBranchState.cs's ten AddBranch overloads split into two
-        # families: the ones that take an explicit `MoveRepeatType repeatType`
-        # parameter all funnel into overload #1 (:46-51), which has NO
-        # maxRepeats slot and THROWS ArgumentException if repeatType is
-        # CanRepeatXTimes ("Use other constructor to specify number of
-        # repeats"); the ones that take `int maxRepeats` instead (#2/#3/#7/#9)
-        # always imply CanRepeatXTimes and never throw -- maxRepeats == 0 is
-        # legal there (a permanently-disabled branch, RandomBranchState.cs
-        # :144-147, step 21/G7 clause a, already ported below in
-        # `_effective_weight`). The sim has one keyword signature instead of
-        # ten overloads, so `max_times=None` (not supplied) is what
-        # distinguishes overload #1's illegal shape from a real, explicit
-        # maxRepeats of 0. A caller that means "disable forever" must say so:
-        # `max_times=0`.
+        # RandomBranchState.cs's ten AddBranch overloads split into two families:
+        # the `repeatType`-only overload (#1, :46-51) has no maxRepeats slot and
+        # THROWS on CanRepeatXTimes; the `maxRepeats`-taking overloads always imply
+        # CanRepeatXTimes and allow maxRepeats==0 (a permanently-disabled branch,
+        # see `_effective_weight`). This one keyword signature distinguishes the
+        # two by whether max_times was passed at all -- "disable forever" must be
+        # spelled explicitly as max_times=0.
         if repeat_type is MoveRepeatType.CAN_REPEAT_X_TIMES and max_times is None:
             raise ValueError(
                 f"add_branch({state.id!r}, ..., repeat_type=CAN_REPEAT_X_TIMES) "
@@ -253,15 +242,10 @@ class RandomBranchState(MonsterState):
         })
 
     def get_next_state(self, owner: MachineMonster, rng: random.Random) -> str | None:
-        # RandomBranchState.cs:115-127, including the all-zero-weights edge:
-        # `rng.NextFloat(0f)` (Rng.cs:145-164, min==max==0) does NOT throw --
-        # it burns a draw and returns 0f -- so `num` starts at 0 and the FIRST
-        # branch's `num -= 0f; num <= 0f` is true immediately. There is no
-        # C#-side special case for total-weight-zero; it resolves through the
-        # exact same loop as every other roll, landing on branch 0. Only a
-        # genuine fall-through (every branch's `num` still positive after
-        # subtracting all of them -- sequential float rounding) reaches the
-        # THROW at RandomBranchState.cs:127.
+        # RandomBranchState.cs:115-127: all-zero-weights is NOT special-cased --
+        # `rng.NextFloat(0f)` burns a draw and returns 0f, so branch 0 wins via the
+        # same loop as any other roll. Only real fall-through (float rounding
+        # leaves every branch's remainder positive) reaches the THROW at :127.
         machine = owner.machine
         weights = [self._effective_weight(b, machine) for b in self._branches]
         total = sum(weights)
@@ -411,12 +395,10 @@ class MonsterMoveStateMachine:
         return state
 
     def on_move_performed(self, move: MoveState) -> None:
-        # MonsterModel.PerformMove (MonsterModel.cs:434-445) awaits
-        # MoveState.PerformMove — which sets _performedAtLeastOnce, lifting a
-        # MustPerformOnceBeforeTransitioning pin — and only then calls
-        # OnMovePerformed, so the two always land together. Marking it here as
-        # well keeps the machine's own bookkeeping complete for callers that
-        # report a performed move without routing through MoveState.perform.
+        # MonsterModel.PerformMove (MonsterModel.cs:434-445) always sets
+        # _performedAtLeastOnce before calling OnMovePerformed; mirror that here
+        # too for callers that report a performed move without going through
+        # MoveState.perform.
         move._performed_at_least_once = True
         self._performed_first_move = True
 
@@ -481,12 +463,9 @@ class MachineMonster(Monster):
 
     @machine.setter
     def machine(self, value: MonsterMoveStateMachine) -> None:
-        # MonsterModel.MoveStateMachine's setter (MonsterModel.cs:222-237)
-        # THROWS InvalidOperationException if a machine is already set --
-        # ResetStateMachine (MonsterModel.cs:389-392) is the only sanctioned
-        # way to clear one first. A bare Python attribute rebind is legal and
-        # would silently replace a live machine mid-combat, losing its
-        # state_log and current state where the game refuses outright.
+        # MonsterModel.MoveStateMachine's setter (MonsterModel.cs:222-237) THROWS
+        # if a machine is already set; only reset_state_machine() may clear one
+        # first. Guard against a silent Python rebind losing state_log mid-combat.
         if self._machine is not None:
             raise RuntimeError(
                 f"{type(self).__name__}'s move state machine has already "

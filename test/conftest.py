@@ -20,9 +20,22 @@ from __future__ import annotations
 import pytest
 
 from sts2_rl.obs import reset_warned_segments
+from sts2_rl.run_env import DECK_OVERFLOW_LOG_ENV, reset_deck_overflow_latch
 
 
 @pytest.fixture(autouse=True)
 def _reset_obs_warned_segments_latch():
     reset_warned_segments()
     yield
+
+
+@pytest.fixture(autouse=True)
+def _deck_overflow_log_to_tmp(tmp_path, monkeypatch):
+    """Same class of trap as the warning latch, plus a side effect: the
+    deck-overflow dump is process-latched AND writes a file, so without this
+    the first overflowing test would both steal the dump from every later
+    test and drop ``deck_overflow.log`` in the repo root."""
+    reset_deck_overflow_latch()
+    monkeypatch.setenv(DECK_OVERFLOW_LOG_ENV, str(tmp_path / "deck_overflow.log"))
+    yield
+    reset_deck_overflow_latch()

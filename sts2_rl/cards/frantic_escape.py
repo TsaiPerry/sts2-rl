@@ -44,22 +44,15 @@ class FranticEscapeCard(Card):
             sandpit = enemy.powers.get("sandpit")
             if sandpit is not None and not enemy.is_gone:
                 # PowerCmd.modify_amount is the decrement-only path (cmds.py):
-                # it deliberately skips the ModifyPowerAmountGiven/Received
-                # chain and takes no applier. Safe here only because every
-                # current listener on that chain is domain-disjoint from
-                # Sandpit — UnsettlingLamp gates on DEBUFF power_type, Ruined
-                # Helmet gates on `power_cls is StrengthPower`, and Vicious
-                # (on_power_amount_changed, which modify_amount DOES still
-                # fire) gates on `name == "vulnerable"` — and Sandpit is none
-                # of those. A future listener sensitive to Buff power amounts
-                # in general would need this call reconsidered.
+                # skips ModifyPowerAmountGiven/Received and takes no applier.
+                # Safe only because current listeners on that chain
+                # (UnsettlingLamp/Ruined Helmet/Vicious) are all
+                # domain-disjoint from Sandpit; revisit if a future listener
+                # gates on Buff power amounts generally.
                 PowerCmd.modify_amount(ctx.hooks, sandpit, 1)
                 break
-        # AddThisCombat(1): permanent for this combat, not cleared at turn end.
-        # FranticEscape.cs:45 is `EnergyCost.AddThisCombat(1)`, a
-        # LocalCostModifier with EndOfCombat expiration — so the card is back
-        # to cost 1 in the NEXT combat. Mutating `_energy_cost` changed the
-        # card's BASE cost, and `reset_combat_state` does not re-run
-        # `_init_vars`, so a Frantic Escape played twice and carried into the
-        # next fight started it at 3.
+        # FranticEscape.cs:45 `EnergyCost.AddThisCombat(1)` is a
+        # LocalCostModifier with EndOfCombat expiration (back to cost 1 next
+        # combat). Use set_cost_this_combat, not `_energy_cost` (that would
+        # mutate the base cost, which `reset_combat_state` never re-derives).
         self.set_cost_this_combat(self.energy_cost + 1)

@@ -109,20 +109,12 @@ def model_obs_segments(spec: ModelSpec) -> list[tuple[str, int]]:
 #: ``entity`` unsafe -- see ``make_model``): combat's Dict rewrite landed at
 #: schema 4, run-scale's (run/column share one layout) at schema 7.
 #:
-#: This used to be a ``frozenset({4, 7})`` literal enumerating "the known-bad
-#: versions" -- the exact shape of guard this project keeps getting bitten
-#: by: it checked membership in a fixed set, so the very next schema bump
-#: (5, 8, ...) fell outside the set and the refusal went silent without a
-#: single line changing at the call site. A checkpoint-format schema number
-#: can only go up (``check_checkpoint``'s schema check refuses anything that
-#: doesn't match exactly, and nothing in this codebase ever decrements
-#: ``OBS_SCHEMA_VERSION``/``RUN_OBS_SCHEMA_VERSION``), so "is this env still
-#: on the unsafe Dict generation" is exactly "is its current schema version
-#: >= the version that generation started at" -- a threshold, not a
-#: membership test. Every later bump is automatically >= the threshold, so
-#: the refusal cannot lapse just because a number changed elsewhere;
-#: ``test_make_model_refuses_future_v4_generation_schema`` in test_models.py
-#: pins that property directly by simulating a future bump.
+#: A threshold, not a membership set: schema numbers only ever increase
+#: (``check_checkpoint`` refuses any non-exact match, and nothing decrements
+#: ``OBS_SCHEMA_VERSION``/``RUN_OBS_SCHEMA_VERSION``), so ">= threshold" stays
+#: correct across future bumps where a fixed set of "known-bad versions"
+#: would silently stop matching. Pinned by
+#: ``test_make_model_refuses_future_v4_generation_schema`` in test_models.py.
 _V4_GENERATION_MIN_SCHEMA = {
     "combat": 4,
     "run": 7,
@@ -155,18 +147,14 @@ def make_model(spec: ModelSpec, obs_dim: tuple[int, int], n_actions: int):
     ``"entity"``).
 
     ``mlp``/``entity`` are refused outright against the v4/v7 ``{f, i}``
-    generation (final fix-pass review item 2): ``models._as_flat`` feeds
-    both of them ``concat(f, i.float())`` with no normalization, so
-    unnormalized vocabulary ids up to 640 sit beside floats bounded in
-    ``[0,1]`` going into an orthogonal-init ``Linear`` — measured, not just
-    "degenerate": the id magnitudes dwarf the ~1400 genuinely numeric
-    features. This project keeps no old-vs-new comparison baseline by
-    explicit decision, so there is no legitimate reason left to build either
-    architecture against these envs — the same "must raise, not silently
-    degrade" rule already applied to an unrecognised ``arch`` name. The
-    classes themselves are untouched: they stay correct for the frozen flat
-    contract, exercised directly (not through this factory) by their own
-    unit tests.
+    generation: ``models._as_flat`` feeds both ``concat(f, i.float())`` with
+    no normalization, so unnormalized vocabulary ids up to 640 sit beside
+    floats bounded in ``[0,1]`` going into an orthogonal-init ``Linear`` —
+    the id magnitudes dwarf the ~1400 genuinely numeric features. No weight
+    migration exists between architectures, so refuse rather than silently
+    degrade (same rule as the unrecognised-``arch`` case). The classes
+    themselves are untouched — still correct for the frozen flat contract,
+    exercised directly by their own unit tests.
     """
     from .models import EntitySetActorCritic, EntityActorCritic, MaskedActorCritic
 
@@ -267,17 +255,13 @@ def check_checkpoint(ckpt: dict, spec: ModelSpec,
             f"there is no weight migration between architectures — pick the "
             f"matching --arch or start --fresh.")
     if ckpt_arch == "entset":
-        # T7 (tied action head): the entset head's parameter STRUCTURE
-        # changed in place -- same arch string, same (obs_dim, n_actions,
-        # hidden) triple -- so a stale checkpoint would otherwise sail past
-        # every check above and die inside `load_state_dict` with a raw key
-        # error instead of an honest refusal (this project's recorded rule:
-        # the version gate must catch this, a shape/key mismatch is only the
-        # fallback -- ledger, round-2 gap 3). Checked BEFORE the shape
-        # comparison below so a checkpoint that is ALSO shape-stale still
-        # gets the true reason first. mlp/entity payloads never carry this
-        # key and are refused earlier (arch mismatch or the v4-generation
-        # guard), so this branch never fires for them.
+        # entset's head parameter STRUCTURE can change in place (same arch
+        # string, same obs_dim/n_actions/hidden triple), so a stale
+        # checkpoint must be refused here rather than dying inside
+        # load_state_dict with a raw key error. Checked BEFORE the shape
+        # comparison below so a checkpoint that's ALSO shape-stale gets the
+        # true reason first. mlp/entity never carry this key (refused
+        # earlier by arch mismatch or the v4-generation guard).
         from . import models
 
         ckpt_head_version = ckpt.get("head_version", 1)   # pre-stamp = version 1
@@ -287,18 +271,14 @@ def check_checkpoint(ckpt: dict, spec: ModelSpec,
                 f"{models.ENTSET_HEAD_VERSION}; this checkpoint predates the "
                 f"phase-2 tied action head -- there is no weight migration "
                 f"for it, start training over with --fresh.")
-        # R10: `shared_encoder` changes whether the checkpoint's state_dict
-        # has ONE `actor_encoder.*` key set (critic_encoder shares it) or
-        # TWO independent `actor_encoder.*`/`critic_encoder.*` sets -- a
-        # structural difference `load_state_dict` would otherwise surface as
-        # a cryptic missing/unexpected-key error rather than the honest
-        # refusal this project's checkpoint gate is supposed to give (same
-        # "the version gate must catch this, a shape/key mismatch is only
-        # the fallback" rule as `head_version` above). This is a SEPARATE
-        # stamp, not folded into `ENTSET_HEAD_VERSION` -- the flag is
-        # orthogonal to the tied action head's structure, it only changes
-        # which encoder OBJECT the actor and critic point at. Missing key =
-        # False (pre-R10 checkpoints were all built with two independent
+        # `shared_encoder` changes whether the state_dict has ONE
+        # `actor_encoder.*` key set (critic shares it) or TWO independent
+        # `actor_encoder.*`/`critic_encoder.*` sets -- a structural
+        # difference load_state_dict would otherwise surface as a cryptic
+        # key error instead of an honest refusal. Separate stamp from
+        # `ENTSET_HEAD_VERSION` (orthogonal: which encoder OBJECT the actor
+        # and critic point at, not head structure). Missing key = False
+        # (pre-existing checkpoints were all built with two independent
         # encoders).
         ckpt_shared_encoder = ckpt.get("shared_encoder", False)
         if ckpt_shared_encoder != spec.shared_encoder:
@@ -372,16 +352,12 @@ def migrate_checkpoint(ckpt: dict, card_obs: str = "hybrid") -> dict:
     Returns a new checkpoint dict (the input is not mutated) with updated
     ``obs_dim``/``obs_schema`` stamps.
 
-    UNREACHABLE as of the phase-1 schema bump (entity-obs-schema.md):
+    UNREACHABLE since the phase-1 schema bump (entity-obs-schema.md):
     ``check_checkpoint`` now refuses every pre-v7 checkpoint before this
-    function could ever be called, and phase 1 rewrote the run observation
-    from a flat array to an ``"f"``/``"i"`` Dict — a different Gym space
-    type, not a reshape the old column-splice technique could target even in
-    principle. Kept per CLAUDE.md §3 (this module doesn't delete
-    pre-existing code it didn't write); its env-kind/schema guards below
-    still behave exactly as designed, but a well-formed v3 checkpoint now
-    hits an explicit ``SystemExit`` instead of running the (impossible)
-    migration.
+    could be called, and phase 1 replaced the flat run observation with an
+    ``"f"``/``"i"`` Dict — a different Gym space type, not something the old
+    column-splice technique can target. Kept per CLAUDE.md §3; a well-formed
+    v3 checkpoint now hits an explicit ``SystemExit`` below instead.
     """
     env_kind = ckpt.get("env_kind", "combat")
     if env_kind not in RUN_SCALE_ENVS:
@@ -392,13 +368,9 @@ def migrate_checkpoint(ckpt: dict, card_obs: str = "hybrid") -> dict:
         raise SystemExit(
             f"can only migrate obs schema 3 → 4; checkpoint has schema "
             f"{ckpt.get('obs_schema')}.")
-    # Everything past this point built a v4 flat-array checkpoint by splicing
-    # zero columns into a v3 flat-array one — a technique with no target: the
-    # phase-1 bump replaced run_obs_segments with run_obs_segments_f/_i and
-    # made the run observation a Dict, not a wider flat array. There is no
-    # schema this function can still migrate a well-formed input onto, so say
-    # that plainly instead of letting `from .run_env import run_obs_segments`
-    # raise a stale ImportError.
+    # The old technique (splice zero columns into a v3 flat array) has no
+    # target: phase 1 replaced run_obs_segments with run_obs_segments_f/_i
+    # and made the run observation a Dict, not a wider flat array.
     raise SystemExit(
         "the v3 -> v4 migration is unreachable: the phase-1 schema bump "
         "(entity-obs-schema.md) replaced the flat run observation with an "
@@ -429,17 +401,12 @@ def migrate_checkpoint_actions(ckpt: dict, card_obs: str = "hybrid") -> dict:
     Returns a new checkpoint dict (the input is not mutated) with updated
     ``n_actions``/``obs_schema`` stamps.
 
-    UNREACHABLE as of the phase-1 schema bump (entity-obs-schema.md):
+    UNREACHABLE since the phase-1 schema bump (entity-obs-schema.md):
     ``check_checkpoint`` now refuses every pre-v7 checkpoint before this
-    function could ever be called, and ``RUN_OBS_SCHEMA_VERSION`` moved to 7
-    without this function's target ever becoming buildable again — v6 was a
-    flat-array action-layout tweak, and phase 1 replaced the flat run
-    observation with an ``"f"``/``"i"`` Dict, so "grow the v5 checkpoint
-    onto v6" no longer names a schema this repo produces. Kept per CLAUDE.md
-    §3; its env-kind/schema/shape guards below still behave exactly as
-    designed, but a well-formed v5 checkpoint now hits an explicit
-    ``SystemExit`` instead of the stale ``assert RUN_OBS_SCHEMA_VERSION ==
-    6``.
+    could be called, and phase 1 replaced the flat run observation with an
+    ``"f"``/``"i"`` Dict — v6's flat-array action-layout target no longer
+    exists. Kept per CLAUDE.md §3; a well-formed v5 checkpoint now hits an
+    explicit ``SystemExit`` below instead.
     """
     env_kind = ckpt.get("env_kind", "combat")
     if env_kind not in RUN_SCALE_ENVS:
@@ -450,17 +417,10 @@ def migrate_checkpoint_actions(ckpt: dict, card_obs: str = "hybrid") -> dict:
         raise SystemExit(
             f"can only migrate obs schema 5 -> 6; checkpoint has schema "
             f"{ckpt.get('obs_schema')}.")
-    # The honest raise comes FIRST, ahead of any shape check on the
-    # checkpoint's ACTUAL n_actions (fix-pass correction, review item 3):
-    # this migration's target no longer exists for ANY well-formed input, so
-    # there is nothing left a shape check could usefully gate -- and the
-    # obvious-looking "does it match the v5 width" check that used to sit
-    # here computed that width from TODAY's `N_ACTIONS - MAX_POTION_SLOTS`,
-    # which is today's formula, not the historical v5 one (MAX_POTION_SLOTS
-    # itself grew 4 -> 10 after v5 shipped). That stale check meant a
-    # genuine v5 checkpoint could be told "it doesn't match the layout this
-    # migration grows" instead of the true reason: there is no migration
-    # path at all.
+    # The honest raise comes first: this migration's target no longer exists
+    # for any well-formed input, so no shape check on n_actions is useful
+    # here (a "matches v5 width" check would need the historical
+    # MAX_POTION_SLOTS, not today's value, which grew 4 -> 10 after v5).
     raise SystemExit(
         "the v5 -> v6 action migration is unreachable: the phase-1 schema "
         "bump (entity-obs-schema.md) moved RUN_OBS_SCHEMA_VERSION past 6 "
@@ -603,6 +563,31 @@ def warm_start_agent(agent: Any, ckpt: dict, spec: ModelSpec) -> tuple[int, int]
     return n_transferred_params, n_reinitialized_params
 
 
+def load_model_state_lenient(model: Any, state: dict) -> int:
+    """Load a saved state dict into ``model``, tolerating a checkpoint that
+    predates the v10 aux heads (spec 2026-08-13-aux-hp-head-gae-lambda-design).
+
+    A strict ``model.load_state_dict(state)`` would raise on the missing
+    ``aux_*`` keys. When every missing key is an aux param, overlay the
+    checkpoint onto the fresh model's own full state dict (same pattern as
+    ``warm_start_agent``) so everything else loads strictly and only the aux
+    tail keeps its fresh init. Any other kind of mismatch still raises,
+    unchanged from today.
+
+    Returns the number of freshly-initialized aux params (0 for an
+    already-current checkpoint).
+    """
+    own = model.state_dict()
+    missing = [k for k in own if k not in state]
+    if missing and all(k.startswith("aux_") for k in missing):
+        full = dict(own)
+        full.update(state)
+        model.load_state_dict(full)
+        return len(missing)
+    model.load_state_dict(state)
+    return 0
+
+
 def load_agent(path: str, *, env_kind: str, obs_dim: tuple[int, int], n_actions: int,
                card_obs: str = "hybrid", device: str = "cpu") -> tuple[Any, dict]:
     """Load a ``train_torch.py`` checkpoint into an eval-mode model.
@@ -622,6 +607,8 @@ def load_agent(path: str, *, env_kind: str, obs_dim: tuple[int, int], n_actions:
     spec = spec_from_checkpoint(ckpt, env_kind, card_obs)
     check_checkpoint(ckpt, spec, obs_dim, n_actions)
     model = make_model(spec, obs_dim, n_actions).to(device)
-    model.load_state_dict(ckpt["model"])
+    n_fresh_aux = load_model_state_lenient(model, ckpt["model"])
+    if n_fresh_aux:
+        print(f"aux heads fresh-initialized ({n_fresh_aux} params not in checkpoint)")
     model.eval()
     return model, ckpt

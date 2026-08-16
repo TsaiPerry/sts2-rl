@@ -142,34 +142,13 @@ class TestRegistry:
     ]
 
     def test_full_ironclad_pool_registered(self):
-        # SharedRelicPool (118) + IroncladRelicPool (8) = 126 pool relics, plus
-        # the event-granted Sword of Stone (Sunken Statue), the 7 Act-2 event
-        # relics (Drowning Beacon's Fresnel Lens is already a pool relic; Trash
-        # Heap's Darkstone Periapt / Dream Catcher / Hand Drill / Maw Bank / The
-        # Boot, Colossal Flower's Pollinous Core, Lost Wisp), and the 4 Act-3
-        # (Glory) event relics (Grave of the Forgotten's Forgotten Soul, Hungry
-        # for Mushrooms' Big / Fragrant Mushroom, Round Tea Party's Royal Poison)
-        # = 138, plus Sword of Jade (never granted directly — Sword of Stone
-        # evolves into it after 5 elite wins, SwordOfStone.cs) = 139, plus the
-        # Golden Compass (Ancient relic; golden-paths its act's map) = 140,
-        # plus the 28 Ancient relics of the Neow run-start pool
-        # (neow_relics.py: 20 positive + 8 curse options) = 168, plus the
-        # Act-2/3 Ancient-shrine pools as they land (Orobas: 10 relics +
-        # Black Blood, Pael: 10, Tezcatara: 8 new — Very Hot Cocoa and Golden
-        # Compass were already ported, Nonupeipe: 9 new — Looming Fruit was
-        # already ported) = 206, plus Tanx's 10 = 216, plus Vakuu's 10 = 226
-        # — the full Act-2/3 Ancient-shrine pools — plus the shared-event
-        # relics as they land (Room Full of Cheese's Chosen Cheese = 227;
-        # Tea Master's Bone/Ember Tea + Tea of Discourtesy = 230; the Doll
-        # Room's Daughter of the Wind / Mr. Struggles / Bing Bong = 233;
-        # Wongo's Mystery Ticket + Customer Appreciation Badge = 235; Byrdonis
-        # Nest's Byrdpip, granted by Byrdonis Egg's HATCH rest-site option
-        # = 236; Darv's 12 = 248; the Fake Merchant's 9 knock-offs plus his
-        # Rug = 258; War Historian Repy's History Course, granted by the
-        # UNLOCK CAGE option = 259, plus the Circlet — RelicFactory's
-        # FallbackRelic, in no pool and no grab-bag deque, reachable only when
-        # a pull finds nothing (RelicFactory.cs:47) = 260)
-        # — all constructible by id, and the original head is present.
+        # 260 = SharedRelicPool + IroncladRelicPool (126) + event-granted
+        # relics (Act1-3 events, Glory) + Sword of Jade + Golden Compass +
+        # the 28 Neow Ancient relics + the Act-2/3 Ancient-shrine pools
+        # (Orobas/Pael/Tezcatara/Nonupeipe/Tanx/Vakuu) + shared-event relics
+        # (Cheese, Tea Master, Doll Room, Wongo, Byrdonis Nest, Darv, Fake
+        # Merchant, War Historian) + the Circlet fallback (RelicFactory.cs:47,
+        # in no pool/deque, only returned when a pull finds nothing).
         assert len(ALL_RELICS) == 260
         assert "golden_compass" in ALL_RELICS
         for nid in ("golden_pearl", "cursed_pearl", "winged_boots",
@@ -791,22 +770,11 @@ class TestCumulativeCounters:
         from sts2_rl.valueprops import DamageProps
         powered = DamageProps.CARD
 
-        # MOVED 2026-07-29 (round 7, relic/pen_nib/g2): the multiplier is now
-        # asked with the card marked as BEING PLAYED, which is what a real play
-        # does. PenNib.cs:120-128's `AttackToDouble == null` arm doubles a
-        # cardSource that is NOT in PileType.Play once AttacksPlayed == 9 — the
-        # preview of the pending tenth Attack — so calling the hook with a
-        # pile-less card, as this test used to, is a state the game answers 2 for
-        # too.
-        #
-        # RE-STAGED 2026-08-01 (round 13, R5): the card is put in the real
-        # `play_pile`, because that is what a real play now does.
-        # AMENDED in R5's fix pass (R5-review RV-9): the first re-staging set
-        # `_playing_card` as well, which made the pin pass under EITHER
-        # predicate and so blind to whether the owed one-liner had landed.
-        # `pen_nib.py` now reads `card not in player.play_pile`, verbatim
-        # PenNib.cs:120-128 (`pile == null || pile.Type != PileType.Play`), and
-        # `_playing_card` is deliberately NOT set here so the pin can tell.
+        # PenNib.cs:120-128 doubles when `card not in player.play_pile`
+        # (`pile == null || pile.Type != PileType.Play`) once AttacksPlayed
+        # == 9 — the preview of the pending tenth Attack. The card is put in
+        # the real `play_pile` below to match a real play; `_playing_card` is
+        # deliberately NOT set, since either predicate alone would pass.
         relic = PenNib()
         cs = fresh(relics=[relic])
         cards = [make_card("strike") for _ in range(10)]
@@ -959,8 +927,6 @@ class TestDefensiveRelics:
         DamageCmd.deal(cs.hooks, cs.player, 5, dealer=cs.enemy)
         DamageCmd.deal(cs.hooks, cs.player, 5, dealer=cs.enemy)
         assert cs.player.block == 0  # not yet
-        # MOVED 2026-07-29 (round 7, relic/self_forming_clay/g2): this drove
-        # `on_player_turn_started`, the LAST turn-start slot.
         # SelfFormingClayPower.AfterBlockCleared (SelfFormingClayPower.cs:19-25)
         # is the BLOCK-CLEAR pass — turn_structure step ~11, before the energy
         # reset, ModifyHandDraw and the whole AfterPlayerTurnStart region.

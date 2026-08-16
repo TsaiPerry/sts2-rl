@@ -24,8 +24,7 @@ _WEAK_TACKLE_DMG = 14        # TorchHeadAmalgam.cs:34 base
 _WEAK_TACKLE_DMG_ASC = 15    # DeadlyEnemies
 _BEAM_DMG = 8
 _BEAM_HITS = 3
-# TorchHeadAmalgam.cs:36 SoulBeamDamage: GetValueIfAscension(DeadlyEnemies,
-# 8, 8) -- asc value equals base value, a no-op; ported as this comment only.
+# TorchHeadAmalgam.cs:36 SoulBeamDamage: DeadlyEnemies value (8) == base (8), a no-op.
 
 # Queen
 _PUPPET_CHAINS = 3
@@ -38,9 +37,8 @@ _OFF_WITH_HEAD_HITS = 5
 _EXECUTION_DMG = 15           # Queen.cs:58 base
 _EXECUTION_DMG_ASC = 18       # DeadlyEnemies
 _ENRAGE_STR = 2
-# Queen.cs:186 BurnBrightForMeMove strengthAmount: GetValueIfAscension(
-# DeadlyEnemies, 1, 1) -- asc value equals base value, a no-op; ported as
-# this comment only (_BURN_BRIGHT_ALLY_STR above stays a plain constant).
+# Queen.cs:186 BurnBrightForMeMove strengthAmount: DeadlyEnemies value (1) ==
+# base (1), a no-op; _BURN_BRIGHT_ALLY_STR above stays a plain constant.
 
 
 class TorchHeadAmalgam(MachineMonster):
@@ -224,12 +222,9 @@ class Queen(MachineMonster):
         from ...powers import StrengthPower
         from ...valueprops import ValueProp
         combat = ctx.hooks.combat
-        # Queen.cs:187-188 `GetTeammatesOf(Creature).Where(t => t != Creature)`
-        # -- the ONLY test is membership of the enemy side (minus self); C#'s
-        # teammate list still holds a death-vetoed retained corpse. Mirrors
-        # Guardbot._guard's fix: `is_removed_from_combat`, not `is_gone`, is
-        # the sim's membership predicate (False for a retained corpse, True
-        # only for a creature actually dropped from Enemies).
+        # Queen.cs:187-188 -- membership test is the enemy side minus self,
+        # which still holds a death-vetoed retained corpse; use
+        # `is_removed_from_combat` (not `is_gone`) as in Guardbot._guard.
         for enemy in combat.enemies:
             if enemy is not self and not enemy.is_removed_from_combat:
                 PowerCmd.apply(ctx.hooks, enemy, StrengthPower, _BURN_BRIGHT_ALLY_STR)

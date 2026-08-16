@@ -76,6 +76,13 @@ class EnvSpec:
     reward_remove: float = 0.0
     reward_elite: float = 0.0
     reward_relic: float = 0.0
+    # v11 (plan 2026-08-14-v11-combat-detour Task 2): +reward_boss per act
+    # boss defeated; the final win pays reward_win + reward_boss. 0.0 = the
+    # env's own default, so a default spec stays bit-identical.
+    reward_boss: float = 0.0
+    # v11.1: +reward_elite_attempt once per elite room entered (win or
+    # lose) — reward_elite pays only on the rewards screen. 0.0 = default.
+    reward_elite_attempt: float = 0.0
     # v8 curriculum mask (plan Task 4, run/column only): None keeps the
     # env's own default (no masking) — see `build_env`'s v7_kwargs below,
     # same "only set when not None" pattern as reward_win_run.
@@ -86,6 +93,19 @@ class EnvSpec:
     hp_potential_scale: float = 0.0
     potion_potential_scale: float = 0.0
     deck_random_prob: float = 0.0
+    # v9 reward fixes (plan 2026-08-12-v9-rest-potion-fix), both default OFF.
+    rest_heal_shaping_knee_cap: bool = False
+    potion_death_expiry: bool = False
+    # v10 (plan 2026-08-13-v10-escape-and-settle Task 1): share of the HP
+    # potential below the knee. 0.7 = the env's own default, so a default
+    # spec stays bit-identical; the s11-lowshare contingency rung runs 0.8.
+    hp_potential_low_share: float = 0.7
+    # v14 (mechanics-exposure plan Task 5): a JSON packages file (card-id
+    # lists appended whole to the starting deck) and its per-episode
+    # injection probability. deck_inject=None / prob 0.0 = the env's own
+    # default, so a default spec stays bit-identical (run/column only).
+    deck_inject: str | None = None
+    deck_inject_prob: float = 0.0
     # combat only (phase-3 Task 3, R11): a snapshot dataset PATH (never a
     # live SnapshotDataset -- this whole dataclass must stay picklable, and
     # a SnapshotDataset carries live Card/Relic instances). Each
@@ -107,8 +127,13 @@ def build_env(spec: EnvSpec):
         reward_remove=spec.reward_remove,
         reward_elite=spec.reward_elite,
         reward_relic=spec.reward_relic,
+        reward_boss=spec.reward_boss,
+        reward_elite_attempt=spec.reward_elite_attempt,
         hp_potential_scale=spec.hp_potential_scale,
+        hp_potential_low_share=spec.hp_potential_low_share,
         potion_potential_scale=spec.potion_potential_scale,
+        deck_inject=spec.deck_inject,
+        deck_inject_prob=spec.deck_inject_prob,
     )
     if spec.reward_win_run is not None:
         v7_kwargs["reward_win"] = spec.reward_win_run
@@ -116,6 +141,10 @@ def build_env(spec: EnvSpec):
         v7_kwargs["rest_heal_mask_above"] = spec.rest_heal_mask_above
     if spec.deck_random_prob:
         v7_kwargs["deck_random_prob"] = spec.deck_random_prob
+    if spec.rest_heal_shaping_knee_cap:
+        v7_kwargs["rest_heal_shaping_knee_cap"] = True
+    if spec.potion_death_expiry:
+        v7_kwargs["potion_death_expiry"] = True
     if spec.kind == "column":
         from sts2_rl.curriculum_env import STS2CurriculumRunEnv
 
@@ -167,7 +196,12 @@ EP_METRIC_KEYS = (
     # v8 (plan Task 1): combat sloppiness tally, independent of whether
     # hp_potential_scale shaping is on. Appended at the END (plan Task 5) —
     # column order is a public contract (train_torch/tests index into it).
-    "ep_hp_lost")
+    "ep_hp_lost",
+    # The floor the episode ended on -- run_env's `info["floor"]`, which is
+    # present every step but only harvested here on the terminal one, so it
+    # reads as "floors completed". train_torch logs it as ep_ret (the combat
+    # env reports no floor, so it falls back to raw return there).
+    "floor")
 
 
 class StepBatch(NamedTuple):

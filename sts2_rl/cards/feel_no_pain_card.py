@@ -24,14 +24,10 @@ class FeelNoPainCard(Card):
 
     def _init_vars(self) -> None:
         self._energy_cost = 1
-        # DynamicVar("Power", 3m), FeelNoPain.cs:16 -- the card itself grants
-        # NO block (that would be `_block`, which `Card.base_block` reads);
-        # this is the amount handed to FeelNoPainPower, so it belongs in the
-        # same `_power_amount` slot Rage/Corruption/Stampede use for their
-        # own generic "Power" var (all four are literally `DynamicVar("Power",
-        # ...)` in the C# source). Storing it as `_block` used to make
-        # `Card.base_block` misreport this as a block-granting card -- exactly
-        # what cards/base.py's GainsBlock docstring warns about.
+        # DynamicVar("Power", 3m), FeelNoPain.cs:16 -- grants no block itself;
+        # belongs in `_power_amount` (shared slot with Rage/Corruption/
+        # Stampede's own "Power" var), not `_block` (would misreport as
+        # block-granting per cards/base.py's GainsBlock docstring).
         self._power_amount = 3
 
     def _on_upgrade(self) -> None:

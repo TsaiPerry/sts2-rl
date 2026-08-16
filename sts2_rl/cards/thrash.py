@@ -25,11 +25,9 @@ class ThrashCard(Card):
     rarity = CardRarity.RARE
     target_type = TargetType.ANY_ENEMY
 
-    # `_extraDamage*`, the private field (Thrash.cs:20, :72). `DowngradeInternal` rebuilds
-    # the damage var from canonical and does NOT touch this, which is the
-    # whole point: `AfterDowngraded` then re-adds it. Deliberately a CLASS
-    # default rather than an `_init_vars` line, because `_init_vars` is what
-    # the downgrade re-runs.
+    # `_extraDamage*` (Thrash.cs:20, :72). DowngradeInternal rebuilds the
+    # damage var from canonical and doesn't touch this; AfterDowngraded
+    # re-adds it. Class default, not `_init_vars`, since downgrade re-runs that.
     _extra_damage = 0
 
     def _init_vars(self) -> None:

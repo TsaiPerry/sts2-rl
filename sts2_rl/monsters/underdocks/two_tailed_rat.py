@@ -147,11 +147,9 @@ class TwoTailedRat(MachineMonster):
 
     def _call_for_backup(self, ctx: CombatCtx) -> None:
         from ...cmds import CreatureCmd
-        # TwoTailedRat.cs:180-185 — the free slot is taken off the END of the
-        # row (`Slots.LastOrDefault(free, string.Empty)`), and an empty result
-        # (the row is full) skips the summon entirely. The three starting rats
-        # sit in third/fourth/fifth, so the first backup takes "second" and
-        # `CreatureCmd.Add`'s slot re-sort seats it AHEAD of all of them.
+        # TwoTailedRat.cs:180-185 -- free slot taken off the END of the row; empty
+        # result (row full) skips the summon. Starting rats sit in third/fourth/fifth,
+        # so the first backup takes "second" and gets seated ahead of all of them.
         next_slot = ctx.combat.encounter.last_free_slot(ctx.combat)
         if next_slot:
             CreatureCmd.add(

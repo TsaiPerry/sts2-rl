@@ -38,3 +38,8 @@ class DismantleCard(Card):
             if target.is_gone or ctx.player.is_dead:
                 break
             DamageCmd.deal(ctx.hooks, target, self._damage, dealer=ctx.player, card=self)
+
+    def _should_glow_gold_internal(self, ctx) -> bool:
+        # Dismantle.cs:18: CombatState?.HittableEnemies.Any(e =>
+        # e.HasPower<VulnerablePower>()) ?? false
+        return any("vulnerable" in e.powers for e in ctx.hittable_enemies)

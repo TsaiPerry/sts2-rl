@@ -7,10 +7,11 @@
 
     py eval.py runs/sts2_torch.pt --env full                 # raw-torch combat checkpoint
     py eval.py runs/sts2_column_torch.pt --env column        # raw-torch full runs (curriculum)
-    py eval.py runs/sts2_run_torch.pt --env run --episodes 50 --baselines
+    py eval.py runs/sts2_run_torch.pt --env run --episodes 50
     py eval.py runs/sts2_run_torch.pt --env run --sample     # stochastic instead of greedy
     py eval.py runs/x.pt --env column --reward-hist          # + return distribution
     py eval.py runs/x.pt --env column --csv out              # + out.episodes.csv / out.hist.csv
+    py eval.py runs/x.pt --env column --csv out --deck-hist  # + out.deck.csv
 
 A ``.pt`` model is a ``train_torch.py`` checkpoint (the current training path);
 anything else is loaded as a stable-baselines3 MaskablePPO zip (the legacy
@@ -35,9 +36,14 @@ window, so an eval row and a CSV row are directly comparable, plus
 upgrading; both are per visit, so they can sum above 100%). ``--reward-hist``
 adds the episode-return distribution, and ``--csv`` exports both the per-episode
 rows and that distribution for a spreadsheet.
+``--deck-hist`` (with ``--csv``) adds ``PATH.deck.csv``: the total copies of
+every card in the deck each run ended with, pooled over the evaluation, one
+histogram block per rarity, with starter, colorless, curse and quest cards
+excluded. The pooling is over all episodes including short ones, so a single
+long run contributes more copies than several early deaths and can dominate
+the profile.
 """
 import argparse
-import random
 
 import numpy as np
 
@@ -58,6 +64,7 @@ from sts2_rl.evaluation import (
     probe_summary,
     reward_histogram_lines,
     write_cards_csv,
+    write_deck_csv,
     write_run_csv,
 )
 from sts2_rl.probes import lethal_oracle
@@ -66,6 +73,15 @@ RUN_SCALE = ("run", "column")
 
 # Width of the leading "policy" column in every report table.
 LABEL_WIDTH = 40
+
+# v8 s7 gate thresholds (plan Task 7 / v8-run-log.md's "s7 (final, asc 10)"
+# row) -- the absolute gates only; the relative ones (elites/ep >= s1's,
+# hp_lost/floor <= s1's, gimmick-probe wins > v6's) have no fixed number
+# here, since s1/v6 aren't this run's own report -- see `s7_gate_lines`.
+S7_REST_UPGRADE_RATE_MIN = 0.25
+S7_ENERGY_UNSPENT_PER_TURN_MAX = 0.15
+S7_POTIONS_USED_MIN = 1.0
+S7_POTIONS_EXPIRED_DEATHS_MAX = 1.5
 
 
 def is_torch_checkpoint(path: str) -> bool:
@@ -248,9 +264,12 @@ def gimmick_probes(
                 policy, _ = load_torch_policy(
                     model_path, env_kind="combat", env=env,
                     device=device, sample=sample, seed=seed)
-            except Exception as exc:
+            except (SystemExit, Exception) as exc:
                 # e.g. a run-scale checkpoint: its obs layout can't drive the
                 # combat env — report and keep the rest of the eval usable.
+                # checkpoints.check_checkpoint refuses via SystemExit (a
+                # BaseException), which would otherwise escape this guard
+                # and kill the whole process instead of degrading gracefully.
                 print(f"  probes skipped: {exc}")
                 return
         else:
@@ -285,6 +304,61 @@ def run_row(name: str, report: RunEvalReport) -> str:
     )
 
 
+def _gate_row(label: str, value: float, threshold: float, op: str,
+              fmt: str = "{:6.3f}") -> str:
+    """One absolute s7-gate line: measured value vs threshold, PASS/FAIL.
+
+    ``op`` is ``">="`` or ``"<="`` -- the two shapes every absolute s7 gate
+    takes (docs/superpowers/plans/2026-08-10-v8-hp-economy-curriculum.md
+    Task 7's s7 row)."""
+    ok = value >= threshold if op == ">=" else value <= threshold
+    verdict = "PASS" if ok else "FAIL"
+    return (f"    {label:<28} {fmt.format(value)} {op} {fmt.format(threshold)}"
+            f"   {verdict}")
+
+
+def s7_gate_lines(report: RunEvalReport) -> list[str]:
+    """v8 s7 gate summary for one policy's report (plan Task 7's final-stage
+    row, mirrored in ``docs/superpowers/plans/v8-run-log.md``).
+
+    The absolute gates (fixed thresholds, no other stage's numbers needed)
+    print measured/threshold/PASS-FAIL; the relative gates (elites/ep >=
+    s1's, hp_lost/floor <= s1's, gimmick-probe wins > v6's) have no
+    threshold a single eval run carries on its own -- they print their
+    measured value labeled "report-only (relative gate)" so a human (or a
+    later script) can diff it against the named stage's own eval."""
+    lines = [
+        _gate_row("rest_upgrade_rate", report.rest_upgrade_rate,
+                  S7_REST_UPGRADE_RATE_MIN, ">=", "{:6.1%}"),
+        _gate_row("energy_unspent/turn", report.energy_unspent_per_turn,
+                  S7_ENERGY_UNSPENT_PER_TURN_MAX, "<="),
+        _gate_row("potions_used/episode", report.mean_potions_used,
+                  S7_POTIONS_USED_MIN, ">="),
+        _gate_row("potions_expired (deaths)", report.mean_potions_expired_deaths,
+                  S7_POTIONS_EXPIRED_DEATHS_MAX, "<="),
+    ]
+    # "mean hp-at-use < mean hp overall" -- a two-measurement gate, not a
+    # fixed threshold; not evaluable with zero drinks (0.0 < anything would
+    # trivially "pass").
+    at_use, overall = report.potion_use_hp_mean, report.mean_hp_overall
+    if report.mean_potions_used <= 0:
+        lines.append(f"    {'hp_at_use < hp_overall':<28} (no potions drunk -- not evaluable)")
+    else:
+        verdict = "PASS" if at_use < overall else "FAIL"
+        lines.append(
+            f"    {'hp_at_use < hp_overall':<28} at_use={at_use:6.3f}"
+            f" overall={overall:6.3f}   {verdict}")
+    lines += [
+        f"    {'elites/episode':<28} {report.mean_elites:6.2f}"
+        f"          report-only (relative gate: >= s1's own eval)",
+        f"    {'hp_lost/floor':<28} {report.hp_lost_per_floor:6.2f}"
+        f"          report-only (relative gate: <= s1's own eval)",
+        f"    {'gimmick-probe wins':<28} {'':6}"
+        f"          report-only (relative gate: > v6's; pass --gimmick-probes)",
+    ]
+    return lines
+
+
 def evaluate_run_scale(
     model_path: str | None,
     env_kind: str,
@@ -297,19 +371,18 @@ def evaluate_run_scale(
     reward_hist: bool = False,
     csv_path: str | None = None,
     ascension: int = 0,
+    deck_hist: bool = False,
 ) -> None:
     """Run-scale evaluation: N seeded full runs on STS2RunEnv/STS2CurriculumRunEnv."""
-    from sts2_rl.run_env import masked_random_run_policy
-
     rows: list[tuple[str, RunEvalReport]] = []
 
-    if baselines or model_path is None:
-        env = make_run_env(env_kind, acts, ascension)
-        rows.append((
-            "masked-random",
-            evaluate_run(masked_random_run_policy(random.Random(seed)),
-                         episodes=n_episodes, seed=seed, env=env),
-        ))
+    # No masked-random arm here anymore (2026-08-14): it doubled every run
+    # eval's wall time (N extra full runs, sequential CPU inference) for a
+    # floor row nothing gates on. `baselines` stays accepted so existing
+    # curriculum scripts that pass --baselines keep working; only --env full
+    # still has baseline rows (masked-random + oracle are cheap single
+    # combats there).
+    _ = baselines
 
     if model_path is not None:
         env = make_run_env(env_kind, acts, ascension)
@@ -347,6 +420,18 @@ def evaluate_run_scale(
               f"potions_expired {report.mean_potions_expired:5.2f}  "
               f"relics {report.mean_relics:5.2f}")
 
+    # v8 s7 gate summary (plan Task 7 / v8-run-log.md's final-stage row) --
+    # printed for every row so this doubles as a quick sanity check on
+    # non-s7 checkpoints too; the absolute gates only make a PASS/FAIL claim
+    # (they're the s7 numbers specifically), the relative ones are always
+    # "report-only" since s1's/v6's own eval isn't this run's report.
+    print("\nv8 s7 gate summary "
+          "(docs/superpowers/plans/2026-08-10-v8-hp-economy-curriculum.md Task 7):")
+    for name, report in rows:
+        print(f"  {name}")
+        for line in s7_gate_lines(report):
+            print(line)
+
     print("\ndeaths (floor reached, losses only):")
     for name, report in rows:
         deaths = report.death_floors
@@ -381,6 +466,10 @@ def evaluate_run_scale(
         print(f"\nwrote {ep_path} ({sum(r.episodes for _, r in rows)} episode rows)"
               f"\nwrote {hist_path}"
               f"\nwrote {cards_path}")
+        if deck_hist:
+            deck_path = f"{stem}.deck.csv"
+            write_deck_csv(deck_path, rows)
+            print(f"wrote {deck_path}")
 
 
 def compare_checkpoints(
@@ -458,8 +547,9 @@ if __name__ == "__main__":
     parser.add_argument("--ablated", action="store_true",
                         help="the model was trained on AblatedObsEnv observations (full env only)")
     parser.add_argument("--baselines", action="store_true",
-                        help="also report baseline rows (masked-random + oracle on "
-                             "--env full, masked-random on the run-scale envs)")
+                        help="also report baseline rows (masked-random + oracle; "
+                             "--env full only — the run-scale envs no longer run "
+                             "a masked-random arm, the flag is accepted but inert)")
     parser.add_argument("--sample", action="store_true",
                         help="torch checkpoints: sample from the policy instead of "
                              "acting greedily (still deterministic given --seed)")
@@ -474,6 +564,16 @@ if __name__ == "__main__":
                              "per episode: outcome, return, and the behavior "
                              "tallies) and PATH.hist.csv (the return histogram). "
                              "A trailing '.csv' on PATH is stripped")
+    parser.add_argument("--deck-hist", action="store_true",
+                        help="run/column envs only, requires --csv: also export "
+                             "PATH.deck.csv -- total copies of every card in the "
+                             "final deck, pooled over all episodes (not a "
+                             "per-run pick rate), one histogram block per "
+                             "rarity (common/uncommon/rare). Starter, colorless, "
+                             "curse and quest cards are excluded and upgraded "
+                             "copies fold into their base card. Pooling is over "
+                             "ALL episodes including short ones, so a single "
+                             "long run can dominate the profile")
     parser.add_argument("--gimmick-probes", action="store_true",
                         help="also roll the three gimmick fights "
                              "(Decimillipede, The Insatiable, Test Subject) "
@@ -491,10 +591,17 @@ if __name__ == "__main__":
     # report path produces. --compare returns a PairedRunDelta, which carries
     # neither the per-episode returns nor the behavior tallies.
     if args.env not in RUN_SCALE or args.compare is not None:
-        for flag, value in (("--reward-hist", args.reward_hist), ("--csv", args.csv)):
+        for flag, value in (("--reward-hist", args.reward_hist),
+                            ("--csv", args.csv),
+                            ("--deck-hist", args.deck_hist)):
             if value:
                 parser.error(f"{flag} applies to the --env run/column report "
                              f"(not --compare, not the combat envs)")
+
+    # --deck-hist has no output of its own (no printed histogram), so without
+    # --csv it would silently do nothing.
+    if args.deck_hist and not args.csv:
+        parser.error("--deck-hist writes PATH.deck.csv; pass --csv PATH too")
 
     if args.compare is not None:
         if args.env not in RUN_SCALE:
@@ -514,8 +621,9 @@ if __name__ == "__main__":
         compare_checkpoints(args.compare[0], args.compare[1], args.env, args.episodes,
                             args.acts, args.sample, args.device, args.ascension)
     elif args.env in RUN_SCALE:
-        if args.model is None and not args.baselines:
-            parser.error(f"--env {args.env} needs a model, --baselines, or both")
+        if args.model is None:
+            parser.error(f"--env {args.env} needs a model (baseline rows are "
+                         f"--env full only)")
         if args.model is not None and not is_torch_checkpoint(args.model):
             parser.error(f"--env {args.env} evaluates train_torch.py checkpoints (*.pt); "
                          f"the SB3 path only covers the combat envs")
@@ -523,7 +631,7 @@ if __name__ == "__main__":
             parser.error("--ablated applies to --env full only")
         evaluate_run_scale(args.model, args.env, args.episodes, args.seed,
                            args.acts, args.baselines, args.sample, args.device,
-                           args.reward_hist, args.csv, args.ascension)
+                           args.reward_hist, args.csv, args.ascension, args.deck_hist)
         if args.gimmick_probes:
             gimmick_probes(args.model, args.ascension, args.seed,
                            args.sample, args.device)

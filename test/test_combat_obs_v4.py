@@ -43,6 +43,7 @@ from sts2_rl.full_env import (
     MAX_POWERS_PLAYER,
     MAX_RELIC_ROWS,
     MONSTER_INDEX,
+    N_CARD_FEATURES,
     POTION_INDEX,
     POWER_INDEX,
     RELIC_INDEX,
@@ -232,7 +233,7 @@ def test_hand_affliction_and_enchantment_decode():
     obs = build_combat_obs(s)
     layout = combat_obs_layout()
     ids = obs["i"][layout.i_slices["hand.ids"]].reshape(-1, 3)
-    fs = obs["f"][layout.f_slices["hand.f"]].reshape(-1, 29)
+    fs = obs["f"][layout.f_slices["hand.f"]].reshape(-1, N_CARD_FEATURES)
 
     i0, i1 = s.player.hand.index(h0), s.player.hand.index(h1)
     assert ids[i0][0] == CARD_INDEX[h0.id] + 1
@@ -960,7 +961,7 @@ def test_card_obs_features_blanks_hand_card_id_but_keeps_pile_identity_and_row_p
 
     # A present hand row is still distinguishable from a PAD row in features
     # mode: the id is blanked, but the float row is not all-zero.
-    hand_f_features = obs_features["f"][layout_f.f_slices["hand.f"]].reshape(-1, 29)
+    hand_f_features = obs_features["f"][layout_f.f_slices["hand.f"]].reshape(-1, N_CARD_FEATURES)
     for h in range(n_hand):
         assert not np.all(hand_f_features[h] == 0.0), (
             "a present hand row must stay distinguishable from PAD even with id blanked")

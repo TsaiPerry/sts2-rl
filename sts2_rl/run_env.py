@@ -8,12 +8,10 @@ choices, post-combat reward picks, every combat action, and every
 mid-resolution card selection (RL.md's "two-phase env") — surfaces as one
 masked Gym step, fully on-policy.
 
-Action space (flat Discrete, four blocks). T5a's brief scoped that lane to
-this env's OBSERVATION half only; T5b (this pass) does the action-space work
-— R4 (the per-candidate SELECT block, building on the
-``_sorted_candidate_order`` helper T5a left behind) and Task A (widening the
-potion-belt ceiling to its true worst case, fixing a live crash, not just an
-undersized cap). Absolute sizes as built: N_ACTIONS = 243
+Action space (flat Discrete, four blocks): a per-candidate SELECT block
+(``_sorted_candidate_order``) plus a potion-belt ceiling sized to its true
+worst case (fixing a live crash, not just an undersized cap). Absolute
+sizes as built: N_ACTIONS = 243
 (N_COMBAT_ACTIONS=121, CHOICE_SLOTS=16, MAX_SELECT_CANDIDATES=96,
 MAX_POTION_SLOTS=10):
 
@@ -22,7 +20,7 @@ MAX_POTION_SLOTS=10):
                                  potion p@e), sized for MAX_POTION_SLOTS=10
                                  belts (base 3 + Phial Holster's 1 + Potion
                                  Belt's 2 + Alchemical Coffer's 4, the true
-                                 worst case — Task A): 61 + 10×6 = 121
+                                 worst case): 61 + 10×6 = 121
   [CHOICE_BASE .. +CHOICE_SLOTS) generic choice slots: the i-th option of the
                                  current MAP / EVENT / SHOP / REST /
                                  REWARD_* / SELECT_OPTION decision (shop slot
@@ -31,19 +29,14 @@ MAX_POTION_SLOTS=10):
                                  During a skippable SELECT_CARDS, slot 0 =
                                  skip.
   [SELECT_BASE .. +MAX_SELECT_CANDIDATES)
-                                 select-by-CANDIDATE-INDEX block (R4): action
+                                 select-by-CANDIDATE-INDEX block: action
                                  SELECT_BASE + i answers sorted candidate row
                                  i — ``_sorted_candidate_order(request)[i]``,
                                  the SAME canonical order the observation's
                                  ``select.candidates`` rows are written in
                                  (``ObsBuffer.write_rows(..., sort=True)``),
                                  so a row and the action that picks it always
-                                 agree. Replaces the pre-R4 (card id,
-                                 upgraded)-pair block, which collapsed two
-                                 candidates differing only by enchantment /
-                                 affliction / cost modifier onto one action
-                                 and handed the driver the FIRST match — a
-                                 documented approximation this fixes.
+                                 agree.
   [POTION_BASE .. +MAX_POTION_SLOTS)
                                  out-of-combat belt block: drink the
                                  `PotionUsage.AnyTime` potion in slot p
@@ -86,7 +79,9 @@ info carries floor/act/phase and, at episode end, is_success + hp_left.
 from __future__ import annotations
 
 import math
+import os
 import random
+import warnings
 from collections import Counter
 from dataclasses import dataclass
 from functools import lru_cache
@@ -100,6 +95,7 @@ from gymnasium import spaces
 from .actmap import ACT_MAP_CONFIGS, MapPointType, _MAP_WIDTH
 from .cards import Card
 from .characters import DEFAULT_CHARACTER
+from .deck_stats import final_deck_histogram
 from .driver import (
     POTION_ACTION_BASE,
     REST_HEAL,
@@ -120,8 +116,8 @@ from .full_env import (
     # N_RELICS/RELIC_IDS: not used inside this module (MAX_RELIC_ROWS covers
     # everything the observation needs), but re-exported here on purpose —
     # test/test_vocab.py addresses them as `run_env.RELIC_IDS` /
-    # `run_env.N_RELICS` (predating T5a), and an import binds the name in
-    # this module's namespace exactly as a local definition would.
+    # `run_env.N_RELICS`, and an import binds the name in this module's
+    # namespace exactly as a local definition would.
     N_RELICS,
     POTION_INDEX,
     RELIC_IDS,
@@ -143,133 +139,70 @@ from .vocab import capacity as vocab_capacity, frozen_ids
 
 # Bump whenever the run-observation layout or action layout changes (any
 # change invalidates saved run-env models — retrain, or migrate where a
-# migration exists). v2: capacity-padded frozen vocabularies (vocab.py) —
-# dims are reserved capacities, so future content additions no longer bump
-# this. v3: the shop's Colorless section (SHOP_CARD_SLOTS 5 → 7, shifting
-# the relic/potion/removal segments and the SHOP decision's entry indices).
-# v4: run.boss.identity + run.map.grid/meta (the act boss and the whole act
-# map, matching what the game shows the player all act) — v3 checkpoints
-# migrate losslessly via migrate_ckpt.py (checkpoints.migrate_checkpoint).
-# v5: DecisionKind gained REWARD_RELIC (the take-or-skip relic offer,
-# relic/_auto_keep), so PHASES = list(DecisionKind) is one wider and every run-
-# obs index after the leading ("phase", N_PHASES) segment shifts.
-# v6: the ACTION layout only — a MAX_POTION_SLOTS-wide out-of-combat belt block
-# (potion/_any_time_usage). The observation is byte-identical to v5, so v5
-# checkpoints migrate losslessly by growing the actor head alone
-# (checkpoints.migrate_checkpoint_actions).
-# v7 (OBS_SCHEMA.md, entity-obs-schema phase 1, T5a): the flat
-# float Box observation is replaced by the {"f": Box(0,1), "i": Box(0,
-# MAX_OBS_ID)} Dict contract — every one-hot/multi-hot vocabulary segment
-# (potions, deck, relics, boss identity, event identity, shop/reward stock,
-# select purpose/candidates) becomes an id row (R1 relic rows with real
-# per-relic state instead of presence-only bits; R2 card-instance rows
-# instead of a 2·N_CARDS histogram) plus R6 log1p-compressed gold/shop/
-# removal prices in place of the old linear-clip scale. The ACTION layout
-# (N_ACTIONS, CHOICE_BASE, SELECT_BASE, POTION_BASE, combat action block) was
-# UNCHANGED by T5a's bump — the action-space follow-up this schema bump set
-# up (R4, the per-candidate action block) is T5b, immediately below, and it
-# is folded into the SAME v7 bump rather than an eighth version (nothing has
-# been trained against v7 yet): the SELECT_CARDS block changes from a
-# `2*N_CARDS`-wide `(card id, upgraded)`-pair block to a
-# `MAX_SELECT_CANDIDATES`-wide candidate-INDEX block (`_sorted_candidate_
-# order`'s canonical order — see that method and `_translate`'s SELECT_CARDS
-# branch), and `full_env.MAX_POTION_ROWS` (and therefore `MAX_POTION_SLOTS`
-# and every downstream action-layout constant) widens from 4 to 10 (Task A —
-# the true worst-case belt, fixing a live `IndexError` crash, not just an
-# undersized ceiling).
-#
-# THERE IS NO v6->v7 MIGRATION, unlike v3->v4's `migrate_checkpoint`: a flat
-# `Box` and a two-leaf `Dict` are different Gym space TYPES, not a reshape of
-# the same array, so there is no meaningful "grow the old weight matrix"
-# operation to perform — every v6-and-earlier checkpoint requires a full
-# retrain against v7, same as any other observation-space-type change. As a
-# direct consequence, `checkpoints.migrate_checkpoint` (the run v3→v4 path)
-# is now UNREACHABLE DEAD CODE: nothing can migrate INTO v7 through it, and
-# nothing downstream of v7 will ever ask to migrate OUT of v3/v4/v5/v6 into a
-# flat-Box target again. Left in place, not deleted — `checkpoints.py` is not
-# this lane's file to edit (T6 owns the checkpoint-migration cleanup); this
-# comment is the report of the gap, per the T5a brief.
-# v8 (defect fix, 2026-08-02): this env's observation EMBEDS the combat
-# block verbatim (`write_combat_obs(..., prefix="combat.")` above/below), so
-# `full_env.OBS_SCHEMA_VERSION`'s 4->5 bump (the enemy row's new StatusIntent
-# count float, full_env.py) silently widened `f_dim` here too (6 enemies x 1
-# float = +6) without this constant moving — a version number that no longer
-# names a single (f_dim, i_dim) contract is itself the defect, independent of
-# whether `checkpoints.check_checkpoint`'s shape check happens to also catch
-# a stale checkpoint. No layout code changed for v8; only this constant
-# (and everything downstream that pins it) had drifted from what the env
-# already emits. See `test_run_schema_version_matches_declared_dims` in
-# test/test_run_obs_v4.py, which pins the (version, f_dim, i_dim) triple so a
-# future embedded-width change can't repeat this silently.
-# v9 (R3, full_env.OBS_SCHEMA_VERSION 5->6): per-enemy intent HISTORY
-# (`enemy{e}.intent_history.f`, no `.ids` half) is folded in through the
-# SAME embedding this env uses for the rest of the combat block, so it grows
-# `f_dim` by `MAX_ENEMIES * MAX_INTENT_HISTORY * _N_ENEMY_HISTORY_SCALARS`
-# (6 * 3 * 15 = 270) with `i_dim` unchanged — bumped explicitly this time
-# (learned from v8's defect: a combat-side width change propagates here and
-# must move this number in the SAME change, not be discovered later).
+# migration exists).
+# v2: capacity-padded frozen vocabularies (vocab.py); dims are reserved
+#     capacities so future content additions no longer bump this.
+# v3: shop Colorless section (SHOP_CARD_SLOTS 5 -> 7), shifting the
+#     relic/potion/removal segments and SHOP decision entry indices.
+# v4: run.boss.identity + run.map.grid/meta. v3 checkpoints migrate
+#     losslessly via checkpoints.migrate_checkpoint.
+# v5: DecisionKind gained REWARD_RELIC, widening PHASES by one.
+# v6: action layout only — MAX_POTION_SLOTS-wide out-of-combat belt block.
+#     Observation byte-identical to v5; v5 checkpoints migrate losslessly by
+#     growing the actor head alone (checkpoints.migrate_checkpoint_actions).
+# v7 (OBS_SCHEMA.md, entity-obs-schema phase 1): flat float Box observation
+#     replaced by the {"f": Box(0,1), "i": Box(0, MAX_OBS_ID)} Dict contract;
+#     every one-hot/multi-hot vocab segment becomes an id row (R1 relic rows,
+#     R2 card-instance rows) plus R6 log1p-compressed gold/shop/removal
+#     prices. Action layout unchanged in width, but SELECT_CARDS moves from
+#     a `2*N_CARDS` (card id, upgraded)-pair block to a
+#     `MAX_SELECT_CANDIDATES`-wide candidate-INDEX block (see
+#     `_sorted_candidate_order`), and `full_env.MAX_POTION_ROWS` widens 4->10
+#     (true worst-case belt: base 3 + Phial Holster 1 + Potion Belt 2 +
+#     Alchemical Coffer 4). NO v6->v7 migration exists: Box->Dict is a space
+#     TYPE change, not a reshape, so every v6-and-earlier checkpoint needs a
+#     full retrain. `checkpoints.migrate_checkpoint` (the v3->v4 path) is
+#     unreachable dead code as of v7 but left in place.
+# v8 (defect fix, 2026-08-02): this env embeds the combat block verbatim, so
+#     `full_env.OBS_SCHEMA_VERSION`'s 4->5 bump (enemy StatusIntent count
+#     float) silently widened `f_dim` here too (+6) without this constant
+#     moving. No layout code changed; only this constant had drifted. See
+#     `test_run_schema_version_matches_declared_dims`
+#     (test/test_run_obs_v4.py), which pins (version, f_dim, i_dim).
+# v9 (R3, full_env.OBS_SCHEMA_VERSION 5->6): per-enemy intent HISTORY grows
+#     `f_dim` by MAX_ENEMIES * MAX_INTENT_HISTORY * _N_ENEMY_HISTORY_SCALARS
+#     (6*3*15 = 270), `i_dim` unchanged.
 # v10 (SpireBot schema audit, docs/superpowers/specs/
-# 2026-08-04-spirebot-schema-audit.md, Task 4): the audit walked every run
-# v9 field (excluding the embedded `combat.*` block, covered by the v6->v7
-# audit/bump) against the live game's readable API surface and found ZERO
-# fields requiring DROP — every segment has either a direct C# read (KEEP),
-# a stated proxy (REDEFINE), or a stated accumulation rule (ACCUMULATE). No
-# segment is added or removed and no width changes (`f_dim`/`i_dim` both
-# unchanged from v9); v10 is a pure version bump. The audit names two
-# REDEFINE rows (`phase`, `select.purpose.ids`) but BOTH are
-# documentation-only for this sim: their proxy language describes how the
-# future C# `ObsBuilder` will SOURCE the value from live game state (screen-
-# predicate dispatch for `phase`; mod-side session memory of "what action did
-# I just dispatch" for `select.purpose`), not a change to what this Python
-# env computes today — `run_obs_segments_f`'s `phase` one-hot (from
-# `DecisionKind`) and `_build_obs`'s `select.purpose.ids` (from
-# `DecisionRequest.purpose` via `PURPOSE_INDEX`) are both already exactly
-# what the audit's proxy targets, so nothing here changes. Embedded combat
-# block: v7 (see full_env.OBS_SCHEMA_VERSION's own v7 comment).
-# v10 amendment (Task B, same day, addendum to the audit above): the audit's
-# own "also noted" flagged a real content GAP outside its KEEP/DROP/REDEFINE/
-# ACCUMULATE scope — `DecisionKind.REWARD_RELIC` (added at run-obs v5) never
-# got a `reward.relic.ids/.f` block, so the policy could see THAT a relic
-# offer exists (`phase`'s one-hot, the `CHOICE` take/skip mask) but not WHICH
-# relic. Perry approved closing that gap AS PART OF v10 rather than a v11
-# bump — v10 is brand-new and uncommitted, nothing has trained on it, and
-# every doc/test/contract already reference 10, so amending in place avoids
-# a same-day double bump. `reward.relic.f`/`reward.relic.ids` (width 1 each,
-# a single scalar id + presence float, mirroring `reward.potion` exactly —
-# not `reward.cards`' multi-slot block, because `RunState.offer_relic`/
-# `DecisionRequest.relic` always offers exactly ONE relic at a time even when
-# `CombatRewards.relics` holds several) are the only width change to EITHER
-# half of this schema since v9: `f_dim`/`i_dim` each grow by 1.
-#
-# v11: `REWARD_CARD_SLOTS` 3 -> 4 (see the constant's own comment — Lasting
-# Candy's appended Power option was being truncated out of an observation
-# whose action stayed legal). `reward.cards.f`/`reward.cards.ids` each grow by
-# one 4-wide row, so `f_dim`/`i_dim` each grow by 4. Unlike the v10 relic
-# amendment above this is a real bump: v10 is no longer brand-new. There is no
-# migration function — nothing on disk claims schema 10 (runs/ was cleared
-# before the v6 curriculum), and `check_checkpoint` refuses a mismatch outright
-# rather than guessing.
-RUN_OBS_SCHEMA_VERSION = 11
+#     2026-08-04-spirebot-schema-audit.md, Task 4): pure version bump, no
+#     width change — every run v9 field has either a direct C# read (KEEP),
+#     a stated proxy (REDEFINE), or an accumulation rule (ACCUMULATE); the
+#     REDEFINE rows (`phase`, `select.purpose.ids`) are documentation-only,
+#     describing a future C# ObsBuilder source, not a change to this env.
+#     Amendment (Task B, same day): `DecisionKind.REWARD_RELIC` (added at
+#     v5) never got a `reward.relic.ids/.f` block — the policy could see
+#     THAT a relic offer exists but not WHICH relic. Closed in place (v10
+#     was still brand-new/uncommitted) rather than a v11 bump.
+#     `reward.relic.f`/`reward.relic.ids` (width 1 each, mirroring
+#     `reward.potion`) are the only width change since v9: f_dim/i_dim +1.
+# v11: `REWARD_CARD_SLOTS` 3 -> 4 (Lasting Candy's appended Power option was
+#     being truncated out of the observation while its action stayed legal).
+#     `reward.cards.f`/`.ids` each grow by one 4-wide row (f_dim/i_dim +4).
+#     No migration function exists for this bump.
+# v12 (task 3, v14 mechanics-exposure): follows full_env.OBS_SCHEMA_VERSION
+#     7 -> 8 in lockstep — the run layout embeds the combat hand.f block,
+#     which grew by 2 fields (f[29] glow_gold, f[30] block_preview_move;
+#     N_CARD_FEATURES 29 -> 31). No migration function exists for this bump.
+RUN_OBS_SCHEMA_VERSION = 12
 
 # ── Fixed-size bounds ────────────────────────────────────────────────────
-# Potion belt headroom. T5a Task 0 moved this from an independently-declared
-# literal 4 to a reference onto full_env.MAX_POTION_ROWS — see that
-# constant's own comment in full_env.py for the full citation (three
-# belt-growing relics, not the one the earlier brief named).
-#
-# T5b (Task A): T5a kept the value at 4, deferring the true worst case (10)
-# as out of scope for its lane (widening it grows N_ACTIONS). That deferral
-# turned out to be a live CRASH, not just an undersized static ceiling: a
-# single COMMON relic (Potion Belt, +2 slots) already grows the belt past 4,
-# and `action_masks()` indexed past the end of the mask the first time it ran
-# with 5 belt slots held (`IndexError: index 1385 is out of bounds for axis 0
-# with size 1385`, reproduced and pinned by
-# test_select_candidate_actions.py::test_potion_belt_grown_past_the_old_cap_does_not_crash_action_masks).
-# Fixed by widening `full_env.MAX_POTION_ROWS` itself to 10 (the true worst
-# case: base 3 + Phial Holster's 1 + Potion Belt's 2 + Alchemical Coffer's
-# 4); this reference means `N_COMBAT_ACTIONS`/`CHOICE_BASE`/`SELECT_BASE`/
-# `POTION_BASE`/`N_ACTIONS` all widen from that ONE source rather than a
-# second hardcoded literal here.
+# Potion belt headroom, referenced from full_env.MAX_POTION_ROWS (true
+# worst-case belt: base 3 + Phial Holster 1 + Potion Belt 2 + Alchemical
+# Coffer 4) rather than a second hardcoded literal — a belt grown past a
+# smaller cap once indexed past the end of `action_masks()`'s array
+# (IndexError, pinned by test_select_candidate_actions.py::
+# test_potion_belt_grown_past_the_old_cap_does_not_crash_action_masks).
+# N_COMBAT_ACTIONS/CHOICE_BASE/SELECT_BASE/POTION_BASE/N_ACTIONS all widen
+# from this one source.
 MAX_POTION_SLOTS = MAX_POTION_ROWS
 # Generic choice slots. Must cover every non-combat, non-select decision's
 # option count: map rows are ≤7 wide (free travel), shops have 14 entries
@@ -322,11 +255,10 @@ REWARD_CARD_SLOTS = 4
 # that avoids a second number that has to independently agree with the first.
 MAX_DECK_ROWS = MAX_COMBAT_CARDS
 
-# T5a brief §2.6: "Set MAX_SELECT_CANDIDATES = 96, matching MAX_COMBAT_CARDS:
-# the largest candidate list a purpose can offer is bounded by 'a whole pile'
-# or 'the whole deck'." The R4 census that would measure this properly is
-# HELD on the user's instruction, so — like MAX_RELIC_ROWS and
-# MAX_COMBAT_CARDS themselves — this is a static argument, not a measurement.
+# MAX_SELECT_CANDIDATES = 96, matching MAX_COMBAT_CARDS: the largest
+# candidate list a purpose can offer is bounded by "a whole pile" or "the
+# whole deck". A static argument, not a measurement (like MAX_RELIC_ROWS
+# and MAX_COMBAT_CARDS themselves).
 MAX_SELECT_CANDIDATES = MAX_COMBAT_CARDS
 
 # `run.boss.ids` sizing: an EXHAUSTIVE census (not an act-0 floor — every
@@ -342,16 +274,13 @@ MAX_SELECT_CANDIDATES = MAX_COMBAT_CARDS
 MAX_BOSS_IDS = 4
 
 # ── Action layout ─────────────────────────────────────────────────────────
-# T5b (Task A): MAX_POTION_SLOTS follows MAX_POTION_ROWS, which just grew
-# 4 -> 10 (the true worst-case belt), so N_COMBAT_ACTIONS/CHOICE_BASE/
-# SELECT_BASE/POTION_BASE/N_ACTIONS all widen with it automatically — never
-# hardcode these widths, they must always be recomputed from the sizing
-# constants above.
+# Never hardcode these widths — always recompute from the sizing constants
+# above so N_COMBAT_ACTIONS/CHOICE_BASE/SELECT_BASE/POTION_BASE/N_ACTIONS
+# stay in sync automatically.
 N_COMBAT_ACTIONS = combat_action_count(MAX_POTION_SLOTS)
 CHOICE_BASE = N_COMBAT_ACTIONS
 SELECT_BASE = CHOICE_BASE + CHOICE_SLOTS
-# T5b (R4): the select-by-card-id-pair block (2*N_CARDS wide) is replaced by
-# a candidate-INDEX block, MAX_SELECT_CANDIDATES wide — see `_translate`'s
+# Candidate-INDEX block, MAX_SELECT_CANDIDATES wide — see `_translate`'s
 # SELECT_CARDS branch and `_sorted_candidate_order` below.
 POTION_BASE = SELECT_BASE + MAX_SELECT_CANDIDATES
 # The out-of-combat belt (driver.POTION_ACTION_BASE). Its own block rather
@@ -361,12 +290,8 @@ N_ACTIONS = POTION_BASE + MAX_POTION_SLOTS
 
 # ── Stable vocabularies (frozen append-only + capacity-padded; vocab.py) ──
 # RELIC_IDS/RELIC_INDEX/N_RELICS: imported from full_env rather than
-# recomputed here. Both modules used to call frozen_ids("relics", ALL_RELICS)
-# independently — harmless (same persisted vocab.json key, idempotent), per
-# full_env's own module comment — but importing one is simpler than keeping
-# two call sites that have to agree by construction rather than by
-# reference. full_env is already imported for MAX_RELIC_ROWS/CARD_INDEX/…,
-# so this adds no new dependency.
+# recomputed here so the two modules agree by reference, not by two call
+# sites that happen to compute the same thing.
 
 EVENT_IDS: list[str] = frozen_ids("events", ALL_EVENTS)
 EVENT_INDEX: dict[str, int] = {eid: i for i, eid in enumerate(EVENT_IDS)}
@@ -379,20 +304,16 @@ PURPOSE_IDS: list[str] = frozen_ids("purposes", [
     "bundle", "card_reward", "curse_of_knowledge", "duplicate", "enchant",
     "exhaust", "from_discard", "from_draw", "gambling_chip", "obtain",
     "remove", "to_draw_top", "transform", "upgrade", "_unknown",
-    # Non-declinable selection screens (Toolbox.cs:28, ChoicesParadox.cs:46):
-    # the sim expresses "not skippable" as membership in
-    # driver.SKIPPABLE_PURPOSES, so these needed their own purpose rather than
-    # reusing "obtain". Appended, never reordered — the registry is frozen.
+    # Non-declinable selection screens (Toolbox.cs:28, ChoicesParadox.cs:46);
+    # needs its own purpose since skippability (driver.SKIPPABLE_PURPOSES)
+    # is per-screen in the source. Appended, never reordered — frozen registry.
     "choose_a_card",
-    # ...and its canSkip:true twin, the generator potions' screen
+    # canSkip:true twin — the generator potions' screen
     # (CardSelectCmd.cs:216-261 `FromChooseACardScreen(..., canSkip: true)`).
-    # Skippability is per-screen in the source, so the same screen shape needs
-    # both purposes here.
     "choose_a_card_optional",
     # Kifuda's non-cancelable MinSelect-0 enchant screen (Kifuda.cs:26-29,
-    # driver.SKIPPABLE_PURPOSES) — registered so it doesn't fall into the
-    # shared "_unknown" bucket like the pre-existing "transform_optional"
-    # (Claws.cs) currently does; see this round's report for that gap.
+    # driver.SKIPPABLE_PURPOSES); "transform_optional" (Claws.cs) still
+    # falls into "_unknown" — a known gap.
     "enchant_optional",
 ])
 PURPOSE_INDEX: dict[str, int] = {p: i for i, p in enumerate(PURPOSE_IDS)}
@@ -409,26 +330,20 @@ _POINT_TYPE_INDEX = {t: i for i, t in enumerate(_POINT_TYPES)}
 
 _N_ACTS = 3   # act-index one-hot width (the game's 3-act run)
 
-# T5a brief §1: full_env.MAX_OBS_ID is computed over the vocabularies the
-# COMBAT observation touches. The run observation additionally touches
-# events and purposes (and, positionally, relics/potions/monsters/cards —
-# already in full_env's set) directly, plus the embedded combat sub-block
-# touches powers — so this is computed independently rather than importing
-# full_env's, per the brief's explicit instruction. It comes out IDENTICAL
-# to full_env.MAX_OBS_ID (640, from the cards vocabulary) because cards is
-# the largest capacity in EITHER set and events (96) / purposes (24) don't
-# come close — reported here rather than assumed, per the brief.
+# full_env.MAX_OBS_ID is computed over the vocabularies the COMBAT
+# observation touches; the run observation additionally touches events and
+# purposes directly, so this is computed independently rather than imported.
+# Comes out IDENTICAL to full_env.MAX_OBS_ID (640, from cards) because cards
+# is the largest capacity in either set.
 MAX_OBS_ID = max(
     vocab_capacity(kind) for kind in (
         "cards", "relics", "powers", "monsters", "potions",
         "afflictions", "enchantments", "events", "purposes",
     )
 )
-# Fix-pass correction (review item 5): a bare module-level `assert` is a
-# no-op under `python -O` (assertions are stripped), silently disarming this
-# check exactly where it matters most (a divergence would corrupt every
-# consumer of either constant). Raise explicitly instead so the check is
-# real regardless of how the interpreter is invoked.
+# A bare `assert` is a no-op under `python -O`; raise explicitly so a
+# vocabulary-capacity divergence between the two constants is never silently
+# disarmed.
 if MAX_OBS_ID != _COMBAT_MAX_OBS_ID:
     raise AssertionError(
         "run_env.MAX_OBS_ID and full_env.MAX_OBS_ID were expected to agree "
@@ -457,49 +372,23 @@ def _log1p_scale(x: float, denom: float) -> float:
 # Gold: GOLD_REWARD_RANGES (rewards.py) pays 10-20g/Monster, 35-45g/Elite,
 # 100g/Boss, ~42-52g/Treasure — a full 3-act run's total INCOME is a few
 # thousand gold, but a normally-shopping player's HELD balance rarely
-# exceeds a few hundred.
-#
-# Fix-pass correction (review item 2): the original 300/3000 pair moved R6's
-# own defect rather than removing it — a review measured every value in
-# {300, 500, 1000, 1500, 3000} reading EXACTLY 1.0 on the fine channel
-# (saturating at the fine denom itself, same shape as the `gold/100` bug R6
-# replaces), and {3000, 4000, 5000, ...} all reading 1.0 on the coarse
-# channel too, so a genuinely hoarding run had NO resolution at all above
-# 3000g on either channel.
-#
-# Retuned so the fine channel keeps resolving further into a normally-
-# shopping player's range (800, not 300, so 300g and 500g no longer collide
-# on the fine channel alone) and the coarse channel resolves the WHOLE
-# comment-defined hoarding ceiling ("a few thousand") with headroom: at
-# 3000g the coarse channel reads ~0.89, not 1.0, and 5000g still resolves at
-# ~0.95 — both denominators are reasoned defaults (no act-0 census reaches
-# these balances; see OBS_SCHEMA.md §7), chosen so neither channel plateaus
-# inside the range this module's own comments claim to cover, verified by
-# test_gold_realistic_band_resolves_without_plateau.
+# exceeds a few hundred. Fine denom 800 (not 300) keeps 300g/500g from
+# colliding on the fine channel; coarse denom 8000 keeps the whole hoarding
+# range (3000g ~0.89, 5000g ~0.95) short of saturation on either channel.
+# Verified by test_gold_realistic_band_resolves_without_plateau.
 GOLD_LOG_FINE_DENOM = 800.0
 GOLD_LOG_COARSE_DENOM = 8000.0
 
-# Shop/removal prices (shop.py): card slots top out around 150-190g (a rare
-# Colorless card with the ±5% jitter), relic slots around 235-320g (a Rare
-# relic's `merchant_cost` with ±15% jitter), potion slots around 50-110g —
-# all comfortably bounded. Card removal (`75 + 25 × removals_used`,
-# shop.py:419-436) is the one genuinely UNBOUNDED quantity here, climbing
-# without limit over a long, removal-heavy run.
-#
-# Fix-pass correction (review item 2): the old denom (2000) technically
-# didn't collide the two named test points, but a review measured the
-# realistic 40-320g item-price band spreading only 27% of [0,1], all bunched
-# in the upper half — the comment's claim that this "resolves the
-# shopping-relevant range" was not true. A SINGLE shared log1p denom cannot
-# spread an ~8x price ratio across all of [0,1] while ALSO keeping the
-# unbounded removal cost resolvable well past 800g — that is a hard
-# mathematical tradeoff of the log1p family (the ratio between any two
-# fixed points is invariant to the denom; only the overall scale moves), not
-# a tuning oversight. 900 is the reasoned middle ground: it noticeably
-# improves the item-price spread (~30%, verified by
-# test_shop_cost_realistic_band_spreads_more_than_the_old_defect) while
-# still keeping 800g comfortably short of saturation (~0.98, not 1.0), so a
-# heavily-removal run still resolves past the named 500-vs-800 pair.
+# Shop/removal prices (shop.py): card slots top out ~150-190g, relic slots
+# ~235-320g, potion slots ~50-110g — all bounded. Card removal
+# (`75 + 25 x removals_used`, shop.py:419-436) is the one genuinely
+# UNBOUNDED quantity, climbing without limit over a removal-heavy run. A
+# single shared log1p denom can't fully spread the ~8x item-price ratio
+# across [0,1] while also keeping unbounded removal cost resolvable past
+# 800g (an inherent log1p tradeoff, not a tuning oversight); 900 is the
+# reasoned middle ground (~30% spread on the item-price band, 800g still
+# ~0.98 short of saturation), verified by
+# test_shop_cost_realistic_band_spreads_more_than_the_old_defect.
 SHOP_COST_LOG_DENOM = 900.0
 
 
@@ -590,9 +479,8 @@ def run_obs_segments_i(card_obs: str = "hybrid") -> list[tuple[str, int]]:
 def run_obs_layout(card_obs: str = "hybrid") -> ObsLayout:
     """The WHOLE run observation's layout: this module's own segments
     followed by every ``full_env.combat_obs_segments_{f,i}()`` name prefixed
-    ``"combat."`` (T5a brief §1) — one ``ObsLayout``, one ``ObsBuffer``,
-    exactly as ``write_combat_obs``'s own docstring specifies for this
-    lane."""
+    ``"combat."`` — one ``ObsLayout``, one ``ObsBuffer``, exactly as
+    ``write_combat_obs``'s own docstring specifies."""
     f_segs = run_obs_segments_f(card_obs) + [
         (f"combat.{name}", width) for name, width in combat_obs_segments_f(card_obs)
     ]
@@ -627,7 +515,7 @@ def _map_grid_block(act_map) -> np.ndarray:
     written by ``_build_obs``. Built once per map object and cached (the map
     only changes at act entry or a Golden Compass regeneration). Rows past
     MAP_GRID_ROWS (a ``column_rooms`` override taller than any real act) are
-    clipped. UNCHANGED (T5a brief §2.2) — not touched by the v7 rewrite."""
+    clipped."""
     block = np.zeros(MAP_GRID_ROWS * _MAP_WIDTH * MAP_GRID_NODE, dtype=np.float32)
     child_base = 1 + _N_POINT_TYPES
     top = min(MAP_GRID_ROWS, act_map.map_length - 1)
@@ -651,37 +539,81 @@ def _run_card_row(card: Card) -> tuple[list[int], list[float]]:
     """The R2 card-instance row (OBS_SCHEMA.md §5.1/§5.2) for run-side
     blocks with no live CombatState: deck, reward cards, select candidates.
 
-    T5b (Task B): this used to be a hand-kept duplicate of
-    ``full_env._pile_card_row``'s row shape — a T5a brief contradicted
-    itself (asking that lane to "reuse `_pile_card_row`" while restricting
-    its `full_env.py` edits to Task 0 only), so T5a correctly left the
-    duplication in place and reported the conflict rather than resolving it
-    by violating its own ownership boundary. T5b owns `full_env.py` for this
-    task, so the row-shape logic is promoted there
-    (``full_env.card_instance_row``) and both envs call the ONE function —
-    R2's whole premise is one row shape everywhere, and two encoders that
-    must agree by construction is exactly the drift this project keeps
-    getting bitten by.
-
-    The one genuine divergence (OBS_SCHEMA.md §2.3) is expressed as
-    ``card_instance_row``'s explicit ``effective_cost`` parameter rather
-    than a second code path: out of combat there is no hook pipeline
-    (``previews.preview_card_energy_cost`` needs a live ``CombatState``) to
-    run cost modifiers through, so this passes the card's plain printed
-    ``energy_cost`` — which is also what the game's own out-of-combat
-    screens (deck view, shop, reward) show.
+    Delegates to ``full_env.card_instance_row`` so both envs share one row
+    shape (R2's whole premise). The one real divergence (OBS_SCHEMA.md
+    §2.3): out of combat there is no hook pipeline to run cost modifiers
+    through (``previews.preview_card_energy_cost`` needs a live
+    ``CombatState``), so this passes the plain printed
+    ``canonical_energy_cost`` — modifier-immune, matching what the game's
+    own out-of-combat screens (deck view, shop, reward) show.
 
     ``pile_id`` is always PAD (0): there is no pile concept outside combat —
-    never invent a new pile id for a run-side block. Fix-pass correction
-    (review item 7): this used to take an unused ``pile_id: int = PAD``
-    parameter — every one of its 4 call sites relied on the default — so it
-    is hardcoded here instead of threaded through as dead flexibility.
-    Round-4 fix: ``canonical_energy_cost`` (printed, modifier-immune), not
-    ``energy_cost`` — see ``full_env._pile_card_row``'s docstring for why
-    the plain getter is the wrong accessor even out of combat (a run-side
-    Card object is fresh per screen today, but the two callers should not
-    silently diverge in which accessor is "the printed cost")."""
+    never invent a new pile id for a run-side block."""
     return card_instance_row(card, PAD, card.canonical_energy_cost)
+
+
+# ── run.deck overflow diagnostics ────────────────────────────────────────
+# `ObsBuffer.write_rows` warns once per (process, segment) when a block
+# overflows its cap and then silently truncates, which tells you THAT the
+# 96-card `run.deck` cap was blown but not WHICH deck did it. This dumps the
+# offending deck's contents alongside that warning so the overflow is
+# actually diagnosable. Latched the same way the warning is — once per
+# process — so a training loop that overflows every step cannot fill a disk.
+DECK_OVERFLOW_LOG_ENV = "STS2_DECK_OVERFLOW_LOG"
+DEFAULT_DECK_OVERFLOW_LOG = "deck_overflow.log"
+_DECK_OVERFLOW_LOGGED = False
+
+
+def reset_deck_overflow_latch() -> None:
+    """Clear the log-once latch (test-only affordance, mirrors
+    ``obs.reset_warned_segments``)."""
+    global _DECK_OVERFLOW_LOGGED
+    _DECK_OVERFLOW_LOGGED = False
+
+
+def deck_overflow_log_path() -> str:
+    """Where the deck dump goes: ``$STS2_DECK_OVERFLOW_LOG``, else
+    ``deck_overflow.log`` in the working directory."""
+    return os.environ.get(DECK_OVERFLOW_LOG_ENV) or DEFAULT_DECK_OVERFLOW_LOG
+
+
+def _log_deck_overflow(run: RunState, deck: list[Card]) -> None:
+    """Append the full deck to the overflow log. Once per process.
+
+    Never raises: a diagnostic that can kill a training run is worse than no
+    diagnostic, so an unwritable path is reported as a warning and dropped.
+    """
+    global _DECK_OVERFLOW_LOGGED
+    if _DECK_OVERFLOW_LOGGED:
+        return
+    _DECK_OVERFLOW_LOGGED = True
+
+    path = deck_overflow_log_path()
+    lines = [
+        f"run.deck overflow: {len(deck)} cards exceeds cap {MAX_DECK_ROWS}",
+        f"  seed={getattr(run, 'string_seed', None)!r} "
+        f"act_index={getattr(run, 'act_index', None)} "
+        f"total_floor={getattr(run, 'total_floor', None)}",
+    ]
+    for i, card in enumerate(deck):
+        affliction = card.affliction.id if card.affliction is not None else None
+        enchantment = getattr(card, "enchantment", None)
+        lines.append(
+            f"  [{i:3d}] {card.id} +{card.upgrade_level}"
+            f" cost={card.canonical_energy_cost}"
+            f" affliction={affliction!r}"
+            f" enchantment={getattr(enchantment, 'id', enchantment)!r}"
+            f" in_vocab={card.id in CARD_INDEX}"
+        )
+    lines.append(
+        "  counts: " + ", ".join(
+            f"{cid}x{n}" for cid, n in sorted(Counter(c.id for c in deck).items())))
+    try:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write("\n".join(lines) + "\n")
+    except OSError as exc:      # unwritable path — degrade, never crash
+        warnings.warn(f"could not write deck overflow log {path!r}: {exc}",
+                      stacklevel=2)
 
 
 def _hp_potential(ratio: float, knee: float, low_share: float) -> float:
@@ -710,17 +642,23 @@ class STS2RunEnv(gym.Env):
         hp_potential_scale: float = 0.0,
         hp_potential_knee: float = 0.35,
         hp_potential_low_share: float = 0.7,
+        rest_heal_shaping_knee_cap: bool = False,
         floor_reward: float = 1.0,
         act_reward: float = 0.0,
         floor_rewards_by_act: "tuple[float, ...] | None" = None,
         reward_upgrade: float = 0.0,
         reward_remove: float = 0.0,
         reward_elite: float = 0.0,
+        reward_elite_attempt: float = 0.0,
+        reward_boss: float = 0.0,
         reward_relic: float = 0.0,
         rest_heal_mask_above: float | None = None,
         potion_potential_scale: float = 0.0,
+        potion_death_expiry: bool = False,
         deck_random_prob: float = 0.0,
         deck_random_cards: tuple[int, int] = (4, 14),
+        deck_inject: str | None = None,
+        deck_inject_prob: float = 0.0,
         max_steps: int = 10_000,
         render_mode: str | None = None,
         character: str = DEFAULT_CHARACTER,
@@ -741,65 +679,93 @@ class STS2RunEnv(gym.Env):
         self._reward_loss = reward_loss
         self._win_hp_bonus = win_hp_bonus
         self._hp_reward_scale = hp_reward_scale
-        # v8 HP-economy (plan Task 1): concave HP potential shaping. Default
-        # OFF (scale 0.0) — see `_hp_potential` for the piecewise-linear
-        # curve shape.
+        # Concave HP potential shaping. Default OFF (scale 0.0) — see
+        # `_hp_potential` for the piecewise-linear curve shape.
         self._hp_potential_scale = hp_potential_scale
         self._hp_potential_knee = hp_potential_knee
         self._hp_potential_low_share = hp_potential_low_share
+        # Rest-collapse fix: default OFF. See the step() ΔΦ block for the
+        # mechanism.
+        self._rest_heal_shaping_knee_cap = bool(rest_heal_shaping_knee_cap)
         self._floor_reward = floor_reward
         self._act_reward = act_reward
-        # v7 reward terms (plan Task 6). All default OFF. Accepted wrinkles,
-        # by design: an upgraded card taken from a reward counts as
-        # +upgrade_level upgrades (it IS acquired power); a transform
-        # (remove+add in one step) nets zero removals. (v8 Task 2 revises the
-        # old "a potion SOLD counts as used" wrinkle below: `_ep_potions_used`
-        # now counts only actual drinks — a belt decrease with no matching
-        # drink answer, e.g. an event trading a potion away, still moves the
-        # v8 ledger but no longer inflates this count. There is no shop-sell
-        # feature in this sim; "sold" here means any non-drink belt loss.)
+        # All default OFF. Accepted wrinkles, by design: an upgraded card
+        # taken from a reward counts as +upgrade_level upgrades (it IS
+        # acquired power); a transform (remove+add in one step) nets zero
+        # removals. `_ep_potions_used` counts only actual drinks — a belt
+        # decrease with no matching drink answer (e.g. an event trading a
+        # potion away) still moves the ledger but doesn't inflate this count.
+        # There is no shop-sell feature in this sim; "sold" means any
+        # non-drink belt loss.
         self._floor_rewards_by_act = (
             tuple(floor_rewards_by_act) if floor_rewards_by_act is not None else None
         )
         self._reward_upgrade = reward_upgrade
         self._reward_remove = reward_remove
         self._reward_elite = reward_elite
-        # v8 relic reward (plan Task 3): +reward_relic per relic gained,
-        # measured the same way as the deck-length delta above (out-of-combat
-        # decisions only). Default OFF.
+        # v11.1: +reward_elite_attempt once per elite room ENTERED (first
+        # answered combat decision in it), win or lose — reward_elite only
+        # pays on the rewards screen, so pathing onto an elite and dying
+        # earned nothing toward the pathing choice itself. Kept small vs
+        # reward_elite: dying at an elite must stay net-negative (the HP
+        # potential prices the death). Default OFF.
+        self._reward_elite_attempt = reward_elite_attempt
+        # v11: +reward_boss per act boss defeated (an act_index advance; the
+        # FINAL boss ends the run without advancing, so the win branch pays
+        # its share instead). Default OFF.
+        self._reward_boss = reward_boss
+        # +reward_relic per relic gained, measured the same way as the
+        # deck-length delta above (out-of-combat decisions only). Default OFF.
         self._reward_relic = reward_relic
-        # v8 curriculum mask (plan Task 4): above this hp/max_hp ratio at a
-        # rest site, REST_HEAL's mask bit is cleared IF at least one other
-        # rest action is legal — forces generation of upgrade-path data
-        # instead of letting the policy always top off. Default None (off);
-        # a mask knob, not a reward term, so it is deliberately NOT stamped
-        # into checkpoints (`checkpoints.py`) — see `action_masks` below.
+        # Curriculum mask: above this hp/max_hp ratio at a rest site,
+        # REST_HEAL's mask bit is cleared IF at least one other rest action
+        # is legal — forces generation of upgrade-path data instead of
+        # letting the policy always top off. Default None (off); a mask
+        # knob, not a reward term, so it is deliberately NOT stamped into
+        # checkpoints (`checkpoints.py`) — see `action_masks` below.
         self._rest_heal_mask_above = rest_heal_mask_above
-        # v8 potion ledger (plan Task 2): potion_potential_scale * (potions
-        # held now - potions held before), off the SAME belt-count delta v7
-        # Task 6c already tracks below. No terminal term — a potion still on
-        # the belt at episode end keeps its +k (that asymmetry against the
-        # -k a drink/loss pays IS the hoarding-vs-spending weighing bar);
-        # `_ep_potions_expired` just tallies the held count at episode end
-        # for visibility, with no reward attached. Default OFF.
+        # potion_potential_scale * (potions held now - potions held before),
+        # off the same belt-count delta tracked below. No terminal term — a
+        # potion still on the belt at episode end keeps its +k (that
+        # asymmetry against the -k a drink/loss pays IS the
+        # hoarding-vs-spending weighing bar); `_ep_potions_expired` just
+        # tallies the held count at episode end for visibility, with no
+        # reward attached. Default OFF.
         self._potion_potential_scale = potion_potential_scale
-        # v7 deck randomization (plan Task 9): card-exposure domain
-        # randomization — with probability deck_random_prob an episode
-        # starts with 4..14 extra reward-pool cards appended to the starter
-        # deck, so every card gets combat playtime regardless of drafting.
+        # Never-drink fix: default OFF. See the step() forfeiture block for
+        # the mechanism.
+        self._potion_death_expiry = bool(potion_death_expiry)
+        # Card-exposure domain randomization: with probability
+        # deck_random_prob an episode starts with 4..14 extra reward-pool
+        # cards appended to the starter deck, so every card gets combat
+        # playtime regardless of drafting.
         self._deck_random_prob = deck_random_prob
         self._deck_random_cards = tuple(deck_random_cards)
+        # v14: deck-inject packages (mechanics exposure). Loaded once at
+        # construction time -- a bad path or unknown card id must raise here,
+        # not mid-training on whatever episode first rolls the injection.
+        self._deck_inject_prob = deck_inject_prob
+        self._deck_inject_packages: list[list[str]] | None = None
+        if deck_inject is not None:
+            import json
+            with open(deck_inject) as fh:
+                pkgs = json.load(fh)["packages"]
+            from .cards import make_card
+            for pkg in pkgs:
+                for cid in pkg:
+                    make_card(cid)      # KeyError now, not at episode 40k
+            self._deck_inject_packages = pkgs
         self._max_steps = max_steps
         self.render_mode = render_mode
-        # Harvest hook (phase 3, Task 4): threaded straight to the
-        # `RunDriver` this env constructs per-episode inside `reset()`'s
-        # `_drive` closure. The env is the only owner of that construction
-        # (the driver runs on a private greenlet `reset()` starts), so a
-        # caller outside this module — e.g. `harvest.py` — has no other way
-        # to observe `RunDriver.on_combat_start` (locked decision 4) firing;
-        # exposing it here is the smallest seam that doesn't require
-        # subclassing or monkeypatching a production object.  `None` (the
-        # default) means zero behavior change, same as the driver's own
+        # Harvest hook: threaded straight to the `RunDriver` this env
+        # constructs per-episode inside `reset()`'s `_drive` closure. The env
+        # is the only owner of that construction (the driver runs on a
+        # private greenlet `reset()` starts), so a caller outside this
+        # module — e.g. `harvest.py` — has no other way to observe
+        # `RunDriver.on_combat_start` firing; exposing it here is the
+        # smallest seam that doesn't require subclassing or monkeypatching a
+        # production object. `None` (the default) means zero behavior
+        # change, same as the driver's own
         # default.
         self._on_combat_start = on_combat_start
 
@@ -885,12 +851,19 @@ class STS2RunEnv(gym.Env):
         if seed is not None:
             self._rng = random.Random(seed)
         self._run = self._make_run_state()
-        # v7 deck randomization — BEFORE the driver greenlet starts, so the
+        # Deck randomization — BEFORE the driver greenlet starts, so the
         # extra cards exist from the first decision on. The prob > 0.0
         # short-circuit is load-bearing (branch_prob precedent,
         # curriculum_env.py:238-244): the default env must draw no rng here.
         if self._deck_random_prob > 0.0 and self._rng.random() < self._deck_random_prob:
             self._randomize_deck(self._run)
+        # v14 deck-inject: same zero-draw short-circuit contract as the
+        # deck_random_prob block above -- the default env (packages None or
+        # prob 0.0) draws no rng here either.
+        if (self._deck_inject_packages is not None
+                and self._deck_inject_prob > 0.0
+                and self._rng.random() < self._deck_inject_prob):
+            self._inject_deck(self._run)
         self._result = None
         self._steps = 0
         self._map_grid_cache = None
@@ -908,33 +881,35 @@ class STS2RunEnv(gym.Env):
         self._rest_visit_key: tuple[int, int] | None = None
         self._rest_healed_here = False
         self._rest_upgraded_here = False
-        # v7 tallies (plan Task 6): counted always, rewarded only when the
-        # matching reward_* kwarg is non-zero.
+        # Counted always, rewarded only when the matching reward_* kwarg is
+        # non-zero.
         self._ep_upgrades = 0
         self._ep_removes = 0
-        # v8 (plan Task 3): relics gained tally, alongside the deck deltas.
         self._ep_relics = 0
-        # v8 (plan Task 1): combat sloppiness tally, independent of the
-        # hp_potential_scale shaping (which can be off while this stays on).
+        # Combat sloppiness tally, independent of hp_potential_scale shaping
+        # (which can be off while this stays on).
         self._ep_hp_lost = 0
         self._ep_elites_won = 0
         self._ep_potions_obtained = 0
         self._ep_potions_used = 0
-        # v8 potion ledger (plan Task 2): USE classification + timing.
-        # `_ep_potions_used_elite/boss/normal` sum to `_ep_potions_used` (now
-        # a drinks-only count, see the __init__ comment); `_ep_potion_use_hp`
-        # is a running SUM of hp/max_hp at each drink (eval divides by uses);
-        # `_ep_potions_expired` is overwritten every step with the CURRENT
-        # held count, so it lands on the belt count at whatever step turns
-        # out to be the episode's last — no terminal-only special case.
+        # `_ep_potions_used_elite/boss/normal` sum to `_ep_potions_used`
+        # (drinks-only count); `_ep_potion_use_hp` is a running SUM of
+        # hp/max_hp at each drink (eval divides by uses); `_ep_potions_expired`
+        # is overwritten every step with the CURRENT held count, so it lands
+        # on the belt count at whatever step turns out to be the episode's
+        # last — no terminal-only special case.
         self._ep_potions_used_elite = 0
         self._ep_potions_used_boss = 0
         self._ep_potions_used_normal = 0
         self._ep_potions_expired = 0
         self._ep_potion_use_hp = 0.0
         self._elite_reward_key: tuple[int, int] | None = None
-        # v7 per-card exposure tallies (plan Task 8): card CLASS name (unique
-        # per card class, unlike display ids) -> count. Eval-only — never in
+        # v11.1: elite ATTEMPTS (rooms entered, win or lose), same per-room
+        # (act, floor) dedup as the win tally above.
+        self._ep_elites_fought = 0
+        self._elite_fought_key: tuple[int, int] | None = None
+        # Per-card exposure tallies: card CLASS name (unique per card class,
+        # unlike display ids) -> count. Eval-only — never in
         # vec_env.EP_METRIC_KEYS (those batch as flat floats).
         self._ep_card_offer_ids: Counter[str] = Counter()
         self._ep_card_take_ids: Counter[str] = Counter()
@@ -956,15 +931,15 @@ class STS2RunEnv(gym.Env):
 
         self._glet = greenlet.greenlet(_drive)
         self._switch(None)   # run until the first decision
-        # Baselines for the v7 deck/belt deltas — taken AFTER the driver runs
+        # Baselines for the deck/belt deltas — taken AFTER the driver runs
         # to the first decision (the run is set up, Neow pending): deck and
         # belt are their true episode-start selves here.
         self._deck_upgrade_base = sum(c.upgrade_level for c in run.deck)
         self._deck_len_base = len(run.deck)
         self._belt_base = sum(1 for p in run.potions if p is not None)
-        # v8 (plan Task 3): relic count baseline. Taken here, same as the
-        # deck/belt baselines, so the starting relic (e.g. Burning Blood) is
-        # already counted and never fires the reward.
+        # Relic count baseline. Taken here, same as the deck/belt baselines,
+        # so the starting relic (e.g. Burning Blood) is already counted and
+        # never fires the reward.
         self._relic_len_base = len(run.relics)
         return self._build_obs(), self._info()
 
@@ -985,6 +960,16 @@ class STS2RunEnv(gym.Env):
                 card.upgrade()
             run.deck.append(card)
 
+    def _inject_deck(self, run: RunState) -> None:
+        """v14: append one inject package (1-3 card ids) to the starting
+        deck — plain append, no hooks, same as _randomize_deck. Packages,
+        not single cards: a lone synergy card (Pact's End with no exhaust
+        engine) would teach the card is dead (spec §3)."""
+        from .cards import make_card
+        pkg = self._rng.choice(self._deck_inject_packages)
+        for cid in pkg:
+            run.deck.append(make_card(cid))
+
     def step(self, action: int):
         assert self._run is not None, "call reset() before step()"
         run = self._run
@@ -1001,24 +986,41 @@ class STS2RunEnv(gym.Env):
             floor_before = run.total_floor
             act_before = run.act_index
             elites_before = self._ep_elites_won
+            fought_before = self._ep_elites_fought
             self._count_behavior(request, answer)
             self._switch(answer)
         else:
             hp_before, floor_before, act_before = run.hp, run.total_floor, run.act_index
             max_hp_before = run.max_hp
             elites_before = self._ep_elites_won
+            fought_before = self._ep_elites_fought
 
         self._ep_hp_lost += max(0, hp_before - run.hp)
         reward = self._hp_reward_scale * (min(run.hp, run.max_hp) - min(hp_before, run.max_hp)) / max(1, run.max_hp)
-        # v8 HP-economy (plan Task 1): concave potential-based shaping, each
-        # ratio measured against its OWN step's max_hp (before-ratio uses
+        # Concave potential-based shaping, each ratio measured against its
+        # OWN step's max_hp (before-ratio uses
         # max_hp_before, after-ratio uses the post-step max_hp) so a max-HP
         # gain can't fire this term backwards. Death terminal: hp=0 -> phi=0,
         # no special case needed (the piecewise formula already gives 0).
         ratio_before = min(hp_before, max_hp_before) / max(1, max_hp_before)
         ratio_after = min(run.hp, run.max_hp) / max(1, run.max_hp)
+        shaped_after = ratio_after
+        if (self._rest_heal_shaping_knee_cap
+                and request is not None
+                and request.kind == DecisionKind.REST
+                and answer == REST_HEAL):
+            # Rest-collapse fix: a rest heal earns shaped reward only
+            # inside the danger zone. ΔΦ is undiscounted while the healed
+            # HP's later losses are discounted, so an uncapped campfire heal
+            # is a net-positive farm that outbids REST_SMITH's flat
+            # +reward_upgrade; capping the after-ratio at the knee (and
+            # clamping to zero when the heal STARTS at/above it) removes
+            # exactly that edge and nothing else.
+            shaped_after = min(ratio_after, self._hp_potential_knee)
+            if shaped_after < ratio_before:
+                shaped_after = ratio_before
         reward += self._hp_potential_scale * (
-            _hp_potential(ratio_after, self._hp_potential_knee, self._hp_potential_low_share)
+            _hp_potential(shaped_after, self._hp_potential_knee, self._hp_potential_low_share)
             - _hp_potential(ratio_before, self._hp_potential_knee, self._hp_potential_low_share)
         )
         if self._floor_rewards_by_act is not None:
@@ -1028,18 +1030,25 @@ class STS2RunEnv(gym.Env):
             reward += self._floor_reward * (run.total_floor - floor_before)
         reward += self._act_reward * (run.act_index - act_before)
         reward += self._reward_elite * (self._ep_elites_won - elites_before)
+        # v11.1: pay the elite-entry credit the step the attempt is tallied
+        # (`_count_behavior` above), decoupled from the win-only term.
+        reward += self._reward_elite_attempt * (self._ep_elites_fought - fought_before)
+        # v11: an act-boss kill IS the act_index advance (act entry lands on
+        # the next act's Ancient node in the same transition); the final
+        # boss pays via the win branch below — exactly once per boss.
+        reward += self._reward_boss * (run.act_index - act_before)
 
         terminated = self._result is not None
         if terminated:
             if self._result.victory:
-                reward += self._reward_win + self._win_hp_bonus * (
+                reward += self._reward_win + self._reward_boss + self._win_hp_bonus * (
                     self._result.hp / max(1, self._result.max_hp)
                 )
             else:
                 reward += self._reward_loss
         truncated = (not terminated) and self._steps >= self._max_steps
 
-        # v7 deck/belt deltas — measured only between decisions with no live
+        # Deck/belt deltas — measured only between decisions with no live
         # combat (in-combat temporary upgrades and mid-combat deck adds are
         # ignored; permanent changes get credited at the first out-of-combat
         # step).
@@ -1066,7 +1075,7 @@ class STS2RunEnv(gym.Env):
         if belt_now > self._belt_base:
             gained = belt_now - self._belt_base
             self._ep_potions_obtained += gained
-            # v8 potion ledger (plan Task 2): +k per potion picked up. No
+            # +k per potion picked up. No
             # terminal zeroing — a potion still held at episode end keeps
             # this +k (see `_ep_potions_expired` below).
             reward += self._potion_potential_scale * gained
@@ -1102,6 +1111,17 @@ class STS2RunEnv(gym.Env):
         # no separate terminal-only branch needed.
         self._ep_potions_expired = belt_now
 
+        if (self._potion_death_expiry and terminated
+                and self._result is not None and not self._result.victory):
+            # Never-drink fix: the ledger pays +k on pickup and nothing at
+            # episode end, so hoard-until-death nets +k per potion and
+            # strictly dominates drinking (drink = +k-k = 0). Forfeiting the
+            # pickup credit on DEATH makes hoard-and-die net 0 too — the
+            # tiebreaker becomes the potion's actual combat value. Wins keep
+            # the credit (winning with a spare potion is not a sin), and
+            # truncation is a harness artifact, so neither expires.
+            reward -= self._potion_potential_scale * belt_now
+
         return self._build_obs(), float(reward), terminated, truncated, self._info()
 
     def _count_behavior(self, request: DecisionRequest, answer: int) -> None:
@@ -1122,7 +1142,7 @@ class STS2RunEnv(gym.Env):
         changes exactly at a visit boundary. Every visit counts in the
         denominator, including one the agent simply left.
         """
-        # v7 elite tally: any request carrying a rewards screen from an elite
+        # Elite tally: any request carrying a rewards screen from an elite
         # room means the elite was beaten; dedupe per room like rest visits
         # (the rewards screen re-asks per item taken).
         rewards = getattr(request, "rewards", None)
@@ -1131,6 +1151,15 @@ class STS2RunEnv(gym.Env):
             if key != self._elite_reward_key:
                 self._elite_reward_key = key
                 self._ep_elites_won += 1
+        # v11.1: elite ATTEMPT — the first answered combat decision inside an
+        # elite room, before the outcome exists (a death here never reaches
+        # the rewards screen, so the win tally above can't see it).
+        if (request.kind == DecisionKind.COMBAT and request.combat is not None
+                and request.combat.room_type == RoomType.ELITE):
+            key = (request.run.act_index, request.run.total_floor)
+            if key != self._elite_fought_key:
+                self._elite_fought_key = key
+                self._ep_elites_fought += 1
         if (request.kind == DecisionKind.COMBAT and answer == 0
                 and request.combat is not None
                 and request.combat.phase == Phase.PLAYER_TURN):
@@ -1141,8 +1170,8 @@ class STS2RunEnv(gym.Env):
                 and answer <= len(request.rewards.cards)):
             self._ep_card_offers += 1
             self._ep_card_takes += int(answer < len(request.rewards.cards))
-            # v7 per-card exposure (plan Task 8): tally every offered card,
-            # and the taken one, by class name.
+            # Per-card exposure: tally every offered card, and the taken
+            # one, by class name.
             for card in request.rewards.cards:
                 self._ep_card_offer_ids[type(card).__name__] += 1
             if answer < len(request.rewards.cards):
@@ -1167,9 +1196,8 @@ class STS2RunEnv(gym.Env):
         super().close()
 
     # ------------------------------------------------------------------
-    # Action translation / masking. T5b (R4): the SELECT_CARDS branches of
-    # both methods below are the only part of this section the v7
-    # observation rewrite's action-space follow-up actually changes — see
+    # Action translation / masking. The SELECT_CARDS branches of both
+    # methods below address the sorted candidate order — see
     # ``_sorted_candidate_order``'s docstring for the ordering contract both
     # sides share.
     # ------------------------------------------------------------------
@@ -1189,14 +1217,12 @@ class STS2RunEnv(gym.Env):
         if kind == DecisionKind.SELECT_CARDS:
             if request.skippable and action == CHOICE_BASE:
                 return len(request.candidates)
-            # R4: action SELECT_BASE + i answers sorted candidate row i —
+            # action SELECT_BASE + i answers sorted candidate row i —
             # ``_sorted_candidate_order(request)[i]``, the SAME order the
             # observation's ``select.candidates`` rows are written in. `order`
-            # already reflects the cap (it never returns more entries than
-            # rows actually exist — see that method's docstring), so an `i`
-            # past `len(order)` correctly falls through to illegal (None),
-            # matching how the old code let the reserved-capacity tail fall
-            # through.
+            # already reflects the cap (never more entries than rows
+            # actually exist — see that method's docstring), so an `i` past
+            # `len(order)` correctly falls through to illegal (None).
             if SELECT_BASE <= action < SELECT_BASE + MAX_SELECT_CANDIDATES:
                 i = action - SELECT_BASE
                 order = self._sorted_candidate_order(request)
@@ -1216,18 +1242,11 @@ class STS2RunEnv(gym.Env):
             mask[0] = True   # terminal/truncated: one harmless no-op
             return mask
         kind = request.kind
-        # Bound, don't crash (fix-pass review item 2): this used to write one
-        # mask cell per ACTUAL belt slot `request.potion_actions()` yields,
-        # uncapped, so a belt grown past MAX_POTION_SLOTS indexed past the
-        # end of this array (a live IndexError — Task A's own regression,
-        # just at a higher threshold). Agrees with the SELECT branch's
-        # policy below: truncate rather than assert, since a crash
-        # mid-training is worse than an unreachable slot. The loud signal
-        # for this overflow already lives on the observation side —
-        # `_build_obs`'s `run.potions` block shares this SAME
-        # MAX_POTION_SLOTS cap, so an overgrown belt also fires
-        # `run.potions.overflow` there — unlike the SELECT branch, this one
-        # needs no separate signal of its own.
+        # Bound, don't crash: a belt grown past MAX_POTION_SLOTS must not
+        # index past the end of this array. Truncate rather than assert — a
+        # crash mid-training is worse than an unreachable slot. `_build_obs`'s
+        # `run.potions` block shares this same cap, so an overgrown belt
+        # also fires `run.potions.overflow` there.
         for answer in request.potion_actions():
             slot = answer - POTION_ACTION_BASE
             if slot < MAX_POTION_SLOTS:
@@ -1236,20 +1255,14 @@ class STS2RunEnv(gym.Env):
         if kind == DecisionKind.COMBAT:
             mask[legal] = True
         elif kind == DecisionKind.SELECT_CARDS:
-            # R4: one mask bit per candidate row `_sorted_candidate_order`
+            # One mask bit per candidate row `_sorted_candidate_order`
             # actually addresses — never more than MAX_SELECT_CANDIDATES,
             # since that helper already truncates to match the observation.
-            # OBS_SCHEMA.md §2.3/this method's own history: overflow here is
-            # more serious than elsewhere in this project — a truncated
-            # OBSERVATION block only degrades the view, but a truncated
-            # ACTION block makes a real, choosable candidate unclickable,
-            # which the actual game never does. So this never asserts on
-            # overflow (a crash mid-training would be worse); the loud
-            # signal is `select.candidates.overflow` in the observation
-            # (`_build_obs`, `buf.write_rows(..., cap=MAX_SELECT_CANDIDATES)`)
-            # firing from the SAME truncated order, which is a genuine, if
-            # remote, ACTION-SPACE fidelity narrowing, not just an
-            # observation one.
+            # A truncated ACTION block makes a real, choosable candidate
+            # unclickable (worse than a truncated observation block, which
+            # only degrades the view), so this never asserts on overflow —
+            # the loud signal is `select.candidates.overflow` in the
+            # observation, firing from the same truncated order.
             order = self._sorted_candidate_order(request)
             for i in range(len(order)):
                 mask[SELECT_BASE + i] = True
@@ -1261,8 +1274,8 @@ class STS2RunEnv(gym.Env):
             )
             for i in legal:
                 mask[CHOICE_BASE + i] = True
-            # v8 (plan Task 4): rest_heal_mask_above curriculum mask. Only
-            # at a rest-site decision, only above the HP-ratio threshold,
+            # rest_heal_mask_above curriculum mask. Only at a rest-site
+            # decision, only above the HP-ratio threshold,
             # and only when REST_HEAL is not the sole legal action — never
             # mask away the only option (`driver.py`'s REST_HEAL/REST_SMITH/
             # REST_LEAVE=0,1,2; REST_HEAL always legal unless already used
@@ -1279,9 +1292,9 @@ class STS2RunEnv(gym.Env):
         return mask
 
     # ------------------------------------------------------------------
-    # T5b (R4): the candidate-index action block (`_translate`/`action_masks`
-    # above) addresses ``select.candidates``' SORTED row order and translates
-    # a chosen row back to the true candidate index through this method. This
+    # The candidate-index action block (`_translate`/`action_masks` above)
+    # addresses ``select.candidates``' SORTED row order and translates a
+    # chosen row back to the true candidate index through this method. This
     # is the single source of that order — the observation writer below sorts
     # via ``ObsBuffer.write_rows(..., sort=True)``, and this method computes
     # the IDENTICAL key independently, so the two can never silently
@@ -1292,23 +1305,17 @@ class STS2RunEnv(gym.Env):
         """The true candidate indices (into ``request.candidates``), in the
         SAME canonical order ``select.candidates``' rows are written in —
         and, since ``write_rows`` TRUNCATES to ``MAX_SELECT_CANDIDATES``
-        after sorting, this returns EXACTLY the rows that exist, never more.
-
-        Fix-pass correction (review item 1): this used to return every
-        candidate index uncapped, so past ``MAX_SELECT_CANDIDATES`` it
-        described rows ``write_rows`` had already truncated away — the next
-        lane (T5b, R4) builds one action-mask bit per entry this method
-        returns, so an uncapped helper would enable actions for candidate
-        rows that are all-PAD in the policy's own observation (the exact
-        observation/action seam this env's split into two lanes exists to
-        protect). Also mirrors ``select.candidates``' own guard (review item
-        3): a candidate whose card id cannot be resolved to a vocab index
-        never becomes a row there, so it must never appear in this order
-        either — computed with the identical ``card.id in CARD_INDEX``
-        predicate, in the same position (before the sort), for the same
-        reason ``write_rows(sort=True)`` sorts before truncating (see that
-        method's own docstring): the retained set must be a deterministic
-        function of the candidate multiset alone, not of input order.
+        after sorting, this returns EXACTLY the rows that exist, never more
+        (an uncapped helper would enable actions for candidate rows that are
+        all-PAD in the policy's own observation). Also mirrors
+        ``select.candidates``' own guard: a candidate whose card id cannot
+        be resolved to a vocab index never becomes a row there, so it must
+        never appear in this order either — computed with the identical
+        ``card.id in CARD_INDEX`` predicate, in the same position (before
+        the sort), for the same reason ``write_rows(sort=True)`` sorts
+        before truncating (see that method's own docstring): the retained
+        set must be a deterministic function of the candidate multiset
+        alone, not of input order.
 
         OBS_SCHEMA.md §2.6's trap: ``from_draw`` candidates arrive in
         draw-pile order — hidden information the real game's own select
@@ -1321,7 +1328,7 @@ class STS2RunEnv(gym.Env):
         aren't hidden-order piles anyway). This module's own sort key
         differs from the game's (ours is ``(tuple(ints), tuple(floats))``
         over ``_run_card_row``'s row shape, not rarity+alphabet) — that is
-        fine per the brief: any canonical, order-independent sort closes the
+        fine: any canonical, order-independent sort closes the
         leak; matching the game's own display order is not required, only
         matching what OUR OWN observation actually wrote.
 
@@ -1390,18 +1397,16 @@ class STS2RunEnv(gym.Env):
         overflow: dict[str, bool] = {}
 
         # ── Potion belt (run-level; combat exposes its own rows too) ─────
-        # Round-6 obs-parity fix: `RunState.potions` is a pre-combat
-        # SNAPSHOT — `RunState.finish_combat` only copies the live
-        # `combat.player.potions` back into it once the combat ENDS (see
-        # `run.py:finish_combat`'s `self.potions = list(combat.player.
-        # potions)`). The game has no such split (one Player, one belt), so
-        # a potion drunk MID-combat (e.g. Skill Potion's card-add, surfaced
-        # here as a SELECT_CARDS decision) empties its game-side belt slot
-        # immediately, while this block used to keep reading the stale
-        # RunState list until the combat's `finish_combat` call — confirmed
+        # `RunState.potions` is a pre-combat SNAPSHOT — `RunState.
+        # finish_combat` only copies the live `combat.player.potions` back
+        # into it once the combat ENDS (`run.py:finish_combat`'s
+        # `self.potions = list(combat.player.potions)`). The game has no
+        # such split (one Player, one belt), so a potion drunk MID-combat
+        # (e.g. Skill Potion's card-add, surfaced as a SELECT_CARDS
+        # decision) empties its game-side belt slot immediately — confirmed
         # against seed 89U21BV1TZ act 0 floor 15 (game dump: belt slot 2
         # already empty from Combat decision 4 onward; sim dump: still
-        # filled for the whole rest of the combat). Read the LIVE belt off
+        # filled for the rest of the combat). Read the LIVE belt off
         # `request.combat.player.potions` whenever a combat is active.
         live_combat = request.combat if request is not None else None
         potions = live_combat.player.potions if live_combat is not None else run.potions
@@ -1420,22 +1425,24 @@ class STS2RunEnv(gym.Env):
         # ── Deck (R2 instance rows, SORTED — a multiset, order-independent
         #    for free; deck order is not hidden information, but the sort
         #    makes this block canonical the same way `cards` is in combat) ─
-        # Fix-pass correction (review item 3): a card whose id is not in
-        # CARD_INDEX is SKIPPED, matching the pre-v7 code's `if idx is not
-        # None` guard — `_run_card_row` computes its floats straight off the
-        # card object regardless of id resolution, so writing it anyway
-        # would produce a row with a PAD id but live floats, violating
-        # OBS_SCHEMA.md §2.1's "PAD means id==0 AND all-zero floats"
-        # invariant. Unreachable today (CARD_INDEX is built from the same
-        # registry every real Card's id comes from).
+        # A card whose id is not in CARD_INDEX is SKIPPED — `_run_card_row`
+        # computes its floats straight off the card object regardless of id
+        # resolution, so writing it anyway would produce a PAD-id row with
+        # live floats, violating OBS_SCHEMA.md §2.1's "PAD means id==0 AND
+        # all-zero floats" invariant. Unreachable today.
+        # On overflow `write_rows` warns (once per process) and truncates,
+        # which names the segment but not the deck that blew the cap — so dump
+        # the deck's contents to the overflow log alongside that warning.
         overflow["run.deck"] = buf.write_rows(
             "run.deck", [_run_card_row(c) for c in run.deck if c.id in CARD_INDEX],
             cap=MAX_DECK_ROWS, n_int=4, n_float=4, sort=True)
+        if overflow["run.deck"]:
+            _log_deck_overflow(run, list(run.deck))
 
         # ── Relics (R1, acquisition order — what the relic bar shows) ────
-        # Fix-pass correction (review item 3): skip a relic whose id is not
-        # in RELIC_INDEX, rather than writing a PAD-id row with `relic_row`'s
-        # live counter/flag floats (same invariant as run.deck above).
+        # Skip a relic whose id is not in RELIC_INDEX, rather than writing a
+        # PAD-id row with `relic_row`'s live counter/flag floats (same
+        # invariant as run.deck above).
         relic_rows = []
         for relic in run.relics:
             idx = RELIC_INDEX.get(relic.id)
@@ -1454,12 +1461,10 @@ class STS2RunEnv(gym.Env):
             # DoubleBoss once the first falls, matching the icon.
             for cls in room_set.next_boss_encounter.monster_classes:
                 idx = MONSTER_INDEX.get(getattr(cls, "__name__", ""))
-                # Fix-pass correction (review item 3, "the worst" case): an
-                # unrecognised monster class must be SKIPPED, not appended
-                # as a PAD row — appending would consume one of only
-                # MAX_BOSS_IDS slots and shift every later real id into a
-                # row it doesn't belong in. Unreachable today (MONSTER_INDEX
-                # is built from the same registry every boss draws from).
+                # An unrecognised monster class must be SKIPPED, not
+                # appended as a PAD row — appending would consume one of
+                # only MAX_BOSS_IDS slots and shift every later real id into
+                # a row it doesn't belong in. Unreachable today.
                 if idx is None:
                     continue
                 boss_rows.append(([oid(idx)], []))
@@ -1583,13 +1588,12 @@ class STS2RunEnv(gym.Env):
             rows = []
             for c in range(max(REWARD_CARD_SLOTS, len(cards))):
                 card = cards[c] if c < len(cards) else None
-                # Fix-pass correction (review item 3): `reward.cards` is
-                # POSITIONAL (the action space picks a reward by slot
-                # index), so an unresolvable id can't be dropped from the
-                # list like the sorted blocks below — that would shift
-                # every later slot into the wrong action index. Treat it as
-                # an explicit PAD row IN PLACE instead, same as an absent
-                # slot (card is None).
+                # `reward.cards` is POSITIONAL (the action space picks a
+                # reward by slot index), so an unresolvable id can't be
+                # dropped from the list like the sorted blocks below — that
+                # would shift every later slot into the wrong action index.
+                # Treat it as an explicit PAD row IN PLACE instead, same as
+                # an absent slot (card is None).
                 if card is not None and card.id not in CARD_INDEX:
                     card = None
                 rows.append(([PAD, PAD, PAD, PAD], [0.0, 0.0, 0.0, 0.0]) if card is None
@@ -1636,13 +1640,10 @@ class STS2RunEnv(gym.Env):
             DecisionKind.SELECT_CARDS, DecisionKind.SELECT_OPTION,
         )
         if selecting:
-            # Bug fix (T5a): the pre-v7 code fell back to a fixed index
-            # `N_PURPOSES - 1` (the CAPACITY tail, a dead padded one-hot
-            # slot — vocab.json's actual "_unknown" entry sits at whatever
-            # index the persisted vocabulary gave it, e.g. 0, not 23) for
-            # any unrecognized purpose string, so an unrecognized purpose
-            # was silently invisible rather than routed to the real
-            # "_unknown" bucket the vocabulary defines for exactly this.
+            # An unrecognized purpose string must route to the real
+            # "_unknown" vocabulary entry (`vocab.json`'s persisted index,
+            # e.g. 0), not a fixed `N_PURPOSES - 1` capacity-tail slot,
+            # which would leave it silently invisible.
             unknown_idx = PURPOSE_INDEX.get("_unknown")
             purpose_idx = PURPOSE_INDEX.get(request.purpose, unknown_idx)
             buf.i[I("select.purpose.ids")] = [oid(purpose_idx)]
@@ -1657,12 +1658,10 @@ class STS2RunEnv(gym.Env):
                 # either (see _sorted_candidate_order's docstring for the
                 # source citation). sort=True makes the row order a pure
                 # function of the candidate multiset.
-                # Fix-pass correction (review item 3): skip a candidate
-                # whose id is not in CARD_INDEX (same invariant as
-                # run.deck above) — `_sorted_candidate_order` applies the
-                # IDENTICAL `card.id in CARD_INDEX` filter before its own
-                # sort, so the two never disagree about which candidates
-                # address a row at all.
+                # Skip a candidate whose id is not in CARD_INDEX (same
+                # invariant as run.deck above) — `_sorted_candidate_order`
+                # applies the IDENTICAL filter before its own sort, so the
+                # two never disagree about which candidates address a row.
                 overflow["select.candidates"] = buf.write_rows(
                     "select.candidates",
                     [_run_card_row(c) for c in request.candidates if c.id in CARD_INDEX],
@@ -1712,6 +1711,7 @@ class STS2RunEnv(gym.Env):
             info["ep_removes"] = self._ep_removes
             info["ep_relics"] = self._ep_relics
             info["ep_elites_won"] = self._ep_elites_won
+            info["ep_elites_fought"] = self._ep_elites_fought
             info["ep_potions_obtained"] = self._ep_potions_obtained
             info["ep_potions_used"] = self._ep_potions_used
             info["ep_potions_used_elite"] = self._ep_potions_used_elite
@@ -1722,6 +1722,11 @@ class STS2RunEnv(gym.Env):
             info["ep_hp_lost"] = self._ep_hp_lost
             info["ep_card_offer_ids"] = dict(self._ep_card_offer_ids)
             info["ep_card_take_ids"] = dict(self._ep_card_take_ids)
+            # The end-of-run deck census (eval.py --deck-hist). `run` is
+            # bound at the top of this method and `self._run` is never
+            # cleared on termination, so the deck here is the deck the
+            # episode finished with.
+            info["ep_final_deck"] = final_deck_histogram(run)
         return info
 
     def render(self) -> None:

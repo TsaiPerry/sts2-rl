@@ -37,18 +37,9 @@ class HavocCard(Card):
 
         # Havoc.cs:21 is ONE line: `CardPileCmd.AutoPlayFromDrawPile(
         # choiceContext, Owner, 1, CardPilePosition.Top, forceExhaust: true)`.
-        #
-        # The sim reimplemented the whole verb inline and, unlike card/cascade,
-        # called `card.on_play(...)` directly — which skipped the entire play
-        # bracket that `_resolve_card_play` provides: the BeforeCardPlayed /
-        # AfterCardPlayed pair (so Free Attack never fired), the play-count loop
-        # seeded from `1 + base_replay_count` (so a Hidden-Gem'd card played
-        # once instead of twice), the before_attack / after_attack bracket (so
-        # Akabeko's Vigor was not consumed), the in-loop EnchantmentModel.OnPlay
-        # call, and `captured_x` (so an auto-played Whirlwind did nothing). It
-        # also hand-rolled the reshuffle with an UNSTABLE shuffle and hand-moved
-        # the card to the exhaust pile, which sent an unplayable Burn to the
-        # exhaust for the wrong reason and could not fire AfterCardExhausted
-        # through CardCmd.Exhaust.
+        # Must route through the full play bracket (BeforeCardPlayed/
+        # AfterCardPlayed, replay-count loop, before/after_attack, captured_x)
+        # rather than calling `card.on_play` directly, and reshuffle must use
+        # a STABLE shuffle — a prior inline reimplementation skipped both.
         CardPileCmd.auto_play_from_draw_pile(
             ctx.hooks, ctx.player, 1, position="top", force_exhaust=True)

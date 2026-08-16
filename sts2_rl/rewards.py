@@ -106,7 +106,7 @@ class CardCreationFlags(IntFlag):
     REWARD screen and nothing else. `NO_CARD_POOL_MODIFICATIONS` and
     `NO_MODIFY_HOOKS` are the two the generators pass.
 
-    Where a flag comes from (R2, round 13): a construction site's flags are
+    Where a flag comes from: a construction site's flags are
     the OR of its `CardCreationOptions` factory's own (`ForNonCombatWith*` all
     set `NO_UPGRADE_ROLL` — CardCreationOptions.cs:139/152/162) and whatever
     it adds with `.WithFlags(...)`, which is itself an OR
@@ -399,7 +399,7 @@ def create_reward_cards(
     `pool` overrides the character pool (CardCreationOptions' explicit pool
     list — Lead Paperweight passes the Colorless pool).
 
-    `extra_flags` (R2, round 13) is the rest of the caller's
+    `extra_flags` is the rest of the caller's
     `CardCreationFlags` — everything its `CardCreationOptions` factory and its
     `.WithFlags(...)` chain set, OR-ed onto the two this function derives from
     `is_card_reward` / `modify_hooks`. Two of them change what happens here,
@@ -663,7 +663,7 @@ class CardRewardGroup:
     # Colorless pool — see test_the_future_of_potions_offer_is_not_widened_
     # by_dingy_rug.
     flags: CardCreationFlags = CardCreationFlags(0)
-    # (R14, R10) The `CardCreationSource` this screen's `CardCreationOptions`
+    # The `CardCreationSource` this screen's `CardCreationOptions`
     # actually carries. `Source` is set by the *factory method* the
     # construction site calls (`ForRoom` -> Encounter/Shop/Other by room
     # type; every `ForNonCombatWith*` -> Other unconditionally —
@@ -773,12 +773,11 @@ class CombatRewards:
     # whether `apply_reward_modifiers` has already run on this set. Makes the
     # dispatch idempotent per instance, mirroring how `GenerateWithoutOffering`
     # no-ops on a set that already went through it — which is what lets
-    # `Offer()` call it again unconditionally at RewardsSet.cs:159. R10
-    # (2026-08-01): construction sites still call `apply_reward_modifiers`
-    # explicitly (the RNG-order-preserving choice — see the function's own
-    # docstring), and `driver._offer_rewards` / `RunState.offer_rewards` now
-    # call it too, as a backstop; this flag is what makes calling it from both
-    # places safe instead of double-firing every hook.
+    # `Offer()` call it again unconditionally at RewardsSet.cs:159. Construction
+    # sites call `apply_reward_modifiers` explicitly (RNG-order-preserving —
+    # see the function's docstring), and `driver._offer_rewards` /
+    # `RunState.offer_rewards` call it again as a backstop; this flag is what
+    # makes calling it from both places safe instead of double-firing hooks.
     generated: bool = False
 
     # ── The first CardReward, as flat attributes ─────────────────────────
@@ -886,17 +885,17 @@ def apply_reward_modifiers(run: "RunState", rewards: CombatRewards) -> None:
     entry point "always generates before offering" (it doesn't, for most
     callers).
 
-    The sim mirrors both entry points (R10, 2026-08-01): `rewards.generated`
-    is the `_isGenerated` mirror — a set this function has already processed
-    returns immediately — so this call still sits at each construction site
+    The sim mirrors both entry points: `rewards.generated` is the
+    `_isGenerated` mirror — a set this function has already processed returns
+    immediately — so this call still sits at each construction site
     (rewards.py:751,814; run.py:1456; glass_eye.py:78; brain_leech.py:89;
-    trial.py:118), preserving their exact RNG draw order, mirroring the
+    trial.py:118), preserving their exact RNG draw order and mirroring the
     generate-time entry point, AND `driver._offer_rewards` /
-    `RunState.offer_rewards` call it again as an idempotent backstop,
-    mirroring the offer-time entry point — so a FUTURE site that forgets the
-    explicit call still gets dispatched exactly once, at offer time, instead
-    of silently skipping every reward-modifying relic (the trap round 12
-    recorded and fixed per-site: GAP-QUEUE.md's event/3C section).
+    `RunState.offer_rewards` call it again as an idempotent backstop mirroring
+    the offer-time entry point — so a future site that forgets the explicit
+    call still gets dispatched exactly once, at offer time, instead of
+    silently skipping every reward-modifying relic (see GAP-QUEUE.md's
+    event/3C section).
 
     What keeps the room-gated relics off a custom screen is `rewards.room`
     being None there, exactly as `RewardsSet.Room` is null for

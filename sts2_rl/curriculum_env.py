@@ -1,50 +1,35 @@
 """STS2CurriculumRunEnv — the phase-1 curriculum env: a full run on a
 randomized single-column map, rewarded by floors reached and nothing else.
 
-The training plan this implements (see RL.md for the base env's design):
+Design (see RL.md for the base env):
 
-  1. **Floor-only reward.** Floors reached is the one metric that actually
-     measures how well a run is going, and the one that can't be reward-
-     hacked. Per-step reward is `floor_reward` × floors gained (0 or 1),
-     plus a terminal `reward_win` worth a few floors so beating the final
-     boss is honestly weighted against dying to it. There is NO HP-delta
-     term: the critic learns "low HP → fewer future floors" on its own from
-     the observation, which densifies the signal through GAE without
-     biasing the optimal policy the way hand-coded HP shaping does.
-     Because that internalization has to propagate across hundreds of
-     steps, train this env with γ≈0.999 (train_torch.py defaults to that
-     for --env column).
+  1. **Floor-only reward.** Reward is `floor_reward` x floors gained (0/1)
+     plus a terminal `reward_win`. No HP-delta term — the critic learns
+     "low HP -> fewer future floors" from the observation via GAE instead
+     of hand-coded shaping. Needs the long-horizon credit assignment of
+     gamma~=0.999 (train_torch.py's default for --env column).
 
-  2. **Randomized single-column maps.** Every act's map is one column
-     ending at the boss (the GoldenPathActMap shape), as long as the act's
-     real room count (`column_rooms` overrides it), but the room-type
-     sequence is re-sampled every act from `room_weights`, monster-heavy
-     by default. One column means routing
-     can never dodge a fight (a bad early policy can't learn risk-averse
-     pathing instead of combat); re-sampling means the schedule can't be
-     memorized — the only way to prepare for "elite next floor" is to read
-     the map-lookahead observation, which is exactly the skill that
-     transfers to the real branching maps. "?" floors always resolve to
-     Events (Golden Compass semantics), so the sampled combat count is the
-     actual combat count.
+  2. **Randomized single-column maps.** Every act is one column to the
+     boss (GoldenPathActMap shape), room-type sequence re-sampled every act
+     from `room_weights` (monster-heavy by default). One column forces
+     every fight (no risk-averse route-dodging); re-sampling prevents
+     memorizing the schedule, so reading the map-lookahead observation is
+     the only way to prepare — the skill that transfers to real branching
+     maps. "?" floors always resolve to Events (Golden Compass semantics).
 
-Phase 2 is the unmodified STS2RunEnv, whose reward defaults are these same
-floor-only settings: the observation/action layout here is IDENTICAL (this
-class only overrides the RunState factory), so a checkpoint trained here
-resumes directly on --env run. Prefer annealing — mix real maps in gradually — over
-a hard swap, since map *choices* never occur on a single column (the MAP
-decision each floor has exactly one option).
+Phase 2 is the unmodified STS2RunEnv with the same floor-only reward
+defaults; obs/action layout is IDENTICAL (only the RunState factory
+differs), so checkpoints trained here resume directly on --env run.
 
-The column obeys StandardActMap's placement rules exactly as they project
-onto a single path: forced rows (row 1 Monster, row `n_rooms − 6` Treasure,
-top row Rest), no Elite/Rest below row 6, no Rest in the top 3 rows, and no
-special room (elite/rest/treasure/shop) on consecutive floors — the same
-restriction sets actmap.py uses. What stays deliberately non-faithful (it
-is a training curriculum, not a fidelity port): type *frequencies* come
-from `room_weights` instead of the per-map queue counts (the defaults are
-calibrated to the measured real-map mix), and the map-modifier relic/card
-pipeline (Spoils Map, Golden Compass regeneration) is skipped — the column
-IS the map.
+The column obeys StandardActMap's placement rules projected onto a single
+path: forced rows (row 1 Monster, row `n_rooms - 6` Treasure, top row
+Rest), no Elite/Rest below row 6, no Rest in the top 3 rows, no repeated
+special room (elite/rest/treasure/shop) on consecutive floors — same
+restriction sets as actmap.py. Deliberately non-faithful: type
+*frequencies* come from `room_weights` (calibrated to the measured
+real-map mix) rather than per-map queue counts, and the map-modifier
+relic/card pipeline (Spoils Map, Golden Compass regen) is skipped — the
+column IS the map.
 """
 from __future__ import annotations
 
@@ -235,10 +220,9 @@ class ColumnRunState(RunState):
         self._room_weights = room_weights
         self._min_special_floor = min_special_floor
         self._branch_prob = branch_prob
-        # Per-episode regime decision: the branch_prob > 0.0 short-circuit
-        # is load-bearing — it means stage 1 (branch_prob=0.0) draws no
-        # extra RNG and is therefore bit-identical to the pre-annealing
-        # column env.  Your existing seeded curriculum tests keep passing.
+        # Per-episode branch/column decision. The `branch_prob > 0.0` guard
+        # is load-bearing: at branch_prob=0.0 no extra RNG draw happens, so
+        # the env stays bit-identical to the pre-annealing column env.
         self._branching = (
             branch_prob > 0.0 and rng is not None and rng.random() < branch_prob
         )

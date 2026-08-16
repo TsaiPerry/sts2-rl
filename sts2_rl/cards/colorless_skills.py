@@ -419,6 +419,10 @@ class ImpatienceCard(Card):
         if not any(c.card_type == CardType.ATTACK for c in ctx.player.hand):
             DrawCmd.draw(ctx.player, self._cards)
 
+    def _should_glow_gold_internal(self, ctx) -> bool:
+        # Impatience.cs:13: Hand.Cards.All(c => c.Type != CardType.Attack)
+        return not any(c.card_type == CardType.ATTACK for c in ctx.player.hand)
+
 
 @register_card
 class JackOfAllTradesCard(Card):
@@ -629,6 +633,11 @@ class RestlessnessCard(Card):
         for _ in range(self._cards):
             DrawCmd.draw(ctx.player, 1)
         EnergyCmd.gain(ctx.hooks, ctx.player, self._energy_gain)
+
+    def _should_glow_gold_internal(self, ctx) -> bool:
+        # Restlessness.cs:24,26: !Hand.Cards.Except(new[]{this}).Any() -- true
+        # iff this card is the only card in hand
+        return all(c is self for c in ctx.player.hand)
 
 
 @register_card

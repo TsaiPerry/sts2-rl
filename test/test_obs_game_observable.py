@@ -51,7 +51,7 @@ class _FlatCostDiscount:
 
 def test_combat_schema_v7_version():
     from sts2_rl import full_env
-    assert full_env.OBS_SCHEMA_VERSION == 7
+    assert full_env.OBS_SCHEMA_VERSION == 8
 
 
 def test_combat_layout_widths_unchanged_from_v6():
@@ -219,7 +219,7 @@ def test_cards_f_effective_cost_tracks_upgrade_but_not_live_modifier():
 
 
 def test_run_schema_version():
-    assert RUN_OBS_SCHEMA_VERSION == 11
+    assert RUN_OBS_SCHEMA_VERSION == 12
 
 
 def test_run_layout_embedded_combat_block_matches_v7_layout():
@@ -257,11 +257,14 @@ def test_run_layout_no_segment_added_removed_or_resized_beyond_the_ledger():
       * v11 — `REWARD_CARD_SLOTS` 3 -> 4, one 4-wide row added to each half of
         `reward.cards` (Lasting Candy appends a fourth option; see the
         constant's comment): 4711/1465 -> 4715/1469.
+      * v12 — full_env's hand.f row grows by 2 fields (f[29] glow_gold,
+        f[30] block_preview_move); MAX_HAND (10) x 2 = +20 f_dim, i_dim
+        unchanged: 4715/1469 -> 4735/1469.
     """
     layout = run_obs_layout()
     total_f = sum(w for _, w in layout.f_segments)
     total_i = sum(w for _, w in layout.i_segments)
-    assert total_f == layout.f_dim == 4715
+    assert total_f == layout.f_dim == 4735
     assert total_i == layout.i_dim == 1469
     names_f = {name for name, _ in layout.f_segments}
     names_i = {name for name, _ in layout.i_segments}

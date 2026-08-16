@@ -84,6 +84,10 @@ DEFAULT_N_STEPS = 512
 
 # One row per iteration in <stem>.csv. CSV, not TensorBoard, on purpose: zero
 # dependencies, and a multi-day run's curve stays plottable from anything.
+# `ep_ret` is the mean FLOORS COMPLETED over the last 100 episodes on the
+# run-scale envs (not the reward sum -- reward weights shift between
+# curriculum stages, so the return is not comparable across a run); on
+# --env combat, which has no floors, it stays the raw episode return.
 CSV_FIELDS = ["iter", "global_step", "wall_seconds", "sps", "ep_ret", "win",
               "ep_len", "pg", "v", "ent", "kl", "clipfrac", "lr",
               # Behavior metrics (run-scale envs only; NaN on --env combat):
@@ -104,7 +108,12 @@ CSV_FIELDS = ["iter", "global_step", "wall_seconds", "sps", "ep_ret", "win",
               # v8 HP-economy (plan Task 1, plan Task 5 threading): mean HP
               # lost per episode -- a sloppiness gauge, tracked independent
               # of whether --hp-potential-scale shaping is on.
-              "hp_lost"]
+              "hp_lost",
+              # v10 aux head (2026-08-14, post-s10): mean masked aux MSE per
+              # iteration (NaN when --aux-hp-coef is 0). The s10 report-only
+              # sanity gate ("aux_loss falling") was unverifiable post-hoc
+              # because aux= only went to the console -- persist it.
+              "aux"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -190,6 +199,12 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--reward-relic", type=float, default=0.0,
                     help="reward per relic gained (v8 plan Task 3; the "
                          "starting relic never counts)")
+    ap.add_argument("--reward-boss", type=float, default=0.0,
+                    help="v11: reward per act boss defeated (the final win "
+                         "pays --reward-win plus this on top)")
+    ap.add_argument("--reward-elite-attempt", type=float, default=0.0,
+                    help="v11.1: reward per elite room entered, win or lose "
+                         "(--reward-elite pays only on won fights)")
     ap.add_argument("--rest-heal-mask-above", type=float, default=None,
                     help="v8 plan Task 4: at a rest site, above this hp/max_hp "
                          "ratio, mask out REST_HEAL if another rest action is "
@@ -197,15 +212,34 @@ def parse_args() -> argparse.Namespace:
                          "topping off). Unset = no masking (default)")
     ap.add_argument("--hp-potential-scale", type=float, default=0.0,
                     help="v8 plan Task 1: concave HP-potential shaping weight "
-                         "(0 = off, the old behavior). knee/low_share stay at "
-                         "the env's own defaults -- not exposed as flags")
+                         "(0 = off, the old behavior). knee stays at the "
+                         "env's own default")
+    ap.add_argument("--hp-potential-low-share", type=float, default=0.7,
+                    help="v10: share of the HP-potential value below the "
+                         "knee (env default 0.7; the s11-lowshare "
+                         "contingency rung runs 0.8 -- steeper danger zone)")
     ap.add_argument("--potion-potential-scale", type=float, default=0.0,
                     help="v8 plan Task 2: potion-ledger shaping weight -- "
                          "+/-scale per potion gained/lost off the belt-count "
                          "delta (0 = off, the old behavior)")
+    ap.add_argument("--rest-heal-shaping-knee-cap", action="store_true",
+                    help="v9: rest heals earn HP-potential shaping only below "
+                         "the knee (zero when starting at/above it)")
+    ap.add_argument("--potion-death-expiry", action="store_true",
+                    help="v9: -potion_potential_scale per potion still held "
+                         "when the run ends in death")
     ap.add_argument("--deck-random-prob", type=float, default=0.0,
                     help="probability an episode starts with a randomized deck "
                          "(card-exposure domain randomization; 0.0 = never)")
+    ap.add_argument("--deck-inject", type=str, default=None,
+                    help="v14: JSON of card-id packages appended to the "
+                         "starting deck with --deck-inject-prob (spec "
+                         "2026-08-15-v14-mechanics-exposure-design.md)")
+    ap.add_argument("--deck-inject-prob", type=float, default=0.0)
+    ap.add_argument("--aux-hp-coef", type=float, default=0.0,
+                    help="v10: weight of the auxiliary 'hp lost over the "
+                         "next 3 floors' MSE (0 = head unused; run env + "
+                         "entset only)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="cpu",
                     help="cpu (default; fastest for --arch mlp), cuda "
@@ -333,7 +367,7 @@ def parse_args() -> argparse.Namespace:
     if args.ent_coef_final is None:
         args.ent_coef_final = args.ent_coef
     if args.best_metric is None:
-        # The column curriculum's reward IS floors reached, and its win rate
+        # ep_ret IS floors reached, and the column curriculum's win rate
         # (a full three-act clear) stays 0 for most of training — ep_ret is
         # the only statistic that moves there.
         args.best_metric = "ep_ret" if args.env == "column" else "win"
@@ -357,17 +391,29 @@ def parse_args() -> argparse.Namespace:
     if args.env == "combat" and (
             args.floor_rewards is not None or args.reward_win is not None
             or args.reward_upgrade or args.reward_remove or args.reward_elite
-            or args.reward_relic or args.rest_heal_mask_above is not None
+            or args.reward_relic or args.reward_boss
+            or args.reward_elite_attempt
+            or args.rest_heal_mask_above is not None
             or args.hp_potential_scale or args.potion_potential_scale
-            or args.deck_random_prob):
+            or args.deck_random_prob
+            or args.deck_inject or args.deck_inject_prob):
         raise SystemExit(
             "--floor-rewards/--reward-win/--reward-upgrade/--reward-remove/"
-            "--reward-elite/--reward-relic/--rest-heal-mask-above/"
+            "--reward-elite/--reward-relic/--reward-boss/"
+            "--reward-elite-attempt/"
+            "--rest-heal-mask-above/"
             "--hp-potential-scale/--potion-potential-scale/"
-            "--deck-random-prob apply to the run-scale envs only.")
+            "--deck-random-prob/--deck-inject/--deck-inject-prob "
+            "apply to the run-scale envs only.")
     if args.branch_prob and args.env != "column":
         raise SystemExit(
             f"--branch-prob applies to --env column only (got --env {args.env})")
+    if args.aux_hp_coef and args.env != "run":
+        raise SystemExit("--aux-hp-coef needs --env run (targets read the "
+                         "run obs layout's run.floor / run.hp_ratio slots)")
+    if args.aux_hp_coef and args.arch != "entset":
+        raise SystemExit("--aux-hp-coef needs --arch entset (aux head lives "
+                         "on EntitySetActorCritic)")
     if args.warm_start and (args.resume or args.fresh):
         raise SystemExit(
             "--warm-start is mutually exclusive with --resume/--fresh: it is "
@@ -472,10 +518,17 @@ def env_spec(args: argparse.Namespace) -> EnvSpec:
         reward_remove=getattr(args, "reward_remove", 0.0),
         reward_elite=getattr(args, "reward_elite", 0.0),
         reward_relic=getattr(args, "reward_relic", 0.0),
+        reward_boss=getattr(args, "reward_boss", 0.0),
+        reward_elite_attempt=getattr(args, "reward_elite_attempt", 0.0),
         rest_heal_mask_above=getattr(args, "rest_heal_mask_above", None),
         hp_potential_scale=getattr(args, "hp_potential_scale", 0.0),
         potion_potential_scale=getattr(args, "potion_potential_scale", 0.0),
         deck_random_prob=getattr(args, "deck_random_prob", 0.0),
+        deck_inject=getattr(args, "deck_inject", None),
+        deck_inject_prob=getattr(args, "deck_inject_prob", 0.0),
+        rest_heal_shaping_knee_cap=getattr(args, "rest_heal_shaping_knee_cap", False),
+        potion_death_expiry=getattr(args, "potion_death_expiry", False),
+        hp_potential_low_share=getattr(args, "hp_potential_low_share", 0.7),
     )
 
 
@@ -625,8 +678,22 @@ def main() -> None:
     if resume_path:
         check_checkpoint(ckpt, args, obs_dim, n_actions)
         checkpoints.check_ascension(ckpt, args.ascension)
-        agent.load_state_dict(ckpt["model"])
-        optimizer.load_state_dict(ckpt["optim"])
+        n_fresh_aux = checkpoints.load_model_state_lenient(agent, ckpt["model"])
+        if n_fresh_aux:
+            print(f"aux heads fresh-initialized ({n_fresh_aux} params not in checkpoint)")
+        opt_state = ckpt["optim"]
+        n_live = sum(1 for _ in agent.parameters())
+        groups = opt_state["param_groups"]
+        if len(groups) == 1 and len(groups[0]["params"]) < n_live:
+            n_aux = sum(1 for n, _ in agent.named_parameters() if n.startswith("aux_"))
+            saved = groups[0]["params"]
+            if len(saved) + n_aux == n_live:
+                # pre-aux checkpoint: old params keep their moments, aux
+                # params take the tail ids with no state (Adam lazily
+                # initializes them on first step).
+                groups[0]["params"] = list(saved) + list(range(len(saved), n_live))
+                print(f"optimizer state patched: {n_aux} fresh aux params appended")
+        optimizer.load_state_dict(opt_state)
         start_iter = ckpt.get("iteration", 0)
         # Pre-hardening checkpoints carry neither field; 0 / -inf just means
         # "step count restarts here" and "no best on record yet".
@@ -660,6 +727,12 @@ def main() -> None:
               f"({100 * masked / agent.actor[0].weight.shape[1]:.1f}% of the "
               f"trunk's input)")
 
+    aux_slices = None
+    if args.aux_hp_coef > 0:
+        from sts2_rl.run_env import run_obs_layout
+        _l = run_obs_layout(args.card_obs)
+        aux_slices = (_l.f_slices["run.floor"], _l.f_slices["run.hp_ratio"])
+
     # ── rollout buffers: [n_steps, n_envs, ...] ─────────────────────────────
     N, E = args.n_steps, args.n_envs
     f_dim, i_dim = obs_dim
@@ -684,7 +757,9 @@ def main() -> None:
     next_mask = torch.as_tensor(reset_mask, dtype=torch.bool, device=device)
     next_done = torch.zeros(E, device=device)
 
-    # episodic logging (raw env reward, not the training-time bootstrap fold-in)
+    # episodic logging. ep_ret_running accumulates raw env reward (not the
+    # training-time bootstrap fold-in); it is only the combat-env fallback for
+    # ret_hist, which otherwise holds end-of-episode floors (see CSV_FIELDS).
     ep_ret_running = np.zeros(E, dtype=np.float64)
     ep_len_running = np.zeros(E, dtype=np.int64)
     ret_hist: deque[float] = deque(maxlen=100)
@@ -762,7 +837,13 @@ def main() -> None:
 
                 dones = batch.terminated | batch.truncated
                 for i in np.flatnonzero(dones):
-                    ret_hist.append(float(ep_ret_running[i]))
+                    # ep_ret is FLOORS COMPLETED on run-scale envs (metrics
+                    # column EP_METRIC_KEYS[-1] = "floor"), so the training
+                    # curve is on the same scale as eval's mean floor. The
+                    # combat env reports no floor -> raw episode return.
+                    floor_end = float(batch.metrics[i, -1])
+                    ret_hist.append(float(ep_ret_running[i])
+                                    if math.isnan(floor_end) else floor_end)
                     len_hist.append(int(ep_len_running[i]))
                     win_hist.append(1.0 if batch.successes[i] else 0.0)
                     m = batch.metrics[i]
@@ -802,6 +883,15 @@ def main() -> None:
                 advantages[t] = lastgae
             returns = advantages + val_buf
 
+            b_auxt = b_auxv = None
+            if args.aux_hp_coef > 0:
+                from sts2_rl.aux_targets import hp_lost_next_floors
+                fl = obs_buf.f[:, :, aux_slices[0]].squeeze(-1).cpu().numpy()
+                hp = obs_buf.f[:, :, aux_slices[1]].squeeze(-1).cpu().numpy()
+                aux_t, aux_v = hp_lost_next_floors(fl, hp, done_buf.cpu().numpy())
+                b_auxt = torch.as_tensor(aux_t, device=device).reshape(-1)
+                b_auxv = torch.as_tensor(aux_v, device=device, dtype=torch.float32).reshape(-1)
+
             # ── flatten and update ──────────────────────────────────────────────
             b_obs = obs_buf.reshape(-1, obs_dim)
             b_mask = mask_buf.reshape(-1, n_actions)
@@ -814,6 +904,7 @@ def main() -> None:
             idx = np.arange(batch_size)
             kls: list[float] = []
             clipfracs: list[float] = []
+            aux_losses: list[float] = []
             # A stale critic's advantages are mis-signed, so spend the first
             # --critic-warmup iterations fitting the value head alone. The
             # actor's parameters are disjoint from the critic's (separate
@@ -830,8 +921,12 @@ def main() -> None:
                 np.random.shuffle(idx)
                 for start in range(0, batch_size, mb_size):
                     mb = idx[start:start + mb_size]
-                    _, newlogp, entropy, newval = agent.get_action_and_value(
-                        b_obs[mb], b_mask[mb], b_act[mb])
+                    if args.aux_hp_coef > 0:
+                        _, newlogp, entropy, newval, aux_pred = agent.get_action_and_value(
+                            b_obs[mb], b_mask[mb], b_act[mb], with_aux=True)
+                    else:
+                        _, newlogp, entropy, newval = agent.get_action_and_value(
+                            b_obs[mb], b_mask[mb], b_act[mb])
                     logratio = newlogp - b_logp[mb]
                     ratio = logratio.exp()
                     with torch.no_grad():
@@ -853,10 +948,16 @@ def main() -> None:
                     v_loss = 0.5 * torch.max(v_unclipped, v_clipped).mean()
 
                     ent_loss = entropy.mean()
+                    aux_loss = torch.zeros((), device=device)
+                    if args.aux_hp_coef > 0:
+                        m = b_auxv[mb]
+                        aux_loss = ((aux_pred - b_auxt[mb]).pow(2) * m).sum() / m.sum().clamp(min=1.0)
+                        aux_losses.append(float(aux_loss.item()))
                     if critic_only:
-                        loss = args.vf_coef * v_loss
+                        loss = args.vf_coef * v_loss + args.aux_hp_coef * aux_loss
                     else:
-                        loss = pg_loss - ent_coef * ent_loss + args.vf_coef * v_loss
+                        loss = (pg_loss - ent_coef * ent_loss + args.vf_coef * v_loss
+                                + args.aux_hp_coef * aux_loss)
 
                     optimizer.zero_grad()
                     loss.backward()
@@ -899,6 +1000,7 @@ def main() -> None:
             v8_hplost_mean = (
                 float(np.mean(v8_hplost_hist)) if v8_hplost_hist else float("nan"))
             lr = optimizer.param_groups[0]["lr"]
+            aux_mean = float(np.mean(aux_losses)) if aux_losses else float("nan")
             print(
                 f"iter {iteration:4d}  step {global_step:>9d}  sps {sps:>5d}  "
                 f"ep_ret {ret:7.3f}  win {wr:5.2f}  ep_len {eplen:6.1f}  "
@@ -906,6 +1008,7 @@ def main() -> None:
                 f"ent {ent_loss.item():.3f}  kl {approx_kl:.4f}  "
                 f"clipfrac {np.mean(clipfracs):.3f}  "
                 f"e_unspent {energy_unspent:4.2f}  take {card_take:4.2f}"
+                + (f"  aux={aux_mean:.4f}" if args.aux_hp_coef > 0 else "")
                 # pg/ent are still reported during the warm-up (they say how
                 # stale the advantages are) but were not applied — mark it so
                 # a flat ep_ret here doesn't read as a stalled run.
@@ -930,6 +1033,7 @@ def main() -> None:
                     potion_use_hp=float(v8_potion_means[4]),
                     relics=v8_relic_mean,
                     hp_lost=v8_hplost_mean,
+                    aux=aux_mean,
                 ))
 
             # ── checkpointing ───────────────────────────────────────────────────

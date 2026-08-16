@@ -94,17 +94,13 @@ class MagiKnight(MachineMonster):
     def _dampen(self, ctx: CombatCtx) -> None:
         from ...cmds import PowerCmd
         from ...powers import DampenPower
-        # MagiKnight.cs:78-96 DampenMove: fetch the target's existing
-        # DampenPower (if any), AddCaster this Magi Knight either way, and
-        # call PowerCmd.Apply ONLY when a new instance had to be created --
-        # a second caster joining an existing Dampen does not re-trigger the
-        # downgrade-everything-upgraded pass. PowerCmd.apply only takes a
-        # power CLASS (no pre-built-instance overload), so the sim cannot
-        # add the caster before registration the way C# does; it adds the
-        # caster to the freshly created instance immediately after instead,
-        # which is unobservable -- AddCaster only mutates the caster set and
-        # nothing reads that set between construction and this call.
-        # monster/magi_knight/g1.
+        # MagiKnight.cs:78-96 -- a second caster joining an existing Dampen
+        # must NOT re-trigger the downgrade-everything-upgraded pass, so
+        # PowerCmd.apply (Apply) only runs when a new instance is created;
+        # AddCaster always runs. Sim adds the caster right after creation
+        # instead of before (PowerCmd.apply takes a class, not an instance),
+        # which is unobservable since nothing reads the caster set in
+        # between. monster/magi_knight/g1.
         target = ctx.player
         existing = target.powers.get(DampenPower.id)
         if existing is None:

@@ -90,14 +90,10 @@ class MadScienceCard(Card):
         self.rider = rider
         return self
 
-    # Round-13 (933T (2,6) hand.f fields 17-21): the game's CanonicalVars carry
-    # BOTH `DamageVar(12)` and `BlockVar(8)` UNCONDITIONALLY (MadScience.cs:96-108
-    # — the var list does not depend on TinkerTimeType; only OnPlay's dispatch
-    # does), so the printed damage/block are present on the card whatever type it
-    # was configured to, and the live obs reads them that way. The old
-    # type-gated properties zeroed both for a Power-configured Mad Science where
-    # the game dump showed 12/8. Gameplay is unaffected — on_play still
-    # dispatches on `tinker_type`.
+    # MadScience.cs:96-108 — CanonicalVars carry BOTH DamageVar(12) and
+    # BlockVar(8) UNCONDITIONALLY (only OnPlay's dispatch depends on
+    # TinkerTimeType), so damage/block are present regardless of configured
+    # type; a prior type-gated version zeroed both for Power configs.
     @property
     def base_damage(self) -> int | None:
         return self._damage
@@ -131,10 +127,9 @@ class MadScienceCard(Card):
             if target.is_gone or ctx.player.is_dead:
                 break
             DamageCmd.deal(ctx.hooks, target, self._damage, dealer=ctx.player, card=self)
-        # The per-hit break above is AttackCommand's own (`validTargets` is
-        # filtered on IsAlive, AttackCommand.cs:544-550). The RIDER had no such
-        # justification: ExecuteRider (MadScience.cs:267-294) is called from
-        # OnPlay's tail with no liveness test, gated only by CanReceivePowers.
+        # Per-hit break is AttackCommand's own (IsAlive filter,
+        # AttackCommand.cs:544-550); ExecuteRider (MadScience.cs:267-294) has
+        # no such liveness test, gated only by CanReceivePowers.
         if self.rider == "sapping":
             PowerCmd.apply(ctx.hooks, target, WeakPower, _SAPPING_WEAK, applier=ctx.player)
             PowerCmd.apply(

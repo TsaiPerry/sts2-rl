@@ -1,42 +1,30 @@
 """Run-scale micro-probes — OBS_PLAN phase 3, Task 6 (evaluation rider).
 
 `probes.py` proves numeric grasp inside one combat turn; this module proves
-the analogous thing one level up — that a policy makes the single obviously
+the analogous thing one level up: a policy makes the single obviously
 correct choice at a fixed out-of-combat decision (rest / shop / card
-reward), the same way a human would given the exact numbers on screen.
+reward).
 
-Construction mirrors `probes.py`'s own pattern one layer up: instead of
-mutating a `CombatState` after a seeded `env.reset()`, a probe here
-overrides `STS2RunEnv._make_run_state()` (the same override point
-`curriculum_env.ColumnRunState` uses) with a `RunState` subclass that pins a
-single fixed-type room right behind the Ancient node — `curriculum_env.
-column_map` already builds exactly this shape for a randomized column, so a
-probe just hands it a one-room, one-type tuple instead. `include_neow=False`
-skips the Neow event (irrelevant to every probe scenario and, left on,
-would be one more branch build() would have to force through). No edit to
-run_env.py / driver.py / curriculum_env.py: every override here composes an
-existing seam (`_make_run_state`, `RunState._generate_map`, `RunState.
-rest_heal_rewards`) or mutates an already-built object post-hoc exactly the
-way `probes._build` mutates `CombatState` fields directly.
+Construction mirrors `probes.py` one layer up: instead of mutating a
+`CombatState` after a seeded `env.reset()`, a probe overrides
+`STS2RunEnv._make_run_state()` (same override point as
+`curriculum_env.ColumnRunState`) with a `RunState` subclass pinning a
+single fixed-type room right behind the Ancient node, reusing
+`curriculum_env.column_map`. `include_neow=False` skips the irrelevant
+Neow event. Every override here composes an existing seam
+(`_make_run_state`, `RunState._generate_map`, `RunState.rest_heal_rewards`)
+or mutates an already-built object post-hoc, same as `probes._build`.
 
-`build()` still has to clear the single forced hop off the Ancient (the
-column's only MAP option) before the env is parked at the probe's actual
-target decision — `_drive_forced_map_hop` does that unwind, asserting (not
-silently skipping) that it really was forced. Requirement 3's REWARD_CARD
-probe additionally forces the REST_HEAL branch to reach the reward screen
-(the only ported source of a card-reward decision with no combat needed);
-that forced answer is a *build-time* scripted step, never the decision
-`check()` scores.
+`build()` clears the single forced MAP hop off the Ancient before parking
+at the probe's target decision — `_drive_forced_map_hop` asserts (not
+silently skips) that it really was forced. The REWARD_CARD probe
+additionally forces the REST_HEAL branch to reach the reward screen; that
+forced step is build-time scripting, never the decision `check()` scores.
 
-`run_run_probe` does not track `DecisionKind` transitions to find "the
-target decision resolved" — some resolutions cross an interstitial kind
-(buying a shop's removal entry asks a SELECT_CARDS "which card" sub-decision
-before the purchase completes), so kind-tracking would either stop too early
-or need a bespoke per-probe kind allowlist. Polling `probe.check(env)` after
-every accepted action is the smaller, uniform mechanism the brief asks for:
-it is exactly the run-state outcome predicate every probe already needs for
-its pass/fail call, so nothing new is invented to also serve as the stop
-condition.
+`run_run_probe` polls `probe.check(env)` after every accepted action rather
+than tracking `DecisionKind` transitions, because some resolutions cross an
+interstitial kind (buying shop removal asks a SELECT_CARDS sub-decision
+first) that kind-tracking would mishandle.
 """
 from __future__ import annotations
 
@@ -192,12 +180,8 @@ def _build_shop_removal() -> _RunProbeEnv:
     assert inventory.all_entries[0] is trap, (
         "run_probes: expected a card entry first in all_entries"
     )
-    # Scenario engineering, not gameplay: price every slot but the trap and
-    # the removal out of reach — mirrors probes.py's direct post-reset
-    # CombatState mutation, applied to the shop object build() already
-    # reached instead of re-plumbing MerchantInventory generation. The
-    # removal's own cost is left exactly as the source computes it (no
-    # jitter on card removal — shop.py's own docstring: "Cost climbs 75 +
+    # Price every slot but the trap and the removal out of reach. Removal's
+    # own cost is left as the source computes it (shop.py: "Cost climbs 75 +
     # 25 x removals used").
     for entry in inventory.all_entries:
         if entry is removal:
@@ -208,22 +192,12 @@ def _build_shop_removal() -> _RunProbeEnv:
 
 
 def _removal_bought(env: STS2RunEnv) -> bool:
-    # Buying the removal is a two-action purchase: the entry pick lands on an
-    # interstitial SELECT_CARDS "which card" sub-decision before the removal
-    # actually resolves. Checking card_shop_removals_used alone goes true
-    # after just the first action (still mid-purchase), so also require the
-    # run to be back at the SHOP decision — i.e. the purchase fully resolved
-    # — without adding kind-tracking to the shared `run_run_probe` runner
-    # (see module docstring on why that stays out of the runner itself).
-    #
-    # `gold == 0` additionally proves the trap (SHOP_TRAP_GOLD, legal at a
-    # LOWER action index than the removal) was never bought: the run starts
-    # with exactly SHOP_REMOVAL_GOLD gold, so the only way to reach 0 is
-    # spending it all on the removal in one purchase — buying the trap first
-    # (leaving SHOP_REMOVAL_GOLD - SHOP_TRAP_GOLD, too little for the
-    # removal) can never also reach card_shop_removals_used >= 1, but this
-    # makes the "gold spent only on the removal" requirement explicit rather
-    # than relying on that arithmetic coincidence alone.
+    # Buying the removal is a two-action purchase (entry pick -> interstitial
+    # SELECT_CARDS sub-decision -> resolve), so also require being back at
+    # SHOP to confirm it fully resolved, not just started.
+    # `gold == 0` confirms the trap (cheaper, lower action index) was never
+    # bought: starting gold == SHOP_REMOVAL_GOLD, so only spending it all on
+    # the removal reaches 0.
     request = getattr(env, "_request", None)
     at_shop = request is not None and request.kind == DecisionKind.SHOP
     return (

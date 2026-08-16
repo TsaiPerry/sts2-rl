@@ -296,19 +296,16 @@ def test_locate_field_out_of_range_raises():
         compare_obs._locate_field(_LAYOUT["f"], 99)
 
 
-# ---------------------------------------------------------------------------
-# Round-6: RewardScreen sub-kind join. The game dump records reward
-# decisions in actual recorded CLICK order (e.g. player claims the potion
-# before picking the card); the sim's driver always asks in its own fixed
-# sub-kind order (cards, then potion, then relic). Raw decision_index joins
-# the two dumps' reward lines crookedly — sim's card-pick line lands on
-# game's potion-claim line — producing pure ordering-artifact mismatches.
-# The fix derives each RewardScreen line's sub-kind (reward_card /
+# RewardScreen sub-kind join. The game dump records reward decisions in
+# actual recorded CLICK order (e.g. player claims the potion before picking
+# the card); the sim's driver always asks in its own fixed sub-kind order
+# (cards, then potion, then relic). Raw decision_index joins the two dumps'
+# reward lines crookedly — sim's card-pick line lands on game's potion-claim
+# line. The fix derives each RewardScreen line's sub-kind (reward_card /
 # reward_potion / reward_relic) from the `phase` one-hot segment (mirrors
 # `sts2_rl.run_env.PHASE_INDEX`, itself `list(DecisionKind)` order — see
 # `driver.DecisionKind`) and joins by (sub-kind, per-sub-kind occurrence
 # counter) instead of raw decision_index, for RewardScreen decisions only.
-# ---------------------------------------------------------------------------
 
 # phase one-hot occupies f[0:10], mirroring driver.DecisionKind's declared
 # order: map, event, shop, rest, reward_card, reward_potion, combat,

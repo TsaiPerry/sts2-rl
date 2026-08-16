@@ -17,10 +17,9 @@ class GlassEye(Relic):
 
     `ForNonCombatWithUniformOdds` itself ORs `NoUpgradeRoll`
     (CardCreationOptions.cs:160-163) on top of the `NoRarityModification`
-    GlassEye.cs:29 adds — R14 finding, corrected from an earlier round's
-    "neither is set" reading, which was wrong: it looked only at the visible
-    `.WithFlags(...)` call and missed the flag the factory method itself ORs
-    in. `NoModifyHooks` is genuinely absent, so every screen still fires
+    GlassEye.cs:29 adds — the factory method ORs this in even though it's
+    not visible in the `.WithFlags(...)` call. `NoModifyHooks` is genuinely
+    absent, so every screen still fires
     `Hook.TryModifyCardRewardOptions` (both passes), but each created card
     skips `RollForUpgrade` and the Rewards draw inside it
     (CardFactory.cs:98-102) — 15 draws across the five screens, not 30.

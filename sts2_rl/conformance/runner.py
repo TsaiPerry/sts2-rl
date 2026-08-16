@@ -719,16 +719,10 @@ class ReplayRunner:
         prev = (acts[act_index][room_in_act - 1] if room_in_act > 0
                 else (acts[act_index - 1][-1] if act_index > 0
                       and acts[act_index - 1] else None))
-        # Code review (2026-08-04): the reachability guard used to be
-        # sim-blind — it skipped ANY unreachable point regardless of what
-        # the live sim actually did, which could silently swallow a real
-        # divergence on some future recording. Narrowed per the decision
-        # table: skip ONLY when the point is unreachable from `prev` AND the
-        # live sim's hp matches `prev.current_hp` (i.e. history is
-        # PROVABLY the liar — the sim independently agrees with the one
-        # reachable reference). If the sim ALSO disagrees with `prev`, this
-        # is not provably a capture artifact, so fall through and record the
-        # divergence normally (a flagged mismatch beats a silent skip).
+        # Skip ONLY when the point is unreachable from `prev` AND the live
+        # sim's hp matches `prev.current_hp` (history is provably the liar).
+        # If the sim also disagrees with `prev`, fall through and record —
+        # a flagged mismatch beats a silent skip.
         if (prev is not None
                 and st.current_hp + st.damage_taken - st.hp_healed
                 != prev.current_hp
@@ -911,18 +905,11 @@ class ReplayRunner:
         if self._is_inconsistent_floor_save(floor, oracle, run):
             return
         if floor == max(floor_saves):
-            # Final checkpointed floor (code review, 2026-08-04): its backup
-            # is a room-ENTRY capture, structurally different from the
-            # whole-run END oracle (`self.oracle`) DETECTORS 2/3 already
-            # check the post-room state against — comparing them here can
-            # never converge (the entry snapshot legitimately disagrees with
-            # the true end state by construction), so recording that diff
-            # made a fully-converged replay print DIVERGENCES REMAIN forever
-            # and would fail a zero-divergences gate on this arm. Skip BOTH
-            # the diff and the resync for this one floor; the final room's
-            # post-state is already covered by DETECTORS 2/3 against the
-            # true run-END oracle (GAP-QUEUE `resync_floors`, resolved
-            # 2026-08-03/04 by tools/oracle_semantics_probe.py).
+            # Final checkpointed floor: its backup is a room-ENTRY capture,
+            # structurally different from the run-END oracle DETECTORS 2/3
+            # check — comparing them here can never converge. Skip both the
+            # diff and the resync; the final room's post-state is already
+            # covered by DETECTORS 2/3 against the true run-END oracle.
             return
 
         def diff(stream, expected, actual, note=""):
@@ -967,18 +954,10 @@ class ReplayRunner:
         run.gold = oracle.gold
         run.rng_set.load_counters(oracle.run_counters)
         run.player_rng.load_counters(oracle.player_counters)
-        # Deck/potions are rebuilt from scratch (fresh Card/Potion objects via
-        # make_card/make_potion) ONLY when the diff above actually found a
-        # mismatch. Measured on 933T: rebuilding unconditionally on every
-        # checkpointed floor — even the ~90% that already match — still
-        # forced_combats 1->7 vs the no-`floor_saves` baseline, churning fresh
-        # object identities every floor even when nothing changed. Gating the
-        # rebuild on the diff (a real content/order mismatch) restores
-        # forced_combats to the baseline's 1 (and combat_divergences to 9, one
-        # better than baseline's 10) with no loss of the resync's purpose —
-        # a no-op rebuild has no cascade to suppress in the first place.
-        # Relics don't need this guard: `_resync_relics` already only touches
-        # the delta (add/remove), never rebuilding relics that already match.
+        # Rebuild deck/potions only when the diff above found a mismatch:
+        # unconditional rebuild on every floor forced_combats 1->7 (measured
+        # on 933T) by churning fresh object identities even when unchanged.
+        # Relics don't need this guard — `_resync_relics` only touches the delta.
         if deck_changed:
             self._resync_deck(run, oracle)
         self._resync_relics(run, oracle)

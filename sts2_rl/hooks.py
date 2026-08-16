@@ -1103,7 +1103,7 @@ class HookSystem:
         twice (once for the plain pass, once for `_late`), so iterating
         `modifiers` directly would fire a both-phases listener's
         after-hook twice; dedup by identity + a fresh walk is what stops
-        that (reviewed 2026-07-31, reproduced live)."""
+        that."""
         seen = {id(l) for l in modifiers}
         for l in self._ordered():
             if id(l) not in seen:
@@ -1133,12 +1133,8 @@ class HookSystem:
         not a blanket "discard": `"none"` for a Power or a dupe (:2072-2074),
         `"exhaust"` for `ExhaustOnNextPlay` or the Exhaust keyword (:2076-2080,
         which also CONSUMES `ExhaustOnNextPlay` at :2078), else `"discard"`.
-        An earlier version of this docstring said the hook was "consulted only
-        for cards that would land in the discard pile (exhausted cards and
-        Powers never reach it)" — that was true of the sim's old call, which
-        passed the literal "discard" for everything, and it is what forced
-        ReboundPower to re-derive the Exhaust seed by hand. It is now false in
-        both halves.
+        (Previously the sim's call always passed the literal "discard",
+        forcing ReboundPower to re-derive the Exhaust seed by hand.)
 
         Listeners see all three seeds and may return any of them:
         `ReboundPower` (ReboundPower.cs:19-30) abstains unless the incoming
@@ -1990,8 +1986,7 @@ class HookSystem:
         Burn and every other turn-end-in-hand card, single-player included.
         It is a local-client-presence check (true throughout ordinary
         single-player play; the sim models no "local client" concept at
-        all), corrected 2026-07-31 from an earlier "multiplayer-only, out
-        of scope" mischaracterization."""
+        all), not a multiplayer-only gate."""
         for l, fn in self._each("before_flush"):
             fn(player)
 

@@ -39,3 +39,8 @@ class EvilEyeCard(Card):
         gains = 2 if ctx.combat.history.card_exhausted_this_turn() else 1
         for _ in range(gains):
             BlockCmd.apply(ctx.hooks, ctx.player, self._block, card=self)
+
+    def _should_glow_gold_internal(self, ctx) -> bool:
+        # EvilEye.cs:19,25: WasCardExhaustedThisTurn -- any CardExhaustedEntry
+        # this turn belonging to the owner
+        return ctx.combat.history.card_exhausted_this_turn()

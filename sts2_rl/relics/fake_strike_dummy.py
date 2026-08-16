@@ -34,12 +34,7 @@ class FakeStrikeDummy(Relic):
             return 0
         if card is None or "strike" not in card.tags:
             return 0
-        # damage_pipeline/G3, relic/fake_strike_dummy (round 14):
-        # FakeStrikeDummy.cs:35-38 is the identical guard to StrikeDummy's
-        # -- decline only when BOTH `dealer != Owner.Creature` AND
-        # `cardSource.Owner != Owner`. See strike_dummy.py's twin comment:
-        # the sim has no enemy-owned CardModel, so the ownership disjunct
-        # can never be true and the AND can never be satisfied. The old
-        # `dealer is self.player` guard was the same unobservable-today,
-        # wrong-in-general mistake as StrikeDummy's.
+        # FakeStrikeDummy.cs:35-38 is the identical guard to StrikeDummy's --
+        # see strike_dummy.py's twin comment; don't gate on `dealer is
+        # self.player` alone.
         return self.EXTRA_DAMAGE

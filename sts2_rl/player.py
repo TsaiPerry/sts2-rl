@@ -159,18 +159,15 @@ class PlayerCombatState(Creature):
         # and restores it so a nested play does not clear the outer card's
         # mark.
         #
-        # ZERO consumers as of 2026-08-01. Its last one was `relics/pen_nib.py`,
-        # whose C# reads `cardSource.Pile?.Type != PileType.Play`
-        # (PenNib.cs:120-128) and therefore wants `card not in
-        # player.play_pile`; that debt is paid, and the two predicates
-        # genuinely differ whenever `AutoPlayFromDrawPile` has more than one
-        # pick parked in Play (the parked picks are in the pile and are NOT
-        # `_playing_card`). It is kept, written and correctly saved/restored
-        # because the fact it names has no other expression in the sim and
-        # C#'s own `CardPlay`/`BeginCardOrPotionEffect` bracket is the thing a
-        # future port would attach here — but it is now UNREAD state, and a
-        # reader added later must first check whether the Play pile answers
-        # the question instead. R5-review RV-9 / R5 fix pass.
+        # Currently unread: `relics/pen_nib.py` used to be its consumer but now
+        # tests `card not in player.play_pile` instead (PenNib.cs:120-128 wants
+        # `cardSource.Pile?.Type != PileType.Play`); the two predicates differ
+        # whenever `AutoPlayFromDrawPile` has more than one pick parked in Play.
+        # Kept because the fact it names ("this card's OnPlay is on the stack
+        # right now") has no other expression in the sim — C#'s own
+        # `CardPlay`/`BeginCardOrPotionEffect` bracket is what a future port
+        # would attach here. A reader added later should check whether the
+        # Play pile answers the question instead.
         self._playing_card: Card | None = None
         # Combat-start draw-pile randomization is CardPile.RandomizeOrderInternal
         # -> UnstableShuffle (Fisher-Yates, NO stabilizing sort), unlike the
@@ -439,12 +436,9 @@ class PlayerCombatState(Creature):
         not and does not call. `discard_hand`'s only caller is the turn-end
         flush (`combat.py`'s `should_flush_hand`/`discard_hand` pair) --
         confirmed by grep, no other site calls it -- so it is FlushPlayerHand
-        and nothing else. (Tier-2 Task 10 finding: the previously-recorded gap
-        here, creature_card_cmds guard G11 / step49, cited CardCmd.cs:186-195
-        as this method's C# counterpart and asked only for a move-then-fire
-        reorder; CombatManager.cs's real FlushPlayerHand shows that citation
-        names the wrong method, and the correct fix is removing the call, not
-        reordering it. See task-10-report.md for the full trace.)
+        and nothing else. (creature_card_cmds guard G11 / step49 previously
+        cited CardCmd.cs:186-195 for this method; that citation names the
+        wrong method — the correct fix is removing the call, not reordering it.)
 
         No `on_hand_emptied` here either. CombatManager.cs:880-883 excludes
         the flush from CheckForEmptyHand in as many words ("besides ending

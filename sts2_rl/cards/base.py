@@ -418,6 +418,19 @@ class Card(ABC):
                 return value
         return None
 
+    def should_glow_gold(self, ctx) -> bool:
+        """The card face's gold-glow signal — the game's 'condition armed'
+        indicator (CardModel.ShouldGlowGold, CardModel.cs:830-840): the
+        per-card internal check OR the enchantment's own glow."""
+        if self._should_glow_gold_internal(ctx):
+            return True
+        ench = self.enchantment
+        return ench.should_glow_gold(ctx, self) if ench is not None else False
+
+    def _should_glow_gold_internal(self, ctx) -> bool:
+        """Per-card override point (CardModel.cs:858 default: False)."""
+        return False
+
     @property
     def canonical_energy_cost(self) -> int:
         """Round-4 review correction: this is NOT `CardEnergyCost.Canonical`

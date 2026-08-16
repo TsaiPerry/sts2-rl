@@ -46,3 +46,8 @@ class SpiteCard(Card):
             if target.is_gone or ctx.player.is_dead:
                 break
             DamageCmd.deal(ctx.hooks, target, self._damage, dealer=ctx.player, card=self)
+
+    def _should_glow_gold_internal(self, ctx) -> bool:
+        # Spite.cs:18,46: LostHpThisTurn(owner.creature) -- unblocked damage
+        # received by the owner this turn
+        return ctx.combat.history.lost_hp_this_turn(ctx.player)

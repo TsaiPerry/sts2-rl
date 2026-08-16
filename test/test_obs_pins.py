@@ -171,6 +171,40 @@ def test_card_number_pins():
     np.testing.assert_allclose(hand_f[defend][17:24], [0, 0, 0.1, 0.05, 0.05, 0, 0], rtol=1e-6)
 
 
+def test_glow_gold_field_pacts_end():
+    # f[29]: the game's gold-glow "condition armed" signal (CardModel.
+    # ShouldGlowGold via Task 1's should_glow_gold hook). Pact's End
+    # (PactsEnd.cs:21-23) glows once the exhaust pile holds >= 3 cards.
+    env = STS2FullCombatEnv(
+        encounter=Encounter(id="pin-glow", monster_classes=[probe_dummy("PinDummy", hp=20, damage=1)]),
+        deck=["pacts_end", "strike"],
+    )
+    env.reset(seed=0)
+    layout = combat_obs_layout()
+    slot = _hand_slot(env, "pacts_end")
+    hand_f = env._build_obs()["f"][layout.f_slices["hand.f"]].reshape(-1, N_CARD_FEATURES)
+    assert hand_f[slot][29] == 0.0
+    from sts2_rl import make_card
+    env._state.player.exhaust_pile[:] = [make_card("strike"), make_card("strike"), make_card("strike")]
+    hand_f = env._build_obs()["f"][layout.f_slices["hand.f"]].reshape(-1, N_CARD_FEATURES)
+    assert hand_f[slot][29] == 1.0
+
+
+def test_block_preview_move_field_dexterity():
+    # f[30]: Defend previews base+dex under the MOVE pipeline; fields 20/21
+    # stay at their old (dex-blind base / ValueProp.NONE) values — the
+    # parity guard field 21 protects stays exact.
+    env = _pin_env()
+    layout = combat_obs_layout()
+    defend = _hand_slot(env, "defend")
+    PowerCmd.apply(env._state.hooks, env._state.player, DexterityPower, 2)
+    hand_f = env._build_obs()["f"][layout.f_slices["hand.f"]].reshape(-1, N_CARD_FEATURES)
+    row = hand_f[defend]
+    assert row[20] == pytest.approx(5 / 100.0)
+    assert row[21] == pytest.approx(5 / 100.0)
+    assert row[30] == pytest.approx(7 / 100.0)
+
+
 def test_damage_matrix_pins_strength_and_vulnerable():
     env = _pin_env()
     s = env._state
@@ -245,10 +279,12 @@ def test_numeric_indices_cover_the_preview_segments_and_exclude_categorical_ones
     hand_sl = layout.f_slices["hand.f"]
     for h in range(MAX_HAND):
         base = hand_sl.start + h * N_CARD_FEATURES
-        numeric = {base + o for o in range(17, 24)}          # dmg..magic
+        numeric = {base + o for o in range(17, 24)} | {base + 30}  # dmg..magic, block_preview_move
         categorical = {base + o for o in range(2, 12)}        # card/target type onehots
+        flags = {base + 25, base + 26, base + 27, base + 29}  # exhaust_on_next_play..sly, glow_gold
         assert numeric <= idx
         assert not (categorical & idx)
+        assert not (flags & idx)
 
     enemies_sl = layout.f_slices["enemies.f"]
     for e in range(MAX_ENEMIES):

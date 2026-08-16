@@ -69,18 +69,10 @@ _WARNED_SEGMENTS: set[str] = set()
 def reset_warned_segments() -> None:
     """Clear the warn-once latch (test-only affordance).
 
-    Fix-pass note (T5b review item 1): this process-global latch is exactly
-    right for production (a hot loop must not spam the log), but it makes
-    ``pytest.warns`` assertions order-dependent across the WHOLE test
-    process — whichever test overflows a given segment name first consumes
-    the latch, and every later test on that same name silently sees no
-    warning. This is the third time process-global state has produced an
-    order-dependent test in this project, so the fix is structural rather
-    than another per-test workaround: ``test/conftest.py`` calls this from
-    an autouse fixture before every test, so no test can inherit or steal
-    another test's latch. Exposed here (rather than tests reaching into
-    ``_WARNED_SEGMENTS`` directly) so the module's own private state stays
-    private.
+    The process-global latch makes ``pytest.warns`` order-dependent across
+    the test process (whichever test overflows a segment first consumes the
+    latch, later tests on that name see no warning); ``test/conftest.py``
+    calls this from an autouse fixture before every test to avoid that.
     """
     _WARNED_SEGMENTS.clear()
 

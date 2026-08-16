@@ -29,10 +29,8 @@ class _BattleFriend(MachineMonster):
         PowerCmd.apply(hooks, self, BattlewornDummyTimeLimitPower, _TIME_LIMIT)
 
     def build_machine(self) -> MonsterMoveStateMachine:
-        # BattleFriendV1/2/3.cs:28 construct NOTHING_MOVE with an EMPTY
-        # `params AbstractIntent[]` -- no telegraph at all, not the "?" C#'s
-        # own UnknownIntent draws. Intent.none() is the sim's equivalent of
-        # that empty array (monster/_no_intent_unrepresentable).
+        # BattleFriendV1/2/3.cs:28 -- empty intent array, not a "?" UnknownIntent;
+        # Intent.none() is the sim's equivalent (monster/_no_intent_unrepresentable).
         nothing = MoveState(
             "NOTHING_MOVE", lambda ctx: None, Intent.none()
         )
@@ -64,14 +62,9 @@ class BattleFriendV3(_BattleFriend):
     max_hp = 300
 
 
-# The three encounters selected by the event's difficulty settings
-# (BattlewornDummyEventEncounter.cs picks the dummy by Setting; its
-# ShouldGiveRewards=false suppresses the normal reward screen — the event's
-# Resume grants the setting's reward instead).
-# One C# class, `BattlewornDummyEventEncounter`, whose `Setting` enum picks
-# the BattleFriend (BattlewornDummyEventEncounter.cs:62-70); the sim models
-# each setting as its own Encounter. All three are still that ONE model id, so
-# all three seed the per-encounter Rng with its slug.
+# BattlewornDummyEventEncounter.cs picks the dummy by Setting; ShouldGiveRewards=false
+# suppresses the normal reward screen (the event's Resume grants it instead). One C#
+# class covers all three settings, so all three Encounters share this entry slug.
 _BATTLEWORN_DUMMY_ENTRY = "BATTLEWORN_DUMMY_EVENT_ENCOUNTER"
 
 BATTLEWORN_DUMMY_SETTING_1 = Encounter(
