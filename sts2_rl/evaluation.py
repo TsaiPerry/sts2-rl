@@ -234,6 +234,11 @@ class RunEvalReport:
     rest_visits: tuple[int, ...] = ()      # rest sites visited (any answer)
     rest_heals: tuple[int, ...] = ()       # of those, visits that healed
     rest_upgrades: tuple[int, ...] = ()    # of those, visits that upgraded
+    # v15: the same rest split conditioned on entering the site at
+    # hp/max_hp >= run_env.HIHP_REST_THRESHOLD (0.65) -- the rest-economy
+    # gate metric ("does it upgrade when healthy?").
+    rest_visits_hihp: tuple[int, ...] = ()
+    rest_upgrades_hihp: tuple[int, ...] = ()
     # v7 (plan Task 8): behavior counters + per-card exposure tallies.
     upgrades: tuple[int, ...] = ()         # permanent card upgrades gained
     removes: tuple[int, ...] = ()          # cards removed from the deck
@@ -557,6 +562,8 @@ def evaluate_run(
     rest_visits: list[int] = []
     rest_heals: list[int] = []
     rest_upgrades: list[int] = []
+    rest_visits_hihp: list[int] = []
+    rest_upgrades_hihp: list[int] = []
     upgrades: list[int] = []
     removes: list[int] = []
     elites_won: list[int] = []
@@ -627,6 +634,8 @@ def evaluate_run(
         rest_visits.append(int(info.get("ep_rest_visits", 0)))
         rest_heals.append(int(info.get("ep_rest_heals", 0)))
         rest_upgrades.append(int(info.get("ep_rest_upgrades", 0)))
+        rest_visits_hihp.append(int(info.get("ep_rest_visits_hihp", 0)))
+        rest_upgrades_hihp.append(int(info.get("ep_rest_upgrades_hihp", 0)))
         upgrades.append(int(info.get("ep_upgrades", 0)))
         removes.append(int(info.get("ep_removes", 0)))
         elites_won.append(int(info.get("ep_elites_won", 0)))
@@ -666,6 +675,8 @@ def evaluate_run(
         rest_visits=tuple(rest_visits),
         rest_heals=tuple(rest_heals),
         rest_upgrades=tuple(rest_upgrades),
+        rest_visits_hihp=tuple(rest_visits_hihp),
+        rest_upgrades_hihp=tuple(rest_upgrades_hihp),
         upgrades=tuple(upgrades),
         removes=tuple(removes),
         elites_won=tuple(elites_won),
@@ -702,7 +713,8 @@ EPISODE_CSV_FIELDS = ("policy", "seed", "floor", "act", "win", "truncated",
                       # v8 s7 gate ("mean hp overall" proxy, see
                       # RunEvalReport.mean_hp_overall): mean run.hp_ratio
                       # over this episode's decisions.
-                      "hp_ratio_mean")
+                      "hp_ratio_mean",
+                      "rest_visits_hihp", "rest_upgrades_hihp")
 
 CARDS_CSV_FIELDS = ("policy", "card", "offered", "taken", "take_rate")
 
@@ -792,6 +804,8 @@ def write_run_csv(
                     report.hp_lost[i] if report.hp_lost else 0,
                     (report.hp_ratio_sum[i] / report.hp_ratio_steps[i]
                      if report.hp_ratio_steps and report.hp_ratio_steps[i] else 0.0),
+                    report.rest_visits_hihp[i] if report.rest_visits_hihp else 0,
+                    report.rest_upgrades_hihp[i] if report.rest_upgrades_hihp else 0,
                 ])
 
     with open(hist_path, "w", newline="") as fh:

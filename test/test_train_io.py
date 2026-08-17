@@ -262,6 +262,25 @@ def test_hp_and_potion_potential_scale_flags_reach_the_env_spec(monkeypatch):
     assert spec.potion_potential_scale == 0.3
 
 
+def test_potion_death_penalty_flag_threads_and_is_run_only(monkeypatch):
+    """v15.1: --potion-death-penalty defaults off, reaches the EnvSpec, and
+    is rejected on the combat env like the other run-scale reward knobs."""
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "run"])
+    args = train_torch.parse_args()
+    assert args.potion_death_penalty == 0.0
+    assert train_torch.env_spec(args).potion_death_penalty == 0.0
+
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "run",
+                                     "--potion-death-penalty", "0.3"])
+    spec = train_torch.env_spec(train_torch.parse_args())
+    assert spec.potion_death_penalty == 0.3
+
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "combat",
+                                     "--potion-death-penalty", "0.3"])
+    with pytest.raises(SystemExit, match="potion-death-penalty"):
+        train_torch.parse_args()
+
+
 # ── rollout geometry across a resume ─────────────────────────────────────
 
 def test_rollout_flags_are_none_unless_passed(monkeypatch):

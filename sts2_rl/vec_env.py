@@ -96,6 +96,7 @@ class EnvSpec:
     # v9 reward fixes (plan 2026-08-12-v9-rest-potion-fix), both default OFF.
     rest_heal_shaping_knee_cap: bool = False
     potion_death_expiry: bool = False
+    potion_death_penalty: float = 0.0
     # v10 (plan 2026-08-13-v10-escape-and-settle Task 1): share of the HP
     # potential below the knee. 0.7 = the env's own default, so a default
     # spec stays bit-identical; the s11-lowshare contingency rung runs 0.8.
@@ -106,6 +107,11 @@ class EnvSpec:
     # default, so a default spec stays bit-identical (run/column only).
     deck_inject: str | None = None
     deck_inject_prob: float = 0.0
+    # v15 (extension-exposure plan Task 1): mid-run twin of deck_inject --
+    # a JSON packages file appended to the LIVE deck on a floor advance
+    # instead of the starting deck. Same bit-identical-by-default contract.
+    deck_inject_midrun: str | None = None
+    deck_inject_midrun_prob: float = 0.0
     # combat only (phase-3 Task 3, R11): a snapshot dataset PATH (never a
     # live SnapshotDataset -- this whole dataclass must stay picklable, and
     # a SnapshotDataset carries live Card/Relic instances). Each
@@ -132,8 +138,11 @@ def build_env(spec: EnvSpec):
         hp_potential_scale=spec.hp_potential_scale,
         hp_potential_low_share=spec.hp_potential_low_share,
         potion_potential_scale=spec.potion_potential_scale,
+        potion_death_penalty=spec.potion_death_penalty,
         deck_inject=spec.deck_inject,
         deck_inject_prob=spec.deck_inject_prob,
+        deck_inject_midrun=spec.deck_inject_midrun,
+        deck_inject_midrun_prob=spec.deck_inject_midrun_prob,
     )
     if spec.reward_win_run is not None:
         v7_kwargs["reward_win"] = spec.reward_win_run

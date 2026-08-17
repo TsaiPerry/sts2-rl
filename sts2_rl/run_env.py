@@ -616,6 +616,14 @@ def _log_deck_overflow(run: RunState, deck: list[Card]) -> None:
                       stacklevel=2)
 
 
+#: A rest visit counts as "high HP" when hp/max_hp is at or above this at
+#: the visit's first answer. 0.65 sits above the v14 policy's observed
+#: heal/smith crossover (heals dominate <= 0.60, smith dominates >= 0.74),
+#: so the eval column isolates exactly the regime the rest-economy gates ask
+#: about ("does it upgrade when healthy?").
+HIHP_REST_THRESHOLD = 0.65
+
+
 def _hp_potential(ratio: float, knee: float, low_share: float) -> float:
     """Concave HP potential: `low_share` of the value lives in [0, knee]
     (danger zone — HP is precious), the rest in [knee, 1] (HP is currency
@@ -655,10 +663,13 @@ class STS2RunEnv(gym.Env):
         rest_heal_mask_above: float | None = None,
         potion_potential_scale: float = 0.0,
         potion_death_expiry: bool = False,
+        potion_death_penalty: float = 0.0,
         deck_random_prob: float = 0.0,
         deck_random_cards: tuple[int, int] = (4, 14),
         deck_inject: str | None = None,
         deck_inject_prob: float = 0.0,
+        deck_inject_midrun: str | None = None,
+        deck_inject_midrun_prob: float = 0.0,
         max_steps: int = 10_000,
         render_mode: str | None = None,
         character: str = DEFAULT_CHARACTER,
@@ -735,6 +746,12 @@ class STS2RunEnv(gym.Env):
         # Never-drink fix: default OFF. See the step() forfeiture block for
         # the mechanism.
         self._potion_death_expiry = bool(potion_death_expiry)
+        # v15.1: flat -potion_death_penalty per potion still held at DEATH,
+        # on top of the expiry forfeiture. Expiry alone only nets
+        # hoard-and-die back to 0, tying it with drink-and-die (+k-k); the
+        # flat term breaks the tie so dying while holding is strictly worse
+        # than using the potion and dying anyway. Default OFF.
+        self._potion_death_penalty = potion_death_penalty
         # Card-exposure domain randomization: with probability
         # deck_random_prob an episode starts with 4..14 extra reward-pool
         # cards appended to the starter deck, so every card gets combat
@@ -755,6 +772,20 @@ class STS2RunEnv(gym.Env):
                 for cid in pkg:
                     make_card(cid)      # KeyError now, not at episode 40k
             self._deck_inject_packages = pkgs
+        # v15: mid-run twin of deck_inject -- appended on a floor advance
+        # (in step()) instead of at reset time. Same load-once-at-
+        # construction validation.
+        self._deck_inject_midrun_prob = deck_inject_midrun_prob
+        self._deck_inject_midrun_packages: list[list[str]] | None = None
+        if deck_inject_midrun is not None:
+            import json
+            with open(deck_inject_midrun) as fh:
+                pkgs = json.load(fh)["packages"]
+            from .cards import make_card
+            for pkg in pkgs:
+                for cid in pkg:
+                    make_card(cid)      # KeyError now, not mid-training
+            self._deck_inject_midrun_packages = pkgs
         self._max_steps = max_steps
         self.render_mode = render_mode
         # Harvest hook: threaded straight to the `RunDriver` this env
@@ -881,6 +912,9 @@ class STS2RunEnv(gym.Env):
         self._rest_visit_key: tuple[int, int] | None = None
         self._rest_healed_here = False
         self._rest_upgraded_here = False
+        self._ep_rest_visits_hihp = 0
+        self._ep_rest_upgrades_hihp = 0
+        self._rest_visit_hihp = False
         # Counted always, rewarded only when the matching reward_* kwarg is
         # non-zero.
         self._ep_upgrades = 0
@@ -1028,6 +1062,21 @@ class STS2RunEnv(gym.Env):
             reward += self._floor_rewards_by_act[act_i] * (run.total_floor - floor_before)
         else:
             reward += self._floor_reward * (run.total_floor - floor_before)
+        # v15 mid-run exposure: on a floor advance, with probability P,
+        # append one dead-list package to the live deck. Same zero-draw
+        # short-circuit contract as the reset-time inject (see
+        # `_deck_inject_packages` above): packages None or prob 0.0 must
+        # draw no rng. Plain append of UNUPGRADED cards only -- the deck
+        # ledger below pays nothing for growth, and the next out-of-combat
+        # check re-syncs _deck_len_base, so no reward term fires from the
+        # injection itself.
+        if (run.total_floor > floor_before
+                and self._deck_inject_midrun_packages is not None
+                and self._deck_inject_midrun_prob > 0.0
+                and self._rng.random() < self._deck_inject_midrun_prob):
+            from .cards import make_card
+            for cid in self._rng.choice(self._deck_inject_midrun_packages):
+                run.deck.append(make_card(cid))
         reward += self._act_reward * (run.act_index - act_before)
         reward += self._reward_elite * (self._ep_elites_won - elites_before)
         # v11.1: pay the elite-entry credit the step the attempt is tallied
@@ -1121,6 +1170,12 @@ class STS2RunEnv(gym.Env):
             # the credit (winning with a spare potion is not a sin), and
             # truncation is a harness artifact, so neither expires.
             reward -= self._potion_potential_scale * belt_now
+        if (self._potion_death_penalty and terminated
+                and self._result is not None and not self._result.victory):
+            # v15.1: flat charge per held potion at death (see ctor comment).
+            # Same guard shape as the expiry above: deaths only — wins and
+            # truncations keep their belts free of charge.
+            reward -= self._potion_death_penalty * belt_now
 
         return self._build_obs(), float(reward), terminated, truncated, self._info()
 
@@ -1184,12 +1239,21 @@ class STS2RunEnv(gym.Env):
                 self._ep_rest_visits += 1
                 self._rest_healed_here = False
                 self._rest_upgraded_here = False
+                # Classified once, at the visit's first answer -- later
+                # answers at the same site (heal after smith etc.) keep the
+                # entry ratio, so the split is per-visit not per-answer.
+                ratio = min(request.run.hp, request.run.max_hp) / max(1, request.run.max_hp)
+                self._rest_visit_hihp = ratio >= HIHP_REST_THRESHOLD
+                if self._rest_visit_hihp:
+                    self._ep_rest_visits_hihp += 1
             if answer == REST_HEAL and not self._rest_healed_here:
                 self._rest_healed_here = True
                 self._ep_rest_heals += 1
             elif answer == REST_SMITH and not self._rest_upgraded_here:
                 self._rest_upgraded_here = True
                 self._ep_rest_upgrades += 1
+                if self._rest_visit_hihp:
+                    self._ep_rest_upgrades_hihp += 1
 
     def close(self) -> None:
         self._kill_driver()
@@ -1707,6 +1771,8 @@ class STS2RunEnv(gym.Env):
             info["ep_rest_visits"] = self._ep_rest_visits
             info["ep_rest_heals"] = self._ep_rest_heals
             info["ep_rest_upgrades"] = self._ep_rest_upgrades
+            info["ep_rest_visits_hihp"] = self._ep_rest_visits_hihp
+            info["ep_rest_upgrades_hihp"] = self._ep_rest_upgrades_hihp
             info["ep_upgrades"] = self._ep_upgrades
             info["ep_removes"] = self._ep_removes
             info["ep_relics"] = self._ep_relics

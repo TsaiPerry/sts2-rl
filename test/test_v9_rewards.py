@@ -127,6 +127,61 @@ def test_potion_death_expiry_default_off():
     assert STS2RunEnv()._potion_death_expiry is False
 
 
+# ── v15.1: potion_death_penalty — flat -penalty per potion still held at
+# death, ON TOP of the expiry forfeiture. Expiry alone only nets
+# hoard-and-die back to 0 (= drink-and-die); the flat penalty prices
+# dying while holding strictly BELOW using-then-dying.
+
+
+def _death_reward_flat(penalty: float) -> float:
+    env = STS2RunEnv(potion_death_penalty=penalty)
+    env.reset(seed=0)
+    _pickup_step(env)
+    _pickup_step(env)
+    _, reward, terminated, *_ = _death_step(env)
+    assert terminated
+    return reward
+
+
+def test_potion_death_penalty_charges_flat_per_held_potion():
+    assert (_death_reward_flat(0.3) - _death_reward_flat(0.0)
+            == pytest.approx(-0.6))
+
+
+def test_potion_death_penalty_stacks_with_expiry():
+    def _r(penalty):
+        env = STS2RunEnv(potion_potential_scale=0.3, potion_death_expiry=True,
+                         potion_death_penalty=penalty)
+        env.reset(seed=0)
+        _pickup_step(env)
+        _, reward, *_ = _death_step(env)
+        return reward
+    assert _r(0.3) - _r(0.0) == pytest.approx(-0.3)
+
+
+def test_potion_death_penalty_win_unaffected():
+    def _win_reward(penalty):
+        env = STS2RunEnv(potion_death_penalty=penalty)
+        env.reset(seed=0)
+        _pickup_step(env)
+
+        def _w(a):
+            env._result = SimpleNamespace(
+                victory=True, hp=env._run.hp, max_hp=env._run.max_hp)
+        env._translate = lambda action, request: 0
+        env._count_behavior = lambda request, answer: None
+        env._switch = _w
+        env._info = lambda: {}
+        _, reward, terminated, *_ = env.step(0)
+        assert terminated
+        return reward
+    assert _win_reward(0.3) == pytest.approx(_win_reward(0.0))
+
+
+def test_potion_death_penalty_default_off():
+    assert STS2RunEnv()._potion_death_penalty == 0.0
+
+
 from sts2_rl.vec_env import EnvSpec, build_env
 
 
@@ -136,6 +191,12 @@ def test_envspec_v9_flags_reach_run_env():
     env = build_env(spec)
     assert env._rest_heal_shaping_knee_cap is True
     assert env._potion_death_expiry is True
+
+
+def test_envspec_potion_death_penalty_reaches_run_env():
+    spec = EnvSpec(kind="run", potion_death_penalty=0.3)
+    env = build_env(spec)
+    assert env._potion_death_penalty == 0.3
 
 
 def test_envspec_v9_flags_default_off():

@@ -95,8 +95,9 @@ class _StubEnv:
     })
     action_space = spaces.Discrete(4)
 
-    def __init__(self, report_metrics: bool):
+    def __init__(self, report_metrics: bool, floor: int | None = None):
         self._report = report_metrics
+        self._floor = floor
         self._n = 0
 
     def _obs(self):
@@ -117,6 +118,8 @@ class _StubEnv:
             info = {"is_success": True, "ep_end_turns": 3,
                     "ep_energy_unspent": 5.0,
                     "ep_card_offers": 2, "ep_card_takes": 1}
+        if self._floor is not None:
+            info["floor"] = self._floor
         return self._obs(), 1.0, done, False, info
 
     def close(self):
@@ -133,7 +136,8 @@ def test_vec_env_carries_episode_metrics(monkeypatch):
         "ep_potions_used_elite", "ep_potions_used_boss", "ep_potions_used_normal",
         "ep_potions_expired", "ep_potion_use_hp",
         "ep_relics",
-        "ep_hp_lost")
+        "ep_hp_lost",
+        "floor")
 
     built = []
 
@@ -147,7 +151,7 @@ def test_vec_env_carries_episode_metrics(monkeypatch):
 
     venv.reset([0, 1])
     batch = venv.step([0, 0])                 # step 1: nobody done
-    assert batch.metrics.shape == (2, 16)
+    assert batch.metrics.shape == (2, 17)
     assert np.isnan(batch.metrics).all()
 
     batch = venv.step([0, 0])                 # step 2: both done
@@ -156,6 +160,36 @@ def test_vec_env_carries_episode_metrics(monkeypatch):
     assert np.isnan(batch.metrics[0][4:]).all()
     # A done env that reported no metrics (e.g. the combat env) stays NaN.
     assert np.isnan(batch.metrics[1]).all()
+    venv.close()
+
+
+def test_vec_env_carries_end_of_episode_floor(monkeypatch):
+    """train_torch logs metrics[:, -1] as ep_ret, so the floor column has to
+    be the floor the episode ENDED on -- harvested on the terminal step only,
+    even though run_env's info carries `floor` every step."""
+    from sts2_rl import vec_env as vv
+
+    assert vv.EP_METRIC_KEYS[-1] == "floor"
+
+    built = []
+
+    def _build(spec):
+        # env 1 is the combat env: no floor in info at all.
+        env = _StubEnv(report_metrics=True,
+                       floor=17 if not built else None)
+        built.append(env)
+        return env
+
+    monkeypatch.setattr(vv, "build_env", _build)
+    venv = vv.SerialVecEnv(vv.EnvSpec(kind="column"), 2)
+
+    venv.reset([0, 1])
+    batch = venv.step([0, 0])                 # step 1: nobody done
+    assert np.isnan(batch.metrics[:, -1]).all()
+
+    batch = venv.step([0, 0])                 # step 2: both done
+    assert batch.metrics[0, -1] == 17.0
+    assert np.isnan(batch.metrics[1, -1])     # combat env -> no floor
     venv.close()
 
 
@@ -198,17 +232,19 @@ def test_csv_has_behavior_metric_columns(tmp_path):
 
 
 class _FakeRun:
-    def __init__(self, act, floor):
+    def __init__(self, act, floor, hp=100, max_hp=100):
         self.act_index = act
         self.total_floor = floor
+        self.hp = hp
+        self.max_hp = max_hp
 
 
-def _rest(env, act, floor, answer):
+def _rest(env, act, floor, answer, hp=100, max_hp=100):
     """Feed one answered REST decision straight to the tally."""
     from sts2_rl.driver import DecisionRequest
 
     env._count_behavior(
-        DecisionRequest(kind=DecisionKind.REST, run=_FakeRun(act, floor)),
+        DecisionRequest(kind=DecisionKind.REST, run=_FakeRun(act, floor, hp, max_hp)),
         answer)
 
 
@@ -274,6 +310,28 @@ def test_extra_rest_options_are_visits_but_neither_heal_nor_upgrade():
     assert _rest_tallies(env) == (before[0] + 1, before[1], before[2])
 
 
+def test_rest_hihp_split():
+    """rest_visits_hihp/rest_upgrades_hihp condition on hp/max_hp at the
+    visit's FIRST answer (>= HIHP_REST_THRESHOLD), classified once per visit
+    and unaffected by later answers at the same site."""
+    from sts2_rl.driver import REST_SMITH
+
+    env = _fresh_env()
+    before_v = env._ep_rest_visits_hihp
+    before_u = env._ep_rest_upgrades_hihp
+    # hi-HP visit: hp/max_hp >= 0.65 at first answer
+    _rest(env, 0, 6, REST_SMITH, hp=70, max_hp=100)
+    assert (env._ep_rest_visits_hihp, env._ep_rest_upgrades_hihp) == (
+        before_v + 1, before_u + 1)
+    # second answer at the same site: no double count
+    _rest(env, 0, 6, REST_SMITH, hp=70, max_hp=100)
+    assert env._ep_rest_upgrades_hihp == before_u + 1
+    # new site, low HP: visit not counted as hihp even if it smiths
+    _rest(env, 0, 7, REST_SMITH, hp=30, max_hp=100)
+    assert (env._ep_rest_visits_hihp, env._ep_rest_upgrades_hihp) == (
+        before_v + 1, before_u + 1)
+
+
 def test_rest_tallies_are_reported_and_reset_per_episode():
     from sts2_rl.driver import REST_HEAL
 
@@ -282,7 +340,18 @@ def test_rest_tallies_are_reported_and_reset_per_episode():
     assert env._ep_rest_visits == 1
     env.reset(seed=1)
     assert _rest_tallies(env) == (0, 0, 0)
+    assert env._ep_rest_visits_hihp == 0
+    assert env._ep_rest_upgrades_hihp == 0
     assert "ep_rest_visits" not in env._info()   # mid-episode: not yet
+    assert "ep_rest_visits_hihp" not in env._info()
+    assert "ep_rest_upgrades_hihp" not in env._info()
+    # Force the episode-end branch (without a full simulated episode) to
+    # confirm the new keys are surfaced there, same as ep_rest_visits.
+    env._steps = env._max_steps
+    end_info = env._info()
+    assert "ep_rest_visits_hihp" in end_info
+    assert "ep_rest_upgrades_hihp" in end_info
+    env.reset(seed=2)   # restore state for later tests sharing this env
 
 
 # ── Eval side: evaluation.evaluate_run carries the same metrics ───────────────
@@ -332,18 +401,23 @@ class _ScriptedRunEnv:
                 "ep_rest_visits": s["rest_visits"],
                 "ep_rest_heals": s["rest_heals"],
                 "ep_rest_upgrades": s["rest_upgrades"],
+                "ep_rest_visits_hihp": s["rest_visits_hihp"],
+                "ep_rest_upgrades_hihp": s["rest_upgrades_hihp"],
             })
         return {}, reward, done, False, info
 
 
 def _script(rewards, end_turns, energy_unspent, card_offers, card_takes,
             floor=1, act=0, win=False, hp_left=0,
-            rest_visits=0, rest_heals=0, rest_upgrades=0):
+            rest_visits=0, rest_heals=0, rest_upgrades=0,
+            rest_visits_hihp=0, rest_upgrades_hihp=0):
     return dict(rewards=rewards, end_turns=end_turns,
                 energy_unspent=energy_unspent, card_offers=card_offers,
                 card_takes=card_takes, floor=floor, act=act, win=win,
                 hp_left=hp_left, rest_visits=rest_visits,
-                rest_heals=rest_heals, rest_upgrades=rest_upgrades)
+                rest_heals=rest_heals, rest_upgrades=rest_upgrades,
+                rest_visits_hihp=rest_visits_hihp,
+                rest_upgrades_hihp=rest_upgrades_hihp)
 
 
 # Chosen so the assertions below can't pass by accident:
@@ -356,10 +430,12 @@ def _script(rewards, end_turns, energy_unspent, card_offers, card_takes,
 _SCRIPTS = [
     _script([1.0, 2.0], end_turns=2, energy_unspent=5.0,
             card_offers=2, card_takes=1, floor=17, act=0,
-            rest_visits=3, rest_heals=2, rest_upgrades=1),
+            rest_visits=3, rest_heals=2, rest_upgrades=1,
+            rest_visits_hihp=2, rest_upgrades_hihp=1),
     _script([0.5, 0.5, 2.0], end_turns=8, energy_unspent=4.0,
             card_offers=1, card_takes=1, floor=23, act=1, win=True, hp_left=44,
-            rest_visits=5, rest_heals=1, rest_upgrades=4),
+            rest_visits=5, rest_heals=1, rest_upgrades=4,
+            rest_visits_hihp=3, rest_upgrades_hihp=2),
     _script([-1.0], end_turns=0, energy_unspent=0.0,
             card_offers=0, card_takes=0, floor=5, act=0),
     _script([0.1, 0.2], end_turns=1, energy_unspent=1.0,
@@ -392,6 +468,8 @@ def test_evaluate_run_carries_episode_behavior_tallies():
     assert report.rest_visits == (3, 5, 0, 2, 0)
     assert report.rest_heals == (2, 1, 0, 1, 0)
     assert report.rest_upgrades == (1, 4, 0, 0, 0)
+    assert report.rest_visits_hihp == (2, 3, 0, 0, 0)
+    assert report.rest_upgrades_hihp == (1, 2, 0, 0, 0)
 
 
 def test_behavior_rates_pool_over_episodes_not_over_means():
@@ -446,12 +524,12 @@ def test_write_run_csv_exports_episode_and_histogram_tables(tmp_path):
                        "potions_used_elite", "potions_used_boss",
                        "potions_used_normal", "potions_expired",
                        "potion_use_hp", "relics", "hp_lost",
-                       "hp_ratio_mean"]
+                       "hp_ratio_mean", "rest_visits_hihp", "rest_upgrades_hihp"]
     assert len(rows) == 1 + report.episodes
     assert rows[1] == ["ckpt.pt", "100", "17", "0", "0", "0", "0", "2",
                        "3.0", "2", "5.0", "2", "1", "3", "2", "1",
                        "0", "0", "0", "0", "0", "0",
-                       "0", "0", "0", "0", "0.0", "0", "0", "0.0"]
+                       "0", "0", "0", "0", "0.0", "0", "0", "0.0", "2", "1"]
     assert rows[2][:8] == ["ckpt.pt", "101", "23", "1", "1", "0", "44", "3"]
 
     with open(hist_path) as fh:

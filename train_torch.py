@@ -228,6 +228,11 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--potion-death-expiry", action="store_true",
                     help="v9: -potion_potential_scale per potion still held "
                          "when the run ends in death")
+    ap.add_argument("--potion-death-penalty", type=float, default=0.0,
+                    help="v15.1: flat penalty per potion still held when the "
+                         "run ends in death, on top of --potion-death-expiry "
+                         "-- prices hoard-and-die strictly below "
+                         "drink-and-die (0 = off)")
     ap.add_argument("--deck-random-prob", type=float, default=0.0,
                     help="probability an episode starts with a randomized deck "
                          "(card-exposure domain randomization; 0.0 = never)")
@@ -236,6 +241,12 @@ def parse_args() -> argparse.Namespace:
                          "starting deck with --deck-inject-prob (spec "
                          "2026-08-15-v14-mechanics-exposure-design.md)")
     ap.add_argument("--deck-inject-prob", type=float, default=0.0)
+    ap.add_argument("--deck-inject-midrun", type=str, default=None,
+                    help="v15: JSON of card-id packages appended to the "
+                         "live deck on a floor advance with "
+                         "--deck-inject-midrun-prob (spec "
+                         "2026-08-16-v15-extension-exposure-restfix.md)")
+    ap.add_argument("--deck-inject-midrun-prob", type=float, default=0.0)
     ap.add_argument("--aux-hp-coef", type=float, default=0.0,
                     help="v10: weight of the auxiliary 'hp lost over the "
                          "next 3 floors' MSE (0 = head unused; run env + "
@@ -395,15 +406,19 @@ def parse_args() -> argparse.Namespace:
             or args.reward_elite_attempt
             or args.rest_heal_mask_above is not None
             or args.hp_potential_scale or args.potion_potential_scale
+            or args.potion_death_penalty
             or args.deck_random_prob
-            or args.deck_inject or args.deck_inject_prob):
+            or args.deck_inject or args.deck_inject_prob
+            or args.deck_inject_midrun or args.deck_inject_midrun_prob):
         raise SystemExit(
             "--floor-rewards/--reward-win/--reward-upgrade/--reward-remove/"
             "--reward-elite/--reward-relic/--reward-boss/"
             "--reward-elite-attempt/"
             "--rest-heal-mask-above/"
             "--hp-potential-scale/--potion-potential-scale/"
-            "--deck-random-prob/--deck-inject/--deck-inject-prob "
+            "--potion-death-penalty/"
+            "--deck-random-prob/--deck-inject/--deck-inject-prob/"
+            "--deck-inject-midrun/--deck-inject-midrun-prob "
             "apply to the run-scale envs only.")
     if args.branch_prob and args.env != "column":
         raise SystemExit(
@@ -526,8 +541,11 @@ def env_spec(args: argparse.Namespace) -> EnvSpec:
         deck_random_prob=getattr(args, "deck_random_prob", 0.0),
         deck_inject=getattr(args, "deck_inject", None),
         deck_inject_prob=getattr(args, "deck_inject_prob", 0.0),
+        deck_inject_midrun=getattr(args, "deck_inject_midrun", None),
+        deck_inject_midrun_prob=getattr(args, "deck_inject_midrun_prob", 0.0),
         rest_heal_shaping_knee_cap=getattr(args, "rest_heal_shaping_knee_cap", False),
         potion_death_expiry=getattr(args, "potion_death_expiry", False),
+        potion_death_penalty=getattr(args, "potion_death_penalty", 0.0),
         hp_potential_low_share=getattr(args, "hp_potential_low_share", 0.7),
     )
 
