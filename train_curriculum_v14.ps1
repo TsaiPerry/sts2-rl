@@ -33,7 +33,7 @@ No rest mask, no potion mask, ever.
   .\train_curriculum_v14.ps1 -Resume        # continue an interrupted run
 #>
 param(
-    [long]$S16Steps = 8000000,
+    [long]$S16Steps = 20000000,
     [string]$Device = "cuda",
     [string]$Tag = "v14",
     [string]$SeedCkpt = "runs/sts2_run_torch_v13_s15_schema12.pt",

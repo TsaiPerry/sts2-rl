@@ -60,6 +60,39 @@ Script is smoke-tested (exit 0); native PowerShell only.
   generation, and the §2b fidelity sweep are all complete and verified;
   s16 has not launched yet. Awaiting Perry's launch per the NEXT section
   above.
+- 2026-08-16: **s16 RAN AND ANALYZED (iters 976→1585, eval ckpt iter 1586,
+  150 eps each asc). ALL HARD GATES PASS — including the asc-10 floor gate
+  for the first time ever.**
+
+  | Gate | v13 s15 | v14 s16 | Verdict |
+  |---|---|---|---|
+  | asc-10 rest-upgrade share ≥ 0.15 | 0.263 | **0.404** | PASS — all-time high |
+  | asc-10 floor ≥ 20.1 | 19.41 | **20.86** (median 16.0→19.5) | **PASS — first time** |
+  | asc-10 truncations < 40/150 | 7 | 13 | PASS |
+  | asc-0 win ≥ 3.3% | 3.33% | 3.33% (5/150) | PASS — sustained |
+  | asc-0 floor (report, alarm <~30) | 32.36 | 32.02 | held — injection is NOT taxing capability |
+
+  Report-only lines: asc-10 energy_unspent/turn **regressed 0.141→0.199**
+  (asc-0 0.169→0.233; train-curve energy also drifted up late — plausibly
+  X-cost/expensive injected cards, watch next gen). Draft diversity
+  <0.05-count 24/59 → 23/58 — nominally unchanged, as spec §3 predicted.
+  The real injection signal is per-card: **15/27 comparable injected cards
+  moved up >+0.02** (inferno 0.182→0.444, juggling 0→0.086, iron_wave
+  0.150→0.212, bloodletting 0→0.056, havoc 0→0.044, true_grit 0→0.040,
+  colossus/body_slam/blood_wall/evil_eye/feel_no_pain off hard-zero), and
+  overall take rate dropped 0.875→0.809 (more selective drafting).
+  **9 cards remain hard-0.000**: burning_pact, drum_of_battle,
+  expect_a_fight, forgotten_ritual, howl_from_beyond, pyre, rupture,
+  second_wind, vicious — dominated by the conditional/synergy set; the
+  burning_pact pairings did not revive their partners (second_wind,
+  feel_no_pain moved only via injection exposure, not drafting). Per the
+  contingency ladder these are the ε-forced-drafting candidates for v15.
+  Elite diving: fought−offered gap 0.21/ep (v13 0.25), losing-eps
+  hp_ratio == overall (0.775) — still not HP-concentrated. Potions still
+  the dead term: use-rate 0.027 (23/865), though mean hp@use improved
+  0.969→0.840. Train curve ep_ret 17.99→18.76 over the stage, still
+  gently climbing at cutoff — the checkpoint is not saturated.
+  Best ckpt: `runs/sts2_run_torch_v14_s16.pt` (iter 1586).
 
 ## §2b sweep table
 

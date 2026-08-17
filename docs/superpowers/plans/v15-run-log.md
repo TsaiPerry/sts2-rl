@@ -51,6 +51,36 @@ Native PowerShell only.
 | s18 contingency | dead-9 fully unmoved after 8M → raise `--deck-inject-midrun-prob` to 0.15 (+4M, same stage pattern); do NOT reach for action-forcing |
 | s19 (DECISION-GATED, not scheduled) | linear HP curve: `--hp-potential-low-share 0.35` (+8M from s18's ckpt, `--critic-warmup 8`, everything else unchanged). Launch ONLY if, after the SpireBot Smith fix is live-verified and s17/s18 are read, the SIM evals still show hi-HP heal preference (rest_upgrades_hihp share materially below the unconditional share) OR chip-damage sloppiness persists with hp_lost/floor flat. Gates if launched: floor and win survival as above; elite gap/ep ≤ 0.3 and hp_lost/floor not rising >10% (defend-spam/passivity check). Rationale: the 0.35 knee hard-codes a danger threshold the agent's own value function contradicts (behavioral crossover ~0.6, set by its bleed rate); linear shaping prices HP uniformly and lets the critic supply the danger structure — and taxes high-HP chip damage ~2×, pressuring the sloppiness directly |
 
+## Results (2026-08-17, analyzed post-run; 150 eps per eval)
+
+| Metric | v14 s16 baseline | s17 | s18 | Verdict |
+|---|---|---|---|---|
+| asc-10 floor | 20.86 (gate ≥ 20.1) | 20.09 ± 0.70 SE | **20.58 ± 0.73** | s17 misses the bar by 0.01 — within noise, not a real regression; s18 PASSES clean |
+| asc-10 rest-upgrade share | 0.404 (gate ≥ 0.15) | **0.450 ATH** | 0.431 | PASS both |
+| asc-10 truncations | 13 (gate < 40) | 7 | 17 | PASS both |
+| asc-0 win | 3.33% (gate ≥ 3.3%) | 4.00% (6/150) | **6.00% (9/150) ATH** | PASS both; s18 nearly doubles the all-time best |
+| asc-0 floor | 32.02 (prior ATH 32.36) | 32.57 ATH | **34.03 ATH** | new high both stages |
+| hp_lost/floor (asc10 / asc0) | 7.94 / 7.30 | 7.86 / 6.37 | 7.72 / 6.95 | flat at asc10, improved at asc0 — danger-zone position unchanged |
+| energy_unspent/turn (asc10 / asc0) | 0.199 / 0.233 | 0.144 / 0.184 | **0.230** / 0.183 | s17 fixed the v14 watch item; s18's inject perturbation regressed asc10 back above baseline — the v16 energy question is s18-specific |
+| rest hi-HP baseline (asc10) | — (new) | hihp upg share 0.609 vs 0.450 unconditional; 58% of visits at hp ≥ 0.65 | 0.593 vs 0.431 | NO hi-HP heal preference — at high HP the policy upgrades MORE. s19's first trigger condition is NOT met |
+| dead-9 movement | 0/9 (v14) | asc0 6/9 > 0 (starter-inject alone already leaking) | **asc0 9/9 > 0** (burning_pact 0.172, howl 0.102, drum 0.082); asc10 6/9 | s18 contingency (prob 0.15) NOT needed |
+| potions | dead (drinks at ~full HP) | got 5.37 used 0.27/ep, use_hp 0.92 | got 5.61 used **0.15**/ep, expired 0.23 | STILL DEAD — `--potion-death-penalty 0.3` did not create drinking (asc10 use fell, expiry rose); zero uses at elites/bosses in all 4 evals |
+
+Training curves: s17 climbed gently (ep_ret 18.3 → 19.2, entropy 0.52 → 0.46).
+s18 dipped mid-stage after injection (17.65) and only partially recovered
+(18.21, entropy back up to 0.51) — still re-equilibrating at cutoff, yet its
+EVAL numbers beat s17 everywhere; the training-return dip is the injected
+packages' cost, not a policy regression.
+
+s19 verdict: NOT triggered on current evidence. The hi-HP heal preference the
+linear curve was designed to fix does not exist in sim (hihp upgrade share is
+ABOVE the unconditional share both stages), and hp_lost/floor is flat-to-better.
+Only the weak arm ("chip sloppiness with hp_lost/floor flat at asc10") holds,
+and the Smith-fix live-verify precondition is still open.
+
+Best checkpoint: `runs/sts2_run_torch_v15_s18.pt` (iter 2074) — ONNX re-export
+per the handoff checklist below.
+
 ## NEXT (Perry)
 
 - Commit the staged v15 work in both repos (this run log plus the other v15-plan files staged this session).

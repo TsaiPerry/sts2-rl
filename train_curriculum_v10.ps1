@@ -77,7 +77,7 @@ $runRewards = @("--floor-rewards", "1.0", "1.5", "2.0", "--reward-win", "12",
                 "--reward-upgrade", "0.5", "--reward-elite", "0.5",
                 "--reward-remove", "0.25", "--reward-relic", "0.25",
                 "--hp-potential-scale", "4.0",
-                "--potion-potential-scale", "0.5",
+                "--potion-potential-scale", "0.15",
                 "--rest-heal-shaping-knee-cap",
                 "--potion-death-expiry")
 

@@ -29,10 +29,10 @@ cd c:\Users\Perry\Desktop\sts2-rl
 
 | Stage | Gate | Result | Verdict |
 |---|---|---|---|
-| s14 (150 eps, asc 10) | **rest-upgrade share SURVIVES: rest_upgrades/visits ≥ 0.15** (v11 s13: 0.292 — decay toward 0 as capability recovers = heal-farm equilibrium re-forming, reward balance needs another look); floor ≥ 20.1 (v11 s13: 14.24; v10 s10's 22.26 is the report line); energy_unspent/turn ≤ 0.25 report vs 0.531; truncations < 40/150 | | |
-| s14 (150 eps, asc 0) | win ≥ 3.3% (v11 s13: 1.33%); floor report vs 23.73 / v9's 31.44; rest share report (v11 s13: 0.173) | | |
-| elite diving (both arms) | report-only, NEW `elites_fought` column: elites_fought/ep vs elites/ep (wins) — a large fought−won gap concentrated at low HP means the +1 entry pay is teaching suicide-pathing → drop toward 0.2 | | |
-| potions (both arms) | report-only at k 0.15 (v11 s13: 0.12/0.20 used/ep, timing ≈ random) | | |
+| s14 (150 eps, asc 10) | **rest-upgrade share SURVIVES: rest_upgrades/visits ≥ 0.15** (v11 s13: 0.292 — decay toward 0 as capability recovers = heal-farm equilibrium re-forming, reward balance needs another look); floor ≥ 20.1 (v11 s13: 14.24; v10 s10's 22.26 is the report line); energy_unspent/turn ≤ 0.25 report vs 0.531; truncations < 40/150 | share **0.050** (24/479 — collapsed from 0.292); floor 18.25 (p10 7, med 16, p90 31); energy 0.120; trunc 11/150 | **FAIL** — exactly the predicted heal-farm re-forming; floor gate also missed but recovering, ep_ret still inching up (16.98 last-50 vs 16.15 prev-50) |
+| s14 (150 eps, asc 0) | win ≥ 3.3% (v11 s13: 1.33%); floor report vs 23.73 / v9's 31.44; rest share report (v11 s13: 0.173) | win 2.00%; floor 27.29 (med 31, p90 45); rest share 0.048 (37/767) | FAIL (improved vs v11, still under v9-era 3.3%) |
+| elite diving (both arms) | report-only, NEW `elites_fought` column: elites_fought/ep vs elites/ep (wins) — a large fought−won gap concentrated at low HP means the +1 entry pay is teaching suicide-pathing → drop toward 0.2 | asc10 fought 1.66 vs won 1.35 (gap 0.31/ep, 46 eps); asc0 gap 0.15. Losing eps' hp_ratio_mean 0.820 vs 0.818 overall (asc0: 0.882 vs 0.868) — NOT low-HP-concentrated | PASS — no suicide-pathing; keep attempt reward at 1 |
+| potions (both arms) | report-only at k 0.15 (v11 s13: 0.12/0.20 used/ep, timing ≈ random) | used/ep 0.16 (asc10) / 0.31 (asc0); mean use HP 0.92–0.95 → drunk at near-full HP, timing still unlearned | unchanged — k 0.15 not moving behavior |
 
 ## Contingencies
 
@@ -52,3 +52,17 @@ cd c:\Users\Perry\Desktop\sts2-rl
 - 2026-08-14: v12 script created (v11 minus the combat stage, s14 = +8M
   run-only continuation of v11_s13, `--resume` handoff — deliberately NOT
   `-WarmStart`). Awaiting Perry's launch.
+- 2026-08-15: s14 COMPLETE (iters 122→365, 12.0M cumulative steps) and
+  evaluated. **Primary gate FAIL**: asc-10 rest-upgrade share 0.050
+  (24/479) — the v11 revival decayed 0.292→0.05 as capability recovered,
+  i.e. the heal-farm equilibrium re-formed exactly as the contingency
+  predicted. Per contingency: revisit reward balance (upgrade vs heal
+  shaping), do NOT re-run a combat detour. Secondary: asc-10 floor 18.25
+  (< 20.1 gate but well up from v11's 14.24), asc-0 win 2.00% (< 3.3%,
+  up from 1.33%), asc-0 floor 27.29 (> v11's 23.73). Energy 0.120 ✓,
+  trunc 11/150 ✓. Elite-diving check PASSES cleanly (gap 0.31/ep not
+  HP-concentrated) — `--reward-elite-attempt 1` is safe to keep. Potions
+  unchanged: 0.16–0.31 used/ep at 0.92–0.95 HP (drunk near-full, timing
+  unlearned). ep_ret still creeping up at end (16.15→16.98 last 100
+  iters) — not hard-plateaued, but the rest-share collapse is the
+  standing issue, not step count.
