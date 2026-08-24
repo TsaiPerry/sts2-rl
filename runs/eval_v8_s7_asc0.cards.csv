@@ -1,0 +1,171 @@
+policy,card,offered,taken,take_rate
+masked-random,PommelStrikeCard,40,11,0.275
+masked-random,BloodWallCard,38,9,0.236842
+masked-random,CinderCard,38,10,0.263158
+masked-random,HavocCard,34,8,0.235294
+masked-random,BodySlamCard,33,10,0.30303
+masked-random,SwordBoomerangCard,33,6,0.181818
+masked-random,SetupStrikeCard,32,6,0.1875
+masked-random,TrembleCard,32,7,0.21875
+masked-random,TwinStrikeCard,32,3,0.09375
+masked-random,ArmamentsCard,30,7,0.233333
+masked-random,AngerCard,29,6,0.206897
+masked-random,BloodlettingCard,29,10,0.344828
+masked-random,BreakthroughCard,29,9,0.310345
+masked-random,ShrugItOffCard,29,8,0.275862
+masked-random,ThunderclapCard,29,9,0.310345
+masked-random,IronWaveCard,28,10,0.357143
+masked-random,MoltenFistCard,26,7,0.269231
+masked-random,TrueGritCard,24,3,0.125
+masked-random,HeadbuttCard,22,2,0.090909
+masked-random,PerfectedStrikeCard,20,4,0.2
+masked-random,StompCard,16,4,0.25
+masked-random,RuptureCard,15,6,0.4
+masked-random,StoneArmorCard,14,2,0.142857
+masked-random,BattleTranceCard,13,4,0.307692
+masked-random,ExpectAFightCard,12,4,0.333333
+masked-random,HowlFromBeyondCard,12,3,0.25
+masked-random,RampageCard,12,3,0.25
+masked-random,StampedeCard,12,2,0.166667
+masked-random,TauntCard,12,3,0.25
+masked-random,AshenStrikeCard,11,2,0.181818
+masked-random,BurningPactCard,11,2,0.181818
+masked-random,InfernalBladeCard,11,1,0.090909
+masked-random,PillageCard,11,3,0.272727
+masked-random,RageCard,11,3,0.272727
+masked-random,SecondWindCard,11,2,0.181818
+masked-random,FeelNoPainCard,10,3,0.3
+masked-random,ForgottenRitualCard,10,2,0.2
+masked-random,ColossusCard,9,2,0.222222
+masked-random,DrumOfBattleCard,9,2,0.222222
+masked-random,InfernoCard,9,1,0.111111
+masked-random,InflameCard,9,3,0.333333
+masked-random,UppercutCard,9,3,0.333333
+masked-random,BludgeonCard,8,2,0.25
+masked-random,DismantleCard,8,3,0.375
+masked-random,DominateCard,8,2,0.25
+masked-random,FightMeCard,8,0,0.0
+masked-random,FlameBarrierCard,8,2,0.25
+masked-random,SpiteCard,8,1,0.125
+masked-random,HemokinesisCard,7,1,0.142857
+masked-random,UnrelentingCard,7,0,0.0
+masked-random,WhirlwindCard,7,0,0.0
+masked-random,EvilEyeCard,6,0,0.0
+masked-random,JugglingCard,6,2,0.333333
+masked-random,BullyCard,5,0,0.0
+masked-random,ViciousCard,5,3,0.6
+masked-random,BarricadeCard,2,2,1.0
+masked-random,JuggernautCard,2,1,0.5
+masked-random,OfferingCard,2,1,0.5
+masked-random,PrimalForceCard,2,0,0.0
+masked-random,UnmovableCard,2,0,0.0
+masked-random,AggressionCard,1,0,0.0
+masked-random,ConflagrationCard,1,0,0.0
+masked-random,FisticuffsCard,1,1,1.0
+masked-random,JackOfAllTradesCard,1,0,0.0
+masked-random,MangleCard,1,1,1.0
+masked-random,PurityCard,1,0,0.0
+masked-random,RestlessnessCard,1,0,0.0
+masked-random,ShockwaveCard,1,1,1.0
+masked-random,TearAsunderCard,1,1,1.0
+masked-random,VolleyCard,1,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",BreakthroughCard,185,41,0.221622
+"...run_torch_v8_s7.pt (entset, iter 549)",BloodlettingCard,178,4,0.022472
+"...run_torch_v8_s7.pt (entset, iter 549)",ShrugItOffCard,176,2,0.011364
+"...run_torch_v8_s7.pt (entset, iter 549)",TrembleCard,175,44,0.251429
+"...run_torch_v8_s7.pt (entset, iter 549)",TrueGritCard,175,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",BodySlamCard,173,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",CinderCard,171,1,0.005848
+"...run_torch_v8_s7.pt (entset, iter 549)",SetupStrikeCard,166,36,0.216867
+"...run_torch_v8_s7.pt (entset, iter 549)",ArmamentsCard,165,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",AngerCard,164,155,0.945122
+"...run_torch_v8_s7.pt (entset, iter 549)",SwordBoomerangCard,164,36,0.219512
+"...run_torch_v8_s7.pt (entset, iter 549)",TwinStrikeCard,163,109,0.668712
+"...run_torch_v8_s7.pt (entset, iter 549)",HavocCard,162,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",ThunderclapCard,159,63,0.396226
+"...run_torch_v8_s7.pt (entset, iter 549)",PommelStrikeCard,158,80,0.506329
+"...run_torch_v8_s7.pt (entset, iter 549)",BloodWallCard,157,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",PerfectedStrikeCard,157,123,0.783439
+"...run_torch_v8_s7.pt (entset, iter 549)",MoltenFistCard,156,53,0.339744
+"...run_torch_v8_s7.pt (entset, iter 549)",IronWaveCard,155,74,0.477419
+"...run_torch_v8_s7.pt (entset, iter 549)",HeadbuttCard,145,12,0.082759
+"...run_torch_v8_s7.pt (entset, iter 549)",DismantleCard,84,49,0.583333
+"...run_torch_v8_s7.pt (entset, iter 549)",TauntCard,79,57,0.721519
+"...run_torch_v8_s7.pt (entset, iter 549)",FightMeCard,74,73,0.986486
+"...run_torch_v8_s7.pt (entset, iter 549)",InflameCard,74,57,0.77027
+"...run_torch_v8_s7.pt (entset, iter 549)",FeelNoPainCard,72,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",BurningPactCard,71,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",DominateCard,71,62,0.873239
+"...run_torch_v8_s7.pt (entset, iter 549)",RageCard,70,40,0.571429
+"...run_torch_v8_s7.pt (entset, iter 549)",StompCard,70,58,0.828571
+"...run_torch_v8_s7.pt (entset, iter 549)",InfernoCard,68,30,0.441176
+"...run_torch_v8_s7.pt (entset, iter 549)",HemokinesisCard,67,18,0.268657
+"...run_torch_v8_s7.pt (entset, iter 549)",RuptureCard,67,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",BattleTranceCard,66,57,0.863636
+"...run_torch_v8_s7.pt (entset, iter 549)",HowlFromBeyondCard,66,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",ViciousCard,66,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",UnrelentingCard,65,63,0.969231
+"...run_torch_v8_s7.pt (entset, iter 549)",BullyCard,64,57,0.890625
+"...run_torch_v8_s7.pt (entset, iter 549)",SecondWindCard,63,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",DrumOfBattleCard,62,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",SpiteCard,62,49,0.790323
+"...run_torch_v8_s7.pt (entset, iter 549)",StoneArmorCard,61,6,0.098361
+"...run_torch_v8_s7.pt (entset, iter 549)",UppercutCard,61,38,0.622951
+"...run_torch_v8_s7.pt (entset, iter 549)",ForgottenRitualCard,60,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",JugglingCard,60,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",EvilEyeCard,59,1,0.016949
+"...run_torch_v8_s7.pt (entset, iter 549)",StampedeCard,59,36,0.610169
+"...run_torch_v8_s7.pt (entset, iter 549)",FlameBarrierCard,58,5,0.086207
+"...run_torch_v8_s7.pt (entset, iter 549)",WhirlwindCard,58,9,0.155172
+"...run_torch_v8_s7.pt (entset, iter 549)",AshenStrikeCard,56,7,0.125
+"...run_torch_v8_s7.pt (entset, iter 549)",RampageCard,56,6,0.107143
+"...run_torch_v8_s7.pt (entset, iter 549)",BludgeonCard,53,17,0.320755
+"...run_torch_v8_s7.pt (entset, iter 549)",ColossusCard,53,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",InfernalBladeCard,51,34,0.666667
+"...run_torch_v8_s7.pt (entset, iter 549)",PillageCard,48,9,0.1875
+"...run_torch_v8_s7.pt (entset, iter 549)",ExpectAFightCard,45,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",BrandCard,43,4,0.093023
+"...run_torch_v8_s7.pt (entset, iter 549)",DarkEmbraceCard,43,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",OfferingCard,41,33,0.804878
+"...run_torch_v8_s7.pt (entset, iter 549)",CascadeCard,40,18,0.45
+"...run_torch_v8_s7.pt (entset, iter 549)",ThrashCard,39,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",CrimsonMantleCard,38,36,0.947368
+"...run_torch_v8_s7.pt (entset, iter 549)",DemonFormCard,38,13,0.342105
+"...run_torch_v8_s7.pt (entset, iter 549)",HellraiserCard,38,11,0.289474
+"...run_torch_v8_s7.pt (entset, iter 549)",AggressionCard,37,16,0.432432
+"...run_torch_v8_s7.pt (entset, iter 549)",MangleCard,37,19,0.513514
+"...run_torch_v8_s7.pt (entset, iter 549)",PyreCard,37,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",StokeCard,37,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",CrueltyCard,36,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",ImperviousCard,36,25,0.694444
+"...run_torch_v8_s7.pt (entset, iter 549)",TearAsunderCard,36,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",OneTwoPunchCard,35,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",PrimalForceCard,35,32,0.914286
+"...run_torch_v8_s7.pt (entset, iter 549)",BarricadeCard,34,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",UnmovableCard,34,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",ConflagrationCard,32,27,0.84375
+"...run_torch_v8_s7.pt (entset, iter 549)",JuggernautCard,30,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",PactsEndCard,30,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",FiendFireCard,27,7,0.259259
+"...run_torch_v8_s7.pt (entset, iter 549)",ProwessCard,3,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",FisticuffsCard,2,2,1.0
+"...run_torch_v8_s7.pt (entset, iter 549)",OmnisliceCard,2,2,1.0
+"...run_torch_v8_s7.pt (entset, iter 549)",ProlongCard,2,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",PurityCard,2,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",TheBombCard,2,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",UltimateDefendCard,2,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",UltimateStrikeCard,2,1,0.5
+"...run_torch_v8_s7.pt (entset, iter 549)",AutomationCard,1,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",DiscoveryCard,1,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",DramaticEntranceCard,1,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",EquilibriumCard,1,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",FastenCard,1,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",FinesseCard,1,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",FlashOfSteelCard,1,1,1.0
+"...run_torch_v8_s7.pt (entset, iter 549)",ImpatienceCard,1,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",NotYetCard,1,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",PanacheCard,1,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",PanicButtonCard,1,1,1.0
+"...run_torch_v8_s7.pt (entset, iter 549)",PrepTimeCard,1,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",ThinkingAheadCard,1,0,0.0
+"...run_torch_v8_s7.pt (entset, iter 549)",ThrummingHatchetCard,1,0,0.0

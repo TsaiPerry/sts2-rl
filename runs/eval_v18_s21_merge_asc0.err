@@ -1,0 +1,4 @@
+C:\Users\Perry\Desktop\sts2-rl\sts2_rl\run_env.py:1990: UserWarning: obs segment 'run.deck': 137 rows exceeds cap 96; truncating to 96
+  overflow["run.deck"] = buf.write_rows(
+C:\Users\Perry\Desktop\sts2-rl\sts2_rl\full_env.py:1140: UserWarning: obs segment 'combat.cards': 133 rows exceeds cap 96; truncating to 96
+  overflow["cards"] = buf.write_rows(

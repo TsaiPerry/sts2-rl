@@ -1,0 +1,46 @@
+...ep 25/150 done (105 tracked fights)
+...ep 50/150 done (197 tracked fights)
+...ep 75/150 done (292 tracked fights)
+...ep 100/150 done (388 tracked fights)
+...ep 125/150 done (476 tracked fights)
+...ep 150/150 done (543 tracked fights)
+
+=== 150 eps @ asc 0, ckpt runs/sts2_run_torch_v20_s23.pt, greedy seed 0+ep ===
+deaths by last-combat room type: {'BOSS': 95, 'MONSTER': 24, 'ELITE': 25}
+
+BOSS fights entered: 277
+act enemies                                    n  won | hp_in%  dmg/t  blk/t  0blk% turns
+  0 CeremonialBeast                           15   15 |    91%    5.3    3.9    59%   7.3
+  0 KinFollower,KinFollower,KinPriest         23   23 |    97%    5.2    6.8    30%   9.5
+  0 LagavulinMatriarch                        24   23 |    96%    7.2    4.5    46%   7.7
+  0 SoulFysh                                  24   22 |    96%    6.0    4.9    53%   8.0
+  0 Vantom                                    28   22 |    92%    6.6    8.6    31%   7.4
+  0 WaterfallGiant                            26   22 |    96%    4.6    5.2    41%   8.5
+  1 Crusher,Rocket                            40   16 |    76%   12.2    8.2    25%   5.5
+  1 KnowledgeDemon                            26   16 |    82%    7.9    8.6    26%   7.5
+  1 TheInsatiable                             30   22 |    84%    8.3    6.2    39%   6.5
+  2 Aeonglass                                 14    3 |    65%    7.7   13.2    22%   5.5
+  2 Queen,TorchHeadAmalgam                     7    1 |    55%    5.7   11.3     8%   6.1
+  2 TestSubject                               20    1 |    54%    8.3   11.3    17%   4.6
+       WON: n=186 hp_in 93% dmg/turn 6.6 block/turn 6.2 zero-block-turns 38% turns 7.7 hp_lost 46%max
+      LOST: n=91 hp_in 68% dmg/turn 9.3 block/turn 9.7 zero-block-turns 28% turns 5.7 hp_lost 68%max
+
+ELITE fights entered: 266
+act enemies                                    n  won | hp_in%  dmg/t  blk/t  0blk% turns
+  0 BygoneEffigy                              24   24 |    85%    4.4    4.4    55%   4.0
+  0 Byrdonis                                  21   21 |    88%    9.3    6.6    30%   3.9
+  0 PhantasmalGardener,PhantasmalGardener,Ph  23   23 |    90%    6.2    5.2    43%   6.1
+  0 PhrogParasite                             21   18 |    83%    3.9    5.6    44%   6.0
+  0 SkulkingColony                            15   15 |    85%    4.4    9.7    10%   5.5
+  0 TerrorEel                                 23   22 |    91%    4.9    4.1    56%   4.7
+  1 DecimillipedeSegmentBack,DecimillipedeSe  24   21 |    79%    8.5    8.8    29%   4.0
+  1 Entomancer                                35   29 |    71%    8.4    8.1    32%   3.8
+  1 InfestedPrism                             32   31 |    78%    7.7    6.3    36%   3.7
+  2 FlailKnight,MagiKnight,SpectralKnight     19   14 |    75%    6.8   10.2    25%   4.4
+  2 MechaKnight                               12    8 |    74%    7.7    7.8    35%   5.6
+  2 SoulNexus                                 17   13 |    76%   13.9    8.7    37%   3.7
+       WON: n=239 hp_in 84% dmg/turn 7.1 block/turn 6.9 zero-block-turns 37% turns 4.5 hp_lost 23%max
+      LOST: n=27 hp_in 56% dmg/turn 8.1 block/turn 7.2 zero-block-turns 33% turns 4.2 hp_lost 56%max
+
+LOST boss fights entry-hp ratios: p10 0.33 median 0.71 p90 1.00
+LOST fights entered at >=70% hp: 48/91

@@ -1,0 +1,13 @@
+{
+  "packages": [
+    ["burning_pact"],
+    ["drum_of_battle"],
+    ["expect_a_fight"],
+    ["forgotten_ritual", "burning_pact"],
+    ["howl_from_beyond"],
+    ["pyre"],
+    ["rupture", "bloodletting"],
+    ["second_wind", "burning_pact"],
+    ["vicious"]
+  ]
+}

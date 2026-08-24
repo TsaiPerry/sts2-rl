@@ -1,0 +1,43 @@
+
+150 full runs on the 'run' env, seed 0, greedy+merge (default act rolls)
+
+policy                                     win%  floor~   med  acts reached      hp@win   dec/ep e_unspent   take  rest_heal  rest_up potion_use
+------------------------------------------------------------------------------------------------------------------------------------------------
+..._torch_v21_s24.pt (entset, iter 3232)   6.7%    34.6    33  1:18 2:57 3:75      29.9    362.2      0.17    83%        46%      56%       112%
+
+v8 HP/potion/relic summary:
+  ..._torch_v21_s24.pt (entset, iter 3232) hp_lost  228.2  potion_elite_share  32.0%  potions_used  8.17  potions_expired  0.02  relics  9.91
+
+v21 potion option-value summary:
+  ..._torch_v21_s24.pt (entset, iter 3232) v_at_use  0.63  wasted   3.2%  bought 0.86  rw_skipped 2.57  rw_forced 0.03  potion_relics 0.29
+
+potion hold summary (floors held; pooled potion instances):
+  ..._torch_v21_s24.pt (entset, iter 3232) instances 1292  mean_hold_used 1.62  0:18.2%  1:37.3%  2-3:34.1%  4-6: 6.9%  7+: 3.6%
+    potion_shaped_rock     picked 106 used 106 held   0 lost  0  hold_used  0.1  v_at_use 0.59  tier   39%
+    blood_potion           picked  50 used  50 held   0 lost  0  hold_used  0.2  v_at_use 0.81  tier    2%
+    attack_potion          picked  45 used  45 held   0 lost  0  hold_used  2.0  v_at_use 0.62  tier   31%
+    soldiers_stew          picked  37 used  37 held   0 lost  0  hold_used  1.9  v_at_use 0.67  tier   30%
+    fairy_in_a_bottle      picked  36 used   0 held   3 lost 33  hold_used  0.0  v_at_use 0.00  tier    0%
+    power_potion           picked  36 used  36 held   0 lost  0  hold_used  1.6  v_at_use 0.67  tier   36%
+    vulnerable_potion      picked  36 used  36 held   0 lost  0  hold_used  1.7  v_at_use 0.61  tier   31%
+    ship_in_a_bottle       picked  35 used  35 held   0 lost  0  hold_used  2.4  v_at_use 0.63  tier   43%
+
+v8 s7 gate summary (docs/superpowers/plans/2026-08-10-v8-hp-economy-curriculum.md Task 7):
+  ..._torch_v21_s24.pt (entset, iter 3232)
+    rest_upgrade_rate             55.7% >=  25.0%   PASS
+    energy_unspent/turn           0.175 <=  0.150   FAIL
+    potions_used/episode          8.167 >=  1.000   PASS
+    potions_expired (deaths)      0.000 <=  1.500   PASS
+    hp_at_use < hp_overall       at_use= 0.839 overall= 0.860   PASS
+    elites/episode                 1.99          report-only (relative gate: >= s1's own eval)
+    hp_lost/floor                  6.59          report-only (relative gate: <= s1's own eval)
+    gimmick-probe wins                           report-only (relative gate: > v6's; pass --gimmick-probes)
+
+deaths (floor reached, losses only):
+  ..._torch_v21_s24.pt (entset, iter 3232) n=140  mean  33.9  median   31  max  45
+
+most-offered never-taken (..._torch_v21_s24.pt (entset, iter 3232)): CrueltyCardx53, FiendFireCardx52, DemonFormCardx51, UnmovableCardx46, DarkEmbraceCardx45, StokeCardx45, PyreCardx44, PactsEndCardx41, ThrashCardx41, JuggernautCardx38
+
+wrote runs\eval_v21_s24_asc0.episodes.csv (150 episode rows)
+wrote runs\eval_v21_s24_asc0.hist.csv
+wrote runs\eval_v21_s24_asc0.cards.csv
