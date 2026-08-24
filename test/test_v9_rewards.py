@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from sts2_rl.combat import Phase
 from sts2_rl.driver import DecisionKind, DecisionRequest, REST_HEAL, REST_SMITH
 from sts2_rl.run_env import STS2RunEnv, _hp_potential
 
@@ -203,3 +204,69 @@ def test_envspec_v9_flags_default_off():
     env = build_env(EnvSpec(kind="run"))
     assert env._rest_heal_shaping_knee_cap is False
     assert env._potion_death_expiry is False
+
+
+# ── v16: energy_waste_penalty — flat -penalty per unspent energy point at
+# every player-turn END_TURN. UNCONDITIONAL by design (empty-hand turns
+# charge too: that is the deck-building gradient, and no alternative
+# action exists on those turns so it cannot distort combat play).
+# Tiebreaker-sized (0.02) so passing vs Thorns/Prism-class punishers
+# stays strictly optimal — HP shaping charges ~an order of magnitude
+# more per HP than this charges per energy.
+
+
+def _end_turn_step(env, energy):
+    """One step() whose pending request is a player-turn END_TURN with
+    `energy` unspent. _count_behavior stays REAL — the reward reads the
+    counter delta it produces."""
+    env._request = SimpleNamespace(
+        kind=DecisionKind.COMBAT,
+        combat=SimpleNamespace(
+            phase=Phase.PLAYER_TURN,
+            room_type=None,
+            player=SimpleNamespace(energy=energy)))
+    env._build_obs = lambda: {"f": np.zeros(1, np.float32), "i": np.zeros(1, np.int32)}
+    env._translate = lambda action, request: 0   # answer 0 == END_TURN
+    env._switch = lambda a: None
+    env._info = lambda: {}
+    return env.step(0)
+
+
+def _end_turn_reward(penalty, energy):
+    env = STS2RunEnv(energy_waste_penalty=penalty)
+    env.reset(seed=0)
+    _, reward, *_ = _end_turn_step(env, energy)
+    return reward
+
+
+def test_energy_waste_penalty_charges_per_unspent_point():
+    assert (_end_turn_reward(0.02, 3) - _end_turn_reward(0.0, 3)
+            == pytest.approx(-0.06))
+
+
+def test_energy_waste_penalty_zero_energy_free():
+    assert (_end_turn_reward(0.02, 0) - _end_turn_reward(0.0, 0)
+            == pytest.approx(0.0))
+
+
+def test_energy_waste_penalty_not_charged_outside_player_turn():
+    def _r(penalty):
+        env = STS2RunEnv(energy_waste_penalty=penalty)
+        env.reset(seed=0)
+        env._request = SimpleNamespace(
+            kind=DecisionKind.COMBAT,
+            combat=SimpleNamespace(
+                phase=Phase.COMBAT_OVER,
+                room_type=None,
+                player=SimpleNamespace(energy=3)))
+        env._build_obs = lambda: {"f": np.zeros(1, np.float32), "i": np.zeros(1, np.int32)}
+        env._translate = lambda action, request: 0
+        env._switch = lambda a: None
+        env._info = lambda: {}
+        _, reward, *_ = env.step(0)
+        return reward
+    assert _r(0.02) == pytest.approx(_r(0.0))
+
+
+def test_energy_waste_penalty_default_off():
+    assert STS2RunEnv()._energy_waste_penalty == 0.0

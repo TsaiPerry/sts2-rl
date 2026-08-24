@@ -44,6 +44,7 @@ long run contributes more copies than several early deaths and can dominate
 the profile.
 """
 import argparse
+import random
 
 import numpy as np
 
@@ -64,6 +65,7 @@ from sts2_rl.evaluation import (
     probe_summary,
     reward_histogram_lines,
     write_cards_csv,
+    write_potions_csv,
     write_deck_csv,
     write_run_csv,
 )
@@ -190,6 +192,7 @@ def evaluate_full(
     baselines: bool,
     sample: bool = False,
     device: str = "cpu",
+    merge_duplicates: bool = False,
 ) -> None:
     """Full combat-env evaluation: win rate + probe accuracy for every policy row.
 
@@ -206,7 +209,7 @@ def evaluate_full(
     if model_path is not None and is_torch_checkpoint(model_path):
         pol, ckpt = load_torch_policy(
             model_path, env_kind="combat", env=STS2FullCombatEnv(),
-            device=device, sample=sample, seed=seed)
+            device=device, sample=sample, seed=seed, merge_duplicates=merge_duplicates)
         specs[label(model_path, ckpt)] = (pol, None, pol)
     elif model_path is not None:
         model = load_sb3(model_path)
@@ -240,6 +243,7 @@ def gimmick_probes(
     sample: bool,
     device: str,
     episodes: int = 100,
+    merge_duplicates: bool = False,
 ) -> None:
     """v7 gimmick-fight probes (plan Task 10): the three fights Perry watched
     the bot fail mechanically, each rolled as a dedicated combat-env eval at
@@ -263,7 +267,7 @@ def gimmick_probes(
             try:
                 policy, _ = load_torch_policy(
                     model_path, env_kind="combat", env=env,
-                    device=device, sample=sample, seed=seed)
+                    device=device, sample=sample, seed=seed, merge_duplicates=merge_duplicates)
             except (SystemExit, Exception) as exc:
                 # e.g. a run-scale checkpoint: its obs layout can't drive the
                 # combat env — report and keep the rest of the eval usable.
@@ -372,6 +376,8 @@ def evaluate_run_scale(
     csv_path: str | None = None,
     ascension: int = 0,
     deck_hist: bool = False,
+    random_episodes: int = 0,
+    merge_duplicates: bool = False,
 ) -> None:
     """Run-scale evaluation: N seeded full runs on STS2RunEnv/STS2CurriculumRunEnv."""
     rows: list[tuple[str, RunEvalReport]] = []
@@ -384,19 +390,34 @@ def evaluate_run_scale(
     # combats there).
     _ = baselines
 
+    # The deterministic block (seed..seed+n-1, same every invocation --
+    # every campaign eval is comparable on it) plus, when asked, extra
+    # episodes on fresh system-entropy seeds. Drawn >= 1_000_000 so they can
+    # never collide with (or be mistaken for) the deterministic block in the
+    # CSV's seed column.
+    episode_seeds = None
+    if random_episodes > 0:
+        sys_rng = random.SystemRandom()
+        episode_seeds = (
+            [seed + ep for ep in range(n_episodes)]
+            + [sys_rng.randrange(1_000_000, 2**31) for _ in range(random_episodes)]
+        )
+
     if model_path is not None:
         env = make_run_env(env_kind, acts, ascension)
         policy, ckpt = load_torch_policy(
             model_path, env_kind=env_kind, env=env,
-            device=device, sample=sample, seed=seed)
+            device=device, sample=sample, seed=seed, merge_duplicates=merge_duplicates)
         rows.append((
             label(model_path, ckpt),
-            evaluate_run(policy, episodes=n_episodes, seed=seed, env=env),
+            evaluate_run(policy, episodes=n_episodes, seed=seed, env=env,
+                         episode_seeds=episode_seeds),
         ))
 
-    mode = "sampled" if sample else "greedy"
+    mode = "sampled" if sample else ("greedy+merge" if merge_duplicates else "greedy")
     act_str = " ".join(acts) if acts else "default act rolls"
-    print(f"\n{n_episodes} full runs on the {env_kind!r} env, seed {seed}, "
+    random_str = (f" + {random_episodes} random-seed" if random_episodes else "")
+    print(f"\n{n_episodes}{random_str} full runs on the {env_kind!r} env, seed {seed}, "
           f"{mode} ({act_str})\n")
     header = (f"{'policy':<{LABEL_WIDTH}} {'win%':>6} {'floor~':>7} {'med':>5}  "
               f"{'acts reached':<16} {'hp@win':>7} {'dec/ep':>8} "
@@ -419,6 +440,39 @@ def evaluate_run_scale(
               f"potions_used {report.mean_potions_used:5.2f}  "
               f"potions_expired {report.mean_potions_expired:5.2f}  "
               f"relics {report.mean_relics:5.2f}")
+
+    # v21 potion option-value reads (spec 2026-08-22-v21-potion-option-value-
+    # design §4): tier share = potion_elite_share above; these are the rest.
+    print("\nv21 potion option-value summary:")
+    for name, report in rows:
+        print(f"  {name:<{LABEL_WIDTH}} v_at_use {report.mean_potion_v_at_use:5.2f}  "
+              f"wasted {100 * report.potions_wasted_rate:5.1f}%  "
+              f"bought {report.mean_potions_bought:4.2f}  "
+              f"discarded {report.mean_potions_discarded:4.2f}  "
+              f"rw_skipped {report.mean_potion_rewards_skipped:4.2f}  "
+              f"rw_forced {report.mean_potion_rewards_forced:4.2f}  "
+              f"potion_relics {report.mean_potion_relic_picks:4.2f}")
+
+    # 2026-08-23 hold-duration read: floors a potion is held before it is
+    # drunk, the hold histogram over every instance, and the top potions.
+    print("\npotion hold summary (floors held; pooled potion instances):")
+    for name, report in rows:
+        hist = report.potion_hold_histogram
+        n = sum(hist.values())
+        table = report.potion_hold_table
+        print(f"  {name:<{LABEL_WIDTH}} instances {n:4d}  mean_hold_used {report.mean_potion_hold_used:4.2f}  "
+              + "  ".join(f"{k}:{100 * c / n:4.1f}%" if n else f"{k}:-" for k, c in hist.items()))
+        for pid, t in list(table.items())[:8]:
+            print(f"    {pid:<22} picked {t['picked']:3d} used {t['used']:3d} held {t['held']:3d} "
+                  f"lost {t['lost']:2d}  hold_used {t['mean_hold_used']:4.1f}  v_at_use {t['v_at_use']:4.2f}  "
+                  f"tier {100 * t['tier_share']:4.0f}%")
+
+    print("\npotion skip context (voluntary reward skips by belt count at skip):")
+    for name, report in rows:
+        hist = report.potion_skip_belt_histogram
+        n = sum(hist.values())
+        print(f"  {name:<{LABEL_WIDTH}} skips {n:4d}  "
+              + "  ".join(f"belt{k}:{c}" for k, c in hist.items()))
 
     # v8 s7 gate summary (plan Task 7 / v8-run-log.md's final-stage row) --
     # printed for every row so this doubles as a quick sanity check on
@@ -463,6 +517,8 @@ def evaluate_run_scale(
         stem = csv_path[:-4] if csv_path.lower().endswith(".csv") else csv_path
         cards_path = f"{stem}.cards.csv"
         write_cards_csv(cards_path, rows)
+        potions_path = f"{stem}.potions.csv"
+        write_potions_csv(potions_path, rows)
         print(f"\nwrote {ep_path} ({sum(r.episodes for _, r in rows)} episode rows)"
               f"\nwrote {hist_path}"
               f"\nwrote {cards_path}")
@@ -481,6 +537,7 @@ def compare_checkpoints(
     sample: bool,
     device: str,
     ascension: int = 0,
+    merge_duplicates: bool = False,
 ) -> None:
     """``--compare``: paired-seed A/B of two run-scale checkpoints on the
     SAME ``EVAL_SEEDS`` slice — per-seed floor/win/hp deltas plus the
@@ -491,7 +548,7 @@ def compare_checkpoints(
         # check; compare_runs supplies the env each arm actually plays on.
         env = make_run_env(env_kind, acts, ascension)
         policy, ckpt = load_torch_policy(
-            path, env_kind=env_kind, env=env, device=device, sample=sample)
+            path, env_kind=env_kind, env=env, device=device, sample=sample, merge_duplicates=merge_duplicates)
         return policy, ckpt
 
     # Loaded once per arm and reused for that arm's whole seed sweep — see
@@ -538,6 +595,14 @@ if __name__ == "__main__":
                              "'run' = STS2RunEnv, 'column' = STS2CurriculumRunEnv "
                              "(both torch-only, match train_torch.py --env run|column)")
     parser.add_argument("--seed", type=int, default=0, help="full/run/column envs only")
+    parser.add_argument("--random-episodes", type=int, default=0,
+                        help="run\\column envs only: run this many ADDITIONAL "
+                             "episodes on freshly random seeds (system entropy, "
+                             "different every invocation) on top of the "
+                             "deterministic --episodes block -- a check that a "
+                             "read isn't an artifact of the fixed seed set. "
+                             "The CSV's seed column records which is which "
+                             "(random seeds are drawn >= 1000000)")
     parser.add_argument("--acts", nargs="+", default=None,
                         help="run/column envs only: the act list (default: rolled per episode)")
     parser.add_argument("--ascension", type=int, default=0,
@@ -550,6 +615,12 @@ if __name__ == "__main__":
                         help="also report baseline rows (masked-random + oracle; "
                              "--env full only — the run-scale envs no longer run "
                              "a masked-random arm, the flag is accepted but inert)")
+    parser.add_argument("--merge-duplicates", action="store_true",
+                        help="torch checkpoints, greedy mode: sum the probability of hand "
+                             "instances the model cannot tell apart (same card/affliction/"
+                             "enchantment/upgrade/target) and argmax the GROUPS — the "
+                             "SpireBot live decoder (MergeDuplicateCards); plain argmax "
+                             "otherwise")
     parser.add_argument("--sample", action="store_true",
                         help="torch checkpoints: sample from the policy instead of "
                              "acting greedily (still deterministic given --seed)")
@@ -593,7 +664,10 @@ if __name__ == "__main__":
     if args.env not in RUN_SCALE or args.compare is not None:
         for flag, value in (("--reward-hist", args.reward_hist),
                             ("--csv", args.csv),
-                            ("--deck-hist", args.deck_hist)):
+                            ("--deck-hist", args.deck_hist),
+                            # --compare is paired-seed by design; random
+                            # seeds would break the pairing.
+                            ("--random-episodes", args.random_episodes)):
             if value:
                 parser.error(f"{flag} applies to the --env run/column report "
                              f"(not --compare, not the combat envs)")
@@ -619,7 +693,8 @@ if __name__ == "__main__":
         # default (1000) already means "all of EVAL_SEEDS" with no sentinel
         # needed.
         compare_checkpoints(args.compare[0], args.compare[1], args.env, args.episodes,
-                            args.acts, args.sample, args.device, args.ascension)
+                            args.acts, args.sample, args.device, args.ascension,
+                            merge_duplicates=args.merge_duplicates)
     elif args.env in RUN_SCALE:
         if args.model is None:
             parser.error(f"--env {args.env} needs a model (baseline rows are "
@@ -631,10 +706,13 @@ if __name__ == "__main__":
             parser.error("--ablated applies to --env full only")
         evaluate_run_scale(args.model, args.env, args.episodes, args.seed,
                            args.acts, args.baselines, args.sample, args.device,
-                           args.reward_hist, args.csv, args.ascension, args.deck_hist)
+                           args.reward_hist, args.csv, args.ascension, args.deck_hist,
+                           random_episodes=args.random_episodes,
+                           merge_duplicates=args.merge_duplicates)
         if args.gimmick_probes:
             gimmick_probes(args.model, args.ascension, args.seed,
-                           args.sample, args.device)
+                           args.sample, args.device,
+                           merge_duplicates=args.merge_duplicates)
     elif args.env == "full":
         if args.model is None and not args.baselines:
             parser.error("--env full needs a model, --baselines, or both")
@@ -645,10 +723,12 @@ if __name__ == "__main__":
         if args.ablated and args.model is not None and is_torch_checkpoint(args.model):
             parser.error("--ablated is an SB3-path flag; train_torch.py has no ablated arm")
         evaluate_full(args.model, args.episodes, args.seed, args.ablated,
-                      args.baselines, args.sample, args.device)
+                      args.baselines, args.sample, args.device,
+                      merge_duplicates=args.merge_duplicates)
         if args.gimmick_probes:
             gimmick_probes(args.model, args.ascension, args.seed,
-                           args.sample, args.device)
+                           args.sample, args.device,
+                           merge_duplicates=args.merge_duplicates)
     else:
         if args.model is None:
             parser.error("--env simple needs a model path")

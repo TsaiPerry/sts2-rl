@@ -733,10 +733,15 @@ _PLAY_PAIR_DIM = 1 + (_PLAY_PAIR_PREVIEW_SLICE.stop - _PLAY_PAIR_PREVIEW_SLICE.s
 #:   there) -- but the play head's weight SHAPE changed, so a version-3
 #:   checkpoint's ``play_head.mlp.0.weight`` no longer matches.
 #:
+#: * 5 -- v22 discard block: run layout appends a third pointer block
+#:   (DISCARD_BASE, over the same ``run.potions`` rows) -- pointer_heads
+#:   gains index 2 and N_ACTIONS widens by MAX_POTION_SLOTS. Combat-scale
+#:   layouts are UNCHANGED (a combat checkpoint migrates by restamp alone).
+#:
 #: ``checkpoints.check_checkpoint`` treats a checkpoint with no ``head_version``
 #: key as version 1 (every checkpoint saved before this constant existed was,
 #: by construction, a version-1 head).
-ENTSET_HEAD_VERSION = 4
+ENTSET_HEAD_VERSION = 5
 
 
 @dataclass(frozen=True)
@@ -975,6 +980,7 @@ def run_action_layout() -> ActionLayout:
     from .run_env import (
         CHOICE_BASE,
         CHOICE_SLOTS,
+        DISCARD_BASE,
         MAX_POTION_SLOTS,
         MAX_SELECT_CANDIDATES,
         N_ACTIONS,
@@ -999,6 +1005,10 @@ def run_action_layout() -> ActionLayout:
         pointer_blocks=(
             (SELECT_BASE, MAX_SELECT_CANDIDATES, "select.candidates"),
             (POTION_BASE, MAX_POTION_SLOTS, "run.potions"),
+            # v22: discard scored from the SAME belt rows by its own head.
+            # MUST stay LAST -- pointer_heads.2 is the only key set the
+            # head-v5 migration fresh-initializes (tools/migrate_headv5.py).
+            (DISCARD_BASE, MAX_POTION_SLOTS, "run.potions"),
         ),
         choice_base=CHOICE_BASE,
         choice_row_overlays=(
@@ -1375,6 +1385,7 @@ class EntitySetActorCritic(neural_network.Module):
         mask: torch.Tensor,
         action: torch.Tensor | None = None,
         with_aux: bool = False,
+        with_dist: bool = False,
     ) -> tuple[torch.Tensor, ...]:
         """Returns ``(action, log_prob, entropy, value)`` — same contract as
         ``MaskedActorCritic.get_action_and_value`` — or, when
@@ -1382,13 +1393,18 @@ class EntitySetActorCritic(neural_network.Module):
         a 5-tuple ``(action, log_prob, entropy, value, aux_pred)`` with the
         aux head's "hp lost over the next 3 floors" prediction appended,
         computed off the SAME critic-encoder features as ``value`` (no extra
-        encoder forward pass)."""
+        encoder forward pass). When ``with_dist=True`` (v16), the already-
+        built ``Categorical`` dist is appended as the FINAL tuple element,
+        after ``aux_pred`` if ``with_aux`` is also set — the existing tuple
+        orders never change, this only ever appends."""
         dist = self._dist(obs, mask)
         if action is None:
             action = dist.sample()
         cf = self.critic_encoder(obs)
         value = self.critic(cf).squeeze(-1)
+        out = (action, dist.log_prob(action), dist.entropy(), value)
         if with_aux:
-            return (action, dist.log_prob(action), dist.entropy(), value,
-                    self.aux_hp3_head(cf).squeeze(-1))
-        return action, dist.log_prob(action), dist.entropy(), value
+            out = out + (self.aux_hp3_head(cf).squeeze(-1),)
+        if with_dist:
+            out = out + (dist,)
+        return out

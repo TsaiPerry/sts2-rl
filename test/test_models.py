@@ -553,16 +553,16 @@ def test_check_checkpoint_refuses_entset_payload_missing_head_version(tmp_path):
 
 
 def test_check_checkpoint_accepts_current_head_version(tmp_path):
-    """A checkpoint stamped with head_version=4 (R9's pair-feature play
-    head widening -- pinned as the literal ``models.ENTSET_HEAD_VERSION``
+    """A checkpoint stamped with head_version=5 (v22's discard-block pointer
+    head -- pinned as the literal ``models.ENTSET_HEAD_VERSION``
     is defined to be) passes. Deliberately hardcoded rather than read live
     off ``models.ENTSET_HEAD_VERSION``: reading the live constant on both
     the stamp and the check side would make this test pass under ANY value
     of the constant, including a regression that bumped it without meaning
     to -- pinning the literal is what actually catches that (see the
-    report's mutation check: patching `ENTSET_HEAD_VERSION = 5` at runtime
+    report's mutation check: patching `ENTSET_HEAD_VERSION = 6` at runtime
     must turn this test red)."""
-    ckpt, args, obs_dim = _entset_ckpt(tmp_path, head_version=4)
+    ckpt, args, obs_dim = _entset_ckpt(tmp_path, head_version=5)
     train_torch.check_checkpoint(ckpt, args, obs_dim, COMBAT_N_ACTIONS)   # must not raise
 
 

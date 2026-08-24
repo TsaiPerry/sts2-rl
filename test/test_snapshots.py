@@ -62,7 +62,10 @@ def _sample_snapshot() -> Snapshot:
         potion_slots=(None, "fire_potion", None),
         act=1,
         encounter_id="flyconid_normal",
-        provenance={"seed": "ABCD", "floor": 12, "episode_decisions": 5},
+        gold=137,
+        floor=12,
+        room_type="MONSTER",
+        provenance={"seed": "ABCD", "ascension": 10, "episode_decisions": 5},
     )
 
 
@@ -79,8 +82,16 @@ def test_save_snapshots_writes_header_line_first(tmp_path):
     path = tmp_path / "snaps.jsonl"
     save_snapshots(path, [_sample_snapshot(), _sample_snapshot()])
     lines = path.read_text(encoding="utf-8").splitlines()
-    assert json.loads(lines[0]) == {"snapshot_schema": 1}
+    assert json.loads(lines[0]) == {"snapshot_schema": 2}
     assert len(lines) == 3   # header + 2 snapshots
+
+
+def test_load_snapshots_rejects_schema_1(tmp_path):
+    """v1 banks predate gold/floor/room_type — refused loudly, re-harvest."""
+    path = tmp_path / "old.jsonl"
+    path.write_text(json.dumps({"snapshot_schema": 1}) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="snapshot_schema 1"):
+        load_snapshots(path)
 
 
 def test_load_snapshots_rejects_schema_mismatch(tmp_path):
@@ -266,11 +277,15 @@ def test_obs_level_fidelity_round_trip():
         max_hp=88, hp=55, potions=_build_potions(),
     )
 
-    snap = snapshot_from_run(run, encounter)
+    snap = snapshot_from_run(run, encounter, "MONSTER")
     assert snap.encounter_id == "fuzzy_wurm_crawler"
     assert snap.hp == 55 and snap.max_hp == 88
     assert snap.potion_slots == (None, None, "fire_potion")
     assert any(r.id == "girya" and r.counter == 2 for r in snap.relics)
+    # Schema-2 run-level facts.
+    assert snap.room_type == "MONSTER"
+    assert snap.gold == run.gold
+    assert snap.floor == run.total_floor
 
     kwargs = build_start_state(snap)
     rebuilt = CombatState(
@@ -329,7 +344,7 @@ def test_obs_level_fidelity_round_trip_pins_flag_relic_loss():
     )
     run.relics[0]._used = True
 
-    snap = snapshot_from_run(run, encounter)
+    snap = snapshot_from_run(run, encounter, "MONSTER")
     assert snap.relics == (RelicSnap("lizard_tail", 0),)   # counter half: 0, as expected
 
     kwargs = build_start_state(snap)
@@ -366,6 +381,32 @@ def test_card_snap_round_trips_upgrade_enchantment_affliction():
     assert rebuilt.affliction is not None
     assert rebuilt.affliction.id == "ringing"
     assert rebuilt.affliction.amount == 4
+    # v20 regression: BOTH riders must carry the back-reference the real
+    # attach paths set (enchantments.attach_internal / CardCmd.afflict) —
+    # a one-directional attach left enchantment.card None, which crashed
+    # `card.downgrade()` (it calls enchantment.modify_card()) the first time
+    # a Knights-elite Dampen hit an enchanted card in a drill episode, and
+    # silently deadened afflicted-card hooks (hook_contains reads
+    # affliction.card).
+    assert rebuilt.enchantment.card is rebuilt
+    assert rebuilt.affliction.card is rebuilt
+
+
+def test_rebuilt_enchanted_card_survives_downgrade():
+    """The v20 s23 crash, reproduced at the unit level: Dampen's
+    `CardCmd.downgrade` walks `card.downgrade()` ->
+    `enchantment.modify_card()`, which dies if the rebuild left the
+    enchantment's card pointer unset."""
+    from sts2_rl.cards import make_card as _mk
+
+    live = _mk("strike")
+    live.upgrade()
+    live.enchantment = make_enchantment("glam")   # harvest-side attach shape
+    rebuilt = CardSnap.from_card(live).rebuild()
+    assert rebuilt.upgrade_level == 1
+    rebuilt.downgrade()                            # must not raise
+    assert rebuilt.upgrade_level == 0
+    assert rebuilt.enchantment is not None and rebuilt.enchantment.id == "glam"
 
 
 @pytest.mark.parametrize(

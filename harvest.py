@@ -124,8 +124,8 @@ def _make_policy(checkpoint: "str | None", seed: int, device: str = "cpu"):
     return policy
 
 
-def _make_env(on_combat_start) -> STS2RunEnv:
-    return STS2RunEnv(on_combat_start=on_combat_start)
+def _make_env(on_combat_start, ascension: int = 0) -> STS2RunEnv:
+    return STS2RunEnv(on_combat_start=on_combat_start, ascension=ascension)
 
 
 def harvest(
@@ -137,6 +137,7 @@ def harvest(
     watchdog_secs: float = 120.0,
     log: "str | Path | None" = None,
     device: str = "cpu",
+    ascension: int = 0,
 ) -> dict[str, Any]:
     """Drives `episodes` seeded `STS2RunEnv` episodes (`seed .. seed +
     episodes - 1`), appending a `Snapshot` to `out` for every combat any
@@ -156,6 +157,11 @@ def harvest(
     floors: list[int] = []
     acts: list[int] = []
     combats_entered = 0
+    # (act_index, room_type) -> snapshots written. Printed at the end so a
+    # bank's per-pool coverage (the v20 drill pools' ≥150 bars) is checked by
+    # reading one census block instead of re-parsing the JSONL.
+    pool_census: Counter = Counter()
+    encounter_census: Counter = Counter()
 
     try:
         for ep in range(episodes):
@@ -168,16 +174,19 @@ def harvest(
             # just before it, not after.
             decisions_so_far = [0]
 
-            def _on_combat_start(run: RunState, encounter: Encounter) -> None:
+            def _on_combat_start(
+                run: RunState, encounter: Encounter, room_type,
+            ) -> None:
                 nonlocal combats_entered
-                snap = snapshot_from_run(run, encounter)
+                snap = snapshot_from_run(run, encounter, room_type.name)
                 snap.provenance["seed"] = episode_seed
-                snap.provenance["floor"] = run.total_floor
                 snap.provenance["episode_decisions"] = decisions_so_far[0]
                 appender.append(snap)
                 combats_entered += 1
+                pool_census[(run.act_index, room_type.name)] += 1
+                encounter_census[encounter.id] += 1
 
-            env = _make_env(_on_combat_start)
+            env = _make_env(_on_combat_start, ascension=ascension)
             obs, info = env.reset(seed=episode_seed)
             max_floor = int(info.get("floor", 0))
             max_act = int(info.get("act", 0))
@@ -217,6 +226,11 @@ def harvest(
         "snapshots_written": appender.count,
         "floor_histogram": dict(sorted(floor_hist.items())),
         "act_histogram": dict(sorted(act_hist.items())),
+        # keys are "act{i}:{ROOM}" (JSON-safe), 0-based act_index.
+        "pool_census": {
+            f"act{a}:{r}": n for (a, r), n in sorted(pool_census.items())
+        },
+        "encounter_census": dict(sorted(encounter_census.items())),
     }
     return summary
 
@@ -231,6 +245,12 @@ def _print_summary(summary: dict[str, Any]) -> None:
     print("act histogram:")
     for act, n in summary["act_histogram"].items():
         print(f"  act {act}: {n}")
+    print("pool census (act_index:room -> snapshots):")
+    for key, n in summary["pool_census"].items():
+        print(f"  {key}: {n}")
+    print("encounter census:")
+    for enc, n in summary["encounter_census"].items():
+        print(f"  {enc}: {n}")
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -266,6 +286,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
                         "hang is a known open issue this CLI never works "
                         "around."
                     ))
+    p.add_argument("--ascension", type=int, default=0,
+                    help=(
+                        "ascension the harvest episodes run at (recorded in "
+                        "each snapshot's provenance; v20 banks harvest at 10 "
+                        "with an asc-0 top-up for act-2/3 coverage)"
+                    ))
     p.add_argument("--log", type=str, default=None,
                     help=(
                         "path for the per-step (seed, episode, decision) "
@@ -285,6 +311,7 @@ def main(argv: "list[str] | None" = None) -> dict[str, Any]:
         watchdog_secs=args.watchdog_secs,
         log=args.log,
         device=args.device,
+        ascension=args.ascension,
     )
     _print_summary(summary)
     return summary

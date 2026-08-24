@@ -329,3 +329,136 @@ def test_evaluate_run_baseline_row():
         masked_random_run_policy(random.Random(0)), episodes=2, seed=5, env=env)
     assert report.episodes == 2
     assert len(report.floors) == 2
+
+
+# ── Duplicate-merged greedy decoding ─────────────────────────────────────────
+#
+# 2026-08-22 live finding (SpireBot runs 13AEBPAE1Y / UNEUS7RD44): the
+# per-instance action space splits one "play a Strike" intent across every
+# Strike copy in hand, so plain argmax picks a UNIQUE action (End Turn at 3
+# energy, a potion, a lone Defend) over a card whose merged mass is far
+# higher (0.76 across five Strikes vs End Turn 0.24). ``merge_duplicates``
+# sums the probability of instances the model cannot tell apart and argmaxes
+# the groups. Per Perry: the group key must keep upgrades, enchantments and
+# afflictions SEPARATE — only truly identical (card, affliction, enchantment,
+# upgrade level, target) instances merge.
+
+
+def test_merged_greedy_action_prefers_group_with_more_total_mass():
+    from sts2_rl.evaluation import merged_greedy_action
+
+    logits = np.array([1.0, 0.9, 0.9, 0.0], dtype=np.float32)
+    mask = np.array([True, True, True, False])
+    keys = [None, "strike", "strike", None]
+    # Plain argmax would take action 0 ...
+    assert int(np.argmax(np.where(mask, logits, -np.inf))) == 0
+    # ... merged, the two strikes (0.32 + 0.32) outweigh action 0 (0.36).
+    assert merged_greedy_action(logits, mask, keys) in (1, 2)
+    # Within the winning group the highest-logit member is dispatched.
+    assert merged_greedy_action(np.array([1.0, 0.9, 0.95, 0.0], dtype=np.float32), mask, keys) == 2
+    # Singletons only → identical to argmax.
+    assert merged_greedy_action(logits, mask, [None] * 4) == 0
+    # A masked-out member contributes nothing to its group.
+    assert merged_greedy_action(np.array([1.0, 0.9, 0.9, 5.0], dtype=np.float32), mask,
+                                [None, "s", "s", "s"]) in (1, 2)
+    # No legal action → -1, like the C# core.
+    assert merged_greedy_action(logits, np.zeros(4, dtype=bool), keys) == -1
+
+
+def test_play_group_keys_merge_identical_cards_only():
+    from sts2_rl import full_env
+    from sts2_rl.evaluation import play_group_keys
+
+    env = STS2FullCombatEnv()
+    obs, _ = env.reset(seed=3)
+    mask = env.action_masks()
+    layout = full_env.combat_obs_layout()
+    keys = play_group_keys(obs, mask, layout)
+    assert len(keys) == len(mask)
+
+    ids = np.asarray(obs["i"])[layout.i_slices["hand.ids"]].reshape(full_env.MAX_HAND, 3)
+    # The Ironclad starting hand always holds duplicate Strikes/Defends.
+    by_card: dict[tuple, list[int]] = {}
+    for h, row in enumerate(ids):
+        if row[0] != 0:
+            by_card.setdefault(tuple(int(x) for x in row), []).append(h)
+    dup = next(slots for slots in by_card.values() if len(slots) >= 2)
+    a, b = dup[0], dup[1]
+    base = full_env.COMBAT_PLAY_BASE
+    legal_targets = [e for e in range(full_env.MAX_ENEMIES)
+                     if mask[base + a * full_env.MAX_ENEMIES + e]]
+    assert legal_targets, "expected the duplicate card to be playable"
+    e = legal_targets[0]
+    ka = keys[base + a * full_env.MAX_ENEMIES + e]
+    kb = keys[base + b * full_env.MAX_ENEMIES + e]
+    assert ka is not None and ka == kb, "identical cards on the same target must share a key"
+
+    # A different target slot is a different group.
+    other = [t for t in legal_targets if t != e]
+    if other:
+        assert keys[base + a * full_env.MAX_ENEMIES + other[0]] != ka
+
+    # A different card id is a different group.
+    other_card = next(s for s in (s for slots in by_card.values() for s in slots)
+                      if tuple(ids[s]) != tuple(ids[a]) and mask[base + s * full_env.MAX_ENEMIES + e])
+    assert keys[base + other_card * full_env.MAX_ENEMIES + e] != ka
+
+    # Upgrade level splits the group (hand.f upgrade feature).
+    obs_up = {"f": np.array(obs["f"], copy=True), "i": np.array(obs["i"], copy=True)}
+    fsl = layout.f_slices["hand.f"]
+    obs_up["f"][fsl.start + b * full_env.N_CARD_FEATURES + full_env.CARD_UPGRADE_FEATURE] = 0.2
+    keys_up = play_group_keys(obs_up, mask, layout)
+    assert keys_up[base + a * full_env.MAX_ENEMIES + e] != keys_up[base + b * full_env.MAX_ENEMIES + e]
+
+    # An enchantment id splits the group; so does an affliction id.
+    for col in (1, 2):
+        obs_x = {"f": np.array(obs["f"], copy=True), "i": np.array(obs["i"], copy=True)}
+        isl = layout.i_slices["hand.ids"]
+        obs_x["i"][isl.start + b * 3 + col] = 7
+        keys_x = play_group_keys(obs_x, mask, layout)
+        assert keys_x[base + a * full_env.MAX_ENEMIES + e] != keys_x[base + b * full_env.MAX_ENEMIES + e]
+
+    # Non-play actions (end turn, potions) and masked-out actions carry no key.
+    assert keys[0] is None
+    assert all(k is None for k, m in zip(keys, mask) if not m)
+    assert all(k is None for a_id, k in enumerate(keys) if a_id >= full_env.COMBAT_POTION_BASE)
+
+
+def test_play_group_keys_accept_run_layout_prefix():
+    from sts2_rl import full_env, run_env
+    from sts2_rl.evaluation import hand_slices
+
+    combat = hand_slices(full_env.combat_obs_layout())
+    run = hand_slices(run_env.run_obs_layout())
+    assert combat == (full_env.combat_obs_layout().i_slices["hand.ids"],
+                      full_env.combat_obs_layout().f_slices["hand.f"])
+    assert run == (run_env.run_obs_layout().i_slices["combat.hand.ids"],
+                   run_env.run_obs_layout().f_slices["combat.hand.f"])
+
+
+def test_torch_policy_merge_duplicates_picks_the_heavier_group():
+    from collections import Counter
+
+    from sts2_rl import full_env
+    from sts2_rl.evaluation import play_group_keys
+
+    env = STS2FullCombatEnv()
+    obs, _ = env.reset(seed=3)
+    mask = env.action_masks()
+    keys = play_group_keys(obs, mask, full_env.combat_obs_layout())
+    key = next(k for k, n in Counter(k for k in keys if k).items() if n >= 2)
+    members = [a for a, k in enumerate(keys) if k == key]
+    n = len(mask)
+
+    class SplitMassModel:
+        """End Turn gets the single highest logit; each duplicate member a
+        little less — the exact shape seen live."""
+
+        def action_logits(self, obs_t, mask_t):
+            lg = torch.full((1, n), -10.0)
+            lg[0, 0] = 1.0
+            lg[0, members] = 0.9
+            return lg
+
+    assert torch_policy(SplitMassModel())(env, obs, mask) == 0
+    assert torch_policy(SplitMassModel(), merge_duplicates=True)(env, obs, mask) in members

@@ -23,6 +23,7 @@ from sts2_rl.models import EntitySetActorCritic, run_action_layout
 from sts2_rl.run_env import (
     CHOICE_BASE,
     CHOICE_SLOTS,
+    DISCARD_BASE,
     MAX_POTION_SLOTS,
     MAX_SELECT_CANDIDATES,
     N_ACTIONS,
@@ -95,10 +96,10 @@ def _all_legal_mask(n: int) -> torch.Tensor:
 # ── 7. layout tiling via the production wiring path ─────────────────────
 
 
-def test_make_model_builds_243_wide_tiled_layout():
+def test_make_model_builds_n_actions_wide_tiled_layout():
     for env_kind in ("run", "column"):
         model = _build_via_make_model(env_kind)
-        assert model.n_actions == N_ACTIONS == 243
+        assert model.n_actions == N_ACTIONS
 
         # Mutation check (b) (see test_tied_head_combat.py's twin assertion):
         # play and potion are separately-weighted PairPointerHead instances.
@@ -107,7 +108,7 @@ def test_make_model_builds_243_wide_tiled_layout():
         potion_params = list(model.potion_head.parameters())
         assert not all(torch.equal(a, b) for a, b in zip(play_params, potion_params))
         layout = model.action_layout
-        assert layout.n_actions == 243
+        assert layout.n_actions == N_ACTIONS
         _src, _tgt, S, T = layout.play
         _src2, _tgt2, S_used, T2 = layout.potion_pairs
         assert S * T == 60
@@ -122,15 +123,18 @@ def test_make_model_builds_243_wide_tiled_layout():
         assert pointer == [
             (SELECT_BASE, MAX_SELECT_CANDIDATES, "select.candidates"),
             (POTION_BASE, MAX_POTION_SLOTS, "run.potions"),
+            # v22: discard scored from the same belt rows by its own head.
+            (DISCARD_BASE, MAX_POTION_SLOTS, "run.potions"),
         ]
-        assert 121 + CHOICE_SLOTS + MAX_SELECT_CANDIDATES + MAX_POTION_SLOTS == 243
+        assert (121 + CHOICE_SLOTS + MAX_SELECT_CANDIDATES
+                + MAX_POTION_SLOTS + MAX_POTION_SLOTS) == N_ACTIONS
 
         env = STS2RunEnv()
         obs, _info = env.reset(seed=0)
         mask = torch.as_tensor(env.action_masks(), dtype=torch.bool).unsqueeze(0)
         tobs = _to_tobs(obs)
         logits = model.action_logits(tobs, mask)
-        assert logits.shape == (1, 243)
+        assert logits.shape == (1, N_ACTIONS)
 
 
 # ── 8. combat-phase hand-swap equivariance inside the run env ───────────

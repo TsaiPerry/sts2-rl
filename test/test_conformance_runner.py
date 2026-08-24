@@ -227,6 +227,9 @@ def test_multi_index_select_grid_is_one_screen_over_the_original_grid():
         def legal_actions(self):
             return list(range(len(self.candidates) + 1))  # + skip
 
+        def own_actions(self):
+            return self.legal_actions()  # stub belt: no potions held
+
     cursor = _CommandCursor([
         cmd("SelectGridCard", "0", "1", "2", "3", "8"),
         cmd("ChooseEventOption", "-1"),

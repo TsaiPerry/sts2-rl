@@ -16,6 +16,7 @@ import torch
 
 import train_torch
 from sts2_rl.models import MaskedActorCritic
+from sts2_rl.vec_env import build_env
 
 
 def make_pair(hidden=(8,), obs_dim=6, n_actions=4):
@@ -281,6 +282,28 @@ def test_potion_death_penalty_flag_threads_and_is_run_only(monkeypatch):
         train_torch.parse_args()
 
 
+def test_energy_waste_penalty_flag_threads_and_is_run_only(monkeypatch):
+    """v16: --energy-waste-penalty defaults off, reaches the EnvSpec and
+    the env, and is rejected on the combat env like the other run-scale
+    reward knobs."""
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "run"])
+    args = train_torch.parse_args()
+    assert args.energy_waste_penalty == 0.0
+    assert train_torch.env_spec(args).energy_waste_penalty == 0.0
+
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "run",
+                                     "--energy-waste-penalty", "0.02"])
+    spec = train_torch.env_spec(train_torch.parse_args())
+    assert spec.energy_waste_penalty == 0.02
+    env = build_env(spec)
+    assert env._energy_waste_penalty == 0.02
+
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "combat",
+                                     "--energy-waste-penalty", "0.02"])
+    with pytest.raises(SystemExit, match="energy-waste-penalty"):
+        train_torch.parse_args()
+
+
 # ── rollout geometry across a resume ─────────────────────────────────────
 
 def test_rollout_flags_are_none_unless_passed(monkeypatch):
@@ -337,3 +360,26 @@ def test_checkpoint_records_the_rollout_geometry(tmp_path):
     model, optimizer = make_pair()
     payload = train_torch.checkpoint_payload(model, optimizer, 1, args, 0)
     assert payload["n_envs"] == 8 and payload["n_steps"] == 256
+
+
+def test_potion_ent_coef_flag_parses_and_is_guarded(monkeypatch):
+    """v16: --potion-ent-coef defaults off, parses, and is rejected off
+    the entset/run pair (the potion index ranges are run-scale entset
+    layout constants)."""
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "run"])
+    assert train_torch.parse_args().potion_ent_coef == 0.0
+
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "run",
+                                     "--potion-ent-coef", "0.01"])
+    assert train_torch.parse_args().potion_ent_coef == 0.01
+
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "combat",
+                                     "--potion-ent-coef", "0.01"])
+    with pytest.raises(SystemExit, match="potion-ent-coef"):
+        train_torch.parse_args()
+
+    monkeypatch.setattr("sys.argv", ["train_torch.py", "--env", "run",
+                                     "--arch", "entity",
+                                     "--potion-ent-coef", "0.01"])
+    with pytest.raises(SystemExit, match="potion-ent-coef"):
+        train_torch.parse_args()

@@ -422,8 +422,11 @@ class _ForceWinDriver(RunDriver):
         # No recorded SelectGridCard before the next room boundary (or a screen
         # confirmed with fewer picks than MaxSelect — Claws is MinSelect 0)
         # means: stop. Skippable screens take their skip action; the rest fall
-        # back to the first legal action.
-        stop = legal[-1] if request.skippable else legal[0]
+        # back to the first own action. Own actions, not `legal`: belt
+        # actions are appended after them (see _answer_event) and the skip
+        # index is own_actions[-1].
+        own = request.own_actions()
+        stop = own[-1] if request.skippable else own[0]
         # `_grid_open` is the count_remaining the next ask of the screen we are
         # already serving will carry (None = no screen open), so a fresh screen
         # is never mistaken for a continuation and a continuation never re-scans
@@ -463,12 +466,19 @@ class _ForceWinDriver(RunDriver):
         return idx if idx in legal else skip
 
     def _answer_event(self, request: DecisionRequest, legal: list[int]) -> int:
+        # Fallbacks index into OWN actions, never `legal`: belt actions
+        # (drink 1000+, discard 2000+) are appended after own actions, and
+        # they replay only through recorded `UsePotion` commands — a held
+        # potion must not turn "proceed/leave (usually last)" into a silent
+        # drink/discard (v22's discard namespace lists every held potion, so
+        # `legal[-1]` did exactly that and broke 933T act-2 player_hp parity).
+        own = request.own_actions()
         cmd = self._cursor.take("ChooseEventOption")
         if cmd is None or not cmd.args:
-            return legal[-1]  # no guidance: proceed/leave (usually last)
+            return own[-1]  # no guidance: proceed/leave (usually last)
         raw = cmd.args[0]
         if raw == "-1":
-            return legal[-1]
+            return own[-1]
         try:
             idx = int(raw)
         except ValueError:

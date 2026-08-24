@@ -10,6 +10,7 @@ from sts2_rl.full_env import combat_action_count, combat_obs_segments_f, combat_
 from sts2_rl.run_env import (
     CHOICE_BASE,
     CHOICE_SLOTS,
+    DISCARD_BASE,
     GOLD_LOG_FINE_DENOM,
     MAX_POTION_SLOTS,
     MAX_SELECT_CANDIDATES,
@@ -69,7 +70,8 @@ def test_action_layout():
     assert CHOICE_BASE == 121
     assert SELECT_BASE == 121 + CHOICE_SLOTS == 137
     assert POTION_BASE == SELECT_BASE + MAX_SELECT_CANDIDATES == 233
-    assert N_ACTIONS == POTION_BASE + MAX_POTION_SLOTS == 243
+    assert DISCARD_BASE == POTION_BASE + MAX_POTION_SLOTS == 243
+    assert N_ACTIONS == DISCARD_BASE + MAX_POTION_SLOTS == 253
     env = shared_env()
     assert env.action_space.n == env.n_actions == N_ACTIONS
 

@@ -115,6 +115,11 @@ SKIPPABLE_PURPOSES = frozenset({
 # belt exists; `RunDriver._ask` intercepts the whole range.
 POTION_ACTION_BASE = 1000
 
+# Answer namespace for "throw away the belt potion in slot N" (v22 spec §A1)
+# — DiscardPotionGameAction via the belt popup's Discard button. Offset past
+# the drink overlay so `_ask` can split the two ranges with one comparison.
+POTION_DISCARD_ACTION_BASE = 2000
+
 # `RunDriver._ask`'s "the screen you were answering resolved itself, there is
 # nothing left to answer" result. Only reachable via the belt overlay: a drink
 # that finishes the screen underneath (Foul Potion in the Fake Merchant event).
@@ -154,7 +159,29 @@ class DecisionRequest:
     in_combat: bool = False
 
     def legal_actions(self) -> list[int]:
-        return self.own_actions() + self.potion_actions()
+        return self.own_actions() + self.potion_actions() + self.discard_actions()
+
+    def discard_actions(self) -> list[int]:
+        """`POTION_DISCARD_ACTION_BASE + slot` for every held potion the
+        player could throw away from this screen.
+
+        `NPotionPopup.RefreshButtons` gates the Discard button ONLY on
+        `Player.CanRemovePotions` (NPotionPopup.cs:139-142) — no usage-class
+        or `PassesCustomUsabilityCheck` predicate (those gate the USE button):
+        combat-only potions and Foul Potion are all discardable. The game also
+        allows discard DURING combat (DiscardPotionGameAction.cs:52); the sim
+        deliberately does not (v22 spec Non-goals — the only strategic use is
+        Belt Buckle, not worth the combat-head blast radius).
+        """
+        if self.in_combat or self.combat is not None:
+            return []
+        if not self.run.can_remove_potions:
+            return []
+        return [
+            POTION_DISCARD_ACTION_BASE + slot
+            for slot, potion in enumerate(self.run.potions)
+            if potion is not None
+        ]
 
     def potion_actions(self) -> list[int]:
         """`POTION_ACTION_BASE + slot` for every belt potion drinkable *from
@@ -310,7 +337,8 @@ class RunDriver:
         ascension: int = 0,
         include_neow: bool = True,
         include_ancients: bool = True,
-        on_combat_start: "Callable[[RunState, Encounter], None] | None" = None,
+        on_combat_start: "Callable[[RunState, Encounter, RoomType], None] | None" = None,
+        start_setup: "Callable[[RunState], tuple[Encounter, RoomType]] | None" = None,
     ) -> None:
         self.run = run
         self._ask_fn = ask
@@ -321,6 +349,13 @@ class RunDriver:
         # Fired in `_run_combat` right after `create_combat`, before the
         # first decision of that combat. `None` (default) is a no-op.
         self.on_combat_start = on_combat_start
+        # Drill-mode start injection (v20): a callable that, after
+        # `start_run`, reshapes the RunState into a harvested mid-run state
+        # (act/map/floor/deck/relics/hp/gold/potions — run_env owns that
+        # logic) and returns the combat to open the episode with. When set,
+        # `play()` skips Neow and fights this combat before the normal map
+        # loop. `None` (default) is exactly today's behavior.
+        self._start_setup = start_setup
         self.decisions = 0
         # act name -> the shared ancients allotted to it this run (filled by
         # play() via _roll_shared_ancients, mirroring GenerateRooms).
@@ -362,6 +397,19 @@ class RunDriver:
                 )
             if action < POTION_ACTION_BASE:
                 return action
+            if action >= POTION_DISCARD_ACTION_BASE:
+                # Discard overlay (v22): null the slot and re-ask the screen
+                # underneath. PotionCmd.Discard runs no on-use machinery, and
+                # AfterPotionDiscarded's only subscriber (Belt Buckle) is
+                # combat-gated — nothing else to run out of combat. A discard
+                # cannot resolve the screen underneath, but keep the drink
+                # branch's guard shape for symmetry.
+                potion = self.run.potions[action - POTION_DISCARD_ACTION_BASE]
+                assert potion is not None, "discard_actions offered an empty slot"
+                self.run.discard_potion(potion)
+                if not request.own_actions():
+                    return NO_ANSWER
+                continue
             # `NPotionPopup` is an overlay: drinking resolves the potion and
             # leaves you on the screen underneath, which still owes an answer.
             # Terminates — every drink empties a belt slot.
@@ -439,7 +487,21 @@ class RunDriver:
         run = self.run
         run.start_run(acts=self._acts, ascension=self._ascension)
         self._roll_shared_ancients()
-        if self._include_neow:
+        if self._start_setup is not None:
+            # Drill episode: no Neow, no act-0 preamble — the setup callable
+            # rewrites the run into a harvested mid-run state and names the
+            # combat the episode opens with. After the fight the run
+            # continues to its natural end through the normal loop below
+            # (the boss-win branch here mirrors the loop's own).
+            encounter, room_type = self._start_setup(run)
+            self._run_combat(encounter, room_type)
+            if not run.is_dead and run.at_act_end:
+                if run.is_final_act:
+                    run.complete_run()
+                else:
+                    run.advance_act()
+                    self._maybe_run_ancient()
+        elif self._include_neow:
             from .events import make_event
 
             self._run_event(make_event("neow", run))
@@ -507,7 +569,10 @@ class RunDriver:
         run = self.run
         combat = run.create_combat(encounter, room_type=room_type)
         if self.on_combat_start is not None:
-            self.on_combat_start(run, encounter)
+            # Schema-2 harvesting needs the room type as a first-class fact
+            # (it cannot be derived from the encounter id), so the hook
+            # carries it — the driver is the only party that knows it here.
+            self.on_combat_start(run, encounter, room_type)
         self._combat = combat
         try:
             while not combat.is_over:

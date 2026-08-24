@@ -39,7 +39,7 @@ def test_on_combat_start_fires_with_facts_matching_direct_reads():
     run = RunState(rng=rng, max_hp=100000, hp=100000)
     fired: list[tuple] = []
 
-    def on_combat_start(r, encounter):
+    def on_combat_start(r, encounter, room_type):
         # Snapshot the facts a caller can read off `run`/`encounter` AT THIS
         # MOMENT -- this is the assertion under test: they must equal what a
         # direct read makes right after this call returns (nothing about
@@ -52,6 +52,7 @@ def test_on_combat_start_fires_with_facts_matching_direct_reads():
             r.hp,
             r.act_index,
             encounter.id,
+            room_type,
         ))
 
     def scripted(request):
@@ -67,19 +68,22 @@ def test_on_combat_start_fires_with_facts_matching_direct_reads():
     driver._run_combat(encounter, RoomType.MONSTER)
 
     assert len(fired) == 1
-    is_same_run, deck_ids, relic_ids, hp, act, enc_id = fired[0]
+    is_same_run, deck_ids, relic_ids, hp, act, enc_id, room_type = fired[0]
     assert is_same_run
     assert deck_ids == deck_before
     assert relic_ids == relics_before
     assert hp == hp_before
     assert act == act_before
     assert enc_id == encounter.id
+    # Schema-2: the hook carries the driver's own room type.
+    assert room_type == RoomType.MONSTER
 
     # And it agrees with the actual Task-2 builder the harvester calls.
     run2 = RunState(rng=random.Random(3), max_hp=100000, hp=100000)
-    snap = snapshot_from_run(run2, encounter)
+    snap = snapshot_from_run(run2, encounter, room_type.name)
     assert [c.id for c in run2.deck] == deck_ids
     assert snap.encounter_id == enc_id
+    assert snap.room_type == "MONSTER"
 
 
 def test_on_combat_start_fires_once_per_combat_entered():
@@ -87,7 +91,7 @@ def test_on_combat_start_fires_once_per_combat_entered():
     run = RunState(rng=rng, max_hp=100000, hp=100000)
     calls = []
 
-    def on_combat_start(r, encounter):
+    def on_combat_start(r, encounter, room_type):
         calls.append(encounter.id)
 
     def scripted(request):
@@ -111,7 +115,7 @@ def test_on_combat_start_none_is_zero_behavior_change():
     seed -- the hook must not perturb the RNG timeline or any decision."""
     absent = play_random_run(5)
     explicit_none = play_random_run(5, on_combat_start=None)
-    noop = play_random_run(5, on_combat_start=lambda run, encounter: None)
+    noop = play_random_run(5, on_combat_start=lambda run, encounter, room_type: None)
     assert absent == explicit_none == noop
 
 
@@ -156,8 +160,11 @@ def test_harvest_end_to_end(tmp_path):
 
         prov = snap.provenance
         assert prov["seed"] in (0, 1)          # seed .. seed+episodes-1
-        assert isinstance(prov["floor"], int)
         assert isinstance(prov["episode_decisions"], int)
+        # Schema-2: floor/gold/room_type are first-class fields now.
+        assert isinstance(snap.floor, int) and snap.floor >= 1
+        assert isinstance(snap.gold, int)
+        assert snap.room_type in ("MONSTER", "ELITE", "BOSS")
         if prov["episode_decisions"] > 0:
             seen_nonzero_decisions = True
     # Refutes the Task-2 placeholder (snapshot_from_run's own

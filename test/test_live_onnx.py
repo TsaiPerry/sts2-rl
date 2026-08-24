@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 import torch
 
-from sts2_rl import run_env
+from sts2_rl import models, run_env
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -59,7 +59,10 @@ def _find_current_schema_checkpoint() -> str | None:
     runs_dir = REPO_ROOT / "runs"
     if not runs_dir.is_dir():
         return None
-    for path in sorted(glob.glob(str(runs_dir / "*.pt"))):
+    # Newest first: exercise the checkpoint a deploy would actually export,
+    # not whichever stale-but-loadable one sorts first alphabetically.
+    for path in sorted(glob.glob(str(runs_dir / "*.pt")),
+                       key=os.path.getmtime, reverse=True):
         try:
             ckpt = torch.load(path, map_location="cpu", weights_only=False)
         except Exception:
@@ -69,6 +72,11 @@ def _find_current_schema_checkpoint() -> str | None:
         if ckpt.get("arch") != "entset":
             continue
         if ckpt.get("obs_schema") != run_env.RUN_OBS_SCHEMA_VERSION:
+            continue
+        # check_checkpoint also refuses a stale entset head STRUCTURE (e.g.
+        # head_version 4 pre-v22 checkpoints, which need tools/migrate_headv5
+        # first) — same "no checkpoint available" treatment as a stale schema.
+        if ckpt.get("head_version", 1) != models.ENTSET_HEAD_VERSION:
             continue
         return path
     return None

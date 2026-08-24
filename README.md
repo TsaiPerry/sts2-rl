@@ -19,9 +19,9 @@ to full parity.
 | `sts2_rl/models.py`, `train_torch.py` | Entity-based policy network + raw-PyTorch PPO trainer |
 | `eval.py` | Evaluation harness with behavior metrics and gate checks |
 | `test/` | ~5000-test pytest suite pinning engine behavior against the game source |
-| `audit/`, `tools/` | Source-audit records and probe tooling used to find fidelity gaps |
-| `train_curriculum_v9.ps1` | Current curriculum training script |
-| `RL.md`, `OBS_SCHEMA.md`, `RL_ARCHITECTURE.md`, `MODULES.md` | Engine/env/network reference docs |
+| `audit/tools/`, `tools/` | Source-audit probe harness and misc tooling used to find fidelity gaps |
+| `scripts/` | Curriculum training scripts (`train_curriculum_v*.ps1`) and harvest tooling |
+| `docs/` | Engine/env/network reference docs (`OBS_SCHEMA.md`, `RL_ARCHITECTURE.md`, `MODULES.md`) |
 
 ## Setup
 
@@ -48,7 +48,7 @@ python -m pytest test -x -q
 
 ```powershell
 # Current curriculum run (stages, gates, and logging handled by the script)
-.\train_curriculum_v9.ps1
+.\scripts\train_curriculum_v22.ps1   # run from repo root
 
 # Or drive the trainer directly
 python train_torch.py --arch entity --device cuda ...

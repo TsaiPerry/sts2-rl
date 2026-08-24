@@ -77,12 +77,14 @@ def test_contract_action_layout_matches_run_env():
     assert a["select"]["max_candidates"] == run_env.MAX_SELECT_CANDIDATES
     assert a["belt_potion"]["base"] == run_env.POTION_BASE
     assert a["belt_potion"]["slots"] == run_env.MAX_POTION_SLOTS
+    assert a["discard"]["base"] == run_env.DISCARD_BASE
+    assert a["discard"]["slots"] == run_env.MAX_POTION_SLOTS
 
 
 def test_contract_is_json_serializable(tmp_path):
     p = tmp_path / "contract.json"
     p.write_text(json.dumps(build_contract()))
-    assert json.loads(p.read_text())["contract_version"] == 1
+    assert json.loads(p.read_text())["contract_version"] == 2
 
 
 def test_contract_game_id_map_covers_powers_and_monsters():

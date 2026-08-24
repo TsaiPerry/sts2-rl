@@ -106,7 +106,13 @@ if TYPE_CHECKING:
     from .relics import Relic
     from .run import RunState
 
-SNAPSHOT_SCHEMA = 1
+# Schema 2 (v20 drill env): +gold, +floor (promoted from provenance),
+# +room_type ("MONSTER"/"ELITE"/"BOSS" — recorded by the harvester from the
+# driver's own room_type, never derived from the encounter id: event-launched
+# encounters make that mapping ambiguous), and the harvest ascension in
+# provenance. `load_snapshots` hard-rejects schema-1 files (re-harvest rather
+# than dual-format support).
+SNAPSHOT_SCHEMA = 2
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -141,11 +147,28 @@ class CardSnap:
         if self.upgraded:
             card.upgrade()
         if self.enchantment is not None:
-            card.enchantment = make_enchantment(self.enchantment)
+            # The real EnchantInternal path, not a bare `card.enchantment =`
+            # assignment: it wires the enchantment->card BACK-reference
+            # (downgrade paths call `enchantment.modify_card()` through it —
+            # a one-directional attach left `.card` None and crashed the
+            # first time a Knights-elite Dampen downgraded an enchanted card
+            # in a v20 drill), and `modify_card()` re-applies the
+            # enchantment's field effects, which a FRESH `make_card` needs —
+            # unlike the game's clone path, whose copied values already
+            # carry them (attach_internal's own docstring).
+            enchantment = make_enchantment(self.enchantment)
+            enchantment.attach_internal(card)
+            enchantment.modify_card()
         if self.affliction is not None:
-            card.affliction = make_affliction(
+            # Same back-reference discipline as `CardCmd.afflict`
+            # (cmds.py:1451-1452): `hook_contains` reads `affliction.card`,
+            # so a one-directional attach silently deadens the affliction's
+            # combat hooks.
+            affliction = make_affliction(
                 self.affliction, self.affliction_amount or 1
             )
+            affliction.card = card
+            card.affliction = affliction
         return card
 
 
@@ -176,7 +199,14 @@ class Snapshot:
     potion_slots: tuple[str | None, ...]
     act: int
     encounter_id: str
-    # json-safe: {"seed": ..., "floor": ..., "episode_decisions": ...}.
+    # Schema 2: run-level facts a run-env drill reset needs that the combat
+    # env's synthetic defaults never did. Dataclass defaults are a
+    # constructor convenience only — the JSON layer treats all three as
+    # REQUIRED (`_snapshot_from_json` KeyErrors on an absent field).
+    gold: int = 0
+    floor: int = 0
+    room_type: str = ""
+    # json-safe: {"seed": ..., "ascension": ..., "episode_decisions": ...}.
     # A plain (mutable) dict — see snapshot_from_run's docstring for why the
     # harvester (a separate lane) fills "episode_decisions" in afterward.
     provenance: dict = field(default_factory=dict)
@@ -313,20 +343,51 @@ def encounter_registry() -> Mapping[str, Encounter]:
 # ─────────────────────────────────────────────────────────────────────────
 
 
-def snapshot_from_run(run: "RunState", encounter: Encounter) -> Snapshot:
-    """Reads the six start-state facts off a live `RunState` right before
+#: encounter.id -> act module name ("overgrowth"/"underdocks"/"hive"/
+#: "glory"). Event-launched encounters map to None — they belong to no act
+#: package and cannot be drilled (the drill setup needs the module to force
+#: the act's RoomSet). Needed because act 1 is a per-run coin flip between
+#: Overgrowth and Underdocks: an act-0 snapshot's encounter pins which one
+#: the source run rolled, and a drill reset must restore THAT module or the
+#: encounter isn't in the act's registry at all.
+_ACT_MODULE_BY_ENCOUNTER: dict[str, str] = {}
+for _name, _pool in (
+    ("overgrowth", _OVERGROWTH_ENCOUNTERS),
+    ("underdocks", _UNDERDOCKS_ENCOUNTERS),
+    ("hive", _HIVE_ENCOUNTERS),
+    ("glory", _GLORY_ENCOUNTERS),
+):
+    for _enc in _pool.values():
+        _ACT_MODULE_BY_ENCOUNTER[_enc.id] = _name
+
+
+def act_module_for_encounter(encounter_id: str) -> "str | None":
+    """The act package an encounter belongs to, or None for event-launched
+    encounters (not drillable — no act RoomSet contains them)."""
+    return _ACT_MODULE_BY_ENCOUNTER.get(encounter_id)
+
+
+def snapshot_from_run(
+    run: "RunState", encounter: Encounter, room_type: str,
+) -> Snapshot:
+    """Reads the start-state facts off a live `RunState` right before
     (or, for the harvest hook, right after `create_combat` has just attached
     them — see the module docstring) a combat begins.
+
+    `room_type` is the driver's own room type for the combat being entered
+    (`RoomType.name`, e.g. "BOSS") — schema 2 records it as a first-class
+    fact because it cannot be derived from the encounter id.
 
     `provenance["seed"]` is `run.string_seed` (the only seed value a
     `RunState` retains — legacy runs driven by a bare, non-string-seeded
     `random.Random` carry no recoverable numeric seed on the run itself, so
-    this is `None` for them); `provenance["floor"]` is `run.total_floor`.
-    `episode_decisions` cannot be derived from a `RunState` at all (it isn't
-    a run-level counter) — it defaults to `0` here and the harvester
-    (Task 4, a separate lane) is expected to overwrite it before writing,
-    since `Snapshot.provenance` is a plain (non-frozen) dict even though the
-    dataclass itself is frozen.
+    this is `None` for them). `episode_decisions` cannot be derived from a
+    `RunState` at all (it isn't a run-level counter) — it defaults to `0`
+    here and the harvester is expected to overwrite it before writing, since
+    `Snapshot.provenance` is a plain (non-frozen) dict even though the
+    dataclass itself is frozen. `provenance["ascension"]` is the run's own
+    ascension (hygiene: know what a bank was harvested at; never restored —
+    the drilling env's own `--ascension` rules).
     """
     deck = tuple(CardSnap.from_card(c) for c in run.deck)
     relics = tuple(RelicSnap.from_relic(r) for r in run.relics)
@@ -339,9 +400,12 @@ def snapshot_from_run(run: "RunState", encounter: Encounter) -> Snapshot:
         potion_slots=potion_slots,
         act=run.act_index,
         encounter_id=encounter.id,
+        gold=run.gold,
+        floor=run.total_floor,
+        room_type=room_type,
         provenance={
             "seed": run.string_seed,
-            "floor": run.total_floor,
+            "ascension": getattr(run, "ascension", 0),
             "episode_decisions": 0,
         },
     )
@@ -391,6 +455,9 @@ def _snapshot_to_json(snap: Snapshot) -> dict:
         "potion_slots": list(snap.potion_slots),
         "act": snap.act,
         "encounter_id": snap.encounter_id,
+        "gold": snap.gold,
+        "floor": snap.floor,
+        "room_type": snap.room_type,
         "provenance": dict(snap.provenance),
     }
 
@@ -413,6 +480,12 @@ def _snapshot_from_json(obj: dict) -> Snapshot:
         potion_slots=tuple(obj["potion_slots"]),
         act=obj["act"],
         encounter_id=obj["encounter_id"],
+        # Schema-2 required fields — a KeyError here means a hand-edited or
+        # foreign file that lied about its schema header; loud beats a
+        # silently zero-gold drill state.
+        gold=obj["gold"],
+        floor=obj["floor"],
+        room_type=obj["room_type"],
         provenance=dict(obj.get("provenance", {})),
     )
 

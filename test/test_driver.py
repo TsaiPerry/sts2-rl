@@ -7,6 +7,7 @@ import pytest
 from sts2_rl.driver import (
     DecisionKind,
     DecisionRequest,
+    POTION_DISCARD_ACTION_BASE,
     RunDriver,
     play_random_run,
     random_asker,
@@ -366,7 +367,11 @@ def test_reward_potion_take_needs_free_slot():
     )
     assert req.legal_actions() == [0, 1]
     run.potions = run.random_potions(run.max_potions)
-    assert req.legal_actions() == [1]      # belt full: skip only
+    # belt full: skip only (plus a discard offer per held potion -- v22 spec
+    # §A1, the belt's Discard button is offered from any out-of-combat
+    # decision, not just this one).
+    assert req.legal_actions() == [1] + [
+        POTION_DISCARD_ACTION_BASE + slot for slot in range(run.max_potions)]
 
 
 def test_event_request_masks_locked_options():

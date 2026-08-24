@@ -266,6 +266,13 @@ def check_checkpoint(ckpt: dict, spec: ModelSpec,
 
         ckpt_head_version = ckpt.get("head_version", 1)   # pre-stamp = version 1
         if ckpt_head_version != models.ENTSET_HEAD_VERSION:
+            if ckpt_head_version == 4 and ckpt.get("env_kind") in RUN_SCALE_ENVS:
+                raise SystemExit(
+                    f"checkpoint head_version {ckpt_head_version} != current "
+                    f"{models.ENTSET_HEAD_VERSION}; this is a pre-v22 "
+                    f"run-scale entset checkpoint -- migrate it with "
+                    f"`python tools/migrate_headv5.py SRC DST` before "
+                    f"resuming, or start training over with --fresh.")
             raise SystemExit(
                 f"checkpoint head_version {ckpt_head_version} != current "
                 f"{models.ENTSET_HEAD_VERSION}; this checkpoint predates the "

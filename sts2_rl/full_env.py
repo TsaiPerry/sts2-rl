@@ -271,6 +271,10 @@ _TARGET_TYPES = [
 # that numeric-ablation subset (see numeric_obs_indices) — f[30] IS, f[29]
 # is not.
 N_CARD_FEATURES = 31
+#: Column of the hand.f / cards.f card row holding clip01(upgrade_level / 5)
+#: (card_features below, CombatObsWriter.cs S(16)). Named so the duplicate-
+#: merging policy decoder (evaluation.play_group_keys) reads the SAME cell.
+CARD_UPGRADE_FEATURE = 16
 # Enemy-row scalars (see _enemy_floats): present + hp ratio + hp×2 + max_hp×2
 # + block×2 + strength + 9 intent flags + per_hit + hits + total×2 +
 # post_block×2 + status_count. The first 24 are UNCHANGED from v3 — only the
@@ -699,7 +703,7 @@ def card_features(state: CombatState, card: Card | None) -> list[float]:
     f[14] = 1.0 if card.is_playable else 0.0
     affordable = card.energy_cost_x or effective_cost <= s.player.energy
     f[15] = 1.0 if affordable else 0.0
-    f[16] = _clip01(card.upgrade_level / 5.0)
+    f[CARD_UPGRADE_FEATURE] = _clip01(card.upgrade_level / 5.0)
     # Base numbers (upgrade-adjusted; dynamic cards like Body Slam /
     # Perfected Strike report their current computed base).
     base_dmg = card_base_damage(s, card, None)

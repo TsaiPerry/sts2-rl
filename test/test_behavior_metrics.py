@@ -137,6 +137,9 @@ def test_vec_env_carries_episode_metrics(monkeypatch):
         "ep_potions_expired", "ep_potion_use_hp",
         "ep_relics",
         "ep_hp_lost",
+        # v20 (Task 3b): inserted BEFORE "floor" so metrics[:, -1] stays the
+        # floor column.
+        "ep_boss_hp_lost",
         "floor")
 
     built = []
@@ -151,7 +154,7 @@ def test_vec_env_carries_episode_metrics(monkeypatch):
 
     venv.reset([0, 1])
     batch = venv.step([0, 0])                 # step 1: nobody done
-    assert batch.metrics.shape == (2, 17)
+    assert batch.metrics.shape == (2, 18)
     assert np.isnan(batch.metrics).all()
 
     batch = venv.step([0, 0])                 # step 2: both done
@@ -211,14 +214,15 @@ def test_csv_has_behavior_metric_columns(tmp_path):
     ))
     with open(path) as fh:
         header, row = fh.read().strip().splitlines()
-    assert header.split(",")[-15:] == [
+    assert header.split(",")[-16:] == [
         "energy_unspent", "card_take",
         "upgrades", "removes", "elites", "potions_got", "potions_used",
         "potions_used_elite", "potions_used_boss", "potions_used_normal",
-        "potions_expired", "potion_use_hp", "relics", "hp_lost", "aux"]
-    assert row.split(",")[-15:] == [
+        "potions_expired", "potion_use_hp", "relics", "hp_lost", "aux",
+        "potion_ent"]
+    assert row.split(",")[-16:] == [
         "1.25", "0.4", "2.0", "1.0", "0.5", "1.5", "1.0",
-        "0.2", "0.1", "0.7", "0.3", "0.55", "0.8", "12.5", "0.02"]
+        "0.2", "0.1", "0.7", "0.3", "0.55", "0.8", "12.5", "0.02", ""]
 
 
 # ── Rest sites: heal / upgrade share of visits ────────────────────────────────
@@ -524,12 +528,24 @@ def test_write_run_csv_exports_episode_and_histogram_tables(tmp_path):
                        "potions_used_elite", "potions_used_boss",
                        "potions_used_normal", "potions_expired",
                        "potion_use_hp", "relics", "hp_lost",
-                       "hp_ratio_mean", "rest_visits_hihp", "rest_upgrades_hihp"]
+                       "hp_ratio_mean", "rest_visits_hihp", "rest_upgrades_hihp",
+                       # v20 (Task 3b): appended at the END so existing
+                       # column indices stay valid.
+                       "boss_hp_lost",
+                       # v21: appended at the END so existing column indices
+                       # stay valid.
+                       "potion_v_at_use", "potions_wasted", "potions_bought",
+                       "potion_rewards_skipped", "potion_rewards_forced",
+                       "potion_relic_picks",
+                       "potions_discarded"]
     assert len(rows) == 1 + report.episodes
     assert rows[1] == ["ckpt.pt", "100", "17", "0", "0", "0", "0", "2",
                        "3.0", "2", "5.0", "2", "1", "3", "2", "1",
                        "0", "0", "0", "0", "0", "0",
-                       "0", "0", "0", "0", "0.0", "0", "0", "0.0", "2", "1"]
+                       "0", "0", "0", "0", "0.0", "0", "0", "0.0", "2", "1",
+                       "0",   # v20: trailing boss_hp_lost
+                       "0.0", "0", "0", "0", "0", "0",   # v21: trailing potion fields
+                       "0"]   # v22: trailing potions_discarded
     assert rows[2][:8] == ["ckpt.pt", "101", "23", "1", "1", "0", "44", "3"]
 
     with open(hist_path) as fh:

@@ -60,6 +60,13 @@ class Potion:
     # AUTOMATIC potions are fired by their own hook and never by the player
     # (the game disables the Use button, NPotionPopup.cs:131).
     usage: str = USAGE_COMBAT_ONLY
+    #: v21 metrics: nominal heal as % of max HP for heal potions (Blood
+    #: Potion 20, Fairy in a Bottle 30); 0 = not a heal potion. Read by the
+    #: run env's potions_wasted counter only — never by game logic.
+    HEAL_PERCENT: int = 0
+    #: FairyInABottle's 30 is a heal-TO threshold, not heal-by; it is
+    #: USAGE_AUTOMATIC and never a manual drink, so the potions_wasted
+    #: nominal never applies to it.
     # Back-reference to the combat this potion is sitting in a belt of (mirrors
     # PotionModel.Owner.Creature.CombatState), set while it is registered as a
     # hook listener — the same pattern as Card.combat. Only hook-listening

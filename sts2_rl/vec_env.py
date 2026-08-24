@@ -97,6 +97,14 @@ class EnvSpec:
     rest_heal_shaping_knee_cap: bool = False
     potion_death_expiry: bool = False
     potion_death_penalty: float = 0.0
+    # v16 (plan Task 2): flat penalty per unspent energy point at every
+    # player-turn end. Defaults OFF (0.0), same bit-identical-by-default
+    # contract as the other v7/v8/v9 reward knobs above.
+    energy_waste_penalty: float = 0.0
+    # v21 (spec 2026-08-22-v21-potion-option-value-design): -k * v(s) per
+    # drink + optional death expiry. Defaults OFF = bit-identical env.
+    potion_option_value: float = 0.0
+    potion_option_expiry: bool = False
     # v10 (plan 2026-08-13-v10-escape-and-settle Task 1): share of the HP
     # potential below the knee. 0.7 = the env's own default, so a default
     # spec stays bit-identical; the s11-lowshare contingency rung runs 0.8.
@@ -118,6 +126,17 @@ class EnvSpec:
     # SubprocVecEnv worker loads it independently, process-locally, the
     # first time it builds an env (STS2FullCombatEnv's own lazy-load).
     start_snapshots: str | None = None
+    # v20 (Task 3b): non-refundable boss-fight HP-loss price. Default OFF.
+    boss_hp_loss_penalty: float = 0.0
+    # v20 drill mode (run env only): schema-2 bank path + per-reset drill
+    # probability + stratified pool masses + within-pool encounter weights.
+    # Tuples-of-pairs, not dicts, so the spec stays hashable/picklable like
+    # floor_rewards_by_act; build_env dict()s them. All defaults = OFF =
+    # bit-identical env.
+    drill_snapshots: str | None = None
+    drill_prob: float = 0.0
+    drill_pools: "tuple[tuple[str, float], ...] | None" = None
+    drill_encounter_weights: "tuple[tuple[str, float], ...] | None" = None
 
 
 def build_env(spec: EnvSpec):
@@ -139,6 +158,9 @@ def build_env(spec: EnvSpec):
         hp_potential_low_share=spec.hp_potential_low_share,
         potion_potential_scale=spec.potion_potential_scale,
         potion_death_penalty=spec.potion_death_penalty,
+        energy_waste_penalty=spec.energy_waste_penalty,
+        potion_option_value=spec.potion_option_value,
+        potion_option_expiry=spec.potion_option_expiry,
         deck_inject=spec.deck_inject,
         deck_inject_prob=spec.deck_inject_prob,
         deck_inject_midrun=spec.deck_inject_midrun,
@@ -169,8 +191,24 @@ def build_env(spec: EnvSpec):
     if spec.kind == "run":
         from sts2_rl.run_env import STS2RunEnv
 
+        # v20 knobs are run-env only (the column env has no drill mode and
+        # no boss-combat context); passed only when opted in so a default
+        # spec builds a byte-identical env.
+        run_kwargs: dict = {}
+        if spec.boss_hp_loss_penalty:
+            run_kwargs["boss_hp_loss_penalty"] = spec.boss_hp_loss_penalty
+        if spec.drill_snapshots is not None:
+            run_kwargs.update(
+                drill_snapshots=spec.drill_snapshots,
+                drill_prob=spec.drill_prob,
+                drill_pools=(dict(spec.drill_pools)
+                             if spec.drill_pools is not None else None),
+                drill_encounter_weights=(
+                    dict(spec.drill_encounter_weights)
+                    if spec.drill_encounter_weights is not None else None),
+            )
         return STS2RunEnv(acts=acts, card_obs=spec.card_obs,
-                          ascension=spec.ascension, **v7_kwargs)
+                          ascension=spec.ascension, **v7_kwargs, **run_kwargs)
     if spec.kind != "combat":
         raise ValueError(f"unknown env kind {spec.kind!r}")
 
@@ -206,6 +244,10 @@ EP_METRIC_KEYS = (
     # hp_potential_scale shaping is on. Appended at the END (plan Task 5) —
     # column order is a public contract (train_torch/tests index into it).
     "ep_hp_lost",
+    # v20 (Task 3b): HP lost inside BOSS combats only — the boss-hp-loss
+    # term's instrument. Inserted BEFORE "floor" so metrics[:, -1] stays the
+    # floor column (train_torch.py:910 indexes it as -1).
+    "ep_boss_hp_lost",
     # The floor the episode ended on -- run_env's `info["floor"]`, which is
     # present every step but only harvested here on the terminal one, so it
     # reads as "floors completed". train_torch logs it as ep_ret (the combat

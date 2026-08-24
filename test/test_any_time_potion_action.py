@@ -25,6 +25,7 @@ import pytest
 
 from sts2_rl.driver import (
     POTION_ACTION_BASE,
+    POTION_DISCARD_ACTION_BASE,
     DecisionKind,
     DecisionRequest,
     RunDriver,
@@ -32,6 +33,7 @@ from sts2_rl.driver import (
 from sts2_rl.potions import make_potion
 from sts2_rl.run import RunState
 from sts2_rl.run_env import (
+    DISCARD_BASE,
     MAX_POTION_SLOTS,
     MAX_SELECT_CANDIDATES,
     N_ACTIONS,
@@ -60,8 +62,12 @@ def test_an_out_of_combat_decision_offers_every_any_time_potion():
     # The map's own options are untouched and keep index 0..n-1.
     assert legal[:3] == [0, 1, 2]
     # Fruit Juice (slot 1) and Blood Potion (slot 2) are AnyTime; Fire Potion
-    # (slot 0) is CombatOnly and the popup disables its button here.
-    assert legal[3:] == [POTION_ACTION_BASE + 1, POTION_ACTION_BASE + 2]
+    # (slot 0) is CombatOnly and the popup disables its button here. All three
+    # held potions are discardable regardless of usage class (v22 §A1).
+    assert legal[3:] == [
+        POTION_ACTION_BASE + 1, POTION_ACTION_BASE + 2,
+        POTION_DISCARD_ACTION_BASE + 0, POTION_DISCARD_ACTION_BASE + 1,
+        POTION_DISCARD_ACTION_BASE + 2]
 
 
 def test_the_belt_action_index_is_the_slot_not_a_rank():
@@ -202,7 +208,8 @@ def test_the_potion_block_is_its_own_action_range():
     # candidate-index block), not 2*N_CARDS (the old (card id, upgraded)
     # pair block).
     assert POTION_BASE == SELECT_BASE + MAX_SELECT_CANDIDATES
-    assert N_ACTIONS == POTION_BASE + MAX_POTION_SLOTS
+    assert DISCARD_BASE == POTION_BASE + MAX_POTION_SLOTS
+    assert N_ACTIONS == DISCARD_BASE + MAX_POTION_SLOTS
     assert _env().action_space.n == N_ACTIONS
 
 

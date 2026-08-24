@@ -1,4 +1,4 @@
-"""v8 HP-economy reward terms (plan Task 1): concave HP potential shaping.
+﻿"""v8 HP-economy reward terms (plan Task 1): concave HP potential shaping.
 All default OFF: a default-constructed env must be bit-identical to today's
 behavior (test_v7_rewards.test_default_env_reward_unchanged already pins
 that; this file adds the hp_potential_scale-specific slice of it).
@@ -316,45 +316,170 @@ def test_pickup_then_episode_end_keeps_plus_k_no_terminal_zeroing():
     assert info2["ep_potions_used"] == 0
 
 
-def test_potion_use_classification_elite_vs_normal():
+def test_potion_use_classification_belt_drinks_are_normal():
+    """2026-08-18 rewrite: this test used to fabricate `kind == COMBAT` with
+    a `POTION_ACTION_BASE` answer and assert elite attribution through the
+    belt-delta branch — a combination the real `_translate` can never
+    produce (COMBAT answers pass through raw, `< N_COMBAT_ACTIONS`, and the
+    belt overlay is masked off while combat is live), which is exactly how
+    the elite/boss counters stayed a green-tested impossibility while every
+    real in-combat drink went uncounted. The belt branch now books every
+    overlay drink as `normal` (an AnyTime drink is by definition not inside
+    an elite/boss fight); elite/boss attribution lives in `_count_behavior`'s
+    potion-pair block (tests below)."""
     env = STS2RunEnv(potion_potential_scale=1.0)
     env.reset(seed=0)
 
     _seed_potion(env)
     env._run.hp, env._run.max_hp = 60, 100
-    env._request = _combat_request(env, RoomType.ELITE)
+    env._request = DecisionRequest(kind=DecisionKind.EVENT, run=env._run)
     env._translate = lambda action, request: POTION_ACTION_BASE + 0
     env._count_behavior = lambda request, answer: None
     env._switch = lambda answer: _remove_potion(env)
     env.step(0)
-    assert env._ep_potions_used_elite == 1
+    assert env._ep_potions_used == 1
+    assert env._ep_potions_used_elite == 0
     assert env._ep_potions_used_boss == 0
-    assert env._ep_potions_used_normal == 0
+    assert env._ep_potions_used_normal == 1
 
     _seed_potion(env)
     env._run.hp, env._run.max_hp = 30, 100
-    env._request = _combat_request(env, RoomType.MONSTER)
+    env._request = DecisionRequest(kind=DecisionKind.EVENT, run=env._run)
     env._translate = lambda action, request: POTION_ACTION_BASE + 0
     env._switch = lambda answer: _remove_potion(env)
     env.step(0)
-    assert env._ep_potions_used_elite == 1
-    assert env._ep_potions_used_boss == 0
-    assert env._ep_potions_used_normal == 1
+    assert env._ep_potions_used == 2
+    assert env._ep_potions_used_normal == 2
 
     assert env._ep_potion_use_hp == pytest.approx(0.6 + 0.3)
 
 
-def test_potion_use_classification_boss_and_out_of_combat_count_as_normal():
-    env = STS2RunEnv(potion_potential_scale=1.0)
-    env.reset(seed=0)
+# â”€â”€ 2026-08-18 counter fix: in-combat drinks (the combat potion-pair block) â”€â”€
+#
+# `_translate` passes COMBAT answers through RAW (< N_COMBAT_ACTIONS), and
+# the driver's belt overlay is empty while combat is live, so the belt-delta
+# branch's `answer >= POTION_ACTION_BASE` test can never see an in-combat
+# drink — a v16_s19 probe measured ~5 drinks/ep (51 MONSTER / 16 ELITE /
+# 7 BOSS in 15 episodes) all booked as anonymous belt losses. The fix counts
+# the drink at the answered pair action itself, in `_count_behavior`, using
+# the COMBAT player's decision-time hp.
 
+def _combat_request_with_player(env, room_type, hp, max_hp) -> DecisionRequest:
+    """Like `_combat_request`, plus the `player`/`phase` fields the potion-
+    pair block and the end-turn tally read off a COMBAT request."""
+    env._build_obs = lambda: {"f": np.zeros(1, np.float32), "i": np.zeros(1, np.int32)}
+    return DecisionRequest(
+        kind=DecisionKind.COMBAT, run=env._run,
+        combat=SimpleNamespace(
+            room_type=room_type, phase=None,
+            player=SimpleNamespace(hp=hp, max_hp=max_hp)))
+
+
+def test_in_combat_pair_drink_counts_use_room_and_hp():
+    from sts2_rl.run_env import COMBAT_POTION_BASE
+
+    env = STS2RunEnv()
+    env.reset(seed=0)
     _seed_potion(env)
-    env._request = _combat_request(env, RoomType.BOSS)
+    del env._count_behavior   # _seed_potion stubbed it; the pair block under test lives there
+    env._request = _combat_request_with_player(env, RoomType.ELITE, hp=30, max_hp=100)
+    env._translate = lambda action, request: int(action)   # real COMBAT branch: raw pass-through
+    env._switch = lambda answer: _remove_potion(env)
+    env.step(COMBAT_POTION_BASE)          # drink slot 0 on enemy 0
+    assert env._ep_potions_used == 1
+    assert env._ep_potions_used_elite == 1
+    assert env._ep_potions_used_boss == 0
+    assert env._ep_potions_used_normal == 0
+    assert env._ep_potion_use_hp == pytest.approx(0.30)
+
+
+def test_in_combat_pair_drink_boss_attribution():
+    from sts2_rl.run_env import COMBAT_POTION_BASE
+
+    env = STS2RunEnv()
+    env.reset(seed=0)
+    _seed_potion(env)
+    del env._count_behavior   # _seed_potion stubbed it; the pair block under test lives there
+    env._request = _combat_request_with_player(env, RoomType.BOSS, hp=80, max_hp=100)
+    env._translate = lambda action, request: int(action)
+    env._switch = lambda answer: _remove_potion(env)
+    env.step(COMBAT_POTION_BASE + 7)      # any pair index counts the same
+    assert env._ep_potions_used == 1
+    assert env._ep_potions_used_boss == 1
+    assert env._ep_potion_use_hp == pytest.approx(0.80)
+
+
+def test_non_pair_combat_action_counts_nothing():
+    env = STS2RunEnv()
+    env.reset(seed=0)
+    _seed_potion(env)
+    del env._count_behavior   # _seed_potion stubbed it; the pair block under test lives there
+    env._request = _combat_request_with_player(env, RoomType.MONSTER, hp=50, max_hp=100)
+    env._translate = lambda action, request: int(action)
+    env._switch = lambda answer: None
+    env.step(1)                           # a play action, below the pair block
+    assert env._ep_potions_used == 0
+    assert env._ep_potion_use_hp == 0.0
+
+
+def test_pair_drink_with_delayed_belt_sync_counts_exactly_once():
+    """The belt decrement from an in-combat drink surfaces on a LATER step
+    (the v16_s19 probe measured 74 pair actions and 74 belt losses on
+    subsequent COMBAT-kind steps, none on the drink step itself). The drink
+    is counted at the pair action; the later loss must stay an anonymous
+    ledger move, not a second use."""
+    from sts2_rl.run_env import COMBAT_POTION_BASE
+
+    env = STS2RunEnv()
+    env.reset(seed=0)
+    _seed_potion(env)
+    del env._count_behavior   # _seed_potion stubbed it; the pair block under test lives there
+    env._request = _combat_request_with_player(env, RoomType.MONSTER, hp=40, max_hp=100)
+    env._translate = lambda action, request: int(action)
+    env._switch = lambda answer: None                 # belt unchanged this step
+    env.step(COMBAT_POTION_BASE)
+    assert env._ep_potions_used == 1
+
+    env._request = _combat_request_with_player(env, RoomType.MONSTER, hp=40, max_hp=100)
+    env._switch = lambda answer: _remove_potion(env)  # the sync lands here
+    env.step(1)                                       # a non-pair combat answer
+    assert env._ep_potions_used == 1                  # no double count
+    assert env._ep_potions_used_normal == 1
+
+
+def test_belt_drink_counts_one_even_with_coincident_losses():
+    """An overlay drink empties exactly ONE slot; if an unrelated loss lands
+    in the same step's delta (`lost` == 2), the drink still counts once —
+    `+= lost` would book the bystander loss as a second drink."""
+    env = STS2RunEnv()
+    env.reset(seed=0)
+    _seed_potion(env)
+    _seed_potion(env)
+    env._run.hp, env._run.max_hp = 50, 100
+
+    def _remove_two(answer):
+        _remove_potion(env)
+        _remove_potion(env)
+
+    env._request = DecisionRequest(kind=DecisionKind.EVENT, run=env._run)
     env._translate = lambda action, request: POTION_ACTION_BASE + 0
     env._count_behavior = lambda request, answer: None
-    env._switch = lambda answer: _remove_potion(env)
+    env._switch = _remove_two
     env.step(0)
-    assert env._ep_potions_used_boss == 1
+    assert env._ep_potions_used == 1
+    assert env._ep_potions_used_normal == 1
+    assert env._ep_potion_use_hp == pytest.approx(0.5)
+
+
+def test_potion_use_classification_out_of_combat_counts_as_normal():
+    """2026-08-18 rewrite: the boss half of this test used to fabricate
+    `kind == COMBAT` with a `POTION_ACTION_BASE` answer — the impossible
+    combination the counter fix retired (see
+    test_potion_use_classification_belt_drinks_are_normal). Boss attribution
+    is covered by test_in_combat_pair_drink_boss_attribution; what remains
+    here is the out-of-combat half."""
+    env = STS2RunEnv(potion_potential_scale=1.0)
+    env.reset(seed=0)
 
     # An AnyTime potion drunk from a non-combat screen: no room to attribute
     # to, so it falls in the catch-all "normal" bucket.
@@ -364,19 +489,32 @@ def test_potion_use_classification_boss_and_out_of_combat_count_as_normal():
     env._switch = lambda answer: _remove_potion(env)
     env.step(0)
     assert env._ep_potions_used_normal == 1
+    assert env._ep_potions_used == 1
 
 
 def test_potion_use_bucket_sum_equals_ep_potions_used():
+    """2026-08-18 rewrite: driven through the REAL mechanisms — in-combat
+    drinks are potion-pair actions counted in `_count_behavior`, the
+    out-of-combat drink is a belt-overlay answer counted in the belt-delta
+    branch — instead of the retired impossible combination."""
+    from sts2_rl.run_env import COMBAT_POTION_BASE
+
     env = STS2RunEnv(potion_potential_scale=1.0)
     env.reset(seed=0)
-    env._count_behavior = lambda request, answer: None
 
-    for room_type in (RoomType.ELITE, RoomType.BOSS, RoomType.MONSTER, RoomType.ELITE):
+    for room_type in (RoomType.ELITE, RoomType.BOSS, RoomType.ELITE):
         _seed_potion(env)
-        env._request = _combat_request(env, room_type)
-        env._translate = lambda action, request: POTION_ACTION_BASE + 0
+        del env._count_behavior   # _seed_potion stubbed it
+        env._request = _combat_request_with_player(env, room_type, hp=50, max_hp=100)
+        env._translate = lambda action, request: int(action)
         env._switch = lambda answer: _remove_potion(env)
-        env.step(0)
+        env.step(COMBAT_POTION_BASE)
+
+    _seed_potion(env)
+    env._request = DecisionRequest(kind=DecisionKind.REST, run=env._run)
+    env._translate = lambda action, request: POTION_ACTION_BASE + 0
+    env._switch = lambda answer: _remove_potion(env)
+    env.step(0)
 
     total_bucketed = (env._ep_potions_used_elite + env._ep_potions_used_boss
                        + env._ep_potions_used_normal)

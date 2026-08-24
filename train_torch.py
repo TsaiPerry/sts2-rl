@@ -67,8 +67,34 @@ import torch.nn as nn
 
 from sts2_rl import checkpoints, models
 from sts2_rl.checkpoints import ModelSpec
+from sts2_rl.full_env import COMBAT_POTION_BASE, MAX_ENEMIES
+from sts2_rl.run_env import MAX_POTION_SLOTS, POTION_BASE
 from sts2_rl.tensor_obs import TensorObs
 from sts2_rl.vec_env import EnvSpec, make_vec_env, resolve_n_workers
+
+
+def potion_entropy_bonus(probs, mask):
+    """v16: binary entropy of the total probability mass on LEGAL potion
+    actions (combat potion-pair block + out-of-combat belt block).
+
+    probs/mask: (B, n_actions). Steps with no legal potion action are
+    excluded from the mean (contribute nothing, not zero-averaged).
+    Returns a scalar tensor; exactly 0 when no step has a legal potion
+    action. Maximizing H_b(q) nudges 'consider drinking' upward without
+    dictating WHICH drink — the hold-pricing reward terms decide where
+    drinks actually pay.
+    """
+    pot = torch.zeros_like(mask)
+    pot[:, COMBAT_POTION_BASE:COMBAT_POTION_BASE
+        + MAX_POTION_SLOTS * MAX_ENEMIES] = True
+    pot[:, POTION_BASE:POTION_BASE + MAX_POTION_SLOTS] = True
+    legal_pot = mask & pot
+    has = legal_pot.any(-1)
+    if not bool(has.any()):
+        return probs.new_zeros(())
+    q = (probs * legal_pot).sum(-1).clamp(1e-6, 1.0 - 1e-6)
+    hb = -(q * q.log() + (1.0 - q) * (1.0 - q).log())
+    return (hb * has).sum() / has.sum()
 
 # --lr's default lives here rather than in add_argument so the flag can stay
 # None when unset: on a resume that difference decides whether we keep the
@@ -113,7 +139,11 @@ CSV_FIELDS = ["iter", "global_step", "wall_seconds", "sps", "ep_ret", "win",
               # iteration (NaN when --aux-hp-coef is 0). The s10 report-only
               # sanity gate ("aux_loss falling") was unverifiable post-hoc
               # because aux= only went to the console -- persist it.
-              "aux"]
+              "aux",
+              # v16 potion-entropy bonus: mean binary entropy of the legal-
+              # potion probability mass per iteration (NaN when
+              # --potion-ent-coef is 0).
+              "potion_ent"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -233,6 +263,40 @@ def parse_args() -> argparse.Namespace:
                          "run ends in death, on top of --potion-death-expiry "
                          "-- prices hoard-and-die strictly below "
                          "drink-and-die (0 = off)")
+    ap.add_argument("--energy-waste-penalty", type=float, default=0.0,
+                    help="v16: flat penalty per unspent energy point at every "
+                         "player-turn end -- tiebreaker-sized energy "
+                         "discipline; unconditional (empty-hand turns charge "
+                         "too: the deck-building gradient) (0 = off)")
+    ap.add_argument("--boss-hp-loss-penalty", type=float, default=0.0,
+                    help="v20 (Task 3b): -K * (HP lost in a BOSS combat)/max_hp, "
+                         "paid once when the combat resolves (won or lost). "
+                         "Non-refundable by design -- the act-entry heal "
+                         "refunds the hp-potential term's boss-fight losses, "
+                         "this is the surviving price (0 = off)")
+    ap.add_argument("--potion-option-value", type=float, default=0.0,
+                    help="v21: -K * v(s) per potion DRINK, v = act-local hard "
+                         "fights still ahead (elites ahead + boss unless in the "
+                         "boss room, /3, cap 1) -- the opportunity value the "
+                         "drink forgoes; no pickup credit (0 = off)")
+    ap.add_argument("--potion-option-expiry", action="store_true",
+                    help="v21: on a LOSS also charge -K * v(s) per potion still "
+                         "held (hoard-and-die priced like drink-and-die)")
+    ap.add_argument("--drill-snapshots", type=str, default=None,
+                    help="v20 drill mode: schema-2 snapshot bank (harvest.py) "
+                         "of mid-run combat start states (--env run only)")
+    ap.add_argument("--drill-prob", type=float, default=0.0,
+                    help="probability an episode starts at a sampled drill "
+                         "combat instead of Neow (requires --drill-snapshots)")
+    ap.add_argument("--drill-pools", type=str, default=None,
+                    help="stratified pool masses, 'a1boss=0.2,a2elite=0.2,...' "
+                         "(act is 1-based; rooms boss/elite/monster). Omit = "
+                         "flat bank sampling. A named pool with zero bank "
+                         "snapshots fails at construction")
+    ap.add_argument("--drill-weights", type=str, default=None,
+                    help="within-pool encounter oversampling, "
+                         "'vantom_boss=2,crusher_rocket_boss=2,...' "
+                         "(encounter id = multiplier)")
     ap.add_argument("--deck-random-prob", type=float, default=0.0,
                     help="probability an episode starts with a randomized deck "
                          "(card-exposure domain randomization; 0.0 = never)")
@@ -251,6 +315,12 @@ def parse_args() -> argparse.Namespace:
                     help="v10: weight of the auxiliary 'hp lost over the "
                          "next 3 floors' MSE (0 = head unused; run env + "
                          "entset only)")
+    ap.add_argument("--potion-ent-coef", type=float, default=0.0,
+                    help="v16: extra entropy bonus on the total legal-potion-"
+                         "action probability mass (binary entropy of q), "
+                         "steps without a legal potion action excluded -- "
+                         "exploration for drink timing without a reward term "
+                         "(0 = off; run env + entset only)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="cpu",
                     help="cpu (default; fastest for --arch mlp), cuda "
@@ -392,6 +462,19 @@ def parse_args() -> argparse.Namespace:
             "(a snapshot supplies the encounter too).")
     if args.env == "combat" and args.acts:
         raise SystemExit("--acts applies to the run-scale envs only.")
+    # v20 knobs are run-env only (mirrors the --start-snapshots guard: the
+    # column env has no drill mode and no boss-combat context).
+    if args.env != "run" and (
+            args.boss_hp_loss_penalty or args.drill_snapshots
+            or args.drill_prob or args.drill_pools or args.drill_weights):
+        raise SystemExit(
+            "--boss-hp-loss-penalty/--drill-snapshots/--drill-prob/"
+            "--drill-pools/--drill-weights apply to --env run only.")
+    if args.drill_prob and not args.drill_snapshots:
+        raise SystemExit("--drill-prob requires --drill-snapshots.")
+    if (args.drill_pools or args.drill_weights) and not args.drill_snapshots:
+        raise SystemExit(
+            "--drill-pools/--drill-weights require --drill-snapshots.")
     # NOTE: --ascension is deliberately NOT rejected for --env combat. v7
     # Task 5 rejected it here because STS2FullCombatEnv didn't take the
     # kwarg yet; v7 Task 10 added it (gimmick probes fight at the stage's
@@ -407,6 +490,8 @@ def parse_args() -> argparse.Namespace:
             or args.rest_heal_mask_above is not None
             or args.hp_potential_scale or args.potion_potential_scale
             or args.potion_death_penalty
+            or args.energy_waste_penalty
+            or args.potion_option_value or args.potion_option_expiry
             or args.deck_random_prob
             or args.deck_inject or args.deck_inject_prob
             or args.deck_inject_midrun or args.deck_inject_midrun_prob):
@@ -416,7 +501,8 @@ def parse_args() -> argparse.Namespace:
             "--reward-elite-attempt/"
             "--rest-heal-mask-above/"
             "--hp-potential-scale/--potion-potential-scale/"
-            "--potion-death-penalty/"
+            "--potion-death-penalty/--energy-waste-penalty/"
+            "--potion-option-value/--potion-option-expiry/"
             "--deck-random-prob/--deck-inject/--deck-inject-prob/"
             "--deck-inject-midrun/--deck-inject-midrun-prob "
             "apply to the run-scale envs only.")
@@ -429,6 +515,11 @@ def parse_args() -> argparse.Namespace:
     if args.aux_hp_coef and args.arch != "entset":
         raise SystemExit("--aux-hp-coef needs --arch entset (aux head lives "
                          "on EntitySetActorCritic)")
+    if args.potion_ent_coef and args.env != "run":
+        raise SystemExit("--potion-ent-coef applies to the run-scale env only")
+    if args.potion_ent_coef and args.arch != "entset":
+        raise SystemExit("--potion-ent-coef needs --arch entset (the potion "
+                         "index ranges are run-scale flat-layout constants)")
     if args.warm_start and (args.resume or args.fresh):
         raise SystemExit(
             "--warm-start is mutually exclusive with --resume/--fresh: it is "
@@ -513,6 +604,29 @@ def resolve_device(requested: str) -> torch.device:
     return device
 
 
+def _parse_kv_floats(text: str | None, flag: str) -> "tuple[tuple[str, float], ...] | None":
+    """'a1boss=0.2,a2elite=0.2' -> (('a1boss', 0.2), ('a2elite', 0.2)).
+    Loud on a malformed pair — a silently-dropped pool mass would skew the
+    drill mix without a trace."""
+    if text is None:
+        return None
+    pairs = []
+    for chunk in text.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        if "=" not in chunk:
+            raise SystemExit(f"{flag}: malformed entry {chunk!r} (want key=value)")
+        key, _, value = chunk.partition("=")
+        try:
+            pairs.append((key.strip(), float(value)))
+        except ValueError:
+            raise SystemExit(f"{flag}: non-numeric value in {chunk!r}")
+    if not pairs:
+        raise SystemExit(f"{flag}: no key=value entries in {text!r}")
+    return tuple(pairs)
+
+
 def env_spec(args: argparse.Namespace) -> EnvSpec:
     """This run's env flags, in the picklable form workers are built from."""
     return EnvSpec(
@@ -546,7 +660,17 @@ def env_spec(args: argparse.Namespace) -> EnvSpec:
         rest_heal_shaping_knee_cap=getattr(args, "rest_heal_shaping_knee_cap", False),
         potion_death_expiry=getattr(args, "potion_death_expiry", False),
         potion_death_penalty=getattr(args, "potion_death_penalty", 0.0),
+        energy_waste_penalty=getattr(args, "energy_waste_penalty", 0.0),
+        potion_option_value=getattr(args, "potion_option_value", 0.0),
+        potion_option_expiry=getattr(args, "potion_option_expiry", False),
         hp_potential_low_share=getattr(args, "hp_potential_low_share", 0.7),
+        boss_hp_loss_penalty=getattr(args, "boss_hp_loss_penalty", 0.0),
+        drill_snapshots=getattr(args, "drill_snapshots", None),
+        drill_prob=getattr(args, "drill_prob", 0.0),
+        drill_pools=_parse_kv_floats(
+            getattr(args, "drill_pools", None), "--drill-pools"),
+        drill_encounter_weights=_parse_kv_floats(
+            getattr(args, "drill_weights", None), "--drill-weights"),
     )
 
 
@@ -923,6 +1047,7 @@ def main() -> None:
             kls: list[float] = []
             clipfracs: list[float] = []
             aux_losses: list[float] = []
+            potion_ent_losses: list[float] = []
             # A stale critic's advantages are mis-signed, so spend the first
             # --critic-warmup iterations fitting the value head alone. The
             # actor's parameters are disjoint from the critic's (separate
@@ -939,12 +1064,18 @@ def main() -> None:
                 np.random.shuffle(idx)
                 for start in range(0, batch_size, mb_size):
                     mb = idx[start:start + mb_size]
+                    extra = {}
                     if args.aux_hp_coef > 0:
-                        _, newlogp, entropy, newval, aux_pred = agent.get_action_and_value(
-                            b_obs[mb], b_mask[mb], b_act[mb], with_aux=True)
-                    else:
-                        _, newlogp, entropy, newval = agent.get_action_and_value(
-                            b_obs[mb], b_mask[mb], b_act[mb])
+                        extra["with_aux"] = True
+                    if args.potion_ent_coef > 0:
+                        extra["with_dist"] = True
+                    out = agent.get_action_and_value(b_obs[mb], b_mask[mb], b_act[mb], **extra)
+                    _, newlogp, entropy, newval = out[:4]
+                    i = 4
+                    aux_pred = None
+                    if args.aux_hp_coef > 0:
+                        aux_pred = out[i]; i += 1
+                    dist = out[i] if args.potion_ent_coef > 0 else None
                     logratio = newlogp - b_logp[mb]
                     ratio = logratio.exp()
                     with torch.no_grad():
@@ -971,11 +1102,16 @@ def main() -> None:
                         m = b_auxv[mb]
                         aux_loss = ((aux_pred - b_auxt[mb]).pow(2) * m).sum() / m.sum().clamp(min=1.0)
                         aux_losses.append(float(aux_loss.item()))
+                    potion_ent_loss = torch.zeros((), device=device)
+                    if args.potion_ent_coef > 0:
+                        potion_ent_loss = potion_entropy_bonus(dist.probs, b_mask[mb])
+                        potion_ent_losses.append(float(potion_ent_loss.item()))
                     if critic_only:
                         loss = args.vf_coef * v_loss + args.aux_hp_coef * aux_loss
                     else:
-                        loss = (pg_loss - ent_coef * ent_loss + args.vf_coef * v_loss
-                                + args.aux_hp_coef * aux_loss)
+                        loss = (pg_loss - ent_coef * ent_loss
+                                - args.potion_ent_coef * potion_ent_loss
+                                + args.vf_coef * v_loss + args.aux_hp_coef * aux_loss)
 
                     optimizer.zero_grad()
                     loss.backward()
@@ -1019,6 +1155,8 @@ def main() -> None:
                 float(np.mean(v8_hplost_hist)) if v8_hplost_hist else float("nan"))
             lr = optimizer.param_groups[0]["lr"]
             aux_mean = float(np.mean(aux_losses)) if aux_losses else float("nan")
+            potion_ent_mean = (float(np.mean(potion_ent_losses))
+                                if potion_ent_losses else float("nan"))
             print(
                 f"iter {iteration:4d}  step {global_step:>9d}  sps {sps:>5d}  "
                 f"ep_ret {ret:7.3f}  win {wr:5.2f}  ep_len {eplen:6.1f}  "
@@ -1027,6 +1165,7 @@ def main() -> None:
                 f"clipfrac {np.mean(clipfracs):.3f}  "
                 f"e_unspent {energy_unspent:4.2f}  take {card_take:4.2f}"
                 + (f"  aux={aux_mean:.4f}" if args.aux_hp_coef > 0 else "")
+                + (f"  pot_ent={potion_ent_mean:.4f}" if args.potion_ent_coef > 0 else "")
                 # pg/ent are still reported during the warm-up (they say how
                 # stale the advantages are) but were not applied — mark it so
                 # a flat ep_ret here doesn't read as a stalled run.
@@ -1052,6 +1191,7 @@ def main() -> None:
                     relics=v8_relic_mean,
                     hp_lost=v8_hplost_mean,
                     aux=aux_mean,
+                    potion_ent=potion_ent_mean,
                 ))
 
             # ── checkpointing ───────────────────────────────────────────────────
@@ -1170,6 +1310,15 @@ def checkpoint_payload(agent: nn.Module, optimizer, iteration: int, args,
         # Namespace without every CLI flag, same pattern as shared_encoder
         # above).
         "start_snapshots": getattr(args, "start_snapshots", None),
+        # v20: what drill bank/mix and boss-hp price this ckpt trained on.
+        "boss_hp_loss_penalty": getattr(args, "boss_hp_loss_penalty", 0.0),
+        "drill_snapshots": getattr(args, "drill_snapshots", None),
+        "drill_prob": getattr(args, "drill_prob", 0.0),
+        "drill_pools": getattr(args, "drill_pools", None),
+        "drill_weights": getattr(args, "drill_weights", None),
+        # v21: the potion opportunity-value price this ckpt trained under.
+        "potion_option_value": getattr(args, "potion_option_value", 0.0),
+        "potion_option_expiry": getattr(args, "potion_option_expiry", False),
     }
 
 

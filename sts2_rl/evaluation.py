@@ -65,13 +65,16 @@ class TorchPolicy:
     """
 
     def __init__(self, model: Any, *, device: str = "cpu",
-                 sample: bool = False, seed: int = 0) -> None:
+                 sample: bool = False, seed: int = 0,
+                 merge_duplicates: bool = False) -> None:
         import torch
 
         self.model = model
         self.device = device
         self.sample = sample
+        self.merge_duplicates = merge_duplicates
         self._generator = torch.Generator(device=device).manual_seed(seed) if sample else None
+        self._layout_cache: dict[tuple[int, int], Any] = {}
 
     def __call__(self, env: Any, obs: dict, mask: np.ndarray) -> int:
         import torch
@@ -86,15 +89,113 @@ class TorchPolicy:
         with torch.no_grad():
             logits = self.model.action_logits(obs_t, mask_t)
             if not self.sample:
+                if self.merge_duplicates:
+                    layout = self._layout_for(obs)
+                    keys = play_group_keys(obs, mask, layout)
+                    action = merged_greedy_action(
+                        logits[0].detach().cpu().numpy(), np.asarray(mask, dtype=bool), keys)
+                    assert action >= 0, "merged_greedy_action found no legal action"
+                    return action
                 return int(logits.argmax(dim=-1).item())
             probs = torch.softmax(logits, dim=-1)
             return int(torch.multinomial(probs[0], 1, generator=self._generator).item())
 
 
+    def _layout_for(self, obs: dict) -> Any:
+        """The ObsLayout whose dims match ``obs`` — the combat env's or the
+        run env's (which prefixes the combat block "combat."). Cached per
+        (f_dim, i_dim)."""
+        key = (int(np.asarray(obs["f"]).shape[-1]), int(np.asarray(obs["i"]).shape[-1]))
+        layout = self._layout_cache.get(key)
+        if layout is None:
+            from . import full_env, run_env
+
+            for candidate in (full_env.combat_obs_layout(), run_env.run_obs_layout()):
+                if (candidate.f_dim, candidate.i_dim) == key:
+                    layout = candidate
+                    break
+            if layout is None:
+                raise ValueError(
+                    f"merge_duplicates: no known obs layout has dims {key} "
+                    f"(combat {full_env.combat_obs_layout().f_dim}/"
+                    f"{full_env.combat_obs_layout().i_dim}, run "
+                    f"{run_env.run_obs_layout().f_dim}/{run_env.run_obs_layout().i_dim})")
+            self._layout_cache[key] = layout
+        return layout
+
+
+def hand_slices(layout: Any) -> tuple[slice, slice]:
+    """``(hand.ids, hand.f)`` slices of ``layout`` — the combat env names
+    them bare, the run env under the ``combat.`` prefix."""
+    if "hand.ids" in layout.i_slices:
+        return layout.i_slices["hand.ids"], layout.f_slices["hand.f"]
+    return layout.i_slices["combat.hand.ids"], layout.f_slices["combat.hand.f"]
+
+
+def play_group_keys(obs: dict, mask: np.ndarray, layout: Any) -> list[str | None]:
+    """One group key per action id, or None.
+
+    Legal ``play`` actions whose hand instance the model cannot tell apart
+    share a key: the ``hand.ids`` triple (card id, affliction id, enchantment
+    id), the ``hand.f`` upgrade-level cell (``full_env.CARD_UPGRADE_FEATURE``)
+    and the target slot. Upgrades / enchantments / afflictions therefore NEVER
+    merge with their plain counterparts (Perry, 2026-08-22). Everything else
+    — end turn, potions, out-of-combat actions, masked-out ids — is None
+    (its own singleton group). Mirrors SpireBot's OnnxPolicyCore.PlayGroupKeys.
+    """
+    from . import full_env
+
+    i_vec = np.asarray(obs["i"]).reshape(-1)
+    f_vec = np.asarray(obs["f"]).reshape(-1)
+    ids_sl, f_sl = hand_slices(layout)
+    mask = np.asarray(mask, dtype=bool).reshape(-1)
+    keys: list[str | None] = [None] * len(mask)
+    base = full_env.COMBAT_PLAY_BASE
+    for h in range(full_env.MAX_HAND):
+        card_id = int(i_vec[ids_sl.start + h * 3])
+        affl_id = int(i_vec[ids_sl.start + h * 3 + 1])
+        ench_id = int(i_vec[ids_sl.start + h * 3 + 2])
+        upgrade = float(f_vec[f_sl.start + h * full_env.N_CARD_FEATURES + full_env.CARD_UPGRADE_FEATURE])
+        for e in range(full_env.MAX_ENEMIES):
+            a = base + h * full_env.MAX_ENEMIES + e
+            if a >= len(mask) or not mask[a]:
+                continue
+            keys[a] = f"play:{card_id}:{affl_id}:{ench_id}:{upgrade:.4f}:{e}"
+    return keys
+
+
+def merged_greedy_action(logits: np.ndarray, mask: np.ndarray,
+                         keys: list[str | None]) -> int:
+    """Argmax over GROUPS of legal actions: softmax the legal logits, sum the
+    probability of every action sharing a key (None = singleton), take the
+    heaviest group, and dispatch its highest-logit member. Returns -1 when no
+    action is legal. With all-None keys this is plain argmax."""
+    logits = np.asarray(logits, dtype=np.float64).reshape(-1)
+    mask = np.asarray(mask, dtype=bool).reshape(-1)
+    legal = np.flatnonzero(mask)
+    if legal.size == 0:
+        return -1
+    z = logits[legal]
+    p = np.exp(z - z.max())
+    p /= p.sum()
+    group_mass: dict[Any, float] = {}
+    group_best: dict[Any, tuple[float, int]] = {}
+    for prob, a in zip(p, legal):
+        k = keys[a] if a < len(keys) and keys[a] is not None else ("__single__", int(a))
+        group_mass[k] = group_mass.get(k, 0.0) + float(prob)
+        cand = (float(logits[a]), -int(a))
+        if k not in group_best or cand > group_best[k]:
+            group_best[k] = cand
+    best_key = max(group_mass, key=group_mass.get)
+    return -group_best[best_key][1]
+
+
 def torch_policy(model: Any, *, device: str = "cpu",
-                 sample: bool = False, seed: int = 0) -> TorchPolicy:
+                 sample: bool = False, seed: int = 0,
+                 merge_duplicates: bool = False) -> TorchPolicy:
     """Wrap an already-built model (see ``load_torch_policy`` to load one)."""
-    return TorchPolicy(model, device=device, sample=sample, seed=seed)
+    return TorchPolicy(model, device=device, sample=sample, seed=seed,
+                       merge_duplicates=merge_duplicates)
 
 
 def load_torch_policy(
@@ -106,6 +207,7 @@ def load_torch_policy(
     device: str = "cpu",
     sample: bool = False,
     seed: int = 0,
+    merge_duplicates: bool = False,
 ) -> tuple[TorchPolicy, dict]:
     """Load a raw-torch checkpoint as a policy for ``env``.
 
@@ -126,7 +228,8 @@ def load_torch_policy(
         card_obs=card_obs,
         device=device,
     )
-    return TorchPolicy(model, device=device, sample=sample, seed=seed), ckpt
+    return TorchPolicy(model, device=device, sample=sample, seed=seed,
+                       merge_duplicates=merge_duplicates), ckpt
 
 
 def ablation_transform(card_obs: str = "hybrid") -> Callable[[dict], dict]:
@@ -254,11 +357,25 @@ class RunEvalReport:
     potions_used_normal: tuple[int, ...] = ()
     potions_expired: tuple[int, ...] = ()          # held belt count at episode end
     potion_use_hp: tuple[float, ...] = ()          # sum of hp/max_hp at each drink
+    # v21 (potion option-value spec): per-episode sums/counts.
+    potion_v_at_use: tuple[float, ...] = ()
+    potions_wasted: tuple[int, ...] = ()
+    potions_bought: tuple[int, ...] = ()
+    potion_rewards_skipped: tuple[int, ...] = ()
+    potion_rewards_forced: tuple[int, ...] = ()
+    potion_relic_picks: tuple[int, ...] = ()
+    # v22: voluntary discards + the skip-context records ({offered, belt,
+    # floor} per open-slot reward skip — selectivity-vs-aversion read).
+    potions_discarded: tuple[int, ...] = ()
+    potion_skips: tuple[dict, ...] = ()
     # v8 (plan Task 3): relics gained tally (starting relic never counts).
     relics: tuple[int, ...] = ()
     # v8 (plan Task 1, plan Task 5 threading): HP lost per episode -- a
     # sloppiness gauge, tracked independent of --hp-potential-scale shaping.
     hp_lost: tuple[int, ...] = ()
+    # v20 (Task 3b): HP lost inside BOSS combats only -- the
+    # --boss-hp-loss-penalty term's read instrument.
+    boss_hp_lost: tuple[int, ...] = ()
     # v8 s7 gate ("mean hp overall" < "mean hp-at-use"): the env keeps no
     # running mean-hp counter of its own, so `evaluate_run` samples the
     # `run.hp_ratio` observation feature (OBS_SCHEMA.md -- the same number
@@ -271,6 +388,9 @@ class RunEvalReport:
     # Merged over all episodes: card class name -> count. `field` defaults
     # because dicts are mutable (still treated as immutable once built).
     card_offer_counts: dict[str, int] = field(default_factory=dict)
+    # 2026-08-23 hold-duration metric: every potion-instance record pooled
+    # over episodes ({id, held, outcome, room, v, pickup_floor, floor}).
+    potion_holds: tuple[dict, ...] = ()
     card_take_counts_raw: dict[str, int] = field(default_factory=dict)
     # Merged over all episodes: rarity value -> {card class name -> copies}
     # in the deck each run ENDED with (sts2_rl.deck_stats). Starter,
@@ -458,6 +578,48 @@ class RunEvalReport:
         return float(np.mean(deaths)) if deaths else 0.0
 
     @property
+    def mean_potion_v_at_use(self) -> float:
+        """Mean option value v(s) spent per drink, pooled (v21). 0 when
+        nothing was drunk."""
+        used = sum(self.potions_used)
+        return sum(self.potion_v_at_use) / used if used else 0.0
+
+    @property
+    def potions_wasted_rate(self) -> float:
+        """(near-)nil drinks / all drinks, pooled (v21 metric rule)."""
+        used = sum(self.potions_used)
+        return sum(self.potions_wasted) / used if used else 0.0
+
+    @property
+    def mean_potions_bought(self) -> float:
+        return float(np.mean(self.potions_bought)) if self.potions_bought else 0.0
+
+    @property
+    def mean_potion_rewards_skipped(self) -> float:
+        return float(np.mean(self.potion_rewards_skipped)) if self.potion_rewards_skipped else 0.0
+
+    @property
+    def mean_potion_rewards_forced(self) -> float:
+        return float(np.mean(self.potion_rewards_forced)) if self.potion_rewards_forced else 0.0
+
+    @property
+    def mean_potion_relic_picks(self) -> float:
+        return float(np.mean(self.potion_relic_picks)) if self.potion_relic_picks else 0.0
+
+    @property
+    def mean_potions_discarded(self) -> float:
+        return float(np.mean(self.potions_discarded)) if self.potions_discarded else 0.0
+
+    @property
+    def potion_skip_belt_histogram(self) -> dict[int, int]:
+        """Voluntary reward skips binned by belt occupancy at skip time.
+        Skips at 0-1 held read as aversion; at 2-3 held as selectivity."""
+        bins = {0: 0, 1: 0, 2: 0, 3: 0}
+        for rec in self.potion_skips:
+            bins[min(len(rec.get("belt", [])), 3)] += 1
+        return bins
+
+    @property
     def mean_hp_overall(self) -> float:
         """Mean `run.hp_ratio` (hp/max_hp) sampled at every decision point,
         pooled over episodes like `energy_unspent_per_turn` -- the v8 s7
@@ -474,6 +636,48 @@ class RunEvalReport:
         test, or a non-run env)."""
         steps = sum(self.hp_ratio_steps)
         return sum(self.hp_ratio_sum) / steps if steps else 0.0
+
+    @property
+    def potion_hold_table(self) -> dict[str, dict]:
+        """Per potion id (most picked first): picked / used / held (at episode
+        end) / lost counts, mean floors held over USED instances and over all,
+        mean v(s) at use, and the elite+boss share of uses."""
+        by_id: dict[str, list[dict]] = {}
+        for rec in self.potion_holds:
+            by_id.setdefault(rec["id"], []).append(rec)
+        table: dict[str, dict] = {}
+        for pid, recs in sorted(by_id.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+            used = [r for r in recs if r["outcome"] == "used"]
+            tier = sum(1 for r in used if r["room"] in ("elite", "boss"))
+            vs = [r["v"] for r in used if r["v"] is not None]
+            table[pid] = {
+                "picked": len(recs),
+                "used": len(used),
+                "held": sum(1 for r in recs if r["outcome"] == "held"),
+                "lost": sum(1 for r in recs if r["outcome"] == "lost"),
+                "discarded": sum(1 for r in recs if r["outcome"] == "discarded"),
+                "mean_hold_used": (sum(r["held"] for r in used) / len(used)) if used else 0.0,
+                "mean_hold_all": sum(r["held"] for r in recs) / len(recs),
+                "v_at_use": (sum(vs) / len(vs)) if vs else 0.0,
+                "tier_share": (tier / len(used)) if used else 0.0,
+            }
+        return table
+
+    @property
+    def mean_potion_hold_used(self) -> float:
+        """Mean floors held by potions that were actually drunk, pooled."""
+        used = [r["held"] for r in self.potion_holds if r["outcome"] == "used"]
+        return (sum(used) / len(used)) if used else 0.0
+
+    @property
+    def potion_hold_histogram(self) -> dict[str, int]:
+        """All resolved instances (used/held/lost) binned by floors held."""
+        bins = {"0": 0, "1": 0, "2-3": 0, "4-6": 0, "7+": 0}
+        for r in self.potion_holds:
+            h = r["held"]
+            key = "0" if h <= 0 else "1" if h == 1 else "2-3" if h <= 3 else "4-6" if h <= 6 else "7+"
+            bins[key] += 1
+        return bins
 
     @property
     def card_take_counts(self) -> dict[str, tuple[int, int]]:
@@ -535,12 +739,18 @@ def evaluate_run(
     episodes: int = 20,
     seed: int = 0,
     env: Any | None = None,
+    episode_seeds: "Sequence[int] | None" = None,
 ) -> RunEvalReport:
     """Roll ``policy`` over ``episodes`` seeded full runs (seed, seed+1, …).
 
     ``env`` defaults to a fresh ``STS2RunEnv``; pass an
     ``STS2CurriculumRunEnv`` to evaluate the phase-1 curriculum. Given the same
     seed and env settings this is deterministic: same episodes, same report.
+
+    ``episode_seeds`` (v20.1, eval.py --random-episodes) overrides the
+    sequential ``seed .. seed+episodes-1`` range with an explicit list —
+    ``episodes``/``seed`` are ignored then, and the per-episode ``seeds``
+    tuple in the report records exactly what ran (the CSV column too).
     """
     if env is None:
         from .run_env import STS2RunEnv
@@ -575,12 +785,22 @@ def evaluate_run(
     potions_used_normal: list[int] = []
     potions_expired: list[int] = []
     potion_use_hp: list[float] = []
+    potion_v_at_use: list[float] = []
+    potions_wasted: list[int] = []
+    potions_bought: list[int] = []
+    potion_rewards_skipped: list[int] = []
+    potion_rewards_forced: list[int] = []
+    potion_relic_picks: list[int] = []
+    potions_discarded: list[int] = []
+    potion_skips: list[dict] = []
     relics: list[int] = []
     hp_lost: list[int] = []
+    boss_hp_lost: list[int] = []
     hp_ratio_sum: list[float] = []
     hp_ratio_steps: list[int] = []
     card_offer_counts: dict[str, int] = {}
     card_take_counts: dict[str, int] = {}
+    potion_holds: list[dict] = []
     deck_rarity_counts: dict[str, dict[str, int]] = {}
 
     # `mean_hp_overall`'s proxy signal (v8 s7 gate): the "run.hp_ratio" slot
@@ -590,8 +810,11 @@ def evaluate_run(
     # test double), so the sampling below just no-ops.
     hp_ratio_slice = getattr(getattr(env, "_layout", None), "f_slices", {}).get("run.hp_ratio")
 
-    for ep in range(episodes):
-        obs, info = env.reset(seed=seed + ep)
+    seed_list = (list(episode_seeds) if episode_seeds is not None
+                 else [seed + ep for ep in range(episodes)])
+    episodes = len(seed_list)
+    for ep_seed in seed_list:
+        obs, info = env.reset(seed=ep_seed)
         max_floor = int(info.get("floor", 0))
         max_act = int(info.get("act", 0))
         steps = 0
@@ -622,7 +845,7 @@ def evaluate_run(
         hp_left.append(int(info.get("hp_left", 0)))
         decisions.append(int(info.get("decisions", steps)))
         trunc_flags.append(bool(truncated and not terminated))
-        seeds.append(seed + ep)
+        seeds.append(ep_seed)
         returns.append(total_reward)
         # Behavior tallies: present on the run envs (both terminated and
         # truncated episodes), absent on envs that don't count them — hence
@@ -647,12 +870,22 @@ def evaluate_run(
         potions_used_normal.append(int(info.get("ep_potions_used_normal", 0)))
         potions_expired.append(int(info.get("ep_potions_expired", 0)))
         potion_use_hp.append(float(info.get("ep_potion_use_hp", 0.0)))
+        potion_v_at_use.append(float(info.get("ep_potion_v_at_use", 0.0)))
+        potions_wasted.append(int(info.get("ep_potions_wasted", 0)))
+        potions_bought.append(int(info.get("ep_potions_bought", 0)))
+        potion_rewards_skipped.append(int(info.get("ep_potion_rewards_skipped", 0)))
+        potion_rewards_forced.append(int(info.get("ep_potion_rewards_forced", 0)))
+        potion_relic_picks.append(int(info.get("ep_potion_relic_picks", 0)))
+        potions_discarded.append(int(info.get("ep_potions_discarded", 0)))
+        potion_skips.extend(info.get("ep_potion_skips", []))
         relics.append(int(info.get("ep_relics", 0)))
         hp_lost.append(int(info.get("ep_hp_lost", 0)))
+        boss_hp_lost.append(int(info.get("ep_boss_hp_lost", 0)))
         for name, count in info.get("ep_card_offer_ids", {}).items():
             card_offer_counts[name] = card_offer_counts.get(name, 0) + int(count)
         for name, count in info.get("ep_card_take_ids", {}).items():
             card_take_counts[name] = card_take_counts.get(name, 0) + int(count)
+        potion_holds.extend(info.get("ep_potion_holds", []))
         for rarity, cards in info.get("ep_final_deck", {}).items():
             bucket = deck_rarity_counts.setdefault(rarity, {})
             for name, count in cards.items():
@@ -688,11 +921,21 @@ def evaluate_run(
         potions_used_normal=tuple(potions_used_normal),
         potions_expired=tuple(potions_expired),
         potion_use_hp=tuple(potion_use_hp),
+        potion_v_at_use=tuple(potion_v_at_use),
+        potions_wasted=tuple(potions_wasted),
+        potions_bought=tuple(potions_bought),
+        potion_rewards_skipped=tuple(potion_rewards_skipped),
+        potion_rewards_forced=tuple(potion_rewards_forced),
+        potion_relic_picks=tuple(potion_relic_picks),
+        potions_discarded=tuple(potions_discarded),
+        potion_skips=tuple(potion_skips),
         relics=tuple(relics),
         hp_lost=tuple(hp_lost),
+        boss_hp_lost=tuple(boss_hp_lost),
         hp_ratio_sum=tuple(hp_ratio_sum),
         hp_ratio_steps=tuple(hp_ratio_steps),
         card_offer_counts=card_offer_counts,
+        potion_holds=tuple(potion_holds),
         card_take_counts_raw=card_take_counts,
         deck_rarity_counts=deck_rarity_counts,
     )
@@ -714,9 +957,22 @@ EPISODE_CSV_FIELDS = ("policy", "seed", "floor", "act", "win", "truncated",
                       # RunEvalReport.mean_hp_overall): mean run.hp_ratio
                       # over this episode's decisions.
                       "hp_ratio_mean",
-                      "rest_visits_hihp", "rest_upgrades_hihp")
+                      "rest_visits_hihp", "rest_upgrades_hihp",
+                      # v20 (Task 3b): appended at the END so existing
+                      # column indices in downstream sheets stay valid.
+                      "boss_hp_lost",
+                      # v21: appended at the END (column indices stay valid).
+                      "potion_v_at_use", "potions_wasted", "potions_bought",
+                      "potion_rewards_skipped", "potion_rewards_forced",
+                      "potion_relic_picks",
+                      # v22: appended at the END (column indices stay valid).
+                      "potions_discarded")
 
 CARDS_CSV_FIELDS = ("policy", "card", "offered", "taken", "take_rate")
+
+POTIONS_CSV_FIELDS = ("policy", "potion", "picked", "used", "held", "lost",
+                      "discarded", "mean_hold_used", "mean_hold_all",
+                      "v_at_use", "tier_share")
 
 DECK_CSV_FIELDS = ("policy", "rarity", "card", "copies", "share_of_rarity",
                    "copies_per_run")
@@ -781,14 +1037,15 @@ def write_run_csv(
                     report.hp_left[i],
                     report.decisions[i],
                     round(report.returns[i], 6),
-                    report.end_turns[i],
-                    report.energy_unspent[i],
-                    report.card_offers[i],
-                    report.card_takes[i],
-                    report.rest_visits[i],
-                    report.rest_heals[i],
-                    report.rest_upgrades[i],
-                    # Guarded: a hand-built report may omit the v7 tuples.
+                    # Guarded: a hand-built report (e.g. a unit test) may
+                    # omit any of these tuples.
+                    report.end_turns[i] if report.end_turns else 0,
+                    report.energy_unspent[i] if report.energy_unspent else 0.0,
+                    report.card_offers[i] if report.card_offers else 0,
+                    report.card_takes[i] if report.card_takes else 0,
+                    report.rest_visits[i] if report.rest_visits else 0,
+                    report.rest_heals[i] if report.rest_heals else 0,
+                    report.rest_upgrades[i] if report.rest_upgrades else 0,
                     report.upgrades[i] if report.upgrades else 0,
                     report.removes[i] if report.removes else 0,
                     report.elites_won[i] if report.elites_won else 0,
@@ -806,6 +1063,14 @@ def write_run_csv(
                      if report.hp_ratio_steps and report.hp_ratio_steps[i] else 0.0),
                     report.rest_visits_hihp[i] if report.rest_visits_hihp else 0,
                     report.rest_upgrades_hihp[i] if report.rest_upgrades_hihp else 0,
+                    report.boss_hp_lost[i] if report.boss_hp_lost else 0,
+                    report.potion_v_at_use[i] if report.potion_v_at_use else 0.0,
+                    report.potions_wasted[i] if report.potions_wasted else 0,
+                    report.potions_bought[i] if report.potions_bought else 0,
+                    report.potion_rewards_skipped[i] if report.potion_rewards_skipped else 0,
+                    report.potion_rewards_forced[i] if report.potion_rewards_forced else 0,
+                    report.potion_relic_picks[i] if report.potion_relic_picks else 0,
+                    report.potions_discarded[i] if report.potions_discarded else 0,
                 ])
 
     with open(hist_path, "w", newline="") as fh:
@@ -832,6 +1097,30 @@ def write_cards_csv(
             for card, (offered, taken) in report.card_take_counts.items():
                 rate = round(taken / offered, 6) if offered else 0.0
                 writer.writerow([name, card, offered, taken, rate])
+
+    if hasattr(path_or_file, "write"):
+        _write(path_or_file)
+    else:
+        with open(path_or_file, "w", newline="") as fh:
+            _write(fh)
+
+
+def write_potions_csv(
+    path_or_file, rows: Sequence[tuple[str, RunEvalReport]]
+) -> None:
+    """Per-potion hold table (2026-08-23): one row per (policy, potion id),
+    most-picked first — see ``RunEvalReport.potion_hold_table``.
+    ``path_or_file`` is a filesystem path or an open text file."""
+    def _write(fh) -> None:
+        writer = csv.writer(fh)
+        writer.writerow(POTIONS_CSV_FIELDS)
+        for name, report in rows:
+            for pid, t in report.potion_hold_table.items():
+                writer.writerow([
+                    name, pid, t["picked"], t["used"], t["held"], t["lost"],
+                    t["discarded"],
+                    round(t["mean_hold_used"], 6), round(t["mean_hold_all"], 6),
+                    round(t["v_at_use"], 6), round(t["tier_share"], 6)])
 
     if hasattr(path_or_file, "write"):
         _write(path_or_file)

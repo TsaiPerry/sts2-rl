@@ -33,7 +33,10 @@ from ..enchantments import ENCHANTMENT_INDEX
 from ..obs import ObsLayout, oid
 from . import game_ids
 
-CONTRACT_VERSION = 1
+# 2: v22 potion-discard action block (run_env.DISCARD_BASE, N_ACTIONS 243→253)
+# — "actions.discard" added; consumers sizing the head off n_actions alone
+# would silently mis-shape against a v1 model, so the version gates it.
+CONTRACT_VERSION = 2
 
 # kind -> {sim_id: vocab_index} (0-based; oid() below adds the +1 PAD offset)
 _VOCAB_INDEX: dict[str, dict[str, int]] = {
@@ -147,6 +150,10 @@ def _actions_block() -> dict:
         },
         "belt_potion": {
             "base": run_env.POTION_BASE,
+            "slots": run_env.MAX_POTION_SLOTS,
+        },
+        "discard": {
+            "base": run_env.DISCARD_BASE,
             "slots": run_env.MAX_POTION_SLOTS,
         },
     }

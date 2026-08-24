@@ -8,12 +8,13 @@ choices, post-combat reward picks, every combat action, and every
 mid-resolution card selection (RL.md's "two-phase env") — surfaces as one
 masked Gym step, fully on-policy.
 
-Action space (flat Discrete, four blocks): a per-candidate SELECT block
+Action space (flat Discrete, five blocks): a per-candidate SELECT block
 (``_sorted_candidate_order``) plus a potion-belt ceiling sized to its true
-worst case (fixing a live crash, not just an undersized cap). Absolute
-sizes as built: N_ACTIONS = 243
+worst case (fixing a live crash, not just an undersized cap), plus a v22
+out-of-combat DISCARD tail block scored from those same belt rows. Absolute
+sizes as built: N_ACTIONS = 253
 (N_COMBAT_ACTIONS=121, CHOICE_SLOTS=16, MAX_SELECT_CANDIDATES=96,
-MAX_POTION_SLOTS=10):
+MAX_POTION_SLOTS=10, MAX_POTION_SLOTS=10):
 
   [0 .. N_COMBAT_ACTIONS)         combat block — identical semantics to
                                  STS2FullCombatEnv (end turn / play h@e /
@@ -48,6 +49,14 @@ MAX_POTION_SLOTS=10):
                                  the game's overlay, drinking does NOT answer
                                  the screen underneath: the same decision
                                  comes straight back.
+  [DISCARD_BASE .. +MAX_POTION_SLOTS)
+                                 out-of-combat DISCARD tail block (v22):
+                                 discard the potion in belt slot p —
+                                 answered as ``POTION_DISCARD_ACTION_BASE +
+                                 slot`` (driver.py) — scored from the SAME
+                                 ``run.potions`` entity rows as the belt-POTION
+                                 block above, by its own pointer head (see
+                                 `models.run_action_layout`).
 
 Observation (OBS_SCHEMA.md; the v7 two-leaf ``{"f": Box(0,1), "i": Box(0,
 MAX_OBS_ID)}`` Dict contract — see that document in full before touching
@@ -98,6 +107,7 @@ from .characters import DEFAULT_CHARACTER
 from .deck_stats import final_deck_histogram
 from .driver import (
     POTION_ACTION_BASE,
+    POTION_DISCARD_ACTION_BASE,
     REST_HEAL,
     REST_SMITH,
     DecisionKind,
@@ -106,9 +116,13 @@ from .driver import (
     RunResult,
 )
 from .events import ALL_EVENTS
+from .potions import BlockPotion
+from .previews import preview_total_incoming
 from .full_env import (
     CARD_INDEX,
+    COMBAT_POTION_BASE,
     MAX_COMBAT_CARDS,
+    MAX_ENEMIES,
     MAX_OBS_ID as _COMBAT_MAX_OBS_ID,
     MAX_POTION_ROWS,
     MAX_RELIC_ROWS,
@@ -286,7 +300,10 @@ POTION_BASE = SELECT_BASE + MAX_SELECT_CANDIDATES
 # The out-of-combat belt (driver.POTION_ACTION_BASE). Its own block rather
 # than extra slots on each decision: an AnyTime potion is usable from every
 # screen, and a shop already offers 15 of CHOICE_SLOTS' 16.
-N_ACTIONS = POTION_BASE + MAX_POTION_SLOTS
+DISCARD_BASE = POTION_BASE + MAX_POTION_SLOTS
+# v22: throw a belt potion away (driver.POTION_DISCARD_ACTION_BASE). Tail
+# append — every pre-v22 action index keeps its position.
+N_ACTIONS = DISCARD_BASE + MAX_POTION_SLOTS
 
 # ── Stable vocabularies (frozen append-only + capacity-padded; vocab.py) ──
 # RELIC_IDS/RELIC_INDEX/N_RELICS: imported from full_env rather than
@@ -633,6 +650,50 @@ def _hp_potential(ratio: float, knee: float, low_share: float) -> float:
     return low_share + (1.0 - low_share) * (ratio - knee) / (1.0 - knee)
 
 
+#: v21: denominator of the act-local option value — "2 elites + the boss"
+#: is the whole act ahead (spec §2). A bigger count caps at 1.0.
+POTION_OPTION_V_REF = 3
+
+#: v21 metrics: relics whose effect is potions / belt slots (the files that
+#: call run.add_potion / add_potion_slots). Keep in sync by grep, not by id
+#: string in game code.
+POTION_RELIC_IDS = frozenset({
+    "phial_holster", "alchemical_coffer", "potion_belt", "belt_buckle",
+    "delicate_frond", "petrified_toad",
+})
+
+
+def elites_ahead(run) -> int:
+    """# ELITE map points reachable from ``run.current_point`` through
+    ``MapPoint.children`` (transitive, any path, each node once) — the current
+    point itself is NOT counted (spec: the hard fight you are in is not
+    'ahead'). 0 with no current point (between acts)."""
+    point = getattr(run, "current_point", None)
+    if point is None:
+        return 0
+    seen: set[int] = set()
+    stack = list(point.children)
+    count = 0
+    while stack:
+        p = stack.pop()
+        if id(p) in seen:
+            continue
+        seen.add(id(p))
+        if p.point_type == MapPointType.ELITE:
+            count += 1
+        stack.extend(p.children)
+    return count
+
+
+def potion_option_value(run) -> float:
+    """v(s) in [0, 1]: act-local hard fights still ahead after the current
+    room (spec §2) — ELITE nodes ahead plus this act's boss unless standing in
+    the boss room — over POTION_OPTION_V_REF, capped at 1. A drink at the act
+    boss costs nothing; a whole-act-ahead drink costs the full k."""
+    boss_ahead = 0 if getattr(run, "current_room_type", None) == RoomType.BOSS else 1
+    return min(1.0, (elites_ahead(run) + boss_ahead) / POTION_OPTION_V_REF)
+
+
 class STS2RunEnv(gym.Env):
     metadata = {"render_modes": ["human"]}
 
@@ -664,6 +725,14 @@ class STS2RunEnv(gym.Env):
         potion_potential_scale: float = 0.0,
         potion_death_expiry: bool = False,
         potion_death_penalty: float = 0.0,
+        energy_waste_penalty: float = 0.0,
+        potion_option_value: float = 0.0,
+        potion_option_expiry: bool = False,
+        boss_hp_loss_penalty: float = 0.0,
+        drill_snapshots: str | None = None,
+        drill_prob: float = 0.0,
+        drill_pools: "dict[str, float] | None" = None,
+        drill_encounter_weights: "dict[str, float] | None" = None,
         deck_random_prob: float = 0.0,
         deck_random_cards: tuple[int, int] = (4, 14),
         deck_inject: str | None = None,
@@ -752,6 +821,49 @@ class STS2RunEnv(gym.Env):
         # flat term breaks the tie so dying while holding is strictly worse
         # than using the potion and dying anyway. Default OFF.
         self._potion_death_penalty = potion_death_penalty
+        # v16: flat -energy_waste_penalty per unspent energy point at every
+        # player-turn END_TURN (the _count_behavior tally). UNCONDITIONAL —
+        # empty-hand turns charge too; that IS the deck-building gradient,
+        # and no alternative action exists on those turns. Tiebreaker-sized:
+        # must stay well below the HP-shaping value of ~1 HP so passing vs
+        # Thorns/Prism/Aeonglass-class punishers stays strictly optimal.
+        self._energy_waste_penalty = energy_waste_penalty
+        # v21 (spec 2026-08-22-v21-potion-option-value-design): -k * v(s) per
+        # DRINK, v = act-local hard fights still ahead (potion_option_value()
+        # above) — the opportunity value the drink forgoes; no pickup credit.
+        # Default OFF (0.0) = bit-identical env.
+        self._potion_option_value = float(potion_option_value)
+        # NB: the kwarg shadows the module-level potion_option_value(run) helper
+        # inside __init__ — do not call the helper from here.
+        # v21: on a LOSS, -k * v(s_death) per potion still held (hoard-and-die
+        # priced like drink-and-die). Independent of the v9 potion_death_*
+        # flags. Default OFF.
+        self._potion_option_expiry = bool(potion_option_expiry)
+        # v20 (Task 3b): non-refundable price on damage taken inside a BOSS
+        # combat, paid once when the combat resolves (won or lost):
+        # -K * (hp_at_entry - hp_at_end) / max_hp. Deliberately NOT
+        # potential-based — the hp-potential term's post-boss act-entry heal
+        # refunds boss-fight HP loss almost in full, so without this the
+        # policy has no gradient toward tighter boss play. Default 0.0 =
+        # exactly the old reward function.
+        self._boss_hp_loss_penalty = boss_hp_loss_penalty
+        # Latch: (id(combat), hp at first decision) of the live boss combat.
+        self._boss_hp_latch: "tuple[int, int] | None" = None
+        # v20 drill mode: with probability drill_prob an episode starts
+        # mid-run at a harvested combat (snapshots.py schema 2) instead of
+        # at Neow, sampled by stratified (act, room_type) pools. Loaded and
+        # validated at construction — a bad path, schema-1 bank, or an empty
+        # named pool must raise here, not mid-training.
+        self._drill_prob = drill_prob
+        self._drill_pools_cfg = dict(drill_pools) if drill_pools else None
+        self._drill_weights = (
+            dict(drill_encounter_weights) if drill_encounter_weights else {})
+        self._drill_pools: "list[tuple[str, float, list, list[float]]] | None" = None
+        if drill_snapshots is not None:
+            self._load_drill_snapshots(drill_snapshots)
+        elif drill_prob > 0.0:
+            raise ValueError(
+                "drill_prob > 0 requires drill_snapshots (a schema-2 bank)")
         # Card-exposure domain randomization: with probability
         # deck_random_prob an episode starts with 4..14 extra reward-pool
         # cards appended to the starter deck, so every card gets combat
@@ -895,6 +1007,13 @@ class STS2RunEnv(gym.Env):
                 and self._deck_inject_prob > 0.0
                 and self._rng.random() < self._deck_inject_prob):
             self._inject_deck(self._run)
+        # v20 drill roll — same zero-draw short-circuit contract as the two
+        # blocks above: with drills off (no bank or prob 0.0) this draws NO
+        # rng, so the default env's episode stream is byte-identical.
+        drill_snap = None
+        if (self._drill_pools is not None and self._drill_prob > 0.0
+                and self._rng.random() < self._drill_prob):
+            drill_snap = self._sample_drill_snapshot()
         self._result = None
         self._steps = 0
         self._map_grid_cache = None
@@ -923,6 +1042,11 @@ class STS2RunEnv(gym.Env):
         # Combat sloppiness tally, independent of hp_potential_scale shaping
         # (which can be off while this stays on).
         self._ep_hp_lost = 0
+        # v20 (Task 3b): HP lost inside BOSS combats, summed over the
+        # episode's boss fights — counted always, priced only when
+        # boss_hp_loss_penalty > 0.
+        self._ep_boss_hp_lost = 0
+        self._boss_hp_latch = None
         self._ep_elites_won = 0
         self._ep_potions_obtained = 0
         self._ep_potions_used = 0
@@ -937,6 +1061,27 @@ class STS2RunEnv(gym.Env):
         self._ep_potions_used_normal = 0
         self._ep_potions_expired = 0
         self._ep_potion_use_hp = 0.0
+        # v21: running SUM of v(s) at each drink (eval divides by uses).
+        self._ep_potion_v_at_use = 0.0
+        self._ep_potions_wasted = 0
+        # v21 acquisition reads (spec §3/§4): counted always, never priced.
+        self._ep_potions_bought = 0
+        self._ep_potion_rewards_skipped = 0
+        self._ep_potion_rewards_forced = 0
+        self._ep_potion_relic_picks = 0
+        self._ep_potions_discarded = 0
+        self._ep_potion_skips: list[dict] = []
+        # 2026-08-23 hold-duration metric (Perry): per potion INSTANCE, pickup
+        # floor -> resolution (used / lost / held at episode end) with floors
+        # held, v(s) and room at use. Keyed by object identity (the combat
+        # belt is a shallow copy of run.potions, so identity survives).
+        # Eval-only (info["ep_potion_holds"]), never reward.
+        self._potion_track: dict[int, tuple[str, int]] = {}
+        # Objects already recorded as USED whose run.potions slot has not been
+        # synced yet (an in-combat drink nulls the COMBAT belt; run.potions
+        # keeps the object until finish_combat) — must not be re-tracked.
+        self._potion_used_pending: set[int] = set()
+        self._ep_potion_holds: list[dict] = []
         self._elite_reward_key: tuple[int, int] | None = None
         # v11.1: elite ATTEMPTS (rooms entered, win or lose), same per-room
         # (act, floor) dedup as the win tally above.
@@ -960,6 +1105,9 @@ class STS2RunEnv(gym.Env):
                 ascension=self._ascension,
                 include_neow=self._include_neow,
                 on_combat_start=self._on_combat_start,
+                start_setup=(
+                    (lambda r: self._drill_start_setup(r, drill_snap))
+                    if drill_snap is not None else None),
             )
             return driver.play()
 
@@ -1004,11 +1152,181 @@ class STS2RunEnv(gym.Env):
         for cid in pkg:
             run.deck.append(make_card(cid))
 
+    # ── v20 drill mode ────────────────────────────────────────────────────
+
+    @staticmethod
+    def _drill_pool_key(act_index: int, room_type: str) -> str:
+        """Pool naming: 1-based display act + lowercase room — 'a1boss',
+        'a2elite', 'a3monster'. `act_index` is the snapshot's 0-based field."""
+        return f"a{act_index + 1}{room_type.lower()}"
+
+    def _load_drill_snapshots(self, path: str) -> None:
+        """Bucket a schema-2 bank into the configured pools, applying the
+        per-encounter oversampling weights within each pool. Everything is
+        validated here: `load_snapshots` rejects schema-1 files, and a named
+        pool with zero snapshots raises — a silently empty pool would quietly
+        renormalize the mix onto the pools that DO have coverage, which is
+        the opposite of what stratification is for."""
+        from .snapshots import act_module_for_encounter, load_snapshots
+
+        dataset = load_snapshots(path)
+        buckets: dict[str, list] = {}
+        dropped = 0
+        for i in range(len(dataset)):
+            snap = dataset[i]
+            # Event-launched encounters belong to no act package — the
+            # drill setup can't restore an act RoomSet containing them.
+            if act_module_for_encounter(snap.encounter_id) is None:
+                dropped += 1
+                continue
+            buckets.setdefault(
+                self._drill_pool_key(snap.act, snap.room_type), []
+            ).append(snap)
+        if dropped:
+            print(f"[drill] {path}: dropped {dropped} event-encounter "
+                  f"snapshots (not drillable)", flush=True)
+        if self._drill_pools_cfg is not None:
+            cfg = self._drill_pools_cfg
+            missing = [k for k in cfg if k not in buckets or not buckets[k]]
+            if missing:
+                raise ValueError(
+                    f"drill pools with ZERO snapshots in {path}: {missing} "
+                    f"(bank has: {sorted(buckets)}) — harvest more coverage "
+                    f"or drop the pool")
+        else:
+            # No pool config: every pool in the bank, mass proportional to
+            # its snapshot count (i.e. flat bank sampling). v20 passes pools
+            # explicitly; this default exists for ad-hoc use.
+            cfg = {k: float(len(v)) for k, v in buckets.items()}
+        total = sum(cfg.values())
+        if total <= 0:
+            raise ValueError("drill_pools masses must sum > 0")
+        self._drill_pools = []
+        for key, mass in cfg.items():
+            snaps = buckets[key]
+            weights = [
+                self._drill_weights.get(s.encounter_id, 1.0) for s in snaps
+            ]
+            self._drill_pools.append((key, mass / total, snaps, weights))
+
+    def _sample_drill_snapshot(self):
+        """Two `self._rng` draws: pool by mass, then snapshot within pool
+        (per-encounter weights applied)."""
+        assert self._drill_pools is not None
+        roll = self._rng.random()
+        acc = 0.0
+        key, _mass, snaps, weights = self._drill_pools[-1]
+        for cand in self._drill_pools:
+            acc += cand[1]
+            if roll < acc:
+                key, _mass, snaps, weights = cand
+                break
+        return self._rng.choices(snaps, weights=weights, k=1)[0]
+
+    def _drill_start_setup(self, run: RunState, snap):
+        """RunDriver start-injection callable: rewrite `run` (which
+        `start_run` just initialized at act 0) into the snapshot's mid-run
+        state and return the combat to open the episode with.
+
+        Mirrors the tail of `run.enter_point` for the injected room
+        (after_room_entered hook, mark_visited, map_history) so the fight
+        sits in the same run-state context a naturally-entered combat would.
+        Known approximations (plan Task 3): the act map is re-rolled (layout
+        differs from the source run's), a DoubleBoss SECOND-boss snapshot is
+        re-fought as the act's primary, and a snapshot belt longer than this
+        run's `max_potions` (asc-0 harvest drilled at asc-10 TightBelt) is
+        truncated."""
+        from .potions import make_potion
+        from .rooms import MapPointType, RoomType
+        from .snapshots import act_module_for_encounter, build_start_state
+
+        if snap.act >= len(run.act_list):
+            raise ValueError(
+                f"drill snapshot act {snap.act} out of range for act list "
+                f"{run.act_list}")
+        # Act 1 is a per-run coin flip (Overgrowth vs Underdocks); the
+        # snapshot's encounter pins which module the source run rolled, and
+        # that module's RoomSet is the only one containing the encounter —
+        # force it before entering the act. (Acts 2/3 are fixed hive/glory,
+        # so this is a no-op there.)
+        module = act_module_for_encounter(snap.encounter_id)
+        assert module is not None   # event snapshots were dropped at load
+        if run.act_list[snap.act] != module:
+            run.act_list[snap.act] = module
+            if snap.act == 0:
+                # start_run already started act 0 on the other module —
+                # restart it on the right one (acts >= 1 are entered fresh
+                # by the advance_act loop below and read the patched list).
+                run.start_act(
+                    module, ascension=run.ascension,
+                    is_final_act=len(run.act_list) == 1, act_index=0)
+        for _ in range(snap.act):
+            run.advance_act()
+
+        parts = build_start_state(snap)
+        run.deck[:] = parts["deck_cards"]
+        run.relics[:] = parts["relics"]
+        run.max_hp = snap.max_hp
+        run.hp = min(snap.hp, snap.max_hp)
+        run.gold = snap.gold
+        belt = [make_potion(pid) if pid is not None else None
+                for pid in snap.potion_slots]
+        belt = belt[: run.max_potions]
+        belt += [None] * (run.max_potions - len(belt))
+        run.potions[:] = belt
+
+        room_type = RoomType[snap.room_type]
+        encounter = parts["encounter"]
+        if room_type == RoomType.BOSS:
+            # Force the act's boss identity to the snapshot's encounter so
+            # the run-block obs (run.boss.ids rows) agree with the fight —
+            # otherwise the drill teaches "obs say boss X, fight boss Y".
+            key = next(
+                (k for k, enc in run.room_set.registry.items()
+                 if enc.id == snap.encounter_id), None)
+            if key is None:
+                raise ValueError(
+                    f"drill boss encounter {snap.encounter_id!r} not in this "
+                    f"act's registry (act {snap.act})")
+            if run.room_set.second_boss_key == key:
+                run.room_set.second_boss_key = run.room_set.boss_key
+            run.room_set.boss_key = key
+            point = run.map.boss_point
+        else:
+            # Row from the within-act floor offset (approximate: acts differ
+            # slightly in length; the clamp keeps it on the grid). The point
+            # choice only shapes the map obs and the post-combat routing —
+            # prefer a node whose type matches the fight.
+            row_count = run.map.row_count
+            floor_in_act = snap.floor - snap.act * row_count
+            row = min(max(floor_in_act, 1), row_count - 1)
+            candidates = run.map.points_in_row(row)
+            want = (MapPointType.ELITE if room_type == RoomType.ELITE
+                    else MapPointType.MONSTER)
+            matching = [p for p in candidates if p.point_type == want]
+            point = self._rng.choice(matching or candidates)
+
+        run.current_point = point
+        run.total_floor = snap.floor
+        run.current_room_type = room_type
+        run.current_event = None
+        # The tail of enter_point for the injected room:
+        for relic in list(run.relics):
+            relic.after_room_entered(run, point, room_type)
+        run.room_set.mark_visited(room_type)
+        run._last_room_types = [room_type]
+        run.map_history.append((point, room_type))
+        return encounter, room_type
+
     def step(self, action: int):
         assert self._run is not None, "call reset() before step()"
         run = self._run
         request = self._request
         self._steps += 1
+        reward = 0.0
+        drink_potion = None
+        drink_hp_before = None
+        drink_block_wasted = False
 
         if request is not None:
             answer = self._translate(int(action), request)
@@ -1021,16 +1339,87 @@ class STS2RunEnv(gym.Env):
             act_before = run.act_index
             elites_before = self._ep_elites_won
             fought_before = self._ep_elites_fought
+            energy_before = self._ep_energy_unspent
             self._count_behavior(request, answer)
+            # v21: opportunity-value charge at the drink, priced off the room
+            # state BEFORE the action resolves (the room the drink happens in).
+            drink_slot = self._drink_slot(request, answer)
+            if drink_slot is not None:
+                v_now = potion_option_value(run)
+                self._ep_potion_v_at_use += v_now
+                if self._potion_option_value:
+                    reward -= self._potion_option_value * v_now
+                in_combat = (
+                    request.kind == DecisionKind.COMBAT
+                    and request.combat is not None
+                    and getattr(request.combat, "player", None) is not None)
+                belt = (getattr(request.combat.player, "potions", None) if in_combat else None) or run.potions
+                drink_potion = belt[drink_slot] if 0 <= drink_slot < len(belt) else None
+                drink_hp_before = request.combat.player.hp if in_combat else run.hp
+                if in_combat and isinstance(drink_potion, BlockPotion):
+                    drink_block_wasted = preview_total_incoming(request.combat) <= 0
+                if drink_potion is not None:
+                    if in_combat:
+                        rt = request.combat.room_type
+                        room = ("elite" if rt == RoomType.ELITE
+                                else "boss" if rt == RoomType.BOSS else "normal")
+                    else:
+                        room = "none"
+                    self._record_potion_hold(drink_potion, "used", room=room, v=v_now)
+            # v22: a discard resolves the tracked instance at decision time,
+            # like a drink — the slot is nulled inside _switch. v(s) recorded
+            # for the read; NO reward here (the belt-delta ledger below pays
+            # the -k, identically to any other belt decrease).
+            if answer >= POTION_DISCARD_ACTION_BASE:
+                discard_potion = run.potions[answer - POTION_DISCARD_ACTION_BASE]
+                if discard_potion is not None:
+                    self._ep_potions_discarded += 1
+                    self._record_potion_hold(
+                        discard_potion, "discarded", room="none",
+                        v=potion_option_value(run))
+            # v20 (Task 3b): latch HP at the first decision of a BOSS
+            # combat (new-combat detection by combat-object identity —
+            # the boss_probe.py pattern). The pre-combat run.hp equals
+            # combat.player.hp here, minus any combat-start relic effects,
+            # which is the right baseline: "damage taken across the fight's
+            # decisions".
+            _boss_combat = (
+                request.combat
+                if request.combat is not None
+                and request.combat.room_type == RoomType.BOSS
+                # getattr guards: reward-screen test doubles hand the env
+                # SimpleNamespace combats with no player/result.
+                and getattr(request.combat, "player", None) is not None
+                else None)
+            if _boss_combat is not None and (
+                    self._boss_hp_latch is None
+                    or self._boss_hp_latch[0] != id(_boss_combat)):
+                self._boss_hp_latch = (
+                    id(_boss_combat), _boss_combat.player.hp)
             self._switch(answer)
         else:
+            _boss_combat = None
             hp_before, floor_before, act_before = run.hp, run.total_floor, run.act_index
             max_hp_before = run.max_hp
             elites_before = self._ep_elites_won
             fought_before = self._ep_elites_fought
+            energy_before = self._ep_energy_unspent
 
         self._ep_hp_lost += max(0, hp_before - run.hp)
-        reward = self._hp_reward_scale * (min(run.hp, run.max_hp) - min(hp_before, run.max_hp)) / max(1, run.max_hp)
+        reward += self._hp_reward_scale * (min(run.hp, run.max_hp) - min(hp_before, run.max_hp)) / max(1, run.max_hp)
+        # v20 (Task 3b): boss-fight HP loss, paid once when the boss combat
+        # resolves (won or lost). Non-refundable by design — the act-entry
+        # heal refunds the hp-potential term's in-fight losses, this term is
+        # the surviving price. Counted always; priced only when K > 0.
+        if (_boss_combat is not None and self._boss_hp_latch is not None
+                and self._boss_hp_latch[0] == id(_boss_combat)
+                and (getattr(_boss_combat, "result", None) is not None
+                     or getattr(_boss_combat.player, "is_dead", False))):
+            _lost = max(0, self._boss_hp_latch[1]
+                        - max(0, _boss_combat.player.hp))
+            self._ep_boss_hp_lost += _lost
+            reward -= self._boss_hp_loss_penalty * _lost / max(1, run.max_hp)
+            self._boss_hp_latch = None
         # Concave potential-based shaping, each ratio measured against its
         # OWN step's max_hp (before-ratio uses
         # max_hp_before, after-ratio uses the post-step max_hp) so a max-HP
@@ -1082,6 +1471,9 @@ class STS2RunEnv(gym.Env):
         # v11.1: pay the elite-entry credit the step the attempt is tallied
         # (`_count_behavior` above), decoupled from the win-only term.
         reward += self._reward_elite_attempt * (self._ep_elites_fought - fought_before)
+        # v16: charge stranded energy the step its END_TURN is tallied
+        # (`_count_behavior` above) — per-turn, never terminal-gated.
+        reward -= self._energy_waste_penalty * (self._ep_energy_unspent - energy_before)
         # v11: an act-boss kill IS the act_index advance (act entry lands on
         # the next act's Ancient node in the same transition); the final
         # boss pays via the win branch below — exactly once per boss.
@@ -1119,7 +1511,28 @@ class STS2RunEnv(gym.Env):
                 gained_relics = relics_now - self._relic_len_base
                 reward += self._reward_relic * gained_relics
                 self._ep_relics += gained_relics
+                for relic in run.relics[self._relic_len_base:]:
+                    if getattr(relic, "id", None) in POTION_RELIC_IDS:
+                        self._ep_potion_relic_picks += 1
             self._relic_len_base = relics_now
+        # v21 metric: was the drink (near-)nil? Heal overflow or block with
+        # nothing incoming. Counter only — never touches reward.
+        if drink_potion is not None:
+            wasted = drink_block_wasted
+            heal_pct = getattr(drink_potion, "HEAL_PERCENT", 0)
+            if heal_pct > 0:
+                nxt = self._request
+                if (nxt is not None and nxt.kind == DecisionKind.COMBAT
+                        and nxt.combat is not None
+                        and getattr(nxt.combat, "player", None) is not None):
+                    hp_after = nxt.combat.player.hp
+                else:
+                    hp_after = run.hp
+                nominal = run.max_hp * heal_pct // 100
+                wasted = wasted or (hp_after - drink_hp_before) < 0.5 * nominal
+            if wasted:
+                self._ep_potions_wasted += 1
+        self._sync_potion_track(terminated or truncated)
         belt_now = sum(1 for p in run.potions if p is not None)
         if belt_now > self._belt_base:
             gained = belt_now - self._belt_base
@@ -1139,20 +1552,20 @@ class STS2RunEnv(gym.Env):
             # apply) or an event trading a potion away (discard_potion) —
             # moves the ledger but is not a "use": it never answered via a
             # potion action this step, so it can't be attributed to a room.
-            if request is not None and answer >= POTION_ACTION_BASE:
-                self._ep_potions_used += lost
-                use_hp_ratio = min(hp_before, max_hp_before) / max(1, max_hp_before)
-                self._ep_potion_use_hp += use_hp_ratio * lost
-                room = None
-                if (request.kind == DecisionKind.COMBAT
-                        and request.combat is not None):
-                    room = request.combat.room_type
-                if room == RoomType.ELITE:
-                    self._ep_potions_used_elite += lost
-                elif room == RoomType.BOSS:
-                    self._ep_potions_used_boss += lost
-                else:
-                    self._ep_potions_used_normal += lost
+            if (request is not None
+                    and POTION_ACTION_BASE <= answer < POTION_DISCARD_ACTION_BASE):
+                # An overlay drink empties exactly ONE slot, so count 1, not
+                # `lost` — a coincident non-drink loss in the same delta must
+                # stay anonymous. And an AnyTime overlay drink is by
+                # definition OUTSIDE live combat (the overlay is masked off
+                # while combat is live), so it is always `normal`; elite/boss
+                # attribution happens at the in-combat pair action in
+                # `_count_behavior` (2026-08-18 counter fix — the old
+                # `kind == COMBAT` split here was dead code).
+                self._ep_potions_used += 1
+                self._ep_potion_use_hp += (
+                    min(hp_before, max_hp_before) / max(1, max_hp_before))
+                self._ep_potions_used_normal += 1
         self._belt_base = belt_now
         # Overwritten every step with the CURRENT held count, so whichever
         # step turns out to be the episode's last (`_info` gates on that same
@@ -1176,8 +1589,66 @@ class STS2RunEnv(gym.Env):
             # Same guard shape as the expiry above: deaths only — wins and
             # truncations keep their belts free of charge.
             reward -= self._potion_death_penalty * belt_now
+        if (self._potion_option_expiry and self._potion_option_value and terminated
+                and self._result is not None and not self._result.victory):
+            # v21: hoard-and-die pays what drinking each potion here would have.
+            reward -= self._potion_option_value * potion_option_value(run) * belt_now
 
         return self._build_obs(), float(reward), terminated, truncated, self._info()
+
+    def _drink_slot(self, request: DecisionRequest | None, answer: int) -> int | None:
+        """Belt slot this answer drinks from, or None when it is not a drink.
+        Two paths exist (2026-08-18 counter fix): the in-combat potion-pair
+        block of a COMBAT request, and the AnyTime belt overlay on any
+        request (`POTION_ACTION_BASE + slot`)."""
+        if request is None:
+            return None
+        if POTION_ACTION_BASE <= answer < POTION_DISCARD_ACTION_BASE:
+            return answer - POTION_ACTION_BASE
+        if (request.kind == DecisionKind.COMBAT and request.combat is not None
+                and COMBAT_POTION_BASE <= answer < N_COMBAT_ACTIONS):
+            return (answer - COMBAT_POTION_BASE) // MAX_ENEMIES
+        return None
+
+    def _record_potion_hold(self, potion, outcome: str, *, room: str = "none",
+                            v: float | None = None) -> None:
+        """Resolve one tracked potion instance into `_ep_potion_holds`. An
+        untracked potion (created and drunk inside one combat, so it never
+        reached run.potions) is recorded with a zero hold."""
+        run = self._run
+        floor = run.total_floor
+        pid, pickup = self._potion_track.pop(
+            id(potion), (getattr(potion, "id", "?"), floor))
+        self._potion_used_pending.add(id(potion))
+        self._ep_potion_holds.append({
+            "id": pid, "held": floor - pickup, "outcome": outcome, "room": room,
+            "v": v, "pickup_floor": pickup, "floor": floor})
+
+    def _sync_potion_track(self, episode_over: bool) -> None:
+        """After the action resolved: start tracking potions that newly
+        appeared on run.potions, resolve tracked ones that vanished without a
+        drink this step as 'lost', and at episode end resolve the rest as
+        'held'. Combat-time belt changes surface here when finish_combat syncs
+        run.potions (the drink itself was already recorded at decision time)."""
+        run = self._run
+        live = {id(p): p for p in run.potions if p is not None}
+        self._potion_used_pending &= set(live)      # synced away -> forget
+        for key, p in live.items():
+            if key not in self._potion_track and key not in self._potion_used_pending:
+                self._potion_track[key] = (getattr(p, "id", "?"), run.total_floor)
+        for key in [k for k in self._potion_track if k not in live]:
+            pid, pickup = self._potion_track.pop(key)
+            self._ep_potion_holds.append({
+                "id": pid, "held": run.total_floor - pickup, "outcome": "lost",
+                "room": "none", "v": None, "pickup_floor": pickup,
+                "floor": run.total_floor})
+        if episode_over:
+            for key in list(self._potion_track):
+                pid, pickup = self._potion_track.pop(key)
+                self._ep_potion_holds.append({
+                    "id": pid, "held": run.total_floor - pickup, "outcome": "held",
+                    "room": "none", "v": None, "pickup_floor": pickup,
+                    "floor": run.total_floor})
 
     def _count_behavior(self, request: DecisionRequest, answer: int) -> None:
         """Per-episode behavior tallies, read back by `_info` at episode end.
@@ -1215,6 +1686,65 @@ class STS2RunEnv(gym.Env):
             if key != self._elite_fought_key:
                 self._elite_fought_key = key
                 self._ep_elites_fought += 1
+        # 2026-08-18 counter fix: an IN-COMBAT drink is a potion-pair action
+        # ([COMBAT_POTION_BASE, N_COMBAT_ACTIONS)), passed through RAW by
+        # `_translate`'s COMBAT branch — it never reaches the belt-delta
+        # branch's `answer >= POTION_ACTION_BASE` test (the belt overlay is
+        # masked off while combat is live), so before this block ~97% of all
+        # drinks were booked as anonymous belt losses and the elite/boss
+        # split was structurally always 0. Counted here, at the answered
+        # action, off the COMBAT player's decision-time hp (the run-level
+        # `hp_before` can lag the live combat). The belt decrement itself
+        # surfaces on a LATER step and stays an uncounted ledger move — no
+        # double count (test_v8_rewards pair-drink tests).
+        if (request.kind == DecisionKind.COMBAT
+                and request.combat is not None
+                and COMBAT_POTION_BASE <= answer < N_COMBAT_ACTIONS):
+            self._ep_potions_used += 1
+            player = request.combat.player
+            self._ep_potion_use_hp += (
+                min(player.hp, player.max_hp) / max(1, player.max_hp))
+            room = request.combat.room_type
+            if room == RoomType.ELITE:
+                self._ep_potions_used_elite += 1
+            elif room == RoomType.BOSS:
+                self._ep_potions_used_boss += 1
+            else:
+                self._ep_potions_used_normal += 1
+        # v21: SHOP answer that buys a potion (entry inspected BEFORE the
+        # driver's purchase()); a full belt is excluded — the purchase would
+        # be refused and the policy can retry it hundreds of times (seen:
+        # 9932/ep), which is not a buy.
+        if request.kind == DecisionKind.SHOP and request.shop is not None:
+            entries = request.shop.all_entries
+            if 0 <= answer < len(entries):
+                from .shop import MerchantPotionEntry
+                entry = entries[answer]
+                if (isinstance(entry, MerchantPotionEntry)
+                        and entry.is_stocked and entry.enough_gold
+                        and request.run.has_open_potion_slot):
+                    self._ep_potions_bought += 1
+        # v21: potion reward declined — voluntarily (a slot was open) vs forced
+        # (belt full: skip was the only legal answer; sizes the v22
+        # discard-to-take affordance gap).
+        if request.kind == DecisionKind.REWARD_POTION and answer == 1:
+            if request.run.has_open_potion_slot:
+                self._ep_potion_rewards_skipped += 1
+                # v22 selectivity read: what was declined while holding what.
+                # The offered potion is request.potion on a bare offer
+                # (_offer_potion) and rewards.potions[0] on the reward-set
+                # path (the loop narrows rewards.potions to the one being
+                # asked about — driver.py `pending` loop).
+                offered = request.potion
+                if offered is None and request.rewards is not None and request.rewards.potions:
+                    offered = request.rewards.potions[0]
+                self._ep_potion_skips.append({
+                    "offered": getattr(offered, "id", "?"),
+                    "belt": [p.id for p in request.run.potions if p is not None],
+                    "floor": request.run.total_floor,
+                })
+            else:
+                self._ep_potion_rewards_forced += 1
         if (request.kind == DecisionKind.COMBAT and answer == 0
                 and request.combat is not None
                 and request.combat.phase == Phase.PLAYER_TURN):
@@ -1275,6 +1805,9 @@ class STS2RunEnv(gym.Env):
         if POTION_BASE <= action < POTION_BASE + MAX_POTION_SLOTS:
             answer = POTION_ACTION_BASE + (action - POTION_BASE)
             return answer if answer in request.potion_actions() else None
+        if DISCARD_BASE <= action < DISCARD_BASE + MAX_POTION_SLOTS:
+            answer = POTION_DISCARD_ACTION_BASE + (action - DISCARD_BASE)
+            return answer if answer in request.discard_actions() else None
         legal = request.own_actions()
         if kind == DecisionKind.COMBAT:
             return action if action < N_COMBAT_ACTIONS and action in legal else None
@@ -1315,6 +1848,10 @@ class STS2RunEnv(gym.Env):
             slot = answer - POTION_ACTION_BASE
             if slot < MAX_POTION_SLOTS:
                 mask[POTION_BASE + slot] = True
+        for answer in request.discard_actions():
+            slot = answer - POTION_DISCARD_ACTION_BASE
+            if slot < MAX_POTION_SLOTS:
+                mask[DISCARD_BASE + slot] = True
         legal = request.own_actions()
         if kind == DecisionKind.COMBAT:
             mask[legal] = True
@@ -1785,7 +2322,17 @@ class STS2RunEnv(gym.Env):
             info["ep_potions_used_normal"] = self._ep_potions_used_normal
             info["ep_potions_expired"] = self._ep_potions_expired
             info["ep_potion_use_hp"] = self._ep_potion_use_hp
+            info["ep_potion_v_at_use"] = self._ep_potion_v_at_use
+            info["ep_potions_wasted"] = self._ep_potions_wasted
+            info["ep_potions_bought"] = self._ep_potions_bought
+            info["ep_potion_rewards_skipped"] = self._ep_potion_rewards_skipped
+            info["ep_potion_rewards_forced"] = self._ep_potion_rewards_forced
+            info["ep_potion_relic_picks"] = self._ep_potion_relic_picks
+            info["ep_potion_holds"] = list(self._ep_potion_holds)
+            info["ep_potions_discarded"] = self._ep_potions_discarded
+            info["ep_potion_skips"] = list(self._ep_potion_skips)
             info["ep_hp_lost"] = self._ep_hp_lost
+            info["ep_boss_hp_lost"] = self._ep_boss_hp_lost
             info["ep_card_offer_ids"] = dict(self._ep_card_offer_ids)
             info["ep_card_take_ids"] = dict(self._ep_card_take_ids)
             # The end-of-run deck census (eval.py --deck-hist). `run` is
