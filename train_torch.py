@@ -239,6 +239,16 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--reward-elite-attempt", type=float, default=0.0,
                     help="v11.1: reward per elite room entered, win or lose "
                          "(--reward-elite pays only on won fights)")
+    ap.add_argument("--elite-rewards", type=float, nargs=3, default=None,
+                    metavar=("ACT1", "ACT2", "ACT3"),
+                    help="v24: per-act elite-WIN reward, replacing the flat "
+                         "--reward-elite (e.g. 2 3 4 to track the "
+                         "--floor-rewards act ramp). Unset keeps the flat "
+                         "--reward-elite")
+    ap.add_argument("--elite-attempt-rewards", type=float, nargs=3, default=None,
+                    metavar=("ACT1", "ACT2", "ACT3"),
+                    help="v24: per-act elite-ENTRY reward, replacing the flat "
+                         "--reward-elite-attempt. Unset keeps the flat value")
     ap.add_argument("--rest-heal-mask-above", type=float, default=None,
                     help="v8 plan Task 4: at a rest site, above this hp/max_hp "
                          "ratio, mask out REST_HEAL if another rest action is "
@@ -286,6 +296,12 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--potion-option-expiry", action="store_true",
                     help="v21: on a LOSS also charge -K * v(s) per potion still "
                          "held (hoard-and-die priced like drink-and-die)")
+    ap.add_argument("--potion-timing-refund", type=float, default=0.0,
+                    help="v24: pay back +K of the potion ledger's release "
+                         "charge when a drink resolves DURING an elite/boss "
+                         "combat (non-AnyTime potions only) -- a well-timed "
+                         "drink nets +K over the potion's lifetime, every "
+                         "other drink stays net 0 (0 = off)")
     ap.add_argument("--drill-snapshots", type=str, default=None,
                     help="v20 drill mode: schema-2 snapshot bank (harvest.py) "
                          "of mid-run combat start states (--env run only)")
@@ -491,22 +507,26 @@ def parse_args() -> argparse.Namespace:
             or args.reward_upgrade or args.reward_remove or args.reward_elite
             or args.reward_relic or args.reward_boss
             or args.reward_elite_attempt
+            or args.elite_rewards is not None
+            or args.elite_attempt_rewards is not None
             or args.rest_heal_mask_above is not None
             or args.hp_potential_scale or args.potion_potential_scale
             or args.potion_death_penalty
             or args.energy_waste_penalty
             or args.potion_option_value or args.potion_option_expiry
+            or args.potion_timing_refund
             or args.deck_random_prob
             or args.deck_inject or args.deck_inject_prob
             or args.deck_inject_midrun or args.deck_inject_midrun_prob):
         raise SystemExit(
             "--floor-rewards/--reward-win/--reward-upgrade/--reward-remove/"
             "--reward-elite/--reward-relic/--reward-boss/"
-            "--reward-elite-attempt/"
+            "--reward-elite-attempt/--elite-rewards/--elite-attempt-rewards/"
             "--rest-heal-mask-above/"
             "--hp-potential-scale/--potion-potential-scale/"
             "--potion-death-penalty/--energy-waste-penalty/"
             "--potion-option-value/--potion-option-expiry/"
+            "--potion-timing-refund/"
             "--deck-random-prob/--deck-inject/--deck-inject-prob/"
             "--deck-inject-midrun/--deck-inject-midrun-prob "
             "apply to the run-scale envs only.")
@@ -653,6 +673,13 @@ def env_spec(args: argparse.Namespace) -> EnvSpec:
         reward_relic=getattr(args, "reward_relic", 0.0),
         reward_boss=getattr(args, "reward_boss", 0.0),
         reward_elite_attempt=getattr(args, "reward_elite_attempt", 0.0),
+        elite_rewards_by_act=(tuple(args.elite_rewards)
+                              if getattr(args, "elite_rewards", None) is not None
+                              else None),
+        elite_attempt_rewards_by_act=(
+            tuple(args.elite_attempt_rewards)
+            if getattr(args, "elite_attempt_rewards", None) is not None
+            else None),
         rest_heal_mask_above=getattr(args, "rest_heal_mask_above", None),
         hp_potential_scale=getattr(args, "hp_potential_scale", 0.0),
         potion_potential_scale=getattr(args, "potion_potential_scale", 0.0),
@@ -667,6 +694,7 @@ def env_spec(args: argparse.Namespace) -> EnvSpec:
         energy_waste_penalty=getattr(args, "energy_waste_penalty", 0.0),
         potion_option_value=getattr(args, "potion_option_value", 0.0),
         potion_option_expiry=getattr(args, "potion_option_expiry", False),
+        potion_timing_refund=getattr(args, "potion_timing_refund", 0.0),
         hp_potential_low_share=getattr(args, "hp_potential_low_share", 0.7),
         boss_hp_loss_penalty=getattr(args, "boss_hp_loss_penalty", 0.0),
         drill_snapshots=getattr(args, "drill_snapshots", None),

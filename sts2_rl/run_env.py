@@ -116,7 +116,7 @@ from .driver import (
     RunResult,
 )
 from .events import ALL_EVENTS
-from .potions import BlockPotion
+from .potions import BlockPotion, USAGE_ANY_TIME
 from .previews import preview_total_incoming
 from .full_env import (
     CARD_INDEX,
@@ -625,6 +625,18 @@ def _log_deck_overflow(run: RunState, deck: list[Card]) -> None:
     lines.append(
         "  counts: " + ", ".join(
             f"{cid}x{n}" for cid, n in sorted(Counter(c.id for c in deck).items())))
+    # Relics too: a relic (an egg, Star Chart...) is often WHY the deck blew
+    # the cap, and an out-of-vocab relic never reaches the observation, so
+    # this dump is the only place it shows up. "relic <id>" prefix, never the
+    # deck's "[idx]" bracket format — the two sections must stay grep-ably
+    # distinct.
+    relics = list(getattr(run, "relics", None) or [])
+    lines.append(f"  relics ({len(relics)}):")
+    for relic in relics:
+        counter, flag = relic_row(relic, in_combat=False)
+        lines.append(
+            f"  relic {relic.id} counter={counter} flag={flag}"
+            f" in_vocab={relic.id in RELIC_INDEX}")
     try:
         with open(path, "a", encoding="utf-8") as fh:
             fh.write("\n".join(lines) + "\n")
@@ -719,6 +731,8 @@ class STS2RunEnv(gym.Env):
         reward_remove: float = 0.0,
         reward_elite: float = 0.0,
         reward_elite_attempt: float = 0.0,
+        elite_rewards_by_act: "tuple[float, ...] | None" = None,
+        elite_attempt_rewards_by_act: "tuple[float, ...] | None" = None,
         reward_boss: float = 0.0,
         reward_relic: float = 0.0,
         rest_heal_mask_above: float | None = None,
@@ -728,6 +742,7 @@ class STS2RunEnv(gym.Env):
         energy_waste_penalty: float = 0.0,
         potion_option_value: float = 0.0,
         potion_option_expiry: bool = False,
+        potion_timing_refund: float = 0.0,
         boss_hp_loss_penalty: float = 0.0,
         drill_snapshots: str | None = None,
         drill_prob: float = 0.0,
@@ -790,6 +805,25 @@ class STS2RunEnv(gym.Env):
         # reward_elite: dying at an elite must stay net-negative (the HP
         # potential prices the death). Default OFF.
         self._reward_elite_attempt = reward_elite_attempt
+        # v24: per-act elite pay, mirroring `floor_rewards_by_act` above --
+        # a 3-tuple indexed by the run's 0-based `act_index`, replacing the
+        # flat `reward_elite`/`reward_elite_attempt` scalar when set. None
+        # (the default) keeps the flat scalar, so an unset spec builds a
+        # bit-identical env. Rationale: the floor pay already scales by act
+        # (1.0/1.5/2.0), so a flat elite pay made act-3 elites steadily
+        # WORSE value per unit of risk than act-3 floors -- these tuples let
+        # the elite pay track the same act ramp. Attribution uses the
+        # POST-step `act_index` (same as the floor line): winning or
+        # entering an elite never advances the act, so post- and pre-step
+        # agree for every elite; only a boss advances, and bosses pay from
+        # `_reward_boss`, not these.
+        self._elite_rewards_by_act = (
+            tuple(elite_rewards_by_act) if elite_rewards_by_act is not None else None
+        )
+        self._elite_attempt_rewards_by_act = (
+            tuple(elite_attempt_rewards_by_act)
+            if elite_attempt_rewards_by_act is not None else None
+        )
         # v11: +reward_boss per act boss defeated (an act_index advance; the
         # FINAL boss ends the run without advancing, so the win branch pays
         # its share instead). Default OFF.
@@ -839,6 +873,16 @@ class STS2RunEnv(gym.Env):
         # priced like drink-and-die). Independent of the v9 potion_death_*
         # flags. Default OFF.
         self._potion_option_expiry = bool(potion_option_expiry)
+        # v24: +potion_timing_refund paid back on a drink that resolves
+        # DURING an elite/boss combat, for a non-AnyTime potion only — a
+        # partial refund of the ledger's -potion_potential_scale release
+        # charge, so a well-timed drink nets +refund over the potion's
+        # lifetime while every other drink stays net 0. Carrot, not tax
+        # (the v21 charge suppressed pickups); AnyTime potions (Fruit
+        # Juice etc.) are excluded because their effect is timing-invariant
+        # and they would farm the bonus for free. Default OFF (0.0) =
+        # bit-identical env.
+        self._potion_timing_refund = float(potion_timing_refund)
         # v20 (Task 3b): non-refundable price on damage taken inside a BOSS
         # combat, paid once when the combat resolves (won or lost):
         # -K * (hp_at_entry - hp_at_end) / max_hp. Deliberately NOT
@@ -1092,6 +1136,15 @@ class STS2RunEnv(gym.Env):
         # vec_env.EP_METRIC_KEYS (those batch as flat floats).
         self._ep_card_offer_ids: Counter[str] = Counter()
         self._ep_card_take_ids: Counter[str] = Counter()
+        # v23: the same offer/take tally split by 0-based act_index — the
+        # per-act take-rate baseline (report-only, no gate). Eval-only like
+        # the id tallies above (dict-valued, so never in EP_METRIC_KEYS).
+        self._ep_card_offers_by_act: Counter[int] = Counter()
+        self._ep_card_takes_by_act: Counter[int] = Counter()
+        # Event choice tally: (event id, page, option key) -> times chosen.
+        # Eval-only like the id tallies above (dict-valued, never in
+        # EP_METRIC_KEYS); feeds eval.py's PATH.events.csv.
+        self._ep_event_choices: Counter[tuple[str, str, str]] = Counter()
 
         run = self._run
 
@@ -1153,6 +1206,17 @@ class STS2RunEnv(gym.Env):
             run.deck.append(make_card(cid))
 
     # ── v20 drill mode ────────────────────────────────────────────────────
+
+    @staticmethod
+    def _elite_pay(flat: float, by_act: "tuple[float, ...] | None",
+                   act_index: int) -> float:
+        """The elite pay rate for `act_index` (0-based): `by_act[act_index]`
+        when the per-act tuple is set, else the flat scalar. Index clamped
+        into range the same way the floor-reward line clamps, so a run past
+        the tuple's length keeps the last act's rate."""
+        if by_act is None:
+            return flat
+        return by_act[max(0, min(act_index, len(by_act) - 1))]
 
     @staticmethod
     def _drill_pool_key(act_index: int, room_type: str) -> str:
@@ -1327,6 +1391,7 @@ class STS2RunEnv(gym.Env):
         drink_potion = None
         drink_hp_before = None
         drink_block_wasted = False
+        drink_timed = False
 
         if request is not None:
             answer = self._translate(int(action), request)
@@ -1365,6 +1430,14 @@ class STS2RunEnv(gym.Env):
                                 else "boss" if rt == RoomType.BOSS else "normal")
                     else:
                         room = "none"
+                    # v24: the timing refund qualifies here (room + usage
+                    # known), but pays inside the belt-loss ledger branch
+                    # below — an in-combat creation drunk on the spot never
+                    # decreases run.potions, so it is neither charged -k nor
+                    # refunded.
+                    drink_timed = (
+                        room in ("elite", "boss")
+                        and getattr(drink_potion, "usage", None) != USAGE_ANY_TIME)
                     self._record_potion_hold(drink_potion, "used", room=room, v=v_now)
             # v22: a discard resolves the tracked instance at decision time,
             # like a drink — the slot is nulled inside _switch. v(s) recorded
@@ -1467,10 +1540,18 @@ class STS2RunEnv(gym.Env):
             for cid in self._rng.choice(self._deck_inject_midrun_packages):
                 run.deck.append(make_card(cid))
         reward += self._act_reward * (run.act_index - act_before)
-        reward += self._reward_elite * (self._ep_elites_won - elites_before)
+        # v24: per-act elite pay when the by-act tuples are set, else the
+        # flat scalar (see `_elite_rewards_by_act` in __init__). Indexed and
+        # clamped exactly like the floor line above, so a run somehow past
+        # the tuple's length keeps paying the last act's rate rather than
+        # raising.
+        reward += self._elite_pay(self._reward_elite, self._elite_rewards_by_act,
+                                  run.act_index) * (self._ep_elites_won - elites_before)
         # v11.1: pay the elite-entry credit the step the attempt is tallied
         # (`_count_behavior` above), decoupled from the win-only term.
-        reward += self._reward_elite_attempt * (self._ep_elites_fought - fought_before)
+        reward += self._elite_pay(
+            self._reward_elite_attempt, self._elite_attempt_rewards_by_act,
+            run.act_index) * (self._ep_elites_fought - fought_before)
         # v16: charge stranded energy the step its END_TURN is tallied
         # (`_count_behavior` above) — per-turn, never terminal-gated.
         reward -= self._energy_waste_penalty * (self._ep_energy_unspent - energy_before)
@@ -1544,6 +1625,12 @@ class STS2RunEnv(gym.Env):
         elif belt_now < self._belt_base:
             lost = self._belt_base - belt_now
             reward -= self._potion_potential_scale * lost
+            # v24: partial refund of the release charge for a drink that
+            # resolved during an elite/boss combat (non-AnyTime potion; see
+            # ctor). At most one drink per step, so a flat +refund — a
+            # coincident non-drink loss in the same delta keeps its full -k.
+            if drink_timed and self._potion_timing_refund:
+                reward += self._potion_timing_refund
             # A DRINK is exactly the answer this step decoded to a belt slot
             # (`_translate`'s POTION_BASE branch -> `POTION_ACTION_BASE +
             # slot`; driver.py:405-411 always empties that slot on the same
@@ -1759,6 +1846,9 @@ class STS2RunEnv(gym.Env):
                 and answer <= len(request.rewards.cards)):
             self._ep_card_offers += 1
             self._ep_card_takes += int(answer < len(request.rewards.cards))
+            act = request.run.act_index
+            self._ep_card_offers_by_act[act] += 1
+            self._ep_card_takes_by_act[act] += int(answer < len(request.rewards.cards))
             # Per-card exposure: tally every offered card, and the taken
             # one, by class name.
             for card in request.rewards.cards:
@@ -1788,6 +1878,17 @@ class STS2RunEnv(gym.Env):
                 self._ep_rest_upgrades += 1
                 if self._rest_visit_hihp:
                     self._ep_rest_upgrades_hihp += 1
+        elif (request.kind == DecisionKind.EVENT
+                and answer < POTION_ACTION_BASE
+                and request.event is not None
+                and answer < len(request.event.options)):
+            # Event choice tally: (event id, page, option key) -- the option
+            # KEY (source loc name), stable across the option's position on
+            # the page. A belt drink mid-event answers >= POTION_ACTION_BASE
+            # and is not a choice on the event.
+            self._ep_event_choices[
+                (request.event.id, request.event.page,
+                 request.event.options[answer].key)] += 1
 
     def close(self) -> None:
         self._kill_driver()
@@ -2339,6 +2440,9 @@ class STS2RunEnv(gym.Env):
             info["ep_boss_hp_lost"] = self._ep_boss_hp_lost
             info["ep_card_offer_ids"] = dict(self._ep_card_offer_ids)
             info["ep_card_take_ids"] = dict(self._ep_card_take_ids)
+            info["ep_card_offers_by_act"] = dict(self._ep_card_offers_by_act)
+            info["ep_card_takes_by_act"] = dict(self._ep_card_takes_by_act)
+            info["ep_event_choices"] = dict(self._ep_event_choices)
             # The end-of-run deck census (eval.py --deck-hist). `run` is
             # bound at the top of this method and `self._run` is never
             # cleared on termination, so the deck here is the deck the

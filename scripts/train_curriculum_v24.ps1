@@ -1,48 +1,51 @@
 <#
-v23 long-horizon credit run: one stage on top of the v22 s25 policy, with
-the REWARD SET UNCHANGED (v22's $runRewards verbatim) so the only variable
-is credit-assignment geometry. Mean run length is ~694 decisions (v22 s25
-asc-0 eval) vs the old 512-step rollout, so no direct return ever spanned a
-whole run -- long-range credit flowed only through the critic bootstrap.
+v24 per-act elite ramp: one stage on top of the v23 s26 policy, keeping
+v23's long-horizon geometry (n-steps 1024 / minibatches 16 / gae-lambda
+0.99) VERBATIM so the only variable is the reward change.
 
-Three changes vs v22, per the 2026-08-24 long-horizon analysis:
+ONE reward change vs v23. The flat elite pay is replaced by a per-act ramp
+tracking --floor-rewards' own 1.0/1.5/2.0 multipliers:
 
-  * --n-steps 512 -> 1024 (n-envs stays 64: batch 32768 -> 65536). Most
-    runs now fit inside one rollout segment, so Monte Carlo signal from the
-    actual outcome reaches early decisions instead of cutting off at the
-    segment boundary. Rollout buffers ~1.0 -> ~2.0 GB on the 3070's 8 GB --
-    watch iteration 1 for OOM; fallback is -NEnvs 32.
-  * --minibatches 8 -> 16: keeps the minibatch at exactly v22's 4096, so
-    update-time activation memory, optimizer-step cadence, and the per-
-    minibatch target-KL check all behave identically.
-  * --gae-lambda 0.98 -> 0.99: direct-propagation horizon ~50 -> ~100
-    steps; variance is affordable at the doubled batch.
+    --reward-elite 2          ->  --elite-rewards         2 3 4
+    --reward-elite-attempt 1  ->  --elite-attempt-rewards 1 1.5 2
 
-An iteration now covers 2x the steps, so iteration-denominated knobs are
-halved for step-parity with v22: --critic-warmup 4 (not 8; rewards are
-unchanged, the warmup only re-scales the critic to the new advantage
-geometry) and --save-every 5 (not the default 10).
+Motivation: the floor pay already scales by act, so a FLAT elite pay made
+deep elites steadily worse value per unit of risk than the floors around
+them -- an act-3 elite cost act-3 HP for act-1 money. The ramp holds the
+elite:floor ratio constant across acts (a won act-3 elite now pays 4+2=6
+vs act-1's 2+1=3). Everything else in $runRewards is v22/v23's set verbatim.
+
+WATCH the elite-dive hole: the entry pay is unconditional, and the implicit
+death price is the forfeited HP potential, 4.0*phi(ratio). At the flat entry
+of 1 the break-even sat at ~12.5% HP; at the act-3 entry of 2 it moves up to
+~25% HP (phi(0.25)=0.5, *4.0 = 2.0). So in act 3 the agent is paid to dive
+into an elite below a QUARTER health. `elites_fought` minus `elites` in the
+s27 evals is the read that catches it; if it opens up, the fix is the
+win-only ramp (flat entry 1) rather than a smaller win ramp.
 
   Stage  Env  Asc  Steps  Notes
-  s26    run   10    15M  continue runs/sts2_run_torch_v22_s25.pt
+  s27    run   10    15M  continue runs/sts2_run_torch_v23_s26.pt
                           (--resume handoff, same kind, NO warm start).
-                          v22 rewards verbatim; geometry/lambda only.
+                          v23 geometry verbatim; elite pay ramped by act.
+                          --critic-warmup 4: reward function changed
+                          (262144 steps, same as v22's 8 iters at batch
+                          32768).
 
-Pre-registered reads = docs/superpowers/plans/v23-run-log.md. Evals with
+Pre-registered reads = docs/superpowers/plans/v24-run-log.md. Evals with
 --merge-duplicates (the live decoder).
 
 No rest mask, no potion mask, ever.
 
   .venv\Scripts\python.exe -m pytest -q     # green before launching
-  .\train_curriculum_v23.ps1                # real run; auto-evals s26
-  .\train_curriculum_v23.ps1 -Smoke         # 131072 steps, scratch tag
-  .\train_curriculum_v23.ps1 -Resume        # continue an interrupted run
+  .	rain_curriculum_v24.ps1                # real run; auto-evals s27
+  .	rain_curriculum_v24.ps1 -Smoke         # 131072 steps, scratch tag
+  .	rain_curriculum_v24.ps1 -Resume        # continue an interrupted run
 #>
 param(
-    [long]$S26Steps = 15000000,
+    [long]$S27Steps = 15000000,
     [string]$Device = "cuda",
-    [string]$Tag = "v23",
-    [string]$SeedCkpt = "runs/sts2_run_torch_v22_s25.pt",
+    [string]$Tag = "v24",
+    [string]$SeedCkpt = "runs/sts2_run_torch_v23_s26.pt",
     [int]$NEnvs = 64,
     [int]$NWorkers = 8,
     [switch]$Resume,
@@ -62,14 +65,14 @@ $py = Join-Path $root "venv\Scripts\python.exe"
 
 if ($Smoke) {
     $Tag = "${Tag}smoke"
-    $S26Steps = 131072   # 2 batches at the new 65536-step batch
+    $S27Steps = 131072   # 2 batches at the new 65536-step batch
     Write-Host "SMOKE MODE: tag=$Tag, 131072 steps/stage. Delete runs/*${Tag}* afterwards." -ForegroundColor Yellow
 }
 
-$ckpt = @{ 26 = Join-Path $runs "sts2_run_torch_${Tag}_s26.pt" }
+$ckpt = @{ 27 = Join-Path $runs "sts2_run_torch_${Tag}_s27.pt" }
 
-if ((Test-Path $ckpt[26]) -and -not $Resume -and -not $Smoke) {
-    Write-Host "$($ckpt[26]) already exists." -ForegroundColor Red
+if ((Test-Path $ckpt[27]) -and -not $Resume -and -not $Smoke) {
+    Write-Host "$($ckpt[27]) already exists." -ForegroundColor Red
     Write-Host "Pass -Resume to continue it, or -Tag <name> for a new checkpoint set."
     exit 1
 }
@@ -96,13 +99,12 @@ if (($headVersion | Select-Object -Last 1).Trim() -ne "5") {
     exit 1
 }
 
-# v23 geometry: --n-steps 1024 (was 512) with n-envs held at 64, so whole
-# runs (~694 decisions mean) fit inside one rollout segment; --minibatches
-# 16 (was 8) keeps the minibatch at v22's 4096 samples. NOTE the checkpoint
-# stores n_steps, so a later invocation resuming s26 WITHOUT these flags
-# still inherits 1024 -- but the explicit flags keep the script honest.
-# --save-every 5 (default 10): an iteration is now 65536 steps, so 5 keeps
-# v22's ~327k-step checkpoint cadence.
+# v23's geometry, carried forward VERBATIM (this run changes reward only):
+# --n-steps 1024 with n-envs 64 so whole runs (~694 decisions mean) fit
+# inside one rollout segment; --minibatches 16 keeps the minibatch at
+# 4096; --save-every 5 keeps the ~327k-step checkpoint cadence at the
+# 65536-step batch. The checkpoint stores n_steps, so a resume inherits
+# 1024 even without the flag -- the explicit flags keep the script honest.
 $nEnvs = $NEnvs
 $nSteps = 1024
 $batchSize = [long]$nEnvs * $nSteps
@@ -120,19 +122,22 @@ $geom = @("--arch", "entset", "--shared-encoder", "--device", $Device,
           "--n-workers", "$NWorkers",
           "--save-every", "5")
 
-# v22's reward set VERBATIM (the lean-v16 set + potion potential ledger +
-# death expiry) -- v23 changes credit-assignment geometry only, so any delta
-# vs v22 s25 is attributable to the geometry, not the reward.
+# v23's reward set with ONE change: the two flat elite terms become per-act
+# ramps mirroring --floor-rewards' 1.0/1.5/2.0 multipliers. The by-act tuples
+# REPLACE the flat scalars (run_env._elite_pay), so --reward-elite /
+# --reward-elite-attempt are deliberately absent rather than left in as dead
+# flags. Everything else is v22/v23 verbatim.
 $runRewards = @("--floor-rewards", "1.0", "1.5", "2.0", "--reward-win", "12",
-                "--reward-upgrade", "1.5", "--reward-elite", "2",
+                "--reward-upgrade", "1.5",
+                "--elite-rewards", "2", "3", "4",
+                "--elite-attempt-rewards", "1", "1.5", "2",
                 "--reward-boss", "3",
-                "--reward-elite-attempt", "1",
                 "--hp-potential-scale", "4.0",
                 "--rest-heal-shaping-knee-cap",
                 "--energy-waste-penalty", "0.02",
                 "--potion-potential-scale", "0.5", "--potion-death-expiry")
 
-# Long-horizon levers: --gae-lambda 0.99 (v10-v22 ran 0.98); aux head kept.
+# Long-horizon levers, inherited from v23 unchanged.
 $longHorizon = @("--gae-lambda", "0.99", "--aux-hp-coef", "0.25")
 
 function Invoke-Phase {
@@ -174,10 +179,10 @@ function Get-CkptStep {
 #                            --critic-warmup and the entropy anneal advanced to
 #                            where the interruption left them;
 #   * budget spent        -> skip entirely and move to the next stage.
-# -WarmStart marks a kind-switch handoff (combat<->run): UNUSED in v23 -- no
+# -WarmStart marks a kind-switch handoff (combat<->run): UNUSED in v24 -- no
 # kind switch here (a warm start would re-drop the run heads v11 rebuilt; the
 # boss-drill option was deferred over exactly this cost). Kept verbatim so the
-# helper stays byte-identical with the v10..v22 scripts.
+# helper stays byte-identical with the v10..v23 scripts.
 function Invoke-Stage {
     param([string]$Name, [string]$SaveCkpt, [string]$PrevCkpt, [long]$Steps,
           [string[]]$StageArgs, [switch]$WarmStart,
@@ -260,19 +265,19 @@ function Invoke-Eval {
 }
 
 # No between-stage gate: single-stage plan. Reads are post-run, human-read,
-# vs the v22_s25 --merge-duplicates baselines (reads table in v23-run-log.md).
+# vs the v23_s26 --merge-duplicates baselines (reads table in v24-run-log.md).
 
-# ── s26: v22 rewards verbatim + long-horizon geometry (1024-step rollouts) ──
-Invoke-Stage -Name "s26-run-asc10-long-horizon" -SaveCkpt $ckpt[26] -PrevCkpt $SeedCkpt `
-    -Steps $S26Steps -CriticWarmup 4 -EntCoef 0.01 -StageArgs (@(
+# ── s27: v23 geometry verbatim + per-act elite ramp (2/3/4, 1/1.5/2) ──
+Invoke-Stage -Name "s27-run-asc10-elite-ramp" -SaveCkpt $ckpt[27] -PrevCkpt $SeedCkpt `
+    -Steps $S27Steps -CriticWarmup 4 -EntCoef 0.01 -StageArgs (@(
     "--env", "run", "--ascension", "10", "--lr", "3e-4") + $runRewards + $longHorizon)
 
 foreach ($asc in 10, 0) {
-    if (Test-Path (Join-Path $root "runs/eval_${Tag}_s26_asc${asc}.episodes.csv")) {
-        Write-Host "s26-eval-asc$asc already recorded - skipping." -ForegroundColor DarkGray
+    if (Test-Path (Join-Path $root "runs/eval_${Tag}_s27_asc${asc}.episodes.csv")) {
+        Write-Host "s27-eval-asc$asc already recorded - skipping." -ForegroundColor DarkGray
     } else {
-        Invoke-Eval -Name "s26-eval-asc$asc" -Ckpt $ckpt[26] -Asc $asc -Episodes 150 `
-            -Csv "runs/eval_${Tag}_s26_asc$asc"
+        Invoke-Eval -Name "s27-eval-asc$asc" -Ckpt $ckpt[27] -Asc $asc -Episodes 150 `
+            -Csv "runs/eval_${Tag}_s27_asc$asc"
     }
 }
-Write-Host "v23 long-horizon run complete. Reads: docs/superpowers/plans/v23-run-log.md" -ForegroundColor Green
+Write-Host "v24 elite-ramp run complete. Reads: docs/superpowers/plans/v24-run-log.md" -ForegroundColor Green

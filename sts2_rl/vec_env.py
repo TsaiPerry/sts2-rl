@@ -83,6 +83,11 @@ class EnvSpec:
     # v11.1: +reward_elite_attempt once per elite room entered (win or
     # lose) — reward_elite pays only on the rewards screen. 0.0 = default.
     reward_elite_attempt: float = 0.0
+    # v24: per-act elite pay (0-based act_index), replacing the two flat
+    # scalars above when set. Tuples, not lists, so the spec stays
+    # hashable/picklable like floor_rewards_by_act. None = flat = default.
+    elite_rewards_by_act: tuple[float, ...] | None = None
+    elite_attempt_rewards_by_act: tuple[float, ...] | None = None
     # v8 curriculum mask (plan Task 4, run/column only): None keeps the
     # env's own default (no masking) — see `build_env`'s v7_kwargs below,
     # same "only set when not None" pattern as reward_win_run.
@@ -105,6 +110,9 @@ class EnvSpec:
     # drink + optional death expiry. Defaults OFF = bit-identical env.
     potion_option_value: float = 0.0
     potion_option_expiry: bool = False
+    # v24: partial refund of the ledger's release charge for an elite/boss
+    # in-combat drink (non-AnyTime potion). Default OFF = bit-identical env.
+    potion_timing_refund: float = 0.0
     # v10 (plan 2026-08-13-v10-escape-and-settle Task 1): share of the HP
     # potential below the knee. 0.7 = the env's own default, so a default
     # spec stays bit-identical; the s11-lowshare contingency rung runs 0.8.
@@ -154,6 +162,8 @@ def build_env(spec: EnvSpec):
         reward_relic=spec.reward_relic,
         reward_boss=spec.reward_boss,
         reward_elite_attempt=spec.reward_elite_attempt,
+        elite_rewards_by_act=spec.elite_rewards_by_act,
+        elite_attempt_rewards_by_act=spec.elite_attempt_rewards_by_act,
         hp_potential_scale=spec.hp_potential_scale,
         hp_potential_low_share=spec.hp_potential_low_share,
         potion_potential_scale=spec.potion_potential_scale,
@@ -161,6 +171,7 @@ def build_env(spec: EnvSpec):
         energy_waste_penalty=spec.energy_waste_penalty,
         potion_option_value=spec.potion_option_value,
         potion_option_expiry=spec.potion_option_expiry,
+        potion_timing_refund=spec.potion_timing_refund,
         deck_inject=spec.deck_inject,
         deck_inject_prob=spec.deck_inject_prob,
         deck_inject_midrun=spec.deck_inject_midrun,
