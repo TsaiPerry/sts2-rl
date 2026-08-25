@@ -49,4 +49,12 @@ audit/README.md
 audit/tools/PROMPT.md
 docs/OBS_PLAN.md
 
+# Training artifacts. Checkpoints are ~26 MB each and one generation produces
+# dozens, so they are kept on disk and out of git — 194 of them had put 4.5 GB
+# of blobs into unpushed history. The deployed policy reaches SpireBot as an
+# ONNX export (above), not as a .pt.
+runs/*.pt
+
+# Per-iteration training logs (train_torch.csv_path) and eval sidecars —
+# bulky, regenerable, one row per iteration of every run ever trained.
 runs/run_logs/
