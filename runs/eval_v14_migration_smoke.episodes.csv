@@ -1,6 +1,0 @@
-policy,seed,floor,act,win,truncated,hp_left,decisions,ep_return,end_turns,energy_unspent,card_offers,card_takes,rest_visits,rest_heals,rest_upgrades,upgrades,removes,elites,elites_fought,potions_got,potions_used,potions_used_elite,potions_used_boss,potions_used_normal,potions_expired,potion_use_hp,relics,hp_lost,hp_ratio_mean
-"...13_s15_schema12.pt (entset, iter 976)",0,16,0,0,0,0,153,16.0,22,0.0,7,7,3,3,0,0,0,2,2,3,0,0,0,0,0,0.0,4,144,0.8263888852853402
-"...13_s15_schema12.pt (entset, iter 976)",1,16,0,0,0,0,144,16.0,28,3.0,8,8,3,2,1,1,0,2,2,2,0,0,0,0,0,0.0,6,139,0.7130397886244787
-"...13_s15_schema12.pt (entset, iter 976)",2,16,0,0,0,0,150,16.0,24,0.0,6,5,3,1,2,3,0,2,2,3,0,0,0,0,0,0.0,4,116,0.7808333212137222
-"...13_s15_schema12.pt (entset, iter 976)",3,25,1,0,0,0,270,25.0,41,19.0,14,11,4,4,0,3,1,2,3,7,0,0,0,0,0,0.0,7,215,0.8314814886561146
-"...13_s15_schema12.pt (entset, iter 976)",4,28,1,0,1,0,10000,28.0,31,2.0,8,7,7,6,1,1,2,1,1,6,0,0,0,0,2,0.0,6,131,0.9972325000867247

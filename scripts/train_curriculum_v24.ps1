@@ -273,11 +273,13 @@ Invoke-Stage -Name "s27-run-asc10-elite-ramp" -SaveCkpt $ckpt[27] -PrevCkpt $See
     "--env", "run", "--ascension", "10", "--lr", "3e-4") + $runRewards + $longHorizon)
 
 foreach ($asc in 10, 0) {
-    if (Test-Path (Join-Path $root "runs/eval_${Tag}_s27_asc${asc}.episodes.csv")) {
+    # runs/run_logs/ (gitignored) is where every CSV lives now -- the eval
+    # sidecars as well as train_torch's per-iteration log (train_torch.csv_path).
+    if (Test-Path (Join-Path $root "runs/run_logs/eval_${Tag}_s27_asc${asc}.episodes.csv")) {
         Write-Host "s27-eval-asc$asc already recorded - skipping." -ForegroundColor DarkGray
     } else {
         Invoke-Eval -Name "s27-eval-asc$asc" -Ckpt $ckpt[27] -Asc $asc -Episodes 150 `
-            -Csv "runs/eval_${Tag}_s27_asc$asc"
+            -Csv "runs/run_logs/eval_${Tag}_s27_asc$asc"
     }
 }
 Write-Host "v24 elite-ramp run complete. Reads: docs/superpowers/plans/v24-run-log.md" -ForegroundColor Green

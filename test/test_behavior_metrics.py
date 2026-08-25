@@ -16,6 +16,8 @@ EP_METRIC_KEYS order, NaN everywhere except done envs that reported them.
 train_torch: CSV gains energy_unspent (mean per end-turn) and card_take
 (take rate) columns.
 """
+import os
+
 import numpy as np
 import pytest
 from gymnasium import spaces
@@ -511,6 +513,18 @@ def test_return_histogram_tallies_exact_values_in_ascending_order():
     assert list(hist) == [-1.0, 0.3, 3.0]        # ascending, float noise folded
     assert list(hist.values()) == [1, 2, 2]
     assert sum(hist.values()) == report.episodes
+
+
+def test_write_run_csv_creates_a_missing_output_directory(tmp_path):
+    """The curriculum scripts write eval sidecars into runs/run_logs/, which is
+    gitignored and so absent on a fresh clone. Without this the first eval of a
+    run dies on FileNotFoundError after the training already finished."""
+    from sts2_rl.evaluation import write_run_csv
+
+    ep_path, hist_path = write_run_csv(
+        str(tmp_path / "run_logs" / "out.csv"), [("ckpt.pt", _scripted_report())])
+
+    assert os.path.exists(ep_path) and os.path.exists(hist_path)
 
 
 def test_write_run_csv_exports_episode_and_histogram_tables(tmp_path):

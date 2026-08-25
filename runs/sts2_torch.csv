@@ -1,3 +1,0 @@
-iter,global_step,wall_seconds,sps,ep_ret,win,ep_len,pg,v,ent,kl,clipfrac,lr,energy_unspent,card_take,upgrades,removes,elites,potions_got,potions_used,potions_used_elite,potions_used_boss,potions_used_normal,potions_expired,potion_use_hp,relics,hp_lost,aux
-0,256,2.669,95,0.018181809308854015,0.6363636363636364,19.727272727272727,-0.011345719918608665,0.05313458293676376,1.7008347511291504,0.004350828268798068,0.0693359375,0.0006,nan,nan,nan,nan,nan,nan,nan,nan,nan,nan,nan,nan,nan,nan,nan
-1,512,5.346,95,0.22099999148398639,0.64,19.08,-0.051581237465143204,0.2180837243795395,1.4003654718399048,0.007164438517065719,0.07421875,0.0006,nan,nan,nan,nan,nan,nan,nan,nan,nan,nan,nan,nan,nan,nan,nan

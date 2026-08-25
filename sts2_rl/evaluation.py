@@ -11,6 +11,7 @@ A *policy* here is any callable ``(env, obs, mask) -> action int`` —
 from __future__ import annotations
 
 import csv
+import os
 from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
 
@@ -1091,6 +1092,13 @@ def write_run_csv(
     """
     stem = path[:-4] if path.lower().endswith(".csv") else path
     ep_path, hist_path = f"{stem}.episodes.csv", f"{stem}.hist.csv"
+
+    # Created on demand: these land in runs/run_logs/, which is gitignored and
+    # so missing on a fresh clone -- and this runs *after* a long eval, too
+    # late to be a tolerable place to fail.
+    out_dir = os.path.dirname(ep_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
 
     with open(ep_path, "w", newline="") as fh:
         writer = csv.writer(fh)

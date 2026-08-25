@@ -108,7 +108,12 @@ DEFAULT_LR = 6e-4
 DEFAULT_N_ENVS = 64
 DEFAULT_N_STEPS = 512
 
-# One row per iteration in <stem>.csv. CSV, not TensorBoard, on purpose: zero
+# Subdirectory of the checkpoint's directory that per-iteration logs go in
+# (see csv_path). Kept out of runs/ proper so the bulky, regenerable logs sit
+# behind one gitignore entry instead of scattering next to the checkpoints.
+RUN_LOGS_DIR = "run_logs"
+
+# One row per iteration in run_logs/<stem>.csv. CSV, not TensorBoard, on purpose: zero
 # dependencies, and a multi-day run's curve stays plottable from anything.
 # `ep_ret` is the mean FLOORS COMPLETED over the last 100 episodes on the
 # run-scale envs (not the reward sum -- reward weights shift between
@@ -369,6 +374,15 @@ def parse_args() -> argparse.Namespace:
                     help="how many iter-stamped snapshots (<stem>.iter000123.pt) "
                          "to keep alongside the live checkpoint, so a late "
                          "policy collapse can be rolled back (0 = none)")
+    ap.add_argument("--cleanup-snapshots", action=argparse.BooleanOptionalAction,
+                    default=True,
+                    help="on a run that finishes cleanly, delete this run's "
+                         "iter-stamped snapshots — they only guard a collapse "
+                         "mid-flight, and they dominate runs/ on disk. The "
+                         "final --save checkpoint and <stem>.best.pt are kept, "
+                         "so curriculum --resume handoff still works. A run "
+                         "killed with Ctrl-C keeps every snapshot. Use "
+                         "--no-cleanup-snapshots to keep them regardless")
     ap.add_argument("--best-metric", choices=["win", "ep_ret", "none"], default=None,
                     help="which 100-episode statistic <stem>.best.pt tracks "
                          "(default: win for --env combat/run, ep_ret for the "
@@ -1255,6 +1269,14 @@ def main() -> None:
             save(agent, optimizer, start_iter + n_iters, args,
                  global_step=global_step, best_score=best_score)
             print(f"Saved to {args.save}")
+            # Only reachable once every iteration ran: the loop has no break,
+            # so a Ctrl-C or a crash raises past this and keeps the snapshots
+            # (the whole point of having them). Final .pt and .best.pt stay.
+            if args.cleanup_snapshots:
+                n_removed = cleanup_snapshots(args.save)
+                if n_removed:
+                    print(f"Run finished — removed {n_removed} iter snapshot(s); "
+                          f"kept {args.save} and {best_path(args.save)}")
     finally:
         envs.close()
 
@@ -1274,7 +1296,16 @@ def best_path(save_path: str) -> str:
 
 
 def csv_path(save_path: str) -> str:
-    return f"{_stem(save_path)}.csv"
+    """``runs/x.pt`` -> ``runs/run_logs/x.csv``.
+
+    Parked in a subdirectory rather than beside the checkpoint because these
+    grow one row per iteration across every run ever trained, and the whole
+    directory is gitignored — they are bulky and regenerable. Created on
+    demand by append_csv_row.
+    """
+    stem = _stem(save_path)
+    return os.path.join(os.path.dirname(stem), RUN_LOGS_DIR,
+                        os.path.basename(stem) + ".csv")
 
 
 def atomic_save(payload: dict, path: str) -> None:
@@ -1303,6 +1334,25 @@ def rotate_snapshots(save_path: str, keep: int) -> None:
     snaps = sorted(glob.glob(f"{_stem(save_path)}.iter*.pt"))
     for stale in snaps[:max(0, len(snaps) - keep)]:
         os.remove(stale)
+
+
+def cleanup_snapshots(save_path: str) -> int:
+    """Delete *this run's* iter-stamped snapshots; return how many went.
+
+    Snapshots exist to survive a late collapse *while the run is in flight* —
+    once it has finished cleanly they are pure disk (they were the bulk of a
+    4.4 GB ``runs/``). Deliberately narrow: the final ``--save`` checkpoint and
+    ``.best.pt`` stay, because the curriculum scripts chain stages through
+    ``--resume runs/..._sNN.pt`` and deleting the final file breaks the handoff.
+
+    The glob hangs off this run's stem, so sibling runs sharing ``runs/`` are
+    untouched. Only ever called on the normal completion path — an interrupted
+    run raises straight past it and keeps every snapshot.
+    """
+    snaps = glob.glob(f"{_stem(save_path)}.iter*.pt")
+    for snap in snaps:
+        os.remove(snap)
+    return len(snaps)
 
 
 def append_csv_row(path: str, row: dict) -> None:

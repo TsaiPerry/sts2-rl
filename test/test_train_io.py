@@ -9,6 +9,7 @@ overwriting good weights, and stdout-only metrics vanishing with the console.
 from __future__ import annotations
 
 import csv
+import os
 from argparse import Namespace
 
 import pytest
@@ -78,7 +79,140 @@ def test_snapshot_names_sort_lexicographically_by_iteration(tmp_path):
             < train_torch.snapshot_path(args.save, 100))
 
 
+# ── finish-time snapshot cleanup ─────────────────────────────────────────
+#
+# Snapshots exist to survive a *late* collapse mid-run; once the run has
+# finished cleanly they are dead weight (they dominated a 4.4 GB runs/ dir).
+# The final --save checkpoint and .best.pt are NOT touched: the curriculum
+# scripts chain stages through `--resume runs/..._sNN.pt`, so deleting the
+# final file would break the handoff.
+
+def _lay_down_run(tmp_path, args, iterations=(10, 20, 30)):
+    """Write one finished run's files: final, best and iter snapshots."""
+    model, optimizer = make_pair()
+    payload = train_torch.checkpoint_payload(model, optimizer, 30, args, 0)
+    train_torch.atomic_save(payload, args.save)
+    train_torch.atomic_save(payload, train_torch.best_path(args.save))
+    for iteration in iterations:
+        train_torch.atomic_save(
+            payload, train_torch.snapshot_path(args.save, iteration))
+
+
+def test_cleanup_deletes_snapshots_but_keeps_final_and_best(tmp_path):
+    args = combat_args(tmp_path)
+    _lay_down_run(tmp_path, args)
+
+    train_torch.cleanup_snapshots(args.save)
+
+    assert not list(tmp_path.glob("ckpt.iter*.pt"))       # snapshots gone
+    assert (tmp_path / "ckpt.pt").exists()                # stage handoff intact
+    assert (tmp_path / "ckpt.best.pt").exists()
+
+
+def test_cleanup_leaves_another_runs_snapshots_alone(tmp_path):
+    """The stem is per-run: sibling runs share runs/ and must not be hit."""
+    args = combat_args(tmp_path)
+    other = combat_args(tmp_path, save=str(tmp_path / "other.pt"))
+    _lay_down_run(tmp_path, args)
+    _lay_down_run(tmp_path, other)
+
+    train_torch.cleanup_snapshots(args.save)
+
+    assert not list(tmp_path.glob("ckpt.iter*.pt"))
+    assert len(list(tmp_path.glob("other.iter*.pt"))) == 3
+
+
+def test_cleanup_is_a_noop_when_there_are_no_snapshots(tmp_path):
+    args = combat_args(tmp_path)
+    model, optimizer = make_pair()
+    train_torch.save(model, optimizer, 1, args)
+
+    train_torch.cleanup_snapshots(args.save)          # must not raise
+
+    assert (tmp_path / "ckpt.pt").exists()
+
+
+def test_cleanup_returns_the_number_of_files_removed(tmp_path):
+    args = combat_args(tmp_path)
+    _lay_down_run(tmp_path, args, iterations=(10, 20, 30, 40))
+    assert train_torch.cleanup_snapshots(args.save) == 4
+    assert train_torch.cleanup_snapshots(args.save) == 0
+
+
+def _short_run_argv(save, *extra):
+    return ["train_torch.py", "--env", "combat", "--arch", "entset",
+            "--encounter", "fuzzy_wurm_weak",
+            "--timesteps", "192", "--n-envs", "2", "--n-steps", "48",
+            "--minibatches", "2", "--epochs", "1", "--hidden", "16",
+            "--save", save, "--save-every", "1", "--keep-snapshots", "5",
+            *extra]
+
+
+def test_finished_run_cleans_up_its_own_snapshots(tmp_path, monkeypatch):
+    """End to end: the default finish path leaves the run resumable, no debris."""
+    save = str(tmp_path / "run.pt")
+    monkeypatch.setattr("sys.argv", _short_run_argv(save))
+    train_torch.main()
+
+    assert not list(tmp_path.glob("run.iter*.pt"))
+    assert (tmp_path / "run.pt").exists()      # next curriculum stage can --resume
+
+
+def test_interrupted_run_keeps_every_snapshot(tmp_path, monkeypatch):
+    """The user-facing contract: Ctrl-C mid-run must not cost you a rollback
+    point. The interrupt raises past the cleanup call, which lives on the
+    normal completion path only."""
+    save = str(tmp_path / "run.pt")
+    real_save = train_torch.atomic_save
+    n_calls = 0
+
+    def interrupt_on_second_snapshot(payload, path, *a, **kw):
+        nonlocal n_calls
+        real_save(payload, path, *a, **kw)
+        if ".iter" in path:
+            n_calls += 1
+            if n_calls == 2:
+                raise KeyboardInterrupt("Ctrl-C mid-run")
+
+    monkeypatch.setattr(train_torch, "atomic_save", interrupt_on_second_snapshot)
+    monkeypatch.setattr("sys.argv", _short_run_argv(save))
+    with pytest.raises(KeyboardInterrupt):
+        train_torch.main()
+
+    assert len(list(tmp_path.glob("run.iter*.pt"))) == 2   # both survived
+
+
+def test_no_cleanup_snapshots_flag_keeps_them_on_a_clean_finish(tmp_path, monkeypatch):
+    save = str(tmp_path / "run.pt")
+    monkeypatch.setattr("sys.argv", _short_run_argv(save, "--no-cleanup-snapshots"))
+    train_torch.main()
+
+    assert len(list(tmp_path.glob("run.iter*.pt"))) == 2
+
+
 # ── CSV log ──────────────────────────────────────────────────────────────
+
+def test_csv_path_lands_in_a_run_logs_subdir(tmp_path):
+    """The per-iteration logs live in runs/run_logs/, not beside the .pt —
+    they are bulky and regenerable, so that directory is gitignored."""
+    args = combat_args(tmp_path)
+    assert train_torch.csv_path(args.save) == str(
+        tmp_path / train_torch.RUN_LOGS_DIR / "ckpt.csv")
+
+
+def test_csv_path_handles_a_bare_relative_save_path(tmp_path):
+    assert train_torch.csv_path("ckpt.pt") == os.path.join(
+        train_torch.RUN_LOGS_DIR, "ckpt.csv")
+
+
+def test_a_real_run_writes_its_csv_into_run_logs(tmp_path, monkeypatch):
+    """End to end: the directory is created on demand, no pre-made tree."""
+    save = str(tmp_path / "run.pt")
+    monkeypatch.setattr("sys.argv", _short_run_argv(save))
+    train_torch.main()
+
+    assert (tmp_path / train_torch.RUN_LOGS_DIR / "run.csv").exists()
+    assert not (tmp_path / "run.csv").exists()
 
 def test_csv_append_across_resume_writes_one_header(tmp_path):
     path = str(tmp_path / "ckpt.csv")
@@ -143,7 +277,11 @@ def test_short_run_then_resume_continues_csv_and_global_step(tmp_path, monkeypat
             "--encounter", "fuzzy_wurm_weak",
             "--timesteps", "192", "--n-envs", "2", "--n-steps", "48",
             "--minibatches", "2", "--epochs", "1", "--hidden", "16",
-            "--save", save, "--save-every", "1", "--keep-snapshots", "2"]
+            "--save", save, "--save-every", "1", "--keep-snapshots", "2",
+            # This test asserts snapshot *rotation* survives a resume; finish-time
+            # cleanup (on by default) would wipe them at the end of both runs and
+            # make that assertion vacuous. Cleanup has its own tests above.
+            "--no-cleanup-snapshots"]
 
     monkeypatch.setattr("sys.argv", argv)
     train_torch.main()
