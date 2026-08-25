@@ -232,10 +232,20 @@ class DecisionRequest:
                 i for i, opt in enumerate(self.event.options) if not opt.locked
             ]
         if kind == DecisionKind.SHOP:
+            from .shop import MerchantPotionEntry
+
             entries = self.shop.all_entries
             legal = [
                 i for i, e in enumerate(entries)
                 if e.is_stocked and e.enough_gold
+                # A potion entry is legal only with an open belt slot —
+                # PotionCmd.TryToProcure (MerchantPotionEntry._buy) fails
+                # silently on a full belt (no gold spent, same screen
+                # re-presented), which let a policy retry the same refused
+                # entry thousands of times in one episode (seen: 9686/ep).
+                # Mirrors REWARD_POTION's has_open_potion_slot gate below.
+                and (not isinstance(e, MerchantPotionEntry)
+                     or self.run.has_open_potion_slot)
             ]
             legal.append(len(entries))           # leaving is always legal
             return legal

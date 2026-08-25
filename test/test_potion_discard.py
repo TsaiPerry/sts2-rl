@@ -167,3 +167,25 @@ def test_report_discard_and_skip_metrics():
     assert rep.mean_potions_discarded == 0.5
     assert rep.potion_hold_table["fire_potion"]["discarded"] == 1
     assert rep.potion_skip_belt_histogram == {0: 1, 1: 0, 2: 1, 3: 0}
+
+
+def test_discard_repickup_read_uses_seed_tags():
+    from sts2_rl.evaluation import RunEvalReport
+    holds = (
+        # ep 1: discard on floor 3, re-pickup on floor 5 -> hit.
+        {"id": "fire_potion", "held": 2, "outcome": "discarded", "room": "none",
+         "v": None, "pickup_floor": 1, "floor": 3, "seed": 1},
+        {"id": "block_potion", "held": 4, "outcome": "held", "room": "none",
+         "v": None, "pickup_floor": 5, "floor": 9, "seed": 1},
+        # ep 2: discard on floor 3; ep 1's floor-5 pickup must NOT count.
+        {"id": "fire_potion", "held": 1, "outcome": "discarded", "room": "none",
+         "v": None, "pickup_floor": 2, "floor": 3, "seed": 2},
+        # Legacy untagged record: excluded from the read entirely.
+        {"id": "fear_potion", "held": 0, "outcome": "discarded", "room": "none",
+         "v": None, "pickup_floor": 4, "floor": 4},
+    )
+    rep = RunEvalReport(
+        episodes=2, floors=(9, 9), acts=(0, 0), victories=(False, False),
+        truncations=(False, False), hp_left=(0, 0), decisions=(5, 5),
+        seeds=(1, 2), returns=(0.0, 0.0), potion_holds=holds)
+    assert rep.discard_repickup_2fl == (1, 2)

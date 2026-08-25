@@ -248,6 +248,10 @@ EP_METRIC_KEYS = (
     # term's instrument. Inserted BEFORE "floor" so metrics[:, -1] stays the
     # floor column (train_torch.py:910 indexes it as -1).
     "ep_boss_hp_lost",
+    # v23: voluntary out-of-combat discards (the v22 affordance) — gives the
+    # training CSV mid-run visibility of the discard rate instead of only the
+    # final eval. Inserted BEFORE "floor" like ep_boss_hp_lost above.
+    "ep_potions_discarded",
     # The floor the episode ended on -- run_env's `info["floor"]`, which is
     # present every step but only harvested here on the terminal one, so it
     # reads as "floors completed". train_torch logs it as ep_ret (the combat

@@ -35,7 +35,9 @@ window, so an eval row and a CSV row are directly comparable, plus
 ``rest_heal`` / ``rest_up`` (share of rest-site visits spent healing /
 upgrading; both are per visit, so they can sum above 100%). ``--reward-hist``
 adds the episode-return distribution, and ``--csv`` exports both the per-episode
-rows and that distribution for a spreadsheet.
+rows and that distribution for a spreadsheet, plus ``PATH.cards.csv`` /
+``PATH.potions.csv`` / ``PATH.events.csv`` (per-event choice percentages:
+every option chosen on every event page, pooled over the evaluation).
 ``--deck-hist`` (with ``--csv``) adds ``PATH.deck.csv``: the total copies of
 every card in the deck each run ended with, pooled over the evaluation, one
 histogram block per rarity, with starter, colorless, curse and quest cards
@@ -65,6 +67,7 @@ from sts2_rl.evaluation import (
     probe_summary,
     reward_histogram_lines,
     write_cards_csv,
+    write_events_csv,
     write_potions_csv,
     write_deck_csv,
     write_run_csv,
@@ -474,6 +477,25 @@ def evaluate_run_scale(
         print(f"  {name:<{LABEL_WIDTH}} skips {n:4d}  "
               + "  ".join(f"belt{k}:{c}" for k, c in hist.items()))
 
+    # v23: the discard -> re-pickup read (v22's uninstrumented fork row --
+    # churn-vs-selectivity), computable now that hold records are seed-tagged.
+    print("\ndiscard -> re-pickup (any pickup <=2 floors after a voluntary "
+          "discard, same episode):")
+    for name, report in rows:
+        hits, total = report.discard_repickup_2fl
+        detail = f"{hits}/{total}" if total else "no discards"
+        print(f"  {name:<{LABEL_WIDTH}} {detail}")
+
+    # v23: per-act card take rate -- report-only baseline, NO guardrail (a
+    # whole-run take rate hides act-conditional drift like v22's 0.84->0.81).
+    print("\ncard take rate by act (pooled offers/takes; report-only, no guardrail):")
+    for name, report in rows:
+        by_act = report.card_take_rate_by_act
+        parts = [f"a{act + 1} {100 * rate:5.1f}% ({takes}/{offers})"
+                 for act, (offers, takes, rate) in by_act.items()]
+        print(f"  {name:<{LABEL_WIDTH}} "
+              + ("  ".join(parts) if parts else "no card offers"))
+
     # v8 s7 gate summary (plan Task 7 / v8-run-log.md's final-stage row) --
     # printed for every row so this doubles as a quick sanity check on
     # non-s7 checkpoints too; the absolute gates only make a PASS/FAIL claim
@@ -519,9 +541,12 @@ def evaluate_run_scale(
         write_cards_csv(cards_path, rows)
         potions_path = f"{stem}.potions.csv"
         write_potions_csv(potions_path, rows)
+        events_path = f"{stem}.events.csv"
+        write_events_csv(events_path, rows)
         print(f"\nwrote {ep_path} ({sum(r.episodes for _, r in rows)} episode rows)"
               f"\nwrote {hist_path}"
-              f"\nwrote {cards_path}")
+              f"\nwrote {cards_path}"
+              f"\nwrote {events_path}")
         if deck_hist:
             deck_path = f"{stem}.deck.csv"
             write_deck_csv(deck_path, rows)
@@ -630,10 +655,12 @@ if __name__ == "__main__":
                              "distribution as an ASCII bar chart (one row per "
                              "distinct return value)")
     parser.add_argument("--csv", default=None, metavar="PATH",
-                        help="run/column envs only: export the evaluation as two "
+                        help="run/column envs only: export the evaluation as "
                              "spreadsheet-ready CSVs — PATH.episodes.csv (one row "
                              "per episode: outcome, return, and the behavior "
-                             "tallies) and PATH.hist.csv (the return histogram). "
+                             "tallies), PATH.hist.csv (the return histogram), "
+                             "PATH.cards.csv / PATH.potions.csv, and "
+                             "PATH.events.csv (per-event choice percentages). "
                              "A trailing '.csv' on PATH is stripped")
     parser.add_argument("--deck-hist", action="store_true",
                         help="run/column envs only, requires --csv: also export "

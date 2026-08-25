@@ -187,6 +187,61 @@ def test_shop_purchase_and_leave():
     assert bought and run.gold < gold_before
 
 
+def test_shop_potion_entry_illegal_with_full_belt():
+    # A stocked, affordable potion entry must drop out of own_actions() (and
+    # therefore legal_actions()) once the belt is full — buying it would be
+    # silently refused by MerchantPotionEntry._buy (PotionCmd.TryToProcure
+    # fails on a full belt), which let a policy retry the same refused entry
+    # thousands of times in one episode. Card/relic/removal entries and
+    # "leave" stay legal regardless of belt state; the entry becomes legal
+    # again once a slot opens up.
+    from sts2_rl.potions import make_potion
+    from sts2_rl.shop import MerchantInventory, MerchantPotionEntry
+
+    run = fresh_run(6, gold=10_000)
+    shop = MerchantInventory.create(run)
+    entries = shop.all_entries
+    potion_indices = [
+        i for i, e in enumerate(entries) if isinstance(e, MerchantPotionEntry)
+    ]
+    assert potion_indices, "fixture shop stocked no potion entry to test against"
+    for i in potion_indices:
+        assert entries[i].is_stocked and entries[i].enough_gold
+
+    non_potion_legal = [
+        i for i, e in enumerate(entries)
+        if not isinstance(e, MerchantPotionEntry) and e.is_stocked and e.enough_gold
+    ]
+
+    request = DecisionRequest(kind=DecisionKind.SHOP, run=run, shop=shop)
+
+    # Open belt: potion entries are legal.
+    assert run.has_open_potion_slot
+    legal_open = request.own_actions()
+    for i in potion_indices:
+        assert i in legal_open
+    for i in non_potion_legal:
+        assert i in legal_open
+    assert len(entries) in legal_open           # leaving is always legal
+
+    # Full belt: potion entries drop out, everything else stays.
+    run.potions = [make_potion("fire_potion") for _ in range(run.max_potions)]
+    assert not run.has_open_potion_slot
+    legal_full = request.own_actions()
+    for i in potion_indices:
+        assert i not in legal_full
+    for i in non_potion_legal:
+        assert i in legal_full
+    assert len(entries) in legal_full
+
+    # Re-opening a slot restores legality.
+    run.potions[0] = None
+    assert run.has_open_potion_slot
+    legal_reopened = request.own_actions()
+    for i in potion_indices:
+        assert i in legal_reopened
+
+
 def test_rest_choices():
     run = fresh_run(7)
     run.hp = 40

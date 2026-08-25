@@ -368,6 +368,11 @@ class RunEvalReport:
     # floor} per open-slot reward skip — selectivity-vs-aversion read).
     potions_discarded: tuple[int, ...] = ()
     potion_skips: tuple[dict, ...] = ()
+    # v23: per-episode card-reward offer/take counts split by 0-based act
+    # ({act: count} dicts) — the per-act take-rate baseline (report-only,
+    # no guardrail; a whole-run rate hides act-conditional drift).
+    card_offers_by_act: tuple[dict, ...] = ()
+    card_takes_by_act: tuple[dict, ...] = ()
     # v8 (plan Task 3): relics gained tally (starting relic never counts).
     relics: tuple[int, ...] = ()
     # v8 (plan Task 1, plan Task 5 threading): HP lost per episode -- a
@@ -396,6 +401,9 @@ class RunEvalReport:
     # in the deck each run ENDED with (sts2_rl.deck_stats). Starter,
     # colorless, curse and quest cards are already filtered out upstream.
     deck_rarity_counts: dict[str, dict[str, int]] = field(default_factory=dict)
+    # Merged over all episodes: (event id, page, option key) -> times chosen
+    # (run_env `ep_event_choices`); rendered by `write_events_csv`.
+    event_choice_counts_raw: dict[tuple[str, str, str], int] = field(default_factory=dict)
 
     @property
     def wins(self) -> int:
@@ -468,6 +476,21 @@ class RunEvalReport:
         (pooled like `energy_unspent_per_turn`; 0.0 when none were offered)."""
         offers = sum(self.card_offers)
         return sum(self.card_takes) / offers if offers else 0.0
+
+    @property
+    def card_take_rate_by_act(self) -> dict[int, tuple[int, int, float]]:
+        """0-based act -> (offers, takes, take rate), pooled over episodes
+        like `card_take_rate` (v23 report-only baseline)."""
+        offers: dict[int, int] = {}
+        takes: dict[int, int] = {}
+        for ep in self.card_offers_by_act:
+            for act, n in ep.items():
+                offers[act] = offers.get(act, 0) + int(n)
+        for ep in self.card_takes_by_act:
+            for act, n in ep.items():
+                takes[act] = takes.get(act, 0) + int(n)
+        return {act: (n, takes.get(act, 0), takes.get(act, 0) / n if n else 0.0)
+                for act, n in sorted(offers.items())}
 
     @property
     def rest_heal_rate(self) -> float:
@@ -670,6 +693,28 @@ class RunEvalReport:
         return (sum(used) / len(used)) if used else 0.0
 
     @property
+    def discard_repickup_2fl(self) -> tuple[int, int]:
+        """(voluntary discards followed by ANY potion pickup within 2 floors
+        of the same episode, total voluntary discards) — the v22 fork read
+        that was uninstrumented then (pooled hold records carried no episode
+        key). Counts only records `evaluate_run` tagged with an episode
+        "seed" (v23), so a report built from untagged records reports (0, 0)
+        rather than falsely linking pickups across episodes."""
+        by_seed: dict[Any, list[dict]] = {}
+        for rec in self.potion_holds:
+            if "seed" in rec:
+                by_seed.setdefault(rec["seed"], []).append(rec)
+        hits = total = 0
+        for recs in by_seed.values():
+            for rec in recs:
+                if rec["outcome"] != "discarded":
+                    continue
+                total += 1
+                hits += any(rec["floor"] < r["pickup_floor"] <= rec["floor"] + 2
+                            for r in recs)
+        return hits, total
+
+    @property
     def potion_hold_histogram(self) -> dict[str, int]:
         """All resolved instances (used/held/lost) binned by floors held."""
         bins = {"0": 0, "1": 0, "2-3": 0, "4-6": 0, "7+": 0}
@@ -793,6 +838,8 @@ def evaluate_run(
     potion_relic_picks: list[int] = []
     potions_discarded: list[int] = []
     potion_skips: list[dict] = []
+    card_offers_by_act: list[dict] = []
+    card_takes_by_act: list[dict] = []
     relics: list[int] = []
     hp_lost: list[int] = []
     boss_hp_lost: list[int] = []
@@ -800,6 +847,7 @@ def evaluate_run(
     hp_ratio_steps: list[int] = []
     card_offer_counts: dict[str, int] = {}
     card_take_counts: dict[str, int] = {}
+    event_choice_counts: dict[tuple[str, str, str], int] = {}
     potion_holds: list[dict] = []
     deck_rarity_counts: dict[str, dict[str, int]] = {}
 
@@ -885,7 +933,17 @@ def evaluate_run(
             card_offer_counts[name] = card_offer_counts.get(name, 0) + int(count)
         for name, count in info.get("ep_card_take_ids", {}).items():
             card_take_counts[name] = card_take_counts.get(name, 0) + int(count)
-        potion_holds.extend(info.get("ep_potion_holds", []))
+        for key, count in info.get("ep_event_choices", {}).items():
+            event_choice_counts[key] = event_choice_counts.get(key, 0) + int(count)
+        # v23: tag each pooled hold record with its episode seed so
+        # within-episode sequence reads (discard -> re-pickup) stay
+        # computable after pooling.
+        potion_holds.extend({**rec, "seed": ep_seed}
+                            for rec in info.get("ep_potion_holds", []))
+        card_offers_by_act.append(
+            {int(k): int(v) for k, v in info.get("ep_card_offers_by_act", {}).items()})
+        card_takes_by_act.append(
+            {int(k): int(v) for k, v in info.get("ep_card_takes_by_act", {}).items()})
         for rarity, cards in info.get("ep_final_deck", {}).items():
             bucket = deck_rarity_counts.setdefault(rarity, {})
             for name, count in cards.items():
@@ -929,6 +987,8 @@ def evaluate_run(
         potion_relic_picks=tuple(potion_relic_picks),
         potions_discarded=tuple(potions_discarded),
         potion_skips=tuple(potion_skips),
+        card_offers_by_act=tuple(card_offers_by_act),
+        card_takes_by_act=tuple(card_takes_by_act),
         relics=tuple(relics),
         hp_lost=tuple(hp_lost),
         boss_hp_lost=tuple(boss_hp_lost),
@@ -938,6 +998,7 @@ def evaluate_run(
         potion_holds=tuple(potion_holds),
         card_take_counts_raw=card_take_counts,
         deck_rarity_counts=deck_rarity_counts,
+        event_choice_counts_raw=event_choice_counts,
     )
 
 
@@ -966,7 +1027,13 @@ EPISODE_CSV_FIELDS = ("policy", "seed", "floor", "act", "win", "truncated",
                       "potion_rewards_skipped", "potion_rewards_forced",
                       "potion_relic_picks",
                       # v22: appended at the END (column indices stay valid).
-                      "potions_discarded")
+                      "potions_discarded",
+                      # v23: appended at the END — the per-act card-reward
+                      # split (a1-a3 = 0-based act_index 0-2; report-only
+                      # take-rate baseline, no guardrail).
+                      "card_offers_a1", "card_takes_a1",
+                      "card_offers_a2", "card_takes_a2",
+                      "card_offers_a3", "card_takes_a3")
 
 CARDS_CSV_FIELDS = ("policy", "card", "offered", "taken", "take_rate")
 
@@ -976,6 +1043,9 @@ POTIONS_CSV_FIELDS = ("policy", "potion", "picked", "used", "held", "lost",
 
 DECK_CSV_FIELDS = ("policy", "rarity", "card", "copies", "share_of_rarity",
                    "copies_per_run")
+
+EVENTS_CSV_FIELDS = ("policy", "event", "page", "option", "chosen", "visits",
+                     "pct")
 
 HIST_CSV_FIELDS = ("policy", "ep_return", "count", "freq")
 
@@ -1071,6 +1141,11 @@ def write_run_csv(
                     report.potion_rewards_forced[i] if report.potion_rewards_forced else 0,
                     report.potion_relic_picks[i] if report.potion_relic_picks else 0,
                     report.potions_discarded[i] if report.potions_discarded else 0,
+                    *(n for act in (0, 1, 2) for n in (
+                        report.card_offers_by_act[i].get(act, 0)
+                        if report.card_offers_by_act else 0,
+                        report.card_takes_by_act[i].get(act, 0)
+                        if report.card_takes_by_act else 0)),
                 ])
 
     with open(hist_path, "w", newline="") as fh:
@@ -1121,6 +1196,40 @@ def write_potions_csv(
                     t["discarded"],
                     round(t["mean_hold_used"], 6), round(t["mean_hold_all"], 6),
                     round(t["v_at_use"], 6), round(t["tier_share"], 6)])
+
+    if hasattr(path_or_file, "write"):
+        _write(path_or_file)
+    else:
+        with open(path_or_file, "w", newline="") as fh:
+            _write(fh)
+
+
+def write_events_csv(
+    path_or_file, rows: Sequence[tuple[str, RunEvalReport]]
+) -> None:
+    """Per-event choice-percentage table: one row per (policy, event, page,
+    option). ``visits`` is the total choices answered on that (event, page)
+    and ``pct`` is chosen/visits, so each (event, page) group is its own
+    100% split. Most-visited group first, most-chosen option first inside a
+    group — each group reads as its own histogram.
+
+    ``path_or_file`` is a filesystem path or an open text file, matching
+    `write_cards_csv`."""
+    def _write(fh) -> None:
+        writer = csv.writer(fh)
+        writer.writerow(EVENTS_CSV_FIELDS)
+        for name, report in rows:
+            visits: dict[tuple[str, str], int] = {}
+            for (event, page, _option), count in report.event_choice_counts_raw.items():
+                visits[(event, page)] = visits.get((event, page), 0) + count
+            ordered = sorted(
+                report.event_choice_counts_raw.items(),
+                key=lambda kv: (-visits[(kv[0][0], kv[0][1])],
+                                kv[0][0], kv[0][1], -kv[1], kv[0][2]))
+            for (event, page, option), count in ordered:
+                total = visits[(event, page)]
+                pct = round(count / total, 6) if total else 0.0
+                writer.writerow([name, event, page, option, count, total, pct])
 
     if hasattr(path_or_file, "write"):
         _write(path_or_file)

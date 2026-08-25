@@ -1714,7 +1714,11 @@ class STS2RunEnv(gym.Env):
         # v21: SHOP answer that buys a potion (entry inspected BEFORE the
         # driver's purchase()); a full belt is excluded — the purchase would
         # be refused and the policy can retry it hundreds of times (seen:
-        # 9932/ep), which is not a buy.
+        # 9932/ep), which is not a buy. 2026-08-25: `own_actions()` now
+        # excludes a full-belt potion entry from the mask itself (driver.py
+        # DecisionKind.SHOP), so `has_open_potion_slot` can never be false
+        # here in practice — this check is kept as documentation of the
+        # invariant, redundant but harmless.
         if request.kind == DecisionKind.SHOP and request.shop is not None:
             entries = request.shop.all_entries
             if 0 <= answer < len(entries):

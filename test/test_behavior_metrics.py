@@ -78,6 +78,9 @@ def test_run_env_reports_episode_behavior_metrics():
         assert info["ep_energy_unspent"] == pytest.approx(tally["energy_unspent"])
         assert info["ep_card_offers"] == tally["card_offers"]
         assert info["ep_card_takes"] == tally["card_takes"]
+        # v23: the per-act split must reconcile with the whole-run tally.
+        assert sum(info["ep_card_offers_by_act"].values()) == tally["card_offers"]
+        assert sum(info["ep_card_takes_by_act"].values()) == tally["card_takes"]
         saw_end_turns = saw_end_turns or tally["end_turns"] > 0
         saw_offers = saw_offers or tally["card_offers"] > 0
     # The tracked episodes must actually exercise the counters, or the
@@ -140,6 +143,8 @@ def test_vec_env_carries_episode_metrics(monkeypatch):
         # v20 (Task 3b): inserted BEFORE "floor" so metrics[:, -1] stays the
         # floor column.
         "ep_boss_hp_lost",
+        # v23: same before-"floor" insertion.
+        "ep_potions_discarded",
         "floor")
 
     built = []
@@ -154,7 +159,7 @@ def test_vec_env_carries_episode_metrics(monkeypatch):
 
     venv.reset([0, 1])
     batch = venv.step([0, 0])                 # step 1: nobody done
-    assert batch.metrics.shape == (2, 18)
+    assert batch.metrics.shape == (2, 19)
     assert np.isnan(batch.metrics).all()
 
     batch = venv.step([0, 0])                 # step 2: both done
@@ -214,15 +219,17 @@ def test_csv_has_behavior_metric_columns(tmp_path):
     ))
     with open(path) as fh:
         header, row = fh.read().strip().splitlines()
-    assert header.split(",")[-16:] == [
+    assert header.split(",")[-17:] == [
         "energy_unspent", "card_take",
         "upgrades", "removes", "elites", "potions_got", "potions_used",
         "potions_used_elite", "potions_used_boss", "potions_used_normal",
         "potions_expired", "potion_use_hp", "relics", "hp_lost", "aux",
-        "potion_ent"]
-    assert row.split(",")[-16:] == [
+        "potion_ent",
+        # v23: trailing mean voluntary discards per episode.
+        "potions_discarded"]
+    assert row.split(",")[-17:] == [
         "1.25", "0.4", "2.0", "1.0", "0.5", "1.5", "1.0",
-        "0.2", "0.1", "0.7", "0.3", "0.55", "0.8", "12.5", "0.02", ""]
+        "0.2", "0.1", "0.7", "0.3", "0.55", "0.8", "12.5", "0.02", "", ""]
 
 
 # ── Rest sites: heal / upgrade share of visits ────────────────────────────────
@@ -537,7 +544,11 @@ def test_write_run_csv_exports_episode_and_histogram_tables(tmp_path):
                        "potion_v_at_use", "potions_wasted", "potions_bought",
                        "potion_rewards_skipped", "potion_rewards_forced",
                        "potion_relic_picks",
-                       "potions_discarded"]
+                       "potions_discarded",
+                       # v23: appended at the END — per-act card-reward split.
+                       "card_offers_a1", "card_takes_a1",
+                       "card_offers_a2", "card_takes_a2",
+                       "card_offers_a3", "card_takes_a3"]
     assert len(rows) == 1 + report.episodes
     assert rows[1] == ["ckpt.pt", "100", "17", "0", "0", "0", "0", "2",
                        "3.0", "2", "5.0", "2", "1", "3", "2", "1",
@@ -545,7 +556,8 @@ def test_write_run_csv_exports_episode_and_histogram_tables(tmp_path):
                        "0", "0", "0", "0", "0.0", "0", "0", "0.0", "2", "1",
                        "0",   # v20: trailing boss_hp_lost
                        "0.0", "0", "0", "0", "0", "0",   # v21: trailing potion fields
-                       "0"]   # v22: trailing potions_discarded
+                       "0",   # v22: trailing potions_discarded
+                       "0", "0", "0", "0", "0", "0"]   # v23: per-act card split
     assert rows[2][:8] == ["ckpt.pt", "101", "23", "1", "1", "0", "44", "3"]
 
     with open(hist_path) as fh:
@@ -583,3 +595,31 @@ def test_reward_histogram_lines_render_every_value_with_a_bar():
         assert any(f"{value:.3f}" in ln and str(count) in ln for ln in body)
     # The modal values get the longest bar.
     assert max(ln.count("#") for ln in body) == body[1].count("#")
+
+
+def test_card_take_rate_by_act_pools_over_episodes():
+    from sts2_rl.evaluation import RunEvalReport
+
+    rep = RunEvalReport(
+        episodes=2, floors=(10, 20), acts=(0, 1), victories=(False, False),
+        truncations=(False, False), hp_left=(0, 0), decisions=(5, 5),
+        seeds=(1, 2), returns=(0.0, 0.0),
+        card_offers_by_act=({0: 2, 1: 1}, {0: 2}),
+        card_takes_by_act=({0: 1, 1: 1}, {0: 2}))
+    assert rep.card_take_rate_by_act == {0: (4, 3, 0.75), 1: (1, 1, 1.0)}
+
+
+def test_episode_csv_carries_per_act_card_columns(tmp_path):
+    import csv as csv_mod
+    from sts2_rl.evaluation import RunEvalReport, write_run_csv
+
+    rep = RunEvalReport(
+        episodes=1, floors=(10,), acts=(2,), victories=(False,),
+        truncations=(False,), hp_left=(0,), decisions=(5,),
+        seeds=(1,), returns=(0.0,),
+        card_offers_by_act=({0: 3, 2: 1},), card_takes_by_act=({0: 2},))
+    ep_path, _ = write_run_csv(str(tmp_path / "out"), [("p", rep)])
+    with open(ep_path, newline="") as fh:
+        row = next(iter(csv_mod.DictReader(fh)))
+    assert (row["card_offers_a1"], row["card_takes_a1"]) == ("3", "2")
+    assert (row["card_offers_a3"], row["card_takes_a3"]) == ("1", "0")

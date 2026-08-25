@@ -364,11 +364,11 @@ def test_report_v21_properties_and_csv(tmp_path):
     assert rep.mean_potion_rewards_forced == pytest.approx(1.0)
     assert rep.mean_potion_relic_picks == pytest.approx(0.5)
     assert rep.potion_elite_share == pytest.approx(0.5)
-    # v22 appended "potions_discarded" at the very end; this slice checks the
-    # v21 block that precedes it.
-    assert EPISODE_CSV_FIELDS[-7:-1] == ("potion_v_at_use", "potions_wasted", "potions_bought",
-                                         "potion_rewards_skipped", "potion_rewards_forced",
-                                         "potion_relic_picks")
+    # v22 appended "potions_discarded" after the v21 block, v23 the six
+    # per-act card columns after that; this slice checks the v21 block.
+    assert EPISODE_CSV_FIELDS[-13:-7] == ("potion_v_at_use", "potions_wasted", "potions_bought",
+                                          "potion_rewards_skipped", "potion_rewards_forced",
+                                          "potion_relic_picks")
     ep_path, _ = write_run_csv(str(tmp_path / "out"), [("p", rep)])
     rows = list(csv.DictReader(open(ep_path, newline="")))
     assert rows[0]["potion_v_at_use"] == "1.0" and rows[1]["potions_wasted"] == "0"
@@ -387,6 +387,11 @@ def test_evaluate_run_collects_v21_info_keys():
     assert len(rep.potion_v_at_use) == 1
     assert len(rep.potions_wasted) == 1
     assert len(rep.potions_bought) == 1
+    # v23: pooled hold records carry their episode seed, and the per-act
+    # card split is collected (presence is the contract, zeros are fine).
+    assert all("seed" in r for r in rep.potion_holds)
+    assert len(rep.card_offers_by_act) == 1
+    assert len(rep.card_takes_by_act) == 1
     assert len(rep.potion_rewards_skipped) == 1
     assert len(rep.potion_rewards_forced) == 1
     assert len(rep.potion_relic_picks) == 1

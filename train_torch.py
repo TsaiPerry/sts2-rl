@@ -143,7 +143,11 @@ CSV_FIELDS = ["iter", "global_step", "wall_seconds", "sps", "ep_ret", "win",
               # v16 potion-entropy bonus: mean binary entropy of the legal-
               # potion probability mass per iteration (NaN when
               # --potion-ent-coef is 0).
-              "potion_ent"]
+              "potion_ent",
+              # v23: mean voluntary out-of-combat discards per episode
+              # (EP_METRIC_KEYS "ep_potions_discarded") -- the v22 affordance
+              # had no mid-run visibility, only the final eval.
+              "potions_discarded"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -925,6 +929,9 @@ def main() -> None:
     # v8 HP-economy (plan Task 1, EP_METRIC_KEYS[15]): same per-episode-count
     # windowing as v8_relic_hist.
     v8_hplost_hist: deque[float] = deque(maxlen=100)
+    # v23: voluntary discards per episode (EP_METRIC_KEYS[17]), same
+    # windowing as v8_relic_hist.
+    discard_hist: deque[float] = deque(maxlen=100)
 
     batch_size = N * E
     mb_size = batch_size // args.minibatches
@@ -1000,6 +1007,8 @@ def main() -> None:
                         v8_relic_hist.append(float(m[14]))
                     if not math.isnan(m[15]):
                         v8_hplost_hist.append(float(m[15]))
+                    if not math.isnan(m[17]):
+                        discard_hist.append(float(m[17]))
                     ep_ret_running[i] = 0.0
                     ep_len_running[i] = 0
 
@@ -1153,6 +1162,8 @@ def main() -> None:
                 float(np.mean(v8_relic_hist)) if v8_relic_hist else float("nan"))
             v8_hplost_mean = (
                 float(np.mean(v8_hplost_hist)) if v8_hplost_hist else float("nan"))
+            discard_mean = (
+                float(np.mean(discard_hist)) if discard_hist else float("nan"))
             lr = optimizer.param_groups[0]["lr"]
             aux_mean = float(np.mean(aux_losses)) if aux_losses else float("nan")
             potion_ent_mean = (float(np.mean(potion_ent_losses))
@@ -1192,6 +1203,7 @@ def main() -> None:
                     hp_lost=v8_hplost_mean,
                     aux=aux_mean,
                     potion_ent=potion_ent_mean,
+                    potions_discarded=discard_mean,
                 ))
 
             # ── checkpointing ───────────────────────────────────────────────────

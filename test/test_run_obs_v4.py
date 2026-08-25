@@ -989,6 +989,29 @@ def test_deck_overflow_log_failure_does_not_break_obs(monkeypatch):
     assert obs["f"][layout.f_slices["run.deck.overflow"]][0] == pytest.approx(1.0)
 
 
+def test_deck_overflow_log_captures_relics():
+    """The dump must show the relics alongside the deck — a relic like an
+    egg is often WHY the deck blew the cap, and an out-of-vocab relic is
+    invisible in the observation, so the log is the only place to see it."""
+    deck = _heterogeneous_cards(MAX_DECK_ROWS + 12)
+    relics = [make_relic("girya"), make_relic("lava_rock")]
+    run = _bare_run(deck=list(deck), relics=relics)
+    env = _env_with(run, DecisionRequest(kind=DecisionKind.MAP, run=run, points=[]))
+    with pytest.warns(UserWarning, match="run.deck"):
+        env._build_obs()
+
+    text = Path(deck_overflow_log_path()).read_text(encoding="utf-8")
+    assert f"relics ({len(relics)}):" in text
+    for relic in relics:
+        assert f"relic {relic.id} " in text
+    # Relic lines must not use the deck's "[idx] " format — the deck-line
+    # count assertion in test_deck_overflow_log_logs_deck_contents_to_file
+    # keys on "] ", and the two sections must stay distinguishable.
+    relic_lines = [l for l in text.splitlines() if l.lstrip().startswith("relic ")]
+    assert len(relic_lines) == len(relics)
+    assert all("in_vocab=True" in l for l in relic_lines)
+
+
 def test_relics_overflow_truncates_without_raising():
     relics = [make_relic("girya") for _ in range(MAX_RELIC_ROWS + 5)]
     run = _bare_run(relics=relics)
