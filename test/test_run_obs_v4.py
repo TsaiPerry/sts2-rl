@@ -124,13 +124,18 @@ def _env_with(run: RunState, request: DecisionRequest | None = None) -> STS2RunE
 
 
 class _FakeOption:
-    """A minimal EventOption-shaped double: `_build_obs` only reads
-    `.locked`, and `events.base.EventOption.locked` is itself just
+    """A minimal EventOption-shaped double: `_build_obs` reads `.locked` and the
+    four `.*_id` preview fields, and `events.base.EventOption.locked` is itself just
     `on_chosen is None` — this is the identical contract without needing a
     real registered Event's preconditions."""
 
-    def __init__(self, locked: bool) -> None:
+    def __init__(self, locked: bool, card_id=None, relic_id=None,
+                 relic_traded_id=None, potion_id=None) -> None:
         self.locked = locked
+        self.card_id = card_id
+        self.relic_id = relic_id
+        self.relic_traded_id = relic_traded_id
+        self.potion_id = potion_id
 
 
 class _FakeEvent:
@@ -196,7 +201,7 @@ def test_run_max_obs_id_matches_combat_and_is_reported_not_assumed():
     assert RUN_MAX_OBS_ID == COMBAT_MAX_OBS_ID == 640
 
 
-def test_schema_version_is_12():
+def test_schema_version_is_13():
     """v9 (R3, 2026-08-02): the run observation embeds the combat block
     verbatim, so full_env's v6 bump (per-enemy intent history — new
     `enemy{e}.intent_history.f` segments) silently widened this env's f_dim
@@ -222,8 +227,15 @@ def test_schema_version_is_12():
 
     v12 (task 3, v14 mechanics-exposure): follows full_env.OBS_SCHEMA_VERSION
     7 -> 8 in lockstep — the embedded combat hand.f block grew by 2 fields
-    per hand row (f[29] glow_gold, f[30] block_preview_move)."""
-    assert RUN_OBS_SCHEMA_VERSION == 12
+    per hand row (f[29] glow_gold, f[30] block_preview_move).
+
+    v13 (2026-08-26): new int block `event.options.cards.ids` — the card an event
+    option previews, positionally aligned with `event.options`. The event block
+    carried only (present, locked) per option, so nothing card-dependent could
+    be learned: Slippery Bridge names the exact card it removes and the policy
+    took that option at high probability whether the card was a Strike or its
+    best pick. i_dim only (CHOICE_SLOTS ids); f_dim unchanged."""
+    assert RUN_OBS_SCHEMA_VERSION == 13
 
 
 def test_run_schema_version_matches_declared_dims():
@@ -253,7 +265,11 @@ def test_run_schema_version_matches_declared_dims():
     # v11 -> v12: full_env's hand.f row grows by 2 fields (f[29] glow_gold,
     # f[30] block_preview_move); MAX_HAND (10) x 2 = +20 f_dim, i_dim
     # unchanged (no new id columns): 4715 -> 4735, 1469 stays 1469.
-    assert (RUN_OBS_SCHEMA_VERSION, layout.f_dim, layout.i_dim) == (12, 4735, 1469)
+    # v12 -> v13: `event.options.cards.ids` adds four 16-wide id blocks (cards,
+    # relics, relics_traded, potions) on the INT half only — 1469 -> 1533; f_dim untouched at 4735.
+    # v13: event.options.ids + run.ascension (v24 fold). run.ascension adds a
+    # 1-wide float segment: 4735 -> 4736; i_dim unchanged at 1533.
+    assert (RUN_OBS_SCHEMA_VERSION, layout.f_dim, layout.i_dim) == (13, 4736, 1533)
 
     # STS2CurriculumRunEnv is STS2RunEnv with a different map/reward factory
     # only (curriculum_env.py's own docstring) — same layout, same version.
@@ -712,6 +728,38 @@ def test_event_identity_and_options():
     opt = obs["f"][layout.f_slices["event.options"]]
     assert opt[0] == 1.0 and opt[1] == 0.0     # option 0: present, unlocked
     assert opt[2] == 1.0 and opt[3] == 1.0     # option 1: present, locked
+    # No option previews a card here, so the whole id block stays PAD.
+    assert not obs["i"][layout.i_slices["event.options.cards.ids"]].any()
+
+
+def test_event_option_card_lands_in_the_matching_slot():
+    """v13: an option that previews a specific card (the source's per-option
+    `HoverTipFactory.FromCard` tip) exposes that card's vocab id, positionally
+    aligned with `event.options`. Slippery Bridge is the motivating case: it
+    names the exact card it would remove, and before this the policy saw only
+    (present, locked) and could not tell a Strike from its best pick."""
+    from sts2_rl.obs import oid
+
+    event = _FakeEvent(
+        "slippery_bridge", "INITIAL",
+        [_FakeOption(False, card_id="bludgeon"), _FakeOption(False)],
+    )
+    run = _bare_run()
+    env = _env_with(run, DecisionRequest(kind=DecisionKind.EVENT, run=run, event=event))
+    ids = env._build_obs()["i"][run_obs_layout().i_slices["event.options.cards.ids"]]
+
+    assert ids[0] == oid(CARD_INDEX["bludgeon"])   # OVERCOME previews the card
+    assert ids[1] == 0                             # HOLD_ON previews none
+    assert not ids[2:].any()                       # unused slots stay PAD
+
+
+def test_event_option_cards_are_absent_outside_an_event():
+    """Zero-fill guarantee, matching the reward/shop blocks: the option-card
+    ids must not survive onto an unrelated screen."""
+    run = _bare_run()
+    env = _env_with(run, DecisionRequest(kind=DecisionKind.MAP, run=run, points=[]))
+    ids = env._build_obs()["i"][run_obs_layout().i_slices["event.options.cards.ids"]]
+    assert not ids.any()
 
 
 def test_select_purpose_fallback_routes_to_the_real_unknown_bucket():

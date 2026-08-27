@@ -66,8 +66,14 @@ class SlipperyBridge(Event):
         return "LOOP" if holds >= 7 else str(holds)
 
     def _page_options(self) -> list[EventOption]:
+        # OVERCOME carries the shown card, mirroring the source attaching
+        # HoverTipFactory.FromCard(RandomCardToLose) to that option on BOTH the
+        # initial page and every HOLD_ON page (SlipperyBridge.cs:96 and :149).
+        # HOLD_ON previews no card: it re-rolls, so the card it leads to does
+        # not exist yet.
         return [
-            EventOption("OVERCOME", self._overcome),
+            EventOption("OVERCOME", self._overcome,
+                        card_id=self.shown_card.id if self.shown_card else None),
             EventOption(f"HOLD_ON_{self._suffix(self._holds)}", self._hold_on),
         ]
 

@@ -29,6 +29,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
+    from ..cards import Card
     from ..combat import CombatState
     from ..monsters import Encounter
     from ..potions import Potion
@@ -53,11 +54,46 @@ class EventOption:
 
     key mirrors the source's loc option name ("EAT", "TRUDGE_ON", ...).
     on_chosen is None for locked options (EventOption with a null onChosen).
+
+    ``card_id`` / ``relic_id`` / ``potion_id`` name the specific content this
+    option previews to the player, mirroring the source's per-option hover tip
+    (``HoverTipFactory.FromCard/FromRelic/FromPotion`` ->
+    ``EventOption.HoverTips``). They exist because the option text alone hid
+    decisions the player can plainly see, and the event block otherwise carried
+    only (present, locked) per option -- so a policy could learn exactly one
+    fixed preference per event id and nothing content-dependent.
+
+    Set these ONLY where the previewed content is not already implied by the
+    event id. A survey of all 68 source events found exactly three such cases;
+    every other card/relic/potion preview goes through a compile-time generic
+    (``FromCard<T>()``), so it is constant for that event and the event id
+    already carries it:
+
+      * SlipperyBridge - a random deck card, the one OVERCOME would remove
+      * DollRoom       - one of three randomized relics, one per option
+      * StoneOfAllTime - a random held potion, the one LIFT would discard
+
+    ``sts2_rl/run_env.py``'s event block and SpireBot's ``RunObsWriter.WriteEvent``
+    BOTH key off that same three-event list. Adding a fourth means changing all
+    three places together, or the live observation stops matching the trained
+    one.
     """
 
-    def __init__(self, key: str, on_chosen: Callable[[], None] | None) -> None:
+    def __init__(self, key: str, on_chosen: Callable[[], None] | None, *,
+                 card_id: str | None = None,
+                 relic_id: str | None = None,
+                 relic_traded_id: str | None = None,
+                 potion_id: str | None = None) -> None:
         self.key = key
         self.on_chosen = on_chosen
+        self.card_id = card_id
+        self.relic_id = relic_id
+        #: The relic this option GIVES UP, when it is a trade. Separate from
+        #: ``relic_id`` (what the option grants) because Relic Trader's options
+        #: are pairs -- one id per option could not say which of your relics
+        #: goes and which arrives, and that IS the decision.
+        self.relic_traded_id = relic_traded_id
+        self.potion_id = potion_id
 
     @property
     def locked(self) -> bool:

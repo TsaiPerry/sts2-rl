@@ -206,7 +206,14 @@ from .vocab import capacity as vocab_capacity, frozen_ids
 #     7 -> 8 in lockstep — the run layout embeds the combat hand.f block,
 #     which grew by 2 fields (f[29] glow_gold, f[30] block_preview_move;
 #     N_CARD_FEATURES 29 -> 31). No migration function exists for this bump.
-RUN_OBS_SCHEMA_VERSION = 12
+# v13: new int block ``event.options.cards.ids`` — the card each event option
+#     previews, positionally aligned with ``event.options``. The event block
+#     previously exposed only (present, locked) per option, so nothing
+#     card-dependent could be learned about an event: Slippery Bridge names the
+#     exact card it removes and the policy took that option at high probability
+#     regardless of whether the card was a Strike or its best pick. No migration
+#     function exists for this bump — v12 checkpoints cannot load.
+RUN_OBS_SCHEMA_VERSION = 13
 
 # ── Fixed-size bounds ────────────────────────────────────────────────────
 # Potion belt headroom, referenced from full_env.MAX_POTION_ROWS (true
@@ -462,6 +469,10 @@ def run_obs_segments_f(card_obs: str = "hybrid") -> list[tuple[str, int]]:
         ("select.candidates.f", MAX_SELECT_CANDIDATES * 4),
         ("select.candidates.overflow", 1),
     ])
+    # v24 (schema 13): current ascension / 10 — lets one policy condition on
+    # difficulty; required for mixed-ascension training (v19's blind-cross-
+    # ascension negative).
+    segs.append(("run.ascension", 1))
     return segs
 
 
@@ -480,6 +491,23 @@ def run_obs_segments_i(card_obs: str = "hybrid") -> list[tuple[str, int]]:
         # above rather than a bespoke single-purpose writer).
         ("run.boss.ids", MAX_BOSS_IDS * 1),
         ("event.ids", 1),
+        # The card each event option previews, positionally aligned with
+        # ``event.options`` (PAD where an option previews none). Mirrors the
+        # source's per-option ``HoverTipFactory.FromCard`` hover tip, which is
+        # how a human reads e.g. Slippery Bridge naming the exact card it would
+        # remove. Without it the event block carried only (present, locked) per
+        # option, so a policy could learn one fixed preference per event id and
+        # nothing card-dependent.
+        ("event.options.cards.ids", CHOICE_SLOTS * 1),
+        # The relic an option GRANTS (Doll Room's three shuffled dolls,
+        # Wongo's featured item, Relic Trader's incoming relic) and, for a
+        # trade, the one it GIVES UP. Two slices because Relic Trader's
+        # options are pairs: a single id could not say which relic leaves
+        # and which arrives, which is the entire decision.
+        ("event.options.relics.ids", CHOICE_SLOTS * 1),
+        ("event.options.relics_traded.ids", CHOICE_SLOTS * 1),
+        # The potion an option consumes (Stone of All Time's LIFT).
+        ("event.options.potions.ids", CHOICE_SLOTS * 1),
         ("shop.cards.ids", SHOP_CARD_SLOTS * 1),
         ("shop.relics.ids", SHOP_RELIC_SLOTS * 1),
         ("shop.potions.ids", SHOP_POTION_SLOTS * 1),
@@ -714,6 +742,7 @@ class STS2RunEnv(gym.Env):
         *,
         acts: list[str] | None = None,
         ascension: int = 0,
+        ascension_sample: "tuple[int, int] | None" = None,
         include_neow: bool = True,
         card_obs: str = "hybrid",
         reward_win: float = 3.0,
@@ -733,6 +762,7 @@ class STS2RunEnv(gym.Env):
         reward_elite_attempt: float = 0.0,
         elite_rewards_by_act: "tuple[float, ...] | None" = None,
         elite_attempt_rewards_by_act: "tuple[float, ...] | None" = None,
+        reward_elite_escalator: float = 0.0,
         reward_boss: float = 0.0,
         reward_relic: float = 0.0,
         rest_heal_mask_above: float | None = None,
@@ -768,6 +798,16 @@ class STS2RunEnv(gym.Env):
         # independent, so RUN_OBS_SCHEMA_VERSION is untouched.
         self._character = character
         self._ascension = ascension
+        # v24: optional per-episode ascension re-roll (uniform [lo, hi]) —
+        # see reset()'s re-roll before run construction.
+        if ascension_sample is not None:
+            lo, hi = ascension_sample
+            if not (0 <= lo <= hi <= 10):
+                raise ValueError(
+                    f"ascension_sample must satisfy 0 <= lo <= hi <= 10, got {ascension_sample!r}")
+            self._ascension_sample = (lo, hi)
+        else:
+            self._ascension_sample = None
         self._include_neow = include_neow
         self._card_obs = card_obs
         self._reward_win = reward_win
@@ -824,6 +864,12 @@ class STS2RunEnv(gym.Env):
             tuple(elite_attempt_rewards_by_act)
             if elite_attempt_rewards_by_act is not None else None
         )
+        # v24: the marginal elite is more expensive (less HP, same deck) but
+        # paid the same — the observed policy fights ONE elite then dodges.
+        # Escalate the KILL pay within an act: N-th kill pays
+        # base*(1+esc*(N-1)). Attempt pay deliberately flat. Reset on act
+        # advance. Default OFF.
+        self._reward_elite_escalator = float(reward_elite_escalator)
         # v11: +reward_boss per act boss defeated (an act_index advance; the
         # FINAL boss ends the run without advancing, so the win branch pays
         # its share instead). Default OFF.
@@ -1034,6 +1080,12 @@ class STS2RunEnv(gym.Env):
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         super().reset(seed=seed)
+        # v24: re-roll BEFORE run construction so map gen, Tight Belt /
+        # Ascender's Bane gating, and the obs float all see the sampled
+        # value. self.np_random is seeded by super().reset(seed=seed) above.
+        if self._ascension_sample is not None:
+            lo, hi = self._ascension_sample
+            self._ascension = int(self.np_random.integers(lo, hi + 1))
         self._kill_driver()
         if seed is not None:
             self._rng = random.Random(seed)
@@ -1054,8 +1106,15 @@ class STS2RunEnv(gym.Env):
         # v20 drill roll — same zero-draw short-circuit contract as the two
         # blocks above: with drills off (no bank or prob 0.0) this draws NO
         # rng, so the default env's episode stream is byte-identical.
+        #
+        # v25 (Phase 3, forksim): `options={"drill_snapshot": snap}` FORCES
+        # that snapshot regardless of `drill_prob`/pools — it REPLACES the
+        # roll (short-circuits before it), so the forced path draws no rng
+        # here either and a replay's rng stream depends only on `seed`.
         drill_snap = None
-        if (self._drill_pools is not None and self._drill_prob > 0.0
+        if options is not None and options.get("drill_snapshot") is not None:
+            drill_snap = options["drill_snapshot"]
+        elif (self._drill_pools is not None and self._drill_prob > 0.0
                 and self._rng.random() < self._drill_prob):
             drill_snap = self._sample_drill_snapshot()
         self._result = None
@@ -1092,6 +1151,9 @@ class STS2RunEnv(gym.Env):
         self._ep_boss_hp_lost = 0
         self._boss_hp_latch = None
         self._ep_elites_won = 0
+        # v24: within-act elite escalator counter (kills only). Reset on
+        # act advance; see the win-pay site in step().
+        self._elites_won_this_act = 0
         self._ep_potions_obtained = 0
         self._ep_potions_used = 0
         # `_ep_potions_used_elite/boss/normal` sum to `_ep_potions_used`
@@ -1545,8 +1607,19 @@ class STS2RunEnv(gym.Env):
         # clamped exactly like the floor line above, so a run somehow past
         # the tuple's length keeps paying the last act's rate rather than
         # raising.
-        reward += self._elite_pay(self._reward_elite, self._elite_rewards_by_act,
-                                  run.act_index) * (self._ep_elites_won - elites_before)
+        # v24: escalate the KILL pay within an act -- the N-th kill pays
+        # base*(1+esc*(N-1)). Reset AFTER paying so a boss-step kill still
+        # pays at the old act's count; `elite_delta` is 0 or 1 per the
+        # per-room dedup, so `mult` is exact.
+        elite_delta = self._ep_elites_won - elites_before
+        if elite_delta:
+            rate = self._elite_pay(self._reward_elite,
+                                   self._elite_rewards_by_act, run.act_index)
+            mult = 1.0 + self._reward_elite_escalator * self._elites_won_this_act
+            reward += rate * mult * elite_delta
+            self._elites_won_this_act += elite_delta
+        if run.act_index != act_before:
+            self._elites_won_this_act = 0
         # v11.1: pay the elite-entry credit the step the attempt is tallied
         # (`_count_behavior` above), decoupled from the win-only term.
         reward += self._elite_pay(
@@ -2225,10 +2298,27 @@ class STS2RunEnv(gym.Env):
                 buf.f[F("event.page")] = 1.0
             opt_base = F("event.options").start
             opts = event.options
+            opt_card_ids = [PAD] * CHOICE_SLOTS
+            opt_relic_ids = [PAD] * CHOICE_SLOTS
+            opt_relic_traded_ids = [PAD] * CHOICE_SLOTS
+            opt_potion_ids = [PAD] * CHOICE_SLOTS
             for i in range(min(CHOICE_SLOTS, len(opts))):
                 buf.f[opt_base + 2 * i] = 1.0
                 if opts[i].locked:
                     buf.f[opt_base + 2 * i + 1] = 1.0
+                if opts[i].card_id is not None:
+                    opt_card_ids[i] = oid(CARD_INDEX.get(opts[i].card_id))
+                if opts[i].relic_id is not None:
+                    opt_relic_ids[i] = oid(RELIC_INDEX.get(opts[i].relic_id))
+                if opts[i].relic_traded_id is not None:
+                    opt_relic_traded_ids[i] = oid(
+                        RELIC_INDEX.get(opts[i].relic_traded_id))
+                if opts[i].potion_id is not None:
+                    opt_potion_ids[i] = oid(POTION_INDEX.get(opts[i].potion_id))
+            buf.i[I("event.options.cards.ids")] = opt_card_ids
+            buf.i[I("event.options.relics.ids")] = opt_relic_ids
+            buf.i[I("event.options.relics_traded.ids")] = opt_relic_traded_ids
+            buf.i[I("event.options.potions.ids")] = opt_potion_ids
 
         # ── Shop block (positional; unstocked slots stay explicit PAD
         #    rows — write_rows never skips a slot, OBS_SCHEMA.md §2.2) ────
@@ -2377,6 +2467,9 @@ class STS2RunEnv(gym.Env):
         for name, truncated in overflow.items():
             if truncated:
                 buf.f[F(f"{name}.overflow")] = 1.0
+
+        # v24 (schema 13): current ascension / 10, last run-block float slot.
+        buf.f[F("run.ascension")] = self._ascension / 10.0
 
         # ── Combat block (folded in under a "combat." prefix; PAD/zero
         #    outside combat, exactly as reset() left it) ──────────────────

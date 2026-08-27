@@ -23,13 +23,73 @@ into an elite below a QUARTER health. `elites_fought` minus `elites` in the
 s27 evals is the read that catches it; if it opens up, the fix is the
 win-only ramp (flat entry 1) rather than a smaller win ramp.
 
+FOUR more knobs turn on this generation, on top of the elite ramp above,
+plus the foresight aux heads merged in below (SIX changes total vs v23 --
+see the run log's attribution caveat):
+  --ascension-random 0 10   Training samples ascension uniformly in [0,10]
+                             per episode instead of fixing 10. The v19 mixed-
+                             ascension caveat (deferred back then: obs did not
+                             carry which ascension was in play, so a mixed
+                             policy could not condition on it) is now RESOLVED
+                             -- run.ascension rides in the obs (schema 13),
+                             so mixed-ascension training is coherent this time.
+  --reward-elite-escalator 0.5   Extra per-elite bonus that escalates within
+                             a run (on top of the act ramp above), to keep
+                             pressure on taking elites late in a run where
+                             the ramp alone under-pays relative to accumulated
+                             deck power.
+  --event-ent-coef 0.01      Entropy bonus scoped to event-choice decisions
+                             only, to counter the option-concentration read
+                             flagged (untested) in the v23 log.
+  --potion-timing-refund 0.25   Refunds part of the on-drink release penalty
+                             for AnyTime potions used in elite/boss combat,
+                             carried over from v22 (was already proven inert
+                             on its own; this generation re-tests it stacked
+                             with the other four levers).
+  --hp-potential-low-share 0.5   Softens the HP-potential shaping curve's
+                             concavity below half health, retired from the
+                             s19 rung and revived here now that the elite-pay
+                             passivity guards it was meant to police are live
+                             reads again (see v24-run-log.md).
+
+FORESIGHT HEADS (merged from the v25 plan, 2026-08-26 -- the standalone
+train_curriculum_v25.ps1 was deleted; this run carries both generations).
+Two new self-supervised aux heads ride the shared critic encoder alongside
+v10's 3-floor HP-loss head. They are auxiliary LOSSES only: no reward term,
+no advantage, no obs change.
+
+    --aux-hp-coef      0.25   v10's head, unchanged (in $longHorizon below)
+    --aux-win-coef     0.5    NEW: P(win | state), BCE
+    --aux-hpturn-coef  0.5    NEW: HP lost before my next turn, MSE
+
+The merge deliberately trades v25's clean single-lever attribution for one
+saved 15M-step generation. Disentangling ablation, if a read comes back
+weird: rerun with the two new coefs at 0, everything else identical.
+SYNERGY: --ascension-random 0 10 is also the fix for the aux_win
+positive-label starvation flagged in v25-run-log.md read #1 -- at fixed
+asc-10 the v23 policy wins 0/150 so the win head collapses to "always
+lose"; the ascension mix supplies real positive labels (asc-0 wins ~4.7%).
+
+FRESH CSV, REQUIRED: train_torch's per-iteration log path is derived from
+--save (train_torch.csv_path: runs/x.pt -> runs/run_logs/x.csv) and a row is
+appended with the CURRENT CSV_FIELDS header only when the file is new. The
+column list gained `aux_win` and `aux_turn` with the foresight heads, so
+appending onto an older CSV would silently write rows under the wrong
+header. runs/run_logs/sts2_run_torch_v24_s27.csv starts fresh -- but if you
+re-tag or hand-copy a CSV into place, DELETE it first.
+
+Post-run foresight reads (pre-registered in v25-run-log.md, amended for the
+merged provenance) gate the Phase-4 search work: tools/foresight_probe.py
+gates + the overnight tools/eval_search.py Tier-B measurement.
+
   Stage  Env  Asc  Steps  Notes
   s27    run   10    15M  continue runs/sts2_run_torch_v23_s26.pt
                           (--resume handoff, same kind, NO warm start).
                           v23 geometry verbatim; elite pay ramped by act.
-                          --critic-warmup 4: reward function changed
-                          (262144 steps, same as v22's 8 iters at batch
-                          32768).
+                          --critic-warmup 4: reward function changed AND
+                          the fresh aux tail heads perturb the shared
+                          critic encoder from the first update (262144
+                          steps, same as v22's 8 iters at batch 32768).
 
 Pre-registered reads = docs/superpowers/plans/v24-run-log.md. Evals with
 --merge-duplicates (the live decoder).
@@ -45,7 +105,7 @@ param(
     [long]$S27Steps = 15000000,
     [string]$Device = "cuda",
     [string]$Tag = "v24",
-    [string]$SeedCkpt = "runs/sts2_run_torch_v23_s26.pt",
+    [string]$SeedCkpt = "runs/sts2_run_torch_v23_s26_schema13.pt",
     [int]$NEnvs = 64,
     [int]$NWorkers = 8,
     [switch]$Resume,
@@ -76,20 +136,29 @@ if ((Test-Path $ckpt[27]) -and -not $Resume -and -not $Smoke) {
     Write-Host "Pass -Resume to continue it, or -Tag <name> for a new checkpoint set."
     exit 1
 }
-if (-not (Test-Path (Join-Path $root $SeedCkpt))) {
+# Normalize to an ABSOLUTE path FIRST. $SeedCkpt is passed to Invoke-Stage as
+# -PrevCkpt, whose `Test-Path $PrevCkpt` resolves against the CALLER's cwd --
+# so a relative default silently fails that test when the script is launched
+# from anywhere but the repo root (e.g. from inside scripts\), skipping the
+# --resume branch and training 15M steps from random init. Join only when the
+# caller did not already pass an absolute path.
+if (-not [System.IO.Path]::IsPathRooted($SeedCkpt)) {
+    $SeedCkpt = Join-Path $root $SeedCkpt
+}
+if (-not (Test-Path $SeedCkpt)) {
     Write-Host "SeedCkpt '$SeedCkpt' not found - nothing to extend." -ForegroundColor Red
     exit 1
 }
-$schema = & $py -c "import sys, torch; print(torch.load(sys.argv[1], map_location='cpu', weights_only=False).get('obs_schema'))" (Join-Path $root $SeedCkpt)
+$schema = & $py -c "import sys, torch; print(torch.load(sys.argv[1], map_location='cpu', weights_only=False).get('obs_schema'))" $SeedCkpt
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Could not read SeedCkpt schema (python exited $LASTEXITCODE)." -ForegroundColor Red
     exit 1
 }
-if (($schema | Select-Object -Last 1).Trim() -ne "12") {
-    Write-Host "SeedCkpt is not schema 12 - run tools\migrate_handrow_v14.py first." -ForegroundColor Red
+if (($schema | Select-Object -Last 1).Trim() -ne "13") {
+    Write-Host "SeedCkpt is not schema 13 - run tools\migrate_runobs_v24.py first." -ForegroundColor Red
     exit 1
 }
-$headVersion = & $py -c "import sys, torch; print(torch.load(sys.argv[1], map_location='cpu', weights_only=False).get('head_version'))" (Join-Path $root $SeedCkpt)
+$headVersion = & $py -c "import sys, torch; print(torch.load(sys.argv[1], map_location='cpu', weights_only=False).get('head_version'))" $SeedCkpt
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Could not read SeedCkpt head_version (python exited $LASTEXITCODE)." -ForegroundColor Red
     exit 1
@@ -135,10 +204,19 @@ $runRewards = @("--floor-rewards", "1.0", "1.5", "2.0", "--reward-win", "12",
                 "--hp-potential-scale", "4.0",
                 "--rest-heal-shaping-knee-cap",
                 "--energy-waste-penalty", "0.02",
-                "--potion-potential-scale", "0.5", "--potion-death-expiry")
+                "--potion-potential-scale", "0.5", "--potion-death-expiry",
+                "--potion-timing-refund", "0.25",
+                "--reward-elite-escalator", "0.5",
+                "--hp-potential-low-share", "0.5")
 
-# Long-horizon levers, inherited from v23 unchanged.
-$longHorizon = @("--gae-lambda", "0.99", "--aux-hp-coef", "0.25")
+# Long-horizon levers, inherited from v23 unchanged, plus --event-ent-coef
+# (new this generation: extra entropy bonus scoped to event-choice decisions).
+$longHorizon = @("--gae-lambda", "0.99", "--aux-hp-coef", "0.25", "--event-ent-coef", "0.01")
+
+# The two foresight heads merged from the v25 plan (see header). Auxiliary
+# LOSSES on the shared encoder only -- neither touches the reward function or
+# the advantage. --aux-hp-coef (v10's head) stays in $longHorizon above.
+$foresight = @("--aux-win-coef", "0.5", "--aux-hpturn-coef", "0.5")
 
 function Invoke-Phase {
     param([string]$Name, [string[]]$PhaseArgs)
@@ -267,10 +345,11 @@ function Invoke-Eval {
 # No between-stage gate: single-stage plan. Reads are post-run, human-read,
 # vs the v23_s26 --merge-duplicates baselines (reads table in v24-run-log.md).
 
-# ── s27: v23 geometry verbatim + per-act elite ramp (2/3/4, 1/1.5/2) ──
+# ── s27: v23 geometry verbatim + per-act elite ramp (2/3/4, 1/1.5/2)
+#         + the two foresight aux heads ──
 Invoke-Stage -Name "s27-run-asc10-elite-ramp" -SaveCkpt $ckpt[27] -PrevCkpt $SeedCkpt `
     -Steps $S27Steps -CriticWarmup 4 -EntCoef 0.01 -StageArgs (@(
-    "--env", "run", "--ascension", "10", "--lr", "3e-4") + $runRewards + $longHorizon)
+    "--env", "run", "--ascension-random", "0", "10", "--lr", "3e-4") + $runRewards + $longHorizon + $foresight)
 
 foreach ($asc in 10, 0) {
     # runs/run_logs/ (gitignored) is where every CSV lives now -- the eval
@@ -282,4 +361,4 @@ foreach ($asc in 10, 0) {
             -Csv "runs/run_logs/eval_${Tag}_s27_asc$asc"
     }
 }
-Write-Host "v24 elite-ramp run complete. Reads: docs/superpowers/plans/v24-run-log.md" -ForegroundColor Green
+Write-Host "v24 elite-ramp + foresight run complete. Reads: docs/superpowers/plans/v24-run-log.md + v25-run-log.md (foresight probe/search gates)" -ForegroundColor Green

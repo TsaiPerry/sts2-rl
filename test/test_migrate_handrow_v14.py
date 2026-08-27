@@ -9,10 +9,14 @@ from sts2_rl.full_env import MAX_HAND, N_CARD_FEATURES
 from sts2_rl.models import EntitySetActorCritic, run_action_layout
 from sts2_rl.run_env import STS2RunEnv, run_obs_layout
 from sts2_rl.tensor_obs import TensorObs
-from tools.migrate_handrow_v14 import migrate, splice_zero_columns
+from tools.migrate_handrow_v14 import (
+    HAND_PROJECTION_KEYS, migrate, splice_zero_columns)
 
 HAND_BLOCK_INDEX = 15   # combat.hand.ids -- see task-4 discovery (Step 1/5)
-HAND_KEY = "actor_encoder._blocks.15.weight"
+# Derived from the tool, not written as a literal: the block index shifts
+# whenever an obs segment is added ahead of the combat blocks (schema 13's
+# `event.options.cards.ids` did exactly that, moving hand from 15 to 16).
+HAND_KEY = HAND_PROJECTION_KEYS[0]
 
 
 def test_splice_zero_columns_positions_and_values():

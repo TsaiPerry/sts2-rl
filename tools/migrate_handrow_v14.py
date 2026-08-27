@@ -45,10 +45,32 @@ _REPO = Path(__file__).resolve().parents[1]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
+def _hand_block_index() -> int:
+    """Position of ``combat.hand.ids``'s row block in the CURRENT run-scale
+    layout.
+
+    Derived, not hardcoded: this was the literal 15 quoted in the module
+    docstring, and adding ``event.options.cards.ids`` to the run int segments
+    (schema 13) shifted every combat block one place right. A stale literal
+    here does not fail loudly -- it splices zero columns into whatever block
+    now sits at that index, quietly corrupting an unrelated projection.
+    """
+    from sts2_rl import models
+    from sts2_rl.checkpoints import ModelSpec, model_obs_layout
+
+    spec = ModelSpec("run", arch="entset")
+    f_segs, i_segs = model_obs_layout(spec)
+    row_blocks, _raw_f = models.entset_segment_plan(f_segs, i_segs)
+    for idx, (name, *_rest) in enumerate(row_blocks):
+        if models._entset_logical_name(name) == "hand":
+            return idx
+    raise RuntimeError("no 'hand' row block in the run-scale layout")
+
+
 #: The hand row-projection weight key(s) to splice. shared_encoder=True in
 #: the real checkpoint means only the actor-side encoder is registered in
 #: state_dict (see module docstring) -- one key, not an actor/critic pair.
-HAND_PROJECTION_KEYS = ("actor_encoder._blocks.15.weight",)
+HAND_PROJECTION_KEYS = (f"actor_encoder._blocks.{_hand_block_index()}.weight",)
 
 #: Floats are the tail of the row (module docstring); the splice position is
 #: the OLD row's full width, discovered per-checkpoint from that weight's own

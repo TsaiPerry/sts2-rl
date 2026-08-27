@@ -221,17 +221,22 @@ def test_csv_has_behavior_metric_columns(tmp_path):
     ))
     with open(path) as fh:
         header, row = fh.read().strip().splitlines()
-    assert header.split(",")[-17:] == [
+    assert header.split(",")[-20:] == [
         "energy_unspent", "card_take",
         "upgrades", "removes", "elites", "potions_got", "potions_used",
         "potions_used_elite", "potions_used_boss", "potions_used_normal",
         "potions_expired", "potion_use_hp", "relics", "hp_lost", "aux",
+        # v25: the two foresight aux heads, immediately after "aux".
+        "aux_win", "aux_turn",
         "potion_ent",
         # v23: trailing mean voluntary discards per episode.
-        "potions_discarded"]
-    assert row.split(",")[-17:] == [
+        "potions_discarded",
+        # v24: trailing mean event-choice entropy per iteration.
+        "event_ent"]
+    assert row.split(",")[-20:] == [
         "1.25", "0.4", "2.0", "1.0", "0.5", "1.5", "1.0",
-        "0.2", "0.1", "0.7", "0.3", "0.55", "0.8", "12.5", "0.02", "", ""]
+        "0.2", "0.1", "0.7", "0.3", "0.55", "0.8", "12.5", "0.02",
+        "", "", "", "", ""]
 
 
 # ── Rest sites: heal / upgrade share of visits ────────────────────────────────

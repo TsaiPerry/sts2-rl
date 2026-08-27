@@ -219,7 +219,7 @@ def test_cards_f_effective_cost_tracks_upgrade_but_not_live_modifier():
 
 
 def test_run_schema_version():
-    assert RUN_OBS_SCHEMA_VERSION == 12
+    assert RUN_OBS_SCHEMA_VERSION == 13
 
 
 def test_run_layout_embedded_combat_block_matches_v7_layout():
@@ -260,12 +260,18 @@ def test_run_layout_no_segment_added_removed_or_resized_beyond_the_ledger():
       * v12 — full_env's hand.f row grows by 2 fields (f[29] glow_gold,
         f[30] block_preview_move); MAX_HAND (10) x 2 = +20 f_dim, i_dim
         unchanged: 4715/1469 -> 4735/1469.
+      * v13 — `event.options.cards.ids`, the card each event option previews,
+        four 16-wide blocks on the INT half only (the event block carried
+        just (present, locked) per option, so nothing card-dependent could be
+        learned): 4735/1469 -> 4735/1533.
+      * v13: event.options.ids + run.ascension (v24 fold). `run.ascension`
+        adds a 1-wide float segment: 4735/1533 -> 4736/1533.
     """
     layout = run_obs_layout()
     total_f = sum(w for _, w in layout.f_segments)
     total_i = sum(w for _, w in layout.i_segments)
-    assert total_f == layout.f_dim == 4735
-    assert total_i == layout.i_dim == 1469
+    assert total_f == layout.f_dim == 4736
+    assert total_i == layout.i_dim == 1533
     names_f = {name for name, _ in layout.f_segments}
     names_i = {name for name, _ in layout.i_segments}
     # Spot-check the two REDEFINE segments and a handful of others are still

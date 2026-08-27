@@ -159,7 +159,10 @@ class ParityResult:
         return (
             f"parity gate {verdict}{detail} "
             f"[{self.n} samples: argmax {self.n - self.argmax_mismatches}/{self.n} agree, "
-            f"max|Δ|={self.max_abs:.3e}, max relative Δ={self.max_rel:.3e}, "
+            # ASCII only: this line is printed by the CLI, and a Windows console
+            # on the cp1252 default codepage raises UnicodeEncodeError on the
+            # delta sign, failing the export itself rather than just the message.
+            f"max|delta|={self.max_abs:.3e}, max relative delta={self.max_rel:.3e}, "
             f"min top1-top2 margin={self.min_margin:.4f}]")
 
 

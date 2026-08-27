@@ -67,6 +67,11 @@ class EnvSpec:
                                                # since v7 Task 10 (gimmick
                                                # probes fight at the stage's
                                                # ascension).
+    # v24 (Task 1): per-episode ascension re-roll, uniform [lo, hi] at each
+    # reset (run-scale envs only). Tuple, not list, so the spec stays
+    # hashable/picklable like the other tuple knobs above. None = default =
+    # fixed `ascension` above, bit-identical env.
+    ascension_sample: "tuple[int, int] | None" = None
     # v7 reward/curriculum knobs (run/column only, plan Task 7). All default
     # OFF so a default spec builds a bit-identical env. reward_win_run is
     # None (not a float) so "unset" keeps the env's own reward_win default.
@@ -88,6 +93,9 @@ class EnvSpec:
     # hashable/picklable like floor_rewards_by_act. None = flat = default.
     elite_rewards_by_act: tuple[float, ...] | None = None
     elite_attempt_rewards_by_act: tuple[float, ...] | None = None
+    # v24: within-act elite kill escalator -- N-th kill pays
+    # base*(1+esc*(N-1)), reset on act advance. 0.0 = default (inert).
+    reward_elite_escalator: float = 0.0
     # v8 curriculum mask (plan Task 4, run/column only): None keeps the
     # env's own default (no masking) — see `build_env`'s v7_kwargs below,
     # same "only set when not None" pattern as reward_win_run.
@@ -155,6 +163,7 @@ def build_env(spec: EnvSpec):
     # fully inert either way), and reward_win_run only when set so the
     # env's own reward_win default (3.0) stays authoritative.
     v7_kwargs: dict = dict(
+        ascension_sample=spec.ascension_sample,
         floor_rewards_by_act=spec.floor_rewards_by_act,
         reward_upgrade=spec.reward_upgrade,
         reward_remove=spec.reward_remove,
@@ -164,6 +173,7 @@ def build_env(spec: EnvSpec):
         reward_elite_attempt=spec.reward_elite_attempt,
         elite_rewards_by_act=spec.elite_rewards_by_act,
         elite_attempt_rewards_by_act=spec.elite_attempt_rewards_by_act,
+        reward_elite_escalator=spec.reward_elite_escalator,
         hp_potential_scale=spec.hp_potential_scale,
         hp_potential_low_share=spec.hp_potential_low_share,
         potion_potential_scale=spec.potion_potential_scale,

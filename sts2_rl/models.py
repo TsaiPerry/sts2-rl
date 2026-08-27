@@ -397,6 +397,10 @@ _ENTSET_SEGMENT_VOCABS: dict[str, tuple[str | None, ...]] = {
     "run.relics": ("relics",),
     "run.boss": ("monsters",),
     "event": ("events",),
+    "event.options.cards": ("cards",),
+    "event.options.relics": ("relics",),
+    "event.options.relics_traded": ("relics",),
+    "event.options.potions": ("potions",),
     "shop.cards": ("cards",),
     "shop.relics": ("relics",),
     "shop.potions": ("potions",),
@@ -1056,6 +1060,7 @@ class EntitySetActorCritic(neural_network.Module):
         hidden: tuple[int, ...] = (256, 256),
         embed_dims: dict[str, int] | None = None,
         shared_encoder: bool = False,
+        n_quantiles: int = 0,
     ) -> None:
         super().__init__()
         self.f_segments = list(f_segments)
@@ -1066,6 +1071,9 @@ class EntitySetActorCritic(neural_network.Module):
         self.n_actions = n_actions
         self.hidden = tuple(hidden)
         self.shared_encoder = shared_encoder
+        if n_quantiles < 0:
+            raise ValueError(f"n_quantiles must be >= 0, got {n_quantiles}")
+        self.n_quantiles = int(n_quantiles)
 
         if action_layout.n_actions != n_actions:
             raise ValueError(
@@ -1281,17 +1289,54 @@ class EntitySetActorCritic(neural_network.Module):
 
         # v10 aux head (spec 2026-08-13-aux-hp-head-gae-lambda-design):
         # supervised "hp lost over the next 3 floors" prediction off the
-        # critic/shared encoder. MUST stay registered LAST: Adam state is
+        # critic/shared encoder. MUST stay in the aux TAIL: Adam state is
         # positional; checkpoints.load_agent's aux-lenient overlay and
         # train_torch's optimizer-group patch both assume pre-existing
-        # params keep their positions and aux params occupy the tail.
+        # params keep their positions and aux params occupy the tail, in the
+        # FROZEN order aux_hp3_head, aux_win_head, aux_hpturn_head.
         self.aux_hp3_head = neural_network.Sequential(
             neural_network.Linear(self.critic_encoder.out_dim, 64), neural_network.Tanh(),
             neural_network.Linear(64, 1),
         )
+        # v25 foresight heads (plan 2026-08-26-foresight-v25-v26): P(win)
+        # and hp-lost-before-next-turn, off the same critic encoder. Tail
+        # order is FROZEN: aux_hp3_head, aux_win_head, aux_hpturn_head —
+        # Adam state is positional and load_model_state_lenient fresh-inits
+        # exactly the tail params a pre-v25 checkpoint lacks.
+        self.aux_win_head = neural_network.Sequential(
+            neural_network.Linear(self.critic_encoder.out_dim, 64), neural_network.Tanh(),
+            neural_network.Linear(64, 1),
+        )
+        self.aux_hpturn_head = neural_network.Sequential(
+            neural_network.Linear(self.critic_encoder.out_dim, 64), neural_network.Tanh(),
+            neural_network.Linear(64, 1),
+        )
+        # v26 distributional critic (plan 2026-08-26-foresight-v25-v26): when
+        # `n_quantiles > 0` the value head becomes `n_quantiles` quantile
+        # estimates trained with the quantile-Huber (QR) loss, and every
+        # scalar value this class reports is their MEAN. Registered LAST, so
+        # the frozen tail order is aux_hp3_head, aux_win_head,
+        # aux_hpturn_head, critic_q -- Adam state is positional and
+        # `checkpoints.load_model_state_lenient` fresh-inits exactly the tail
+        # params a pre-quantile checkpoint lacks.
+        #
+        # The scalar `self.critic` STAYS registered even then: dropping it
+        # would shift every later parameter's position and invalidate a saved
+        # Adam state. It simply receives no gradient (nothing in the trainer's
+        # loss reads it once the QR loss replaces v_loss), so Adam skips it.
+        if self.n_quantiles > 0:
+            self.critic_q = _mlp(self.critic_encoder.out_dim, self.hidden,
+                                 self.n_quantiles, out_std=1.0)
+
+    def _value_from_critic_features(self, cf: torch.Tensor) -> torch.Tensor:
+        """The scalar value for pooled critic features -- the quantile MEAN
+        when the distributional critic is on, the scalar head otherwise."""
+        if self.n_quantiles > 0:
+            return self.critic_q(cf).mean(-1)
+        return self.critic(cf).squeeze(-1)
 
     def get_value(self, obs: TensorObs) -> torch.Tensor:
-        return self.critic(self.critic_encoder(obs)).squeeze(-1)
+        return self._value_from_critic_features(self.critic_encoder(obs))
 
     def _choice_overlay(
         self, ctx: torch.Tensor, rows: dict[str, torch.Tensor], obs: TensorObs,
@@ -1385,26 +1430,51 @@ class EntitySetActorCritic(neural_network.Module):
         mask: torch.Tensor,
         action: torch.Tensor | None = None,
         with_aux: bool = False,
+        with_quantiles: bool = False,
         with_dist: bool = False,
     ) -> tuple[torch.Tensor, ...]:
         """Returns ``(action, log_prob, entropy, value)`` — same contract as
         ``MaskedActorCritic.get_action_and_value`` — or, when
-        ``with_aux=True`` (v10, spec 2026-08-13-aux-hp-head-gae-lambda-design),
-        a 5-tuple ``(action, log_prob, entropy, value, aux_pred)`` with the
-        aux head's "hp lost over the next 3 floors" prediction appended,
-        computed off the SAME critic-encoder features as ``value`` (no extra
-        encoder forward pass). When ``with_dist=True`` (v16), the already-
-        built ``Categorical`` dist is appended as the FINAL tuple element,
-        after ``aux_pred`` if ``with_aux`` is also set — the existing tuple
-        orders never change, this only ever appends."""
+        ``with_aux=True`` (v10, spec 2026-08-13-aux-hp-head-gae-lambda-design;
+        v25 plan 2026-08-26-foresight-v25-v26), a 7-tuple with the three aux
+        predictions appended in the frozen order (hp3, win_logit, hpturn);
+        ``with_dist``'s dist remains the final element. All three are computed
+        off the SAME critic-encoder features as ``value`` (no extra encoder
+        forward pass). When ``with_dist=True`` (v16), the already-built
+        ``Categorical`` dist is appended as the FINAL tuple element, after the
+        aux predictions if ``with_aux`` is also set — the existing tuple
+        orders never change, this only ever appends.
+
+        ``with_quantiles=True`` (v26 distributional critic) appends the raw
+        ``(B, n_quantiles)`` tensor AFTER the aux predictions and BEFORE
+        ``with_dist``'s dist, which stays final. It requires the model to
+        have been built with ``n_quantiles > 0``.
+
+        ``value`` (element 3) is the quantile MEAN whenever the
+        distributional critic is on, so rollout/GAE call sites need no
+        branch — and so the gradient-free scalar ``self.critic`` never leaks
+        into a value estimate anyone acts on."""
         dist = self._dist(obs, mask)
         if action is None:
             action = dist.sample()
         cf = self.critic_encoder(obs)
-        value = self.critic(cf).squeeze(-1)
+        quantiles = self.critic_q(cf) if self.n_quantiles > 0 else None
+        value = (quantiles.mean(-1) if quantiles is not None
+                 else self.critic(cf).squeeze(-1))
         out = (action, dist.log_prob(action), dist.entropy(), value)
         if with_aux:
-            out = out + (self.aux_hp3_head(cf).squeeze(-1),)
+            out = out + (
+                self.aux_hp3_head(cf).squeeze(-1),
+                self.aux_win_head(cf).squeeze(-1),     # raw logit; BCE-with-logits
+                self.aux_hpturn_head(cf).squeeze(-1),
+            )
+        if with_quantiles:
+            if quantiles is None:
+                raise ValueError(
+                    "with_quantiles=True needs a model built with "
+                    "n_quantiles > 0 (this one has the scalar critic); pass "
+                    "--quantile-critic N at training time.")
+            out = out + (quantiles,)
         if with_dist:
             out = out + (dist,)
         return out

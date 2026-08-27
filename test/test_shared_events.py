@@ -208,6 +208,35 @@ def test_slippery_bridge_overcome_removes_the_shown_card():
     assert event.finished
 
 
+def test_slippery_bridge_overcome_option_carries_the_shown_card():
+    """The source attaches HoverTipFactory.FromCard(RandomCardToLose) to the
+    OVERCOME option on the initial page AND on every HOLD_ON page
+    (SlipperyBridge.cs:96, :149), so the player always sees which card they
+    would drop. HOLD_ON previews nothing — it re-rolls, so the card it leads to
+    does not exist yet."""
+    run = slippery_run()
+    event = make_event("slippery_bridge", run).begin()
+
+    overcome, hold_on = event.options
+    assert overcome.key == "OVERCOME"
+    assert overcome.card_id == event.shown_card.id
+    assert hold_on.card_id is None
+
+
+def test_slippery_bridge_option_card_follows_the_reroll():
+    """Holding on re-rolls the shown card, and the OVERCOME option must follow
+    it — a stale card here would feed the policy the wrong identity for exactly
+    the decision this exposure exists to inform."""
+    run = slippery_run()
+    event = make_event("slippery_bridge", run).begin()
+    first = event.shown_card
+
+    assert event.choose("HOLD_ON_0")
+    assert not event.finished
+    assert event.shown_card is not first          # GetNewRandomCard re-rolled
+    assert event.options[0].card_id == event.shown_card.id
+
+
 def test_brain_leech_gate_is_acts_1_and_2():
     from sts2_rl.events import ALL_EVENTS
 

@@ -54,7 +54,9 @@ class RelicTrader(Event):
     def initial_options(self) -> list[EventOption]:
         keys = ("TOP", "MIDDLE", "BOTTOM")
         options = [
-            EventOption(keys[i], lambda i=i: self._trade(i))
+            EventOption(keys[i], lambda i=i: self._trade(i),
+                        relic_id=self._new[i].id,
+                        relic_traded_id=self._owned[i].id)
             for i in range(min(len(self._owned), len(self._new)))
         ]
         return options or [EventOption("PROCEED", lambda: self._finish("DONE"))]

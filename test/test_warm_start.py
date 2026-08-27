@@ -43,6 +43,20 @@ def _build(env_kind: str, hidden=(32,)):
     return model, spec, obs_dim, n_actions
 
 
+def _block_index(spec, logical_name: str) -> int:
+    """Position of ``logical_name``'s row block in an entset encoder's
+    ``_blocks`` list. Derived from the same plan the encoder is built from, so
+    tests never hardcode an index that any new obs segment would shift."""
+    f_segs, i_segs = model_obs_layout(spec)
+    row_blocks, _raw_f = models.entset_segment_plan(f_segs, i_segs)
+    # Blocks are named by their raw ".ids" segment; the encoder pairs them by
+    # the LOGICAL name (".ids" dropped, "combat." prefix stripped), which is
+    # what makes a run block and a combat block "the same segment".
+    names = [models._entset_logical_name(name) for name, *_rest in row_blocks]
+    assert logical_name in names, f"{logical_name!r} not in {names}"
+    return names.index(logical_name)
+
+
 def _fake_ckpt(model, env_kind: str, hidden=(32,)) -> dict:
     return {
         "model": model.state_dict(),
@@ -129,22 +143,35 @@ def test_blocks_transfer_only_for_logically_matched_segments_not_by_position():
     coincidence -- same shape, unrelated meaning). A naive name+shape
     ``strict=False`` load would copy run's shop-relics projection into
     combat's enemy-powers slot. The real logical match for combat's
-    enemy2.powers sits at run's ``_blocks.19`` instead (see the module
-    docstring's `_blocks` dump)."""
+    enemy2.powers sits at a DIFFERENT index in run's block list.
+
+    Both indices are derived from the layouts rather than written as literals:
+    they are positions in the run/combat int-segment lists, so ANY segment
+    added ahead of them shifts them. Hardcoding made this test fail on the
+    unrelated v13 `event.options.cards.ids` addition, which is noise — the
+    behaviour under test (match by logical name, not position) was unaffected."""
     torch.manual_seed(4)
     run_model, _rs, _rd, _rn = _build("run")
     ckpt = _fake_ckpt(run_model, "run")
 
     torch.manual_seed(5)
     target, target_spec, _cd, _cn = _build("combat")
-    before_block6 = target.state_dict()["actor_encoder._blocks.6.weight"].clone()
+
+    combat_block = _block_index(target_spec, "enemy2.powers")
+    run_block = _block_index(_spec("run", (32,)), "enemy2.powers")
+    # The landmine only exists while the two indices genuinely disagree.
+    assert combat_block != run_block
+
+    key = f"actor_encoder._blocks.{combat_block}.weight"
+    before_block6 = target.state_dict()[key].clone()
 
     warm_start_agent(target, ckpt, target_spec)
 
-    after_block6 = target.state_dict()["actor_encoder._blocks.6.weight"]
+    after_block6 = target.state_dict()[key]
     run_sd = run_model.state_dict()
-    wrong_source = run_sd["actor_encoder._blocks.6.weight"]     # shop.relics
-    right_source = run_sd["actor_encoder._blocks.19.weight"]    # enemy2.powers
+    # Same index in the SOURCE model — a different segment entirely.
+    wrong_source = run_sd[f"actor_encoder._blocks.{combat_block}.weight"]
+    right_source = run_sd[f"actor_encoder._blocks.{run_block}.weight"]
 
     assert not torch.equal(after_block6, wrong_source), (
         "block 6 was copied by POSITION (run's shop.relics) instead of by "

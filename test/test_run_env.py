@@ -64,7 +64,7 @@ def test_action_layout():
     # Coffer = 10). Recent version bumps (v8-v12) were observation-only
     # widenings (combat enemy row, intent history, REWARD_CARD_SLOTS,
     # glow_gold/block_preview_move) that don't affect this action layout.
-    assert RUN_OBS_SCHEMA_VERSION == 12
+    assert RUN_OBS_SCHEMA_VERSION == 13
     # Combat block sized for the true worst-case belt: 1 + 10×6 + 10×6 = 121.
     assert N_COMBAT_ACTIONS == combat_action_count(MAX_POTION_SLOTS) == 121
     assert CHOICE_BASE == 121

@@ -58,7 +58,10 @@ class DollRoom(Event):
             list(_DOLLS), er if er is not None else self.rng, key=str.upper,
         )[:count]
         self._set_state(page, [
-            EventOption(rid, lambda r=rid: self._take(r)) for rid in dolls
+            # The relic is the whole choice here and the order is shuffled,
+            # so without relic_id the three options are indistinguishable.
+            EventOption(rid, lambda r=rid: self._take(r), relic_id=rid)
+            for rid in dolls
         ])
 
     def _choose_random(self) -> None:

@@ -17,7 +17,7 @@ def test_contract_dims_match_layout():
     assert c["f_dim"] == sum(w for _, w in layout.f_segments)
     assert c["i_dim"] == sum(w for _, w in layout.i_segments)
     assert c["combat_obs_schema"] == full_env.OBS_SCHEMA_VERSION == 8
-    assert c["run_obs_schema"] == run_env.RUN_OBS_SCHEMA_VERSION == 12
+    assert c["run_obs_schema"] == run_env.RUN_OBS_SCHEMA_VERSION == 13
 
 
 def test_contract_layout_offsets_are_contiguous():

@@ -54,6 +54,17 @@ class ModelSpec:
                                          # checked as its own field rather
                                          # than folded into the head-version
                                          # bump (see check_checkpoint below).
+    n_quantiles: int = 0                # v26: entset only -- 0 keeps the
+                                         # scalar critic; > 0 adds the
+                                         # `critic_q` distributional head
+                                         # (quantile-Huber loss, value = the
+                                         # quantile mean). Stamped and checked
+                                         # as its own field for the same
+                                         # reason as `shared_encoder`: it
+                                         # changes the critic's parameter
+                                         # structure, not the ACTION head
+                                         # structure `ENTSET_HEAD_VERSION`
+                                         # versions.
 
 
 def obs_schema_version(spec: ModelSpec) -> int:
@@ -171,6 +182,12 @@ def make_model(spec: ModelSpec, obs_dim: tuple[int, int], n_actions: int):
             f"half rather than merely degrading it, and this project keeps no "
             f"old-vs-new comparison baseline. Use --arch entset.")
 
+    if spec.n_quantiles and spec.arch != "entset":
+        raise SystemExit(
+            f"n_quantiles={spec.n_quantiles} needs --arch entset (got "
+            f"--arch {spec.arch!r}); the distributional `critic_q` head lives "
+            f"on EntitySetActorCritic only.")
+
     if spec.arch == "entset":
         f_segments, i_segments = model_obs_layout(spec)
         seg_f = sum(w for _, w in f_segments)
@@ -196,7 +213,8 @@ def make_model(spec: ModelSpec, obs_dim: tuple[int, int], n_actions: int):
             action_layout = combat_action_layout(MAX_POTIONS)
         return EntitySetActorCritic(
             f_segments, i_segments, n_actions, action_layout,
-            hidden=tuple(spec.hidden), shared_encoder=spec.shared_encoder)
+            hidden=tuple(spec.hidden), shared_encoder=spec.shared_encoder,
+            n_quantiles=spec.n_quantiles)
     if spec.arch == "entity":
         segments = model_obs_segments(spec)
         seg_dim = sum(w for _, w in segments)
@@ -296,6 +314,20 @@ def check_checkpoint(ckpt: dict, spec: ModelSpec,
                 f"between the two arms (one shared instance vs two "
                 f"independent ones) -- there is no weight migration between "
                 f"them, match --shared-encoder or start --fresh.")
+        # v26 distributional critic: same treatment as `shared_encoder`
+        # above -- a structural difference in the critic (one scalar head vs
+        # an `n_quantiles`-wide `critic_q` head) that load_state_dict would
+        # otherwise surface as a cryptic key/shape error. Missing key = 0
+        # (every pre-v26 checkpoint is scalar-critic).
+        ckpt_n_quantiles = ckpt.get("n_quantiles", 0)
+        if ckpt_n_quantiles != spec.n_quantiles:
+            raise SystemExit(
+                f"checkpoint n_quantiles {ckpt_n_quantiles} != this run's "
+                f"--quantile-critic {spec.n_quantiles}; the critic head is "
+                f"structurally different between the two (scalar vs "
+                f"{spec.n_quantiles or ckpt_n_quantiles} quantiles) and there "
+                f"is no weight migration between them -- match "
+                f"--quantile-critic or start --fresh.")
     shape = (ckpt.get("obs_dim"), ckpt.get("n_actions"), tuple(ckpt.get("hidden", ())))
     want = (obs_dim, n_actions, tuple(spec.hidden))
     if shape != want:
@@ -338,6 +370,9 @@ def spec_from_checkpoint(ckpt: dict, env_kind: str,
         arch=ckpt.get("arch", "mlp"),
         hidden=tuple(ckpt.get("hidden", ())),
         shared_encoder=ckpt.get("shared_encoder", False),
+        # v26: adopt the checkpoint's critic structure, same rule as
+        # arch/hidden (loading builds the model the weights were trained as).
+        n_quantiles=ckpt.get("n_quantiles", 0),
     )
 
 
@@ -570,23 +605,40 @@ def warm_start_agent(agent: Any, ckpt: dict, spec: ModelSpec) -> tuple[int, int]
     return n_transferred_params, n_reinitialized_params
 
 
+#: The parameter-name prefixes that make up ``EntitySetActorCritic``'s FROZEN
+#: TAIL -- the blocks that were appended after the original actor/critic and
+#: that a strictly older checkpoint may therefore simply not have. Adam state
+#: is positional, so leniency is safe for exactly these and nothing else: they
+#: occupy the END of ``named_parameters()``, so every pre-existing param keeps
+#: its index (see ``train_torch.patch_optimizer_group_for_fresh_aux``).
+#: Order here is documentation only; the model registers them in the order
+#: aux_hp3_head, aux_win_head, aux_hpturn_head, critic_q.
+FRESH_TAIL_PREFIXES = ("aux_", "critic_q")
+
+
 def load_model_state_lenient(model: Any, state: dict) -> int:
     """Load a saved state dict into ``model``, tolerating a checkpoint that
-    predates the v10 aux heads (spec 2026-08-13-aux-hp-head-gae-lambda-design).
+    predates one of the frozen TAIL blocks -- the v10/v25 aux heads (spec
+    2026-08-13-aux-hp-head-gae-lambda-design) or the v26 ``critic_q``
+    distributional head (plan 2026-08-26-foresight-v25-v26).
 
     A strict ``model.load_state_dict(state)`` would raise on the missing
-    ``aux_*`` keys. When every missing key is an aux param, overlay the
-    checkpoint onto the fresh model's own full state dict (same pattern as
-    ``warm_start_agent``) so everything else loads strictly and only the aux
-    tail keeps its fresh init. Any other kind of mismatch still raises,
-    unchanged from today.
+    keys. When every missing key belongs to that tail
+    (``FRESH_TAIL_PREFIXES``), overlay the checkpoint onto the fresh model's
+    own full state dict (same pattern as ``warm_start_agent``) so everything
+    else loads strictly and only the tail keeps its fresh init. Any other kind
+    of mismatch still raises, unchanged from today.
 
-    Returns the number of freshly-initialized aux params (0 for an
-    already-current checkpoint).
+    Returns the number of freshly-initialized tail params (0 for an
+    already-current checkpoint) -- the count
+    ``train_torch.patch_optimizer_group_for_fresh_aux`` needs to widen a saved
+    Adam param group by. All of these blocks are plain ``Linear`` stacks with
+    no buffers, so one missing state_dict key is exactly one missing
+    parameter.
     """
     own = model.state_dict()
     missing = [k for k in own if k not in state]
-    if missing and all(k.startswith("aux_") for k in missing):
+    if missing and all(k.startswith(FRESH_TAIL_PREFIXES) for k in missing):
         full = dict(own)
         full.update(state)
         model.load_state_dict(full)
@@ -616,6 +668,6 @@ def load_agent(path: str, *, env_kind: str, obs_dim: tuple[int, int], n_actions:
     model = make_model(spec, obs_dim, n_actions).to(device)
     n_fresh_aux = load_model_state_lenient(model, ckpt["model"])
     if n_fresh_aux:
-        print(f"aux heads fresh-initialized ({n_fresh_aux} params not in checkpoint)")
+        print(f"tail heads fresh-initialized ({n_fresh_aux} params not in checkpoint)")
     model.eval()
     return model, ckpt

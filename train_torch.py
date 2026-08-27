@@ -68,7 +68,7 @@ import torch.nn as nn
 from sts2_rl import checkpoints, models
 from sts2_rl.checkpoints import ModelSpec
 from sts2_rl.full_env import COMBAT_POTION_BASE, MAX_ENEMIES
-from sts2_rl.run_env import MAX_POTION_SLOTS, POTION_BASE
+from sts2_rl.run_env import CHOICE_BASE, CHOICE_SLOTS, MAX_POTION_SLOTS, POTION_BASE
 from sts2_rl.tensor_obs import TensorObs
 from sts2_rl.vec_env import EnvSpec, make_vec_env, resolve_n_workers
 
@@ -95,6 +95,26 @@ def potion_entropy_bonus(probs, mask):
     q = (probs * legal_pot).sum(-1).clamp(1e-6, 1.0 - 1e-6)
     hb = -(q * q.log() + (1.0 - q) * (1.0 - q).log())
     return (hb * has).sum() / has.sum()
+
+
+def event_entropy_bonus(probs, mask, f_obs, event_present_col):
+    """Mean entropy of the legal-CHOICE distribution on EVENT steps only.
+    Event steps are flagged by the obs float `event.present` (the mask
+    can't tell events from other choice screens). Renormalize probs over
+    legal choice slots; exclude steps with <2 legal choices; average over
+    included steps only (potion_ent precedent). Zero tensor if none."""
+    choice = torch.zeros_like(mask)
+    choice[:, CHOICE_BASE:CHOICE_BASE + CHOICE_SLOTS] = True
+    legal = mask & choice
+    is_event = f_obs[:, event_present_col] > 0.5
+    multi = legal.sum(-1) >= 2
+    keep = is_event & multi
+    if not keep.any():
+        return probs.new_zeros(())
+    p = probs[keep] * legal[keep].float()
+    p = p / p.sum(-1, keepdim=True).clamp_min(1e-12)
+    ent = -(p.clamp_min(1e-12).log() * p).sum(-1)
+    return ent.mean()
 
 # --lr's default lives here rather than in add_argument so the flag can stay
 # None when unset: on a resume that difference decides whether we keep the
@@ -145,6 +165,11 @@ CSV_FIELDS = ["iter", "global_step", "wall_seconds", "sps", "ep_ret", "win",
               # sanity gate ("aux_loss falling") was unverifiable post-hoc
               # because aux= only went to the console -- persist it.
               "aux",
+              # v25 foresight heads (plan 2026-08-26-foresight-v25-v26): mean
+              # masked BCE of the P(win) head and mean masked MSE of the
+              # "hp lost before my next turn" head, per iteration (NaN when
+              # the matching coef is 0).
+              "aux_win", "aux_turn",
               # v16 potion-entropy bonus: mean binary entropy of the legal-
               # potion probability mass per iteration (NaN when
               # --potion-ent-coef is 0).
@@ -152,7 +177,11 @@ CSV_FIELDS = ["iter", "global_step", "wall_seconds", "sps", "ep_ret", "win",
               # v23: mean voluntary out-of-combat discards per episode
               # (EP_METRIC_KEYS "ep_potions_discarded") -- the v22 affordance
               # had no mid-run visibility, only the final eval.
-              "potions_discarded"]
+              "potions_discarded",
+              # v24 (plan Task 5): mean entropy of the legal-choice
+              # distribution on event steps only (NaN when
+              # --event-ent-coef is 0).
+              "event_ent"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -220,6 +249,12 @@ def parse_args() -> argparse.Namespace:
                          "unlike env_kind/schema/arch a resume WARNS rather "
                          "than refuses on a mismatch -- v7 deliberately "
                          "resumes training across ascensions.")
+    ap.add_argument("--ascension-random", type=int, nargs=2, default=None,
+                    metavar=("LO", "HI"),
+                    help="v24: re-roll the episode ascension uniformly in "
+                         "[LO, HI] at every reset (obs carry run.ascension "
+                         "so the policy sees the level); overrides "
+                         "--ascension for run-scale envs")
     # v7 reward/curriculum knobs (plan Task 7; run/column envs only, all
     # default OFF so a plain invocation trains exactly as before).
     ap.add_argument("--floor-rewards", type=float, nargs=3, default=None,
@@ -254,6 +289,10 @@ def parse_args() -> argparse.Namespace:
                     metavar=("ACT1", "ACT2", "ACT3"),
                     help="v24: per-act elite-ENTRY reward, replacing the flat "
                          "--reward-elite-attempt. Unset keeps the flat value")
+    ap.add_argument("--reward-elite-escalator", type=float, default=0.0,
+                    help="v24: within-act elite kill escalator -- the N-th "
+                         "elite killed in an act pays base*(1+esc*(N-1)); "
+                         "resets when act_index advances. 0.0 = default (inert)")
     ap.add_argument("--rest-heal-mask-above", type=float, default=None,
                     help="v8 plan Task 4: at a rest site, above this hp/max_hp "
                          "ratio, mask out REST_HEAL if another rest action is "
@@ -340,12 +379,30 @@ def parse_args() -> argparse.Namespace:
                     help="v10: weight of the auxiliary 'hp lost over the "
                          "next 3 floors' MSE (0 = head unused; run env + "
                          "entset only)")
+    ap.add_argument("--aux-win-coef", type=float, default=0.0,
+                    help="v25: weight of the auxiliary P(win|state) BCE head")
+    ap.add_argument("--aux-hpturn-coef", type=float, default=0.0,
+                    help="v25: weight of the auxiliary 'hp lost before my "
+                         "next turn' MSE head")
+    ap.add_argument("--quantile-critic", type=int, default=0,
+                    metavar="N",
+                    help="v26: replace the scalar value head with N quantile "
+                         "estimates trained by the quantile-Huber (QR) loss; "
+                         "the reported value is their mean (0 = off; entset "
+                         "only). No value clipping is applied in this mode.")
     ap.add_argument("--potion-ent-coef", type=float, default=0.0,
                     help="v16: extra entropy bonus on the total legal-potion-"
                          "action probability mass (binary entropy of q), "
                          "steps without a legal potion action excluded -- "
                          "exploration for drink timing without a reward term "
                          "(0 = off; run env + entset only)")
+    ap.add_argument("--event-ent-coef", type=float, default=0.0,
+                    help="v24: extra entropy bonus on the legal-choice "
+                         "distribution, event steps only (flagged by the "
+                         "run obs float event.present -- the action mask "
+                         "can't tell events from other CHOICE_BASE screens) "
+                         "-- exploration for event-option variety without a "
+                         "reward term (0 = off; run env + entset only)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="cpu",
                     help="cpu (default; fastest for --arch mlp), cuda "
@@ -523,6 +580,7 @@ def parse_args() -> argparse.Namespace:
             or args.reward_elite_attempt
             or args.elite_rewards is not None
             or args.elite_attempt_rewards is not None
+            or args.reward_elite_escalator
             or args.rest_heal_mask_above is not None
             or args.hp_potential_scale or args.potion_potential_scale
             or args.potion_death_penalty
@@ -531,33 +589,53 @@ def parse_args() -> argparse.Namespace:
             or args.potion_timing_refund
             or args.deck_random_prob
             or args.deck_inject or args.deck_inject_prob
-            or args.deck_inject_midrun or args.deck_inject_midrun_prob):
+            or args.deck_inject_midrun or args.deck_inject_midrun_prob
+            or getattr(args, "ascension_random", None) is not None):
         raise SystemExit(
             "--floor-rewards/--reward-win/--reward-upgrade/--reward-remove/"
             "--reward-elite/--reward-relic/--reward-boss/"
             "--reward-elite-attempt/--elite-rewards/--elite-attempt-rewards/"
+            "--reward-elite-escalator/"
             "--rest-heal-mask-above/"
             "--hp-potential-scale/--potion-potential-scale/"
             "--potion-death-penalty/--energy-waste-penalty/"
             "--potion-option-value/--potion-option-expiry/"
             "--potion-timing-refund/"
             "--deck-random-prob/--deck-inject/--deck-inject-prob/"
-            "--deck-inject-midrun/--deck-inject-midrun-prob "
+            "--deck-inject-midrun/--deck-inject-midrun-prob/"
+            "--ascension-random "
             "apply to the run-scale envs only.")
     if args.branch_prob and args.env != "column":
         raise SystemExit(
             f"--branch-prob applies to --env column only (got --env {args.env})")
-    if args.aux_hp_coef and args.env != "run":
-        raise SystemExit("--aux-hp-coef needs --env run (targets read the "
-                         "run obs layout's run.floor / run.hp_ratio slots)")
-    if args.aux_hp_coef and args.arch != "entset":
-        raise SystemExit("--aux-hp-coef needs --arch entset (aux head lives "
-                         "on EntitySetActorCritic)")
+    # v25: the two new aux heads share the v10 head's environment/arch
+    # requirements -- all three read run-obs slots and live on entset.
+    any_aux_coef = bool(args.aux_hp_coef or args.aux_win_coef
+                        or args.aux_hpturn_coef)
+    if any_aux_coef and args.env != "run":
+        raise SystemExit("--aux-hp-coef / --aux-win-coef / --aux-hpturn-coef "
+                         "need --env run (targets read the run obs layout's "
+                         "run.floor / run.hp_ratio / combat.player slots)")
+    if any_aux_coef and args.arch != "entset":
+        raise SystemExit("--aux-hp-coef / --aux-win-coef / --aux-hpturn-coef "
+                         "need --arch entset (aux heads live on "
+                         "EntitySetActorCritic)")
+    if args.quantile_critic < 0:
+        raise SystemExit("--quantile-critic must be >= 0 (0 = the scalar critic)")
+    if args.quantile_critic and args.arch != "entset":
+        raise SystemExit("--quantile-critic needs --arch entset (the "
+                         "distributional critic_q head lives on "
+                         "EntitySetActorCritic)")
     if args.potion_ent_coef and args.env != "run":
         raise SystemExit("--potion-ent-coef applies to the run-scale env only")
     if args.potion_ent_coef and args.arch != "entset":
         raise SystemExit("--potion-ent-coef needs --arch entset (the potion "
                          "index ranges are run-scale flat-layout constants)")
+    if args.event_ent_coef and args.env != "run":
+        raise SystemExit("--event-ent-coef applies to the run-scale env only")
+    if args.event_ent_coef and args.arch != "entset":
+        raise SystemExit("--event-ent-coef needs --arch entset (the choice "
+                         "index range is a run-scale flat-layout constant)")
     if args.warm_start and (args.resume or args.fresh):
         raise SystemExit(
             "--warm-start is mutually exclusive with --resume/--fresh: it is "
@@ -677,6 +755,8 @@ def env_spec(args: argparse.Namespace) -> EnvSpec:
         branch_prob=args.branch_prob,
         start_snapshots=getattr(args, "start_snapshots", None),
         ascension=getattr(args, "ascension", 0),
+        ascension_sample=(tuple(args.ascension_random)
+                          if getattr(args, "ascension_random", None) else None),
         floor_rewards_by_act=(tuple(args.floor_rewards)
                               if getattr(args, "floor_rewards", None) is not None
                               else None),
@@ -694,6 +774,7 @@ def env_spec(args: argparse.Namespace) -> EnvSpec:
             tuple(args.elite_attempt_rewards)
             if getattr(args, "elite_attempt_rewards", None) is not None
             else None),
+        reward_elite_escalator=getattr(args, "reward_elite_escalator", 0.0),
         rest_heal_mask_above=getattr(args, "rest_heal_mask_above", None),
         hp_potential_scale=getattr(args, "hp_potential_scale", 0.0),
         potion_potential_scale=getattr(args, "potion_potential_scale", 0.0),
@@ -734,6 +815,9 @@ def model_spec(args: argparse.Namespace) -> ModelSpec:
         # encoder store_true default of False, so this only matters off the
         # real CLI path).
         shared_encoder=getattr(args, "shared_encoder", False),
+        # getattr for the same reason as shared_encoder above (hand-built
+        # test Namespaces); the real CLI always sets it via --quantile-critic.
+        n_quantiles=getattr(args, "quantile_critic", 0),
     )
 
 
@@ -871,16 +955,8 @@ def main() -> None:
             print(f"aux heads fresh-initialized ({n_fresh_aux} params not in checkpoint)")
         opt_state = ckpt["optim"]
         n_live = sum(1 for _ in agent.parameters())
-        groups = opt_state["param_groups"]
-        if len(groups) == 1 and len(groups[0]["params"]) < n_live:
-            n_aux = sum(1 for n, _ in agent.named_parameters() if n.startswith("aux_"))
-            saved = groups[0]["params"]
-            if len(saved) + n_aux == n_live:
-                # pre-aux checkpoint: old params keep their moments, aux
-                # params take the tail ids with no state (Adam lazily
-                # initializes them on first step).
-                groups[0]["params"] = list(saved) + list(range(len(saved), n_live))
-                print(f"optimizer state patched: {n_aux} fresh aux params appended")
+        if patch_optimizer_group_for_fresh_aux(opt_state, n_live, n_fresh_aux):
+            print(f"optimizer state patched: {n_fresh_aux} fresh aux params appended")
         optimizer.load_state_dict(opt_state)
         start_iter = ckpt.get("iteration", 0)
         # Pre-hardening checkpoints carry neither field; 0 / -inf just means
@@ -915,11 +991,26 @@ def main() -> None:
               f"({100 * masked / agent.actor[0].weight.shape[1]:.1f}% of the "
               f"trunk's input)")
 
+    # v25: any of the three aux coefs turns the aux heads on; the slice tuple
+    # is (run.floor, run.hp_ratio, combat.player.turn, combat.player.hp_ratio).
+    ANY_AUX = (args.aux_hp_coef > 0 or args.aux_win_coef > 0
+               or args.aux_hpturn_coef > 0)
+    # v26: whether this run's critic is distributional. Read off the built
+    # agent, not the flag, so a resumed checkpoint's own structure wins.
+    QUANTILE = getattr(agent, "n_quantiles", 0) > 0
     aux_slices = None
-    if args.aux_hp_coef > 0:
+    if ANY_AUX:
         from sts2_rl.run_env import run_obs_layout
         _l = run_obs_layout(args.card_obs)
-        aux_slices = (_l.f_slices["run.floor"], _l.f_slices["run.hp_ratio"])
+        aux_slices = (_l.f_slices["run.floor"], _l.f_slices["run.hp_ratio"],
+                      _l.f_slices["combat.player.turn"],
+                      _l.f_slices["combat.player.hp_ratio"])
+
+    EVENT_PRESENT_COL = None
+    if args.event_ent_coef > 0:
+        from sts2_rl.run_env import run_obs_layout
+        _l = run_obs_layout(args.card_obs)
+        EVENT_PRESENT_COL = _l.f_slices["event.present"].start
 
     # ── rollout buffers: [n_steps, n_envs, ...] ─────────────────────────────
     N, E = args.n_steps, args.n_envs
@@ -933,6 +1024,11 @@ def main() -> None:
     logp_buf = torch.zeros((N, E), device=device)
     rew_buf = torch.zeros((N, E), device=device)
     done_buf = torch.zeros((N, E), device=device)
+    # v25 win head: succ_buf shares done_buf's index convention EXACTLY --
+    # entry t records the PREVIOUS step's done/success, so done_buf[t]==1 means
+    # obs t opens a new episode and succ_buf[t] scores the episode that just
+    # closed. win_outcome() reads the pair on that shared index.
+    succ_buf = torch.zeros((N, E), device=device)
     val_buf = torch.zeros((N, E), device=device)
 
     # Initial state: distinct seed per env, then their RNG streams run on.
@@ -944,6 +1040,7 @@ def main() -> None:
     next_obs = reset_obs.to(device)
     next_mask = torch.as_tensor(reset_mask, dtype=torch.bool, device=device)
     next_done = torch.zeros(E, device=device)
+    next_succ = torch.zeros(E, device=device)
 
     # episodic logging. ep_ret_running accumulates raw env reward (not the
     # training-time bootstrap fold-in); it is only the combat-env fallback for
@@ -1002,6 +1099,7 @@ def main() -> None:
                 obs_buf[t] = next_obs
                 mask_buf[t] = next_mask
                 done_buf[t] = next_done
+                succ_buf[t] = next_succ
                 with torch.no_grad():
                     action, logp, _, value = agent.get_action_and_value(next_obs, next_mask)
                 val_buf[t] = value
@@ -1058,6 +1156,11 @@ def main() -> None:
                 next_obs = batch.obs.to(device)
                 next_mask = torch.as_tensor(batch.masks, dtype=torch.bool, device=device)
                 next_done = torch.as_tensor(dones.astype(np.float32), device=device)
+                # StepBatch.successes is info["is_success"] harvested on the
+                # same step the done fires (vec_env.py:340-341), so it is
+                # aligned with `dones` and rides the same one-step carry.
+                next_succ = torch.as_tensor(
+                    batch.successes.astype(np.float32), device=device)
 
             # ── GAE ─────────────────────────────────────────────────────────────
             with torch.no_grad():
@@ -1076,14 +1179,27 @@ def main() -> None:
                 advantages[t] = lastgae
             returns = advantages + val_buf
 
-            b_auxt = b_auxv = None
-            if args.aux_hp_coef > 0:
-                from sts2_rl.aux_targets import hp_lost_next_floors
-                fl = obs_buf.f[:, :, aux_slices[0]].squeeze(-1).cpu().numpy()
-                hp = obs_buf.f[:, :, aux_slices[1]].squeeze(-1).cpu().numpy()
-                aux_t, aux_v = hp_lost_next_floors(fl, hp, done_buf.cpu().numpy())
-                b_auxt = torch.as_tensor(aux_t, device=device).reshape(-1)
-                b_auxv = torch.as_tensor(aux_v, device=device, dtype=torch.float32).reshape(-1)
+            b_auxt = b_auxv = b_wint = b_winv = b_turnt = b_turnv = None
+            if ANY_AUX:
+                from sts2_rl.aux_targets import (hp_lost_next_floors,
+                                                 hp_lost_next_turn, win_outcome)
+                dn = done_buf.cpu().numpy()
+                if args.aux_hp_coef > 0:
+                    fl = obs_buf.f[:, :, aux_slices[0]].squeeze(-1).cpu().numpy()
+                    hp = obs_buf.f[:, :, aux_slices[1]].squeeze(-1).cpu().numpy()
+                    aux_t, aux_v = hp_lost_next_floors(fl, hp, dn)
+                    b_auxt = torch.as_tensor(aux_t, device=device).reshape(-1)
+                    b_auxv = torch.as_tensor(aux_v, device=device, dtype=torch.float32).reshape(-1)
+                if args.aux_win_coef > 0:
+                    win_t, win_v = win_outcome(dn, succ_buf.cpu().numpy())
+                    b_wint = torch.as_tensor(win_t, device=device).reshape(-1)
+                    b_winv = torch.as_tensor(win_v, device=device, dtype=torch.float32).reshape(-1)
+                if args.aux_hpturn_coef > 0:
+                    tn = obs_buf.f[:, :, aux_slices[2]].squeeze(-1).cpu().numpy()
+                    chp = obs_buf.f[:, :, aux_slices[3]].squeeze(-1).cpu().numpy()
+                    turn_t, turn_v = hp_lost_next_turn(tn, chp, dn)
+                    b_turnt = torch.as_tensor(turn_t, device=device).reshape(-1)
+                    b_turnv = torch.as_tensor(turn_v, device=device, dtype=torch.float32).reshape(-1)
 
             # ── flatten and update ──────────────────────────────────────────────
             b_obs = obs_buf.reshape(-1, obs_dim)
@@ -1098,7 +1214,10 @@ def main() -> None:
             kls: list[float] = []
             clipfracs: list[float] = []
             aux_losses: list[float] = []
+            win_losses: list[float] = []
+            turn_losses: list[float] = []
             potion_ent_losses: list[float] = []
+            event_ent_losses: list[float] = []
             # A stale critic's advantages are mis-signed, so spend the first
             # --critic-warmup iterations fitting the value head alone. The
             # actor's parameters are disjoint from the critic's (separate
@@ -1116,17 +1235,28 @@ def main() -> None:
                 for start in range(0, batch_size, mb_size):
                     mb = idx[start:start + mb_size]
                     extra = {}
-                    if args.aux_hp_coef > 0:
+                    if ANY_AUX:
                         extra["with_aux"] = True
-                    if args.potion_ent_coef > 0:
+                    if QUANTILE:
+                        extra["with_quantiles"] = True
+                    if args.potion_ent_coef > 0 or args.event_ent_coef > 0:
                         extra["with_dist"] = True
                     out = agent.get_action_and_value(b_obs[mb], b_mask[mb], b_act[mb], **extra)
                     _, newlogp, entropy, newval = out[:4]
                     i = 4
-                    aux_pred = None
-                    if args.aux_hp_coef > 0:
-                        aux_pred = out[i]; i += 1
-                    dist = out[i] if args.potion_ent_coef > 0 else None
+                    # v25: with_aux appends all THREE preds in the frozen order
+                    # (hp3, win logit, hpturn); v26's quantiles come next;
+                    # with_dist's dist stays last.
+                    aux_pred = win_pred = turn_pred = None
+                    if ANY_AUX:
+                        aux_pred, win_pred, turn_pred = out[i], out[i + 1], out[i + 2]
+                        i += 3
+                    quantiles = None
+                    if QUANTILE:
+                        quantiles = out[i]
+                        i += 1
+                    dist = out[i] if (args.potion_ent_coef > 0
+                                       or args.event_ent_coef > 0) else None
                     logratio = newlogp - b_logp[mb]
                     ratio = logratio.exp()
                     with torch.no_grad():
@@ -1141,11 +1271,29 @@ def main() -> None:
                         -mb_adv * torch.clamp(ratio, 1 - args.clip, 1 + args.clip),
                     ).mean()
 
-                    # clipped value loss
-                    v_unclipped = (newval - b_ret[mb]) ** 2
-                    v_clip = b_val[mb] + torch.clamp(newval - b_val[mb], -args.clip, args.clip)
-                    v_clipped = (v_clip - b_ret[mb]) ** 2
-                    v_loss = 0.5 * torch.max(v_unclipped, v_clipped).mean()
+                    if QUANTILE:
+                        # v26: the quantile-Huber (QR) loss replaces the
+                        # clipped value loss WHOLESALE, and deliberately
+                        # carries no value clipping. PPO's value clipping is
+                        # defined on the SCALAR head -- it trust-regions
+                        # `newval` around the rollout's `b_val` -- and there
+                        # is no meaningful per-quantile analogue: clipping
+                        # each quantile toward a single old scalar would
+                        # squash the very spread the distributional critic
+                        # exists to learn. The QR loss's own Huber term
+                        # already bounds the per-sample gradient.
+                        #
+                        # Nothing here reads `newval`, so the still-registered
+                        # scalar `agent.critic` receives no gradient at all:
+                        # its grads stay None and Adam skips it, momentum
+                        # included (same mechanism as --critic-warmup's actor).
+                        v_loss = quantile_huber_loss(quantiles, b_ret[mb])
+                    else:
+                        # clipped value loss
+                        v_unclipped = (newval - b_ret[mb]) ** 2
+                        v_clip = b_val[mb] + torch.clamp(newval - b_val[mb], -args.clip, args.clip)
+                        v_clipped = (v_clip - b_ret[mb]) ** 2
+                        v_loss = 0.5 * torch.max(v_unclipped, v_clipped).mean()
 
                     ent_loss = entropy.mean()
                     aux_loss = torch.zeros((), device=device)
@@ -1153,16 +1301,41 @@ def main() -> None:
                         m = b_auxv[mb]
                         aux_loss = ((aux_pred - b_auxt[mb]).pow(2) * m).sum() / m.sum().clamp(min=1.0)
                         aux_losses.append(float(aux_loss.item()))
+                    win_loss = torch.zeros((), device=device)
+                    if args.aux_win_coef > 0:
+                        m = b_winv[mb]
+                        win_loss = (nn.functional.binary_cross_entropy_with_logits(
+                            win_pred, b_wint[mb], reduction="none") * m
+                        ).sum() / m.sum().clamp(min=1.0)
+                        win_losses.append(float(win_loss.item()))
+                    turn_loss = torch.zeros((), device=device)
+                    if args.aux_hpturn_coef > 0:
+                        m = b_turnv[mb]
+                        turn_loss = ((turn_pred - b_turnt[mb]).pow(2) * m
+                                     ).sum() / m.sum().clamp(min=1.0)
+                        turn_losses.append(float(turn_loss.item()))
                     potion_ent_loss = torch.zeros((), device=device)
                     if args.potion_ent_coef > 0:
                         potion_ent_loss = potion_entropy_bonus(dist.probs, b_mask[mb])
                         potion_ent_losses.append(float(potion_ent_loss.item()))
+                    event_ent_loss = torch.zeros((), device=device)
+                    if args.event_ent_coef > 0:
+                        event_ent_loss = event_entropy_bonus(
+                            dist.probs, b_mask[mb], b_obs[mb].f, EVENT_PRESENT_COL)
+                        event_ent_losses.append(float(event_ent_loss.item()))
                     if critic_only:
-                        loss = args.vf_coef * v_loss + args.aux_hp_coef * aux_loss
+                        loss = (args.vf_coef * v_loss
+                                + args.aux_hp_coef * aux_loss
+                                + args.aux_win_coef * win_loss
+                                + args.aux_hpturn_coef * turn_loss)
                     else:
                         loss = (pg_loss - ent_coef * ent_loss
                                 - args.potion_ent_coef * potion_ent_loss
-                                + args.vf_coef * v_loss + args.aux_hp_coef * aux_loss)
+                                - args.event_ent_coef * event_ent_loss
+                                + args.vf_coef * v_loss
+                                + args.aux_hp_coef * aux_loss
+                                + args.aux_win_coef * win_loss
+                                + args.aux_hpturn_coef * turn_loss)
 
                     optimizer.zero_grad()
                     loss.backward()
@@ -1208,8 +1381,14 @@ def main() -> None:
                 float(np.mean(discard_hist)) if discard_hist else float("nan"))
             lr = optimizer.param_groups[0]["lr"]
             aux_mean = float(np.mean(aux_losses)) if aux_losses else float("nan")
+            aux_win_mean = (float(np.mean(win_losses))
+                            if win_losses else float("nan"))
+            aux_turn_mean = (float(np.mean(turn_losses))
+                             if turn_losses else float("nan"))
             potion_ent_mean = (float(np.mean(potion_ent_losses))
                                 if potion_ent_losses else float("nan"))
+            event_ent_mean = (float(np.mean(event_ent_losses))
+                               if event_ent_losses else float("nan"))
             print(
                 f"iter {iteration:4d}  step {global_step:>9d}  sps {sps:>5d}  "
                 f"ep_ret {ret:7.3f}  win {wr:5.2f}  ep_len {eplen:6.1f}  "
@@ -1218,7 +1397,10 @@ def main() -> None:
                 f"clipfrac {np.mean(clipfracs):.3f}  "
                 f"e_unspent {energy_unspent:4.2f}  take {card_take:4.2f}"
                 + (f"  aux={aux_mean:.4f}" if args.aux_hp_coef > 0 else "")
+                + (f"  aux_win={aux_win_mean:.4f}" if args.aux_win_coef > 0 else "")
+                + (f"  aux_turn={aux_turn_mean:.4f}" if args.aux_hpturn_coef > 0 else "")
                 + (f"  pot_ent={potion_ent_mean:.4f}" if args.potion_ent_coef > 0 else "")
+                + (f"  ev_ent={event_ent_mean:.4f}" if args.event_ent_coef > 0 else "")
                 # pg/ent are still reported during the warm-up (they say how
                 # stale the advantages are) but were not applied — mark it so
                 # a flat ep_ret here doesn't read as a stalled run.
@@ -1244,8 +1426,11 @@ def main() -> None:
                     relics=v8_relic_mean,
                     hp_lost=v8_hplost_mean,
                     aux=aux_mean,
+                    aux_win=aux_win_mean,
+                    aux_turn=aux_turn_mean,
                     potion_ent=potion_ent_mean,
                     potions_discarded=discard_mean,
+                    event_ent=event_ent_mean,
                 ))
 
             # ── checkpointing ───────────────────────────────────────────────────
@@ -1289,6 +1474,51 @@ def _stem(save_path: str) -> str:
 def snapshot_path(save_path: str, iteration: int) -> str:
     """Zero-padded so snapshots sort lexicographically by iteration."""
     return f"{_stem(save_path)}.iter{iteration:06d}.pt"
+
+
+def quantile_huber_loss(pred_q: torch.Tensor, target: torch.Tensor,
+                        kappa: float = 1.0) -> torch.Tensor:
+    """Quantile-Huber (QR-DQN eq. 10) of predicted quantiles against a
+    SCALAR sample target per row (the empirical lambda-return). pred_q is
+    (B, N); target is (B,)."""
+    n = pred_q.shape[-1]
+    taus = (2 * torch.arange(n, device=pred_q.device) + 1) / (2.0 * n)
+    u = target.unsqueeze(-1) - pred_q                      # (B, N)
+    huber = torch.where(u.abs() <= kappa, 0.5 * u * u,
+                        kappa * (u.abs() - 0.5 * kappa))
+    return (torch.abs(taus - (u.detach() < 0).float()) * huber / kappa).mean()
+
+
+def patch_optimizer_group_for_fresh_aux(opt_state: dict, n_live: int,
+                                        n_fresh: int) -> bool:
+    """Widen a saved single-group Adam state to cover freshly-added aux params.
+
+    A checkpoint that predates one of the aux heads saved fewer parameters than
+    the live model has, and ``Optimizer.load_state_dict`` refuses a param group
+    whose length does not match. The aux heads are registered LAST and in a
+    frozen order (``models.EntitySetActorCritic``: aux_hp3 → aux_win →
+    aux_hpturn), so the saved ids still address the same tensors and the fresh
+    tail simply takes the next ids with no moment state (Adam initializes those
+    lazily on the first step).
+
+    ``n_fresh`` MUST be the count of parameters actually missing from the
+    checkpoint (``checkpoints.load_model_state_lenient``'s return), not the
+    count of all ``aux_*`` params: a v23-era checkpoint already carries the v10
+    ``aux_hp3_head``, so counting every aux param over-shoots by that head's
+    four tensors and the patch silently declines to fire (v25 smoke, 2026-08-26).
+
+    Returns True when the state was patched.
+    """
+    if n_fresh <= 0:
+        return False
+    groups = opt_state.get("param_groups") or []
+    if len(groups) != 1:
+        return False
+    saved = groups[0]["params"]
+    if len(saved) >= n_live or len(saved) + n_fresh != n_live:
+        return False
+    groups[0]["params"] = list(saved) + list(range(len(saved), n_live))
+    return True
 
 
 def best_path(save_path: str) -> str:
@@ -1383,6 +1613,9 @@ def checkpoint_payload(agent: nn.Module, optimizer, iteration: int, args,
         "arch": args.arch,
         "head_version": models.ENTSET_HEAD_VERSION,
         "shared_encoder": getattr(args, "shared_encoder", False),
+        # v26: 0 = the scalar critic. Checked with a hard refusal
+        # (checkpoints.check_checkpoint) -- structurally different critic.
+        "n_quantiles": getattr(args, "quantile_critic", 0),
         "obs_schema": env_obs_schema(args),
         "env_kind": args.env,
         # Stamped next to env_kind, but checked with a WARN not a refusal

@@ -51,10 +51,18 @@ class WelcomeToWongos(Event):
             ("FEATURED_ITEM", _FEATURED_ITEM_COST, self._buy_featured_item),
             ("MYSTERY_BOX", _MYSTERY_BOX_COST, self._buy_mystery_box),
         ):
+            # Only the featured item names its relic to the player (the source
+            # fills the RandomRelic StringVar and hangs the relic's hover tips
+            # on that option); Bargain Bin and Mystery Box are deliberately
+            # blind purchases, so exposing anything for them would tell the
+            # policy something a human cannot see.
+            relic_id = (self._featured.id
+                        if key == "FEATURED_ITEM" and self._featured is not None
+                        else None)
             if self.run.gold >= cost:
-                options.append(EventOption(key, handler))
+                options.append(EventOption(key, handler, relic_id=relic_id))
             else:
-                options.append(EventOption(f"{key}_LOCKED", None))
+                options.append(EventOption(f"{key}_LOCKED", None, relic_id=relic_id))
         options.append(EventOption("LEAVE", self._leave))
         return options
 

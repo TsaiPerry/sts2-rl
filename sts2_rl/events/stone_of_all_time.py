@@ -52,7 +52,8 @@ class StoneOfAllTime(Event):
         else:
             potion = self.rng.choice(held) if held else None
         lift = (
-            EventOption("LIFT", lambda p=potion: self._lift(p))
+            EventOption("LIFT", lambda p=potion: self._lift(p),
+                        potion_id=potion.id if potion is not None else None)
             if potion is not None
             else EventOption("LIFT_LOCKED", None)
         )
