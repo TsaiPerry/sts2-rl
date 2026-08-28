@@ -1,0 +1,45 @@
+{
+  "distill_schema": 1,
+  "ckpt": "runs\\sts2_run_torch_v24_s27.pt",
+  "bank": "runs\\snapshots\\v24s27_bank_asc10.p4.jsonl",
+  "k": 5,
+  "m": 8,
+  "date": "2026-08-27T22:06:45+00:00",
+  "obs_schema": 13,
+  "arch": "entset",
+  "card_obs": "hybrid",
+  "f_dim": 4736,
+  "i_dim": 1533,
+  "n_actions": 253,
+  "asc": 10,
+  "room": null,
+  "seed": 0,
+  "gamma": 0.999,
+  "rollout_steps": 120,
+  "mass_cap": 0.92,
+  "device": "cuda",
+  "decisions_requested": 834,
+  "shard_size": 4096,
+  "shards": [
+    "shard-00000.npz"
+  ],
+  "records": 834,
+  "stats": {
+    "fights": 77,
+    "decisions": 1279,
+    "forced": 258,
+    "collected": 1021,
+    "selected": 837,
+    "searched": 834,
+    "flips": 333,
+    "rollouts": 20040,
+    "unsearched_at_score": 0,
+    "collect_seconds": 54.676,
+    "search_seconds": 13197.409,
+    "room_hist": {
+      "BOSS": 9,
+      "ELITE": 16,
+      "MONSTER": 52
+    }
+  }
+}
