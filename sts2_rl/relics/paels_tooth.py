@@ -53,6 +53,13 @@ class PaelsTooth(Relic):
         else:
             card = run.rng.choice(self.stored_cards)
         self.stored_cards.remove(card)
+        if card is None:
+            # snapshots._paels_tooth restores only the observation-visible
+            # COUNT, as `[None] * counter` — the stored identities never leak
+            # into the obs. The rng draw above is still consumed (matching
+            # the game), but the returned card is unknowable here, so it
+            # cannot be upgraded or re-added.
+            return
         if card.is_upgradable:
             card.upgrade()
         run.add_card(card)

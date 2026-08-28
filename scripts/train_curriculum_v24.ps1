@@ -1,105 +1,55 @@
 <#
-v24 per-act elite ramp: one stage on top of the v23 s26 policy, keeping
-v23's long-horizon geometry (n-steps 1024 / minibatches 16 / gae-lambda
-0.99) VERBATIM so the only variable is the reward change.
+v24 (+ merged v25 foresight): one stage on the v23 s26 policy, v23 geometry
+(n-steps 1024 / minibatches 16 / gae-lambda 0.99) VERBATIM. SIX changes vs
+v23 -- attribution caveat + full per-knob rationale: v24-run-log.md;
+foresight: v25-run-log.md.
 
-ONE reward change vs v23. The flat elite pay is replaced by a per-act ramp
-tracking --floor-rewards' own 1.0/1.5/2.0 multipliers:
+  --elite-rewards 2 3 4 / --elite-attempt-rewards 1 1.5 2
+                              Per-act elite ramp replacing the flat pay
+                              (tracks --floor-rewards' 1.0/1.5/2.0 so the
+                              elite:floor value ratio holds across acts).
+  --ascension-random 0 10     Ascension sampled uniformly per EPISODE
+                              (coherent now that run.ascension rides in the
+                              schema-13 obs; also cures aux_win positive-
+                              label starvation -- asc-0 supplies wins).
+  --reward-elite-escalator 0.5   Within-run escalating elite bonus.
+  --event-ent-coef 0.01       Entropy bonus on event-choice decisions only.
+  --potion-timing-refund 0.25 v22's refund, re-tested stacked.
+  --hp-potential-low-share 0.5   Softer HP-shaping concavity below half HP.
+  --aux-win-coef 0.5 / --aux-hpturn-coef 0.5
+                              FORESIGHT heads (v25 merge, 2026-08-26;
+                              train_curriculum_v25.ps1 deleted): P(win|state)
+                              BCE + next-turn HP-loss MSE on the shared
+                              critic encoder, beside v10's --aux-hp-coef
+                              0.25. Auxiliary LOSSES only -- no reward,
+                              advantage, or obs change. Ablation if a read
+                              is weird: both coefs 0, all else identical.
 
-    --reward-elite 2          ->  --elite-rewards         2 3 4
-    --reward-elite-attempt 1  ->  --elite-attempt-rewards 1 1.5 2
+WATCH the elite-dive hole: elite entry pay is unconditional, and at the
+act-3 entry of 2 the death break-even moves from ~12.5% to ~25% HP
+(phi(0.25)=0.5 * 4.0 = 2.0) -- the agent is PAID to dive below quarter
+health. Read: elites_fought minus elites in the s27 evals; fix if it opens
+= win-only ramp (flat entry 1), not a smaller ramp.
 
-Motivation: the floor pay already scales by act, so a FLAT elite pay made
-deep elites steadily worse value per unit of risk than the floors around
-them -- an act-3 elite cost act-3 HP for act-1 money. The ramp holds the
-elite:floor ratio constant across acts (a won act-3 elite now pays 4+2=6
-vs act-1's 2+1=3). Everything else in $runRewards is v22/v23's set verbatim.
+FRESH CSV, REQUIRED: train_torch derives csv_path from --save and writes
+the header only when the file is new; CSV_FIELDS gained aux_win/aux_turn,
+so never let this run append to a pre-foresight CSV -- delete any
+hand-copied or re-tagged one first.
 
-WATCH the elite-dive hole: the entry pay is unconditional, and the implicit
-death price is the forfeited HP potential, 4.0*phi(ratio). At the flat entry
-of 1 the break-even sat at ~12.5% HP; at the act-3 entry of 2 it moves up to
-~25% HP (phi(0.25)=0.5, *4.0 = 2.0). So in act 3 the agent is paid to dive
-into an elite below a QUARTER health. `elites_fought` minus `elites` in the
-s27 evals is the read that catches it; if it opens up, the fix is the
-win-only ramp (flat entry 1) rather than a smaller win ramp.
+  Stage  Env  Asc   Steps  Notes
+  s27    run  0-10    15M  --resume from $SeedCkpt (same kind, NO warm
+                           start). --critic-warmup 4: rewards changed AND
+                           the fresh aux tail heads perturb the shared
+                           critic encoder from update 1 (262144 steps).
 
-FOUR more knobs turn on this generation, on top of the elite ramp above,
-plus the foresight aux heads merged in below (SIX changes total vs v23 --
-see the run log's attribution caveat):
-  --ascension-random 0 10   Training samples ascension uniformly in [0,10]
-                             per episode instead of fixing 10. The v19 mixed-
-                             ascension caveat (deferred back then: obs did not
-                             carry which ascension was in play, so a mixed
-                             policy could not condition on it) is now RESOLVED
-                             -- run.ascension rides in the obs (schema 13),
-                             so mixed-ascension training is coherent this time.
-  --reward-elite-escalator 0.5   Extra per-elite bonus that escalates within
-                             a run (on top of the act ramp above), to keep
-                             pressure on taking elites late in a run where
-                             the ramp alone under-pays relative to accumulated
-                             deck power.
-  --event-ent-coef 0.01      Entropy bonus scoped to event-choice decisions
-                             only, to counter the option-concentration read
-                             flagged (untested) in the v23 log.
-  --potion-timing-refund 0.25   Refunds part of the on-drink release penalty
-                             for AnyTime potions used in elite/boss combat,
-                             carried over from v22 (was already proven inert
-                             on its own; this generation re-tests it stacked
-                             with the other four levers).
-  --hp-potential-low-share 0.5   Softens the HP-potential shaping curve's
-                             concavity below half health, retired from the
-                             s19 rung and revived here now that the elite-pay
-                             passivity guards it was meant to police are live
-                             reads again (see v24-run-log.md).
+Reads: v24-run-log.md (reward-side) + v25-run-log.md (foresight probe +
+Tier-B eval_search gates for Phase 4). Evals use --merge-duplicates (the
+live decoder). No rest mask, no potion mask, ever.
 
-FORESIGHT HEADS (merged from the v25 plan, 2026-08-26 -- the standalone
-train_curriculum_v25.ps1 was deleted; this run carries both generations).
-Two new self-supervised aux heads ride the shared critic encoder alongside
-v10's 3-floor HP-loss head. They are auxiliary LOSSES only: no reward term,
-no advantage, no obs change.
-
-    --aux-hp-coef      0.25   v10's head, unchanged (in $longHorizon below)
-    --aux-win-coef     0.5    NEW: P(win | state), BCE
-    --aux-hpturn-coef  0.5    NEW: HP lost before my next turn, MSE
-
-The merge deliberately trades v25's clean single-lever attribution for one
-saved 15M-step generation. Disentangling ablation, if a read comes back
-weird: rerun with the two new coefs at 0, everything else identical.
-SYNERGY: --ascension-random 0 10 is also the fix for the aux_win
-positive-label starvation flagged in v25-run-log.md read #1 -- at fixed
-asc-10 the v23 policy wins 0/150 so the win head collapses to "always
-lose"; the ascension mix supplies real positive labels (asc-0 wins ~4.7%).
-
-FRESH CSV, REQUIRED: train_torch's per-iteration log path is derived from
---save (train_torch.csv_path: runs/x.pt -> runs/run_logs/x.csv) and a row is
-appended with the CURRENT CSV_FIELDS header only when the file is new. The
-column list gained `aux_win` and `aux_turn` with the foresight heads, so
-appending onto an older CSV would silently write rows under the wrong
-header. runs/run_logs/sts2_run_torch_v24_s27.csv starts fresh -- but if you
-re-tag or hand-copy a CSV into place, DELETE it first.
-
-Post-run foresight reads (pre-registered in v25-run-log.md, amended for the
-merged provenance) gate the Phase-4 search work: tools/foresight_probe.py
-gates + the overnight tools/eval_search.py Tier-B measurement.
-
-  Stage  Env  Asc  Steps  Notes
-  s27    run   10    15M  continue runs/sts2_run_torch_v23_s26.pt
-                          (--resume handoff, same kind, NO warm start).
-                          v23 geometry verbatim; elite pay ramped by act.
-                          --critic-warmup 4: reward function changed AND
-                          the fresh aux tail heads perturb the shared
-                          critic encoder from the first update (262144
-                          steps, same as v22's 8 iters at batch 32768).
-
-Pre-registered reads = docs/superpowers/plans/v24-run-log.md. Evals with
---merge-duplicates (the live decoder).
-
-No rest mask, no potion mask, ever.
-
-  .venv\Scripts\python.exe -m pytest -q     # green before launching
-  .	rain_curriculum_v24.ps1                # real run; auto-evals s27
-  .	rain_curriculum_v24.ps1 -Smoke         # 131072 steps, scratch tag
-  .	rain_curriculum_v24.ps1 -Resume        # continue an interrupted run
+  .venv\Scripts\python.exe -m pytest -q      # green before launching
+  .\scripts\train_curriculum_v24.ps1         # real run; auto-evals s27
+  .\scripts\train_curriculum_v24.ps1 -Smoke  # 131072 steps, scratch tag
+  .\scripts\train_curriculum_v24.ps1 -Resume # continue an interrupted run
 #>
 param(
     [long]$S27Steps = 15000000,
@@ -347,7 +297,7 @@ function Invoke-Eval {
 
 # ── s27: v23 geometry verbatim + per-act elite ramp (2/3/4, 1/1.5/2)
 #         + the two foresight aux heads ──
-Invoke-Stage -Name "s27-run-asc10-elite-ramp" -SaveCkpt $ckpt[27] -PrevCkpt $SeedCkpt `
+Invoke-Stage -Name "s27-run-ascmix-elite-ramp" -SaveCkpt $ckpt[27] -PrevCkpt $SeedCkpt `
     -Steps $S27Steps -CriticWarmup 4 -EntCoef 0.01 -StageArgs (@(
     "--env", "run", "--ascension-random", "0", "10", "--lr", "3e-4") + $runRewards + $longHorizon + $foresight)
 

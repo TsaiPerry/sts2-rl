@@ -336,7 +336,8 @@ def check_checkpoint(ckpt: dict, spec: ModelSpec,
             f"(obs_dim, n_actions, hidden); can't resume — match --hidden or use --fresh.")
 
 
-def check_ascension(ckpt: dict, ascension: int) -> None:
+def check_ascension(ckpt: dict, ascension: int,
+                    ascension_sample: "tuple[int, int] | None" = None) -> None:
     """Warn (never refuse) when resuming a checkpoint at a different
     ``--ascension`` than it was last saved at.
 
@@ -348,9 +349,19 @@ def check_ascension(ckpt: dict, ascension: int) -> None:
     Tasks 1-3) — v7 deliberately resumes training across ascensions (e.g.
     ramping ascension mid-curriculum), so a print is the right strength of
     signal here, not a ``SystemExit``.
+
+    ``ascension_sample`` (v24's ``--ascension-random`` range) supersedes the
+    fixed value: under sampling, ``args.ascension`` is a dead default the env
+    re-rolls over on every reset, so comparing against it printed the
+    actively misleading "this run uses 0" on the v24 launch path.
     """
     ckpt_ascension = ckpt.get("ascension", 0)
-    if ckpt_ascension != ascension:
+    if ascension_sample is not None:
+        lo, hi = ascension_sample
+        print(f"Ascension: checkpoint was last saved at ascension "
+              f"{ckpt_ascension}; this run samples uniformly in [{lo}, {hi}] "
+              f"per episode (--ascension-random).")
+    elif ckpt_ascension != ascension:
         print(f"Ascension change: checkpoint was last saved at ascension "
               f"{ckpt_ascension}, this run uses {ascension}.")
 

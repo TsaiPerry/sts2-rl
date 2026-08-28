@@ -291,9 +291,14 @@ class SearchResult:
 def expectimax(fork: CombatFork, actions: "list[int]", policy: Any,
                k: int, m: int, *, env: "STS2RunEnv | None" = None,
                salt_base: int = 0, rollout_seed_base: "int | None" = None,
-               max_steps: int = 120, gamma: float = 0.999) -> SearchResult:
+               max_steps: int = 120, gamma: float = 0.999,
+               mass_cap: "float | None" = None) -> SearchResult:
     """One-ply expectimax over the policy's top-`k` legal actions, `m`
-    stochastic branches each, scored by `CombatFork.rollout`.
+    stochastic branches each, scored by `CombatFork.rollout`. `mass_cap`
+    (optional) further shrinks the candidate set to the smallest prior-mass
+    prefix — see `top_k_actions`; `n_rollouts` in the result reflects the
+    actual (possibly shrunk) candidate count, so a measurement's rollout
+    tally prices the cap honestly.
 
     For each candidate `a`, each salt `j`:
 
@@ -341,7 +346,7 @@ def expectimax(fork: CombatFork, actions: "list[int]", policy: Any,
                             searched=False, candidates=(prior_argmax,),
                             scores=(float("nan"),), n_rollouts=0)
 
-    candidates = top_k_actions(probs, mask, k)
+    candidates = top_k_actions(probs, mask, k, mass_cap=mass_cap)
     salts = [salt_base + j for j in range(m)]
 
     best_action = prior_argmax
@@ -374,7 +379,9 @@ def expectimax(fork: CombatFork, actions: "list[int]", policy: Any,
                         scores=tuple(means), n_rollouts=len(candidates) * len(salts))
 
 
-def top_k_actions(probs: np.ndarray, mask: np.ndarray, k: int) -> "list[int]":
+def top_k_actions(probs: np.ndarray, mask: np.ndarray, k: int, *,
+                  mass_cap: "float | None" = None,
+                  min_k: int = 2) -> "list[int]":
     """The `k` highest-prior LEGAL actions, highest first, ties broken by
     ascending action id.
 
@@ -384,10 +391,34 @@ def top_k_actions(probs: np.ndarray, mask: np.ndarray, k: int) -> "list[int]":
     hand produce bit-identical logits) must always enter the candidate set in
     the same order, or the search's tie-break, and with it the flip rate,
     becomes a function of numpy's sort implementation.
+
+    `mass_cap`, when set, shrinks the list further: keep the smallest prefix
+    whose cumulative prior mass reaches the cap, clamped to `[min_k, k]`.
+    Rationale: after 100M+ steps the prior is concentrated (train-time
+    entropy ~0.5 nats ≈ 1.6 effective actions), so a fixed k=5 routinely
+    spends most of its k·m rollouts scoring sub-1% candidates the softmax
+    target will zero out anyway; the cap adapts breadth to how torn the
+    policy actually is. `probs` must be the masked softmax (`prior`'s
+    contract: legal mass sums to 1), so the cumulative sum is well-defined.
+    `min_k` floors the list at 2 so a searched decision always compares
+    something (`expectimax` handles the 1-legal-action case before calling
+    here). `None` (the default) preserves the fixed-k behavior exactly.
     """
     legal = np.flatnonzero(np.asarray(mask, dtype=bool))
     ranked = sorted(legal.tolist(), key=lambda a: (-float(probs[a]), int(a)))
-    return ranked[: max(1, int(k))]
+    ranked = ranked[: max(1, int(k))]
+    if mass_cap is None:
+        return ranked
+    if not 0.0 < mass_cap <= 1.0:
+        raise ValueError(f"top_k_actions: mass_cap must be in (0, 1], got {mass_cap}")
+    cum = 0.0
+    keep = len(ranked)
+    for i, a in enumerate(ranked):
+        cum += float(probs[a])
+        if cum >= mass_cap:
+            keep = i + 1
+            break
+    return ranked[: max(min(min_k, len(ranked)), keep)]
 
 
 def masked_random_policy(rng: "random.Random | None" = None) -> Callable:

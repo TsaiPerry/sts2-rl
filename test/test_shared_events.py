@@ -923,3 +923,106 @@ def test_slippery_bridge_hold_on_escalates_and_rerolls():
     # Overcome still works after holds.
     assert event.choose("OVERCOME")
     assert event.finished
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Per-option content previews (obs schema 13)
+#
+# Each option carries the content it shows the player, so the policy can tell
+# the options apart. These assert the PAIRING, not merely that a field is set:
+# a swapped or index-shifted wiring still populates every field and would sail
+# past a "is not None" check.
+# ═════════════════════════════════════════════════════════════════════════
+
+def test_relic_trader_options_name_both_sides_of_the_trade():
+    """relic_id is what ARRIVES, relic_traded_id is what LEAVES. Swapping them
+    inverts the meaning of the whole decision and is otherwise invisible, so
+    this drives the trade through and checks the run agrees."""
+    from sts2_rl.relics import make_relic
+
+    run = hive_run(10)
+    for rid in ("anchor", "akabeko", "bag_of_marbles", "blood_vial", "kunai"):
+        run.add_relic(make_relic(rid))
+    event = make_event("relic_trader", run).begin()
+
+    for i, opt in enumerate(event.options):
+        assert opt.relic_traded_id == event._owned[i].id
+        assert opt.relic_id == event._new[i].id
+    # Incoming relics are pulled from the front of the pool, so the two sides
+    # cannot overlap -- if they did, a swap would be undetectable here.
+    assert {o.relic_id for o in event.options}.isdisjoint(
+        {o.relic_traded_id for o in event.options})
+
+    middle = event.options[1]
+    leaves, arrives = middle.relic_traded_id, middle.relic_id
+    assert event.choose("MIDDLE")
+    held = [r.id for r in run.relics]
+    assert leaves not in held
+    assert arrives in held
+
+
+def test_doll_room_each_option_names_its_own_relic():
+    """The dolls are SHUFFLED into option order, so the relic has to track its
+    own option rather than a fixed index."""
+    run = hive_run(28)
+    event = make_event("doll_room", run).begin()
+    assert event.choose("EXAMINE")
+
+    options = event.options
+    assert {o.relic_id for o in options} == DOLLS
+    # The option key IS the relic id here, so this pins per-option alignment.
+    assert all(o.relic_id == o.key for o in options)
+
+    chosen = options[1]
+    assert event.choose(chosen.key)
+    assert run.relics[-1].id == chosen.relic_id
+
+
+def test_stone_of_all_time_lift_names_the_potion_it_discards():
+    """With two potions held, the named one must be the one LIFT actually
+    discards -- a wiring that just grabbed held_potions[0] would pass with one
+    potion and fail here."""
+    from sts2_rl.potions import make_potion
+
+    run = hive_run(16)
+    run.add_potion(make_potion("fire_potion"))
+    run.add_potion(make_potion("block_potion"))
+    event = make_event("stone_of_all_time", run).begin()
+
+    lift, push = event.options
+    assert lift.key == "LIFT" and push.key == "PUSH"
+    assert lift.potion_id in ("fire_potion", "block_potion")
+    assert push.potion_id is None          # PUSH previews no potion
+
+    named = lift.potion_id
+    assert event.choose("LIFT")
+    assert named not in [p.id for p in run.held_potions]
+    assert len(run.held_potions) == 1
+
+
+def test_wongos_names_the_featured_relic_and_nothing_else():
+    """Bargain Bin and Mystery Box are blind purchases in the source -- naming
+    their contents would hand the policy information a human cannot see."""
+    run = hive_run(30)
+    run.gold = 500
+    event = make_event("welcome_to_wongos", run).begin()
+    by_key = {o.key: o for o in event.options}
+
+    assert by_key["FEATURED_ITEM"].relic_id == event._featured.id
+    for key in ("BARGAIN_BIN", "MYSTERY_BOX", "LEAVE"):
+        assert by_key[key].relic_id is None
+
+    featured = by_key["FEATURED_ITEM"].relic_id
+    assert event.choose("FEATURED_ITEM")
+    assert featured in [r.id for r in run.relics]
+
+
+def test_wongos_featured_relic_is_named_even_when_unaffordable():
+    """The source fills the RandomRelic StringVar before the affordability
+    check, so a player short on gold still SEES what they are missing."""
+    run = hive_run(31)
+    run.gold = 150
+    event = make_event("welcome_to_wongos", run).begin()
+    by_key = {o.key: o for o in event.options}
+    assert "FEATURED_ITEM_LOCKED" in by_key
+    assert by_key["FEATURED_ITEM_LOCKED"].relic_id == event._featured.id

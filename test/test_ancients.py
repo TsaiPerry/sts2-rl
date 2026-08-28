@@ -481,6 +481,25 @@ def test_paels_tooth_stores_five_and_returns_upgraded():
     assert len(run.deck) == 10
 
 
+def test_paels_tooth_snapshot_placeholders_survive_combat_end():
+    # snapshots._paels_tooth restores stored_cards as [None] * count (only
+    # the count is observation-visible). after_combat_end must consume the
+    # rng draw and drop the placeholder without upgrading or re-adding.
+    run = fresh_run(23)
+    run.add_relic("paels_tooth")
+    tooth = run.relics[0]
+    tooth.stored_cards = [None] * 5
+    deck_before = len(run.deck)
+    for i in range(1, 6):
+        combat = run.create_combat(WURM)
+        run.finish_combat(combat, room_type=RoomType.MONSTER)
+        assert len(tooth.stored_cards) == 5 - i
+        assert len(run.deck) == deck_before      # unknowable card: not added
+    combat = run.create_combat(WURM)
+    run.finish_combat(combat, room_type=RoomType.MONSTER)
+    assert len(run.deck) == deck_before
+
+
 def test_paels_eye_extra_turn_once_per_combat():
     # 12 cards so the extra turn's fresh 5-card draw isn't pile-starved.
     deck = [make_card("strike") for _ in range(12)]

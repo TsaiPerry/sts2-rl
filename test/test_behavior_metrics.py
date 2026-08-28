@@ -221,7 +221,7 @@ def test_csv_has_behavior_metric_columns(tmp_path):
     ))
     with open(path) as fh:
         header, row = fh.read().strip().splitlines()
-    assert header.split(",")[-20:] == [
+    assert header.split(",")[-21:] == [
         "energy_unspent", "card_take",
         "upgrades", "removes", "elites", "potions_got", "potions_used",
         "potions_used_elite", "potions_used_boss", "potions_used_normal",
@@ -232,11 +232,16 @@ def test_csv_has_behavior_metric_columns(tmp_path):
         # v23: trailing mean voluntary discards per episode.
         "potions_discarded",
         # v24: trailing mean event-choice entropy per iteration.
-        "event_ent"]
-    assert row.split(",")[-20:] == [
+        "event_ent",
+        # v26: trailing mean masked cross-entropy toward the searched action
+        # distribution (NaN when --distill is off / during critic warm-up).
+        "distill"]
+    assert row.split(",")[-21:] == [
         "1.25", "0.4", "2.0", "1.0", "0.5", "1.5", "1.0",
         "0.2", "0.1", "0.7", "0.3", "0.55", "0.8", "12.5", "0.02",
-        "", "", "", "", ""]
+        # aux_win, aux_turn, potion_ent, potions_discarded, event_ent, distill
+        # -- the six fields the dict above does not supply.
+        "", "", "", "", "", ""]
 
 
 # ── Rest sites: heal / upgrade share of visits ────────────────────────────────

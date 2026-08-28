@@ -114,6 +114,43 @@ def test_top_k_breaks_exact_ties_by_ascending_action_id():
     assert forksim.top_k_actions(probs, mask, 4) == [0, 1, 2, 3]
 
 
+def test_mass_cap_keeps_the_smallest_prefix_reaching_the_cap():
+    # 0.6 + 0.3 = 0.9 >= 0.85 after two candidates: 3rd and 4th are pruned.
+    probs = np.array([0.6, 0.3, 0.06, 0.04])
+    mask = np.ones(4, dtype=bool)
+    assert forksim.top_k_actions(probs, mask, 4, mass_cap=0.85) == [0, 1]
+
+
+def test_mass_cap_floors_at_two_candidates_even_when_one_dominates():
+    # A near-certain prior must still yield a comparison pair, never a
+    # single-candidate "search".
+    probs = np.array([0.97, 0.02, 0.01])
+    mask = np.ones(3, dtype=bool)
+    assert forksim.top_k_actions(probs, mask, 5, mass_cap=0.9) == [0, 1]
+
+
+def test_mass_cap_never_exceeds_k_when_the_prior_is_flat():
+    # Flat prior: the cap is only reached at the 4th candidate, but k=3 wins.
+    probs = np.array([0.25, 0.25, 0.25, 0.25])
+    mask = np.ones(4, dtype=bool)
+    assert forksim.top_k_actions(probs, mask, 3, mass_cap=0.9) == [0, 1, 2]
+
+
+def test_mass_cap_none_is_byte_identical_to_fixed_k():
+    probs = np.array([0.0, 0.5, 0.1, 0.3, 0.1])
+    mask = np.array([False, True, True, True, True])
+    assert (forksim.top_k_actions(probs, mask, 3, mass_cap=None)
+            == forksim.top_k_actions(probs, mask, 3))
+
+
+def test_mass_cap_rejects_out_of_range_values():
+    probs = np.array([0.5, 0.5])
+    mask = np.ones(2, dtype=bool)
+    for bad in (0.0, -0.1, 1.5):
+        with pytest.raises(ValueError):
+            forksim.top_k_actions(probs, mask, 2, mass_cap=bad)
+
+
 # ── expectimax control flow (stub fork, no engine) ──────────────────────────
 
 
@@ -200,6 +237,18 @@ def test_expectimax_honours_k(monkeypatch):
                              env=_StubEnv([True] * 4))
     assert res.candidates == (0, 1)
     assert res.action == 0            # the 9.0 action was never a candidate
+
+
+def test_expectimax_mass_cap_shrinks_the_candidate_set_and_the_rollout_bill(monkeypatch):
+    """A concentrated prior under --mass-cap spends rollouts on the live
+    candidates only; n_rollouts must report the shrunk bill."""
+    _patch_prior(monkeypatch, [0.7, 0.25, 0.03, 0.02], [True] * 4)
+    fork = _StubFork({0: 0.0, 1: 1.0, 2: 9.0, 3: 9.0})
+    res = forksim.expectimax(fork, [], _StubPolicy(), k=4, m=3,
+                             env=_StubEnv([True] * 4), mass_cap=0.9)
+    assert res.candidates == (0, 1)   # 0.7 + 0.25 >= 0.9; tail pruned
+    assert res.n_rollouts == 2 * 3
+    assert res.action == 1            # judged among survivors only
 
 
 def test_expectimax_bootstraps_a_truncation_but_not_a_termination(monkeypatch):

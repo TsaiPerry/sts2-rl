@@ -753,6 +753,37 @@ def test_event_option_card_lands_in_the_matching_slot():
     assert not ids[2:].any()                       # unused slots stay PAD
 
 
+def test_event_option_relic_and_potion_previews_land_in_their_own_slices():
+    """v13: the relic/potion halves of the option-preview block. Asserted
+    together so a writer that filled the right VALUE into the wrong SLICE --
+    relics vs relics_traded is the easy one to transpose, and they share the
+    `relics` vocab so the ids would look plausible either way -- fails here."""
+    from sts2_rl.obs import oid
+
+    event = _FakeEvent(
+        "relic_trader", "INITIAL",
+        [_FakeOption(False, relic_id="kunai", relic_traded_id="anchor"),
+         _FakeOption(False, potion_id="fire_potion")],
+    )
+    run = _bare_run()
+    env = _env_with(run, DecisionRequest(kind=DecisionKind.EVENT, run=run, event=event))
+    i = env._build_obs()["i"]
+    layout = run_obs_layout()
+    relics = i[layout.i_slices["event.options.relics.ids"]]
+    traded = i[layout.i_slices["event.options.relics_traded.ids"]]
+    potions = i[layout.i_slices["event.options.potions.ids"]]
+
+    assert relics[0] == oid(RELIC_INDEX["kunai"])
+    assert traded[0] == oid(RELIC_INDEX["anchor"])
+    assert potions[1] == oid(POTION_INDEX["fire_potion"])
+
+    # No bleed between slices or between option slots.
+    assert relics[1] == 0 and traded[1] == 0 and potions[0] == 0
+    assert not relics[2:].any() and not traded[2:].any() and not potions[2:].any()
+    # The card slice stays PAD: no option here previews a card.
+    assert not i[layout.i_slices["event.options.cards.ids"]].any()
+
+
 def test_event_option_cards_are_absent_outside_an_event():
     """Zero-fill guarantee, matching the reward/shop blocks: the option-card
     ids must not survive onto an unrelated screen."""

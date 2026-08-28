@@ -60,6 +60,7 @@ import math
 import os
 import time
 from collections import deque
+from dataclasses import dataclass
 
 import numpy as np
 import torch
@@ -115,6 +116,211 @@ def event_entropy_bonus(probs, mask, f_obs, event_present_col):
     p = p / p.sum(-1, keepdim=True).clamp_min(1e-12)
     ent = -(p.clamp_min(1e-12).log() * p).sum(-1)
     return ent.mean()
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Search distillation (v26, plan 2026-08-26-foresight-v25-v26, Task 11)
+# ════════════════════════════════════════════════════════════════════════════
+#
+# `tools/search_worker.py` bottles a one-ply expectimax into `.npz` shards of
+# (obs, mask, searched action distribution). This is the consuming half: the
+# whole shard set is preloaded to the device ONCE, and each PPO minibatch pays
+# a bounded number of rows of masked cross-entropy toward those distributions.
+# The term adds NO parameters -- it pushes gradients through exactly the actor
+# (shared encoder + tied action heads) that the policy-gradient term trains.
+
+#: Per-minibatch row cap. The distillation cost is meant to be a fixed tax on
+#: an update, not a function of how many shards happen to be on disk, so the
+#: sample is `min(mb_size, this)` rows drawn WITH replacement rather than an
+#: epoch over the set.
+DISTILL_MAX_ROWS = 4096
+
+
+@dataclass
+class DistillSet:
+    """A whole shard set, resident on the training device.
+
+    The −1 pad convention is decoded HERE, once, so the loss never has to
+    reason about it:
+
+    * ``tgt_valid`` (bool) is the shard's ``tgt_idx >= 0`` -- the single
+      unambiguous validity mask over both target arrays.
+    * ``tgt_idx`` is clamped to ``>= 0`` so it is a legal ``gather`` index
+      everywhere. A pad therefore READS some real action's log-prob; it is
+      ``tgt_valid`` that stops the value being used (and its gradient path
+      with it), not the index.
+    * ``tgt_p`` is zeroed at every pad, so a −1 "probability" can never reach
+      an arithmetic op even if a future caller skipped the validity mask.
+    """
+
+    f: "torch.Tensor"          # float32 (n, f_dim)
+    i: "torch.Tensor"          # int64   (n, i_dim) -- embedding indices
+    mask: "torch.Tensor"       # bool    (n, n_actions), the RECORD's legality
+    tgt_idx: "torch.Tensor"    # int64   (n, k), clamped >= 0
+    tgt_valid: "torch.Tensor"  # bool    (n, k)
+    tgt_p: "torch.Tensor"      # float32 (n, k), 0 at every pad
+
+    def __len__(self) -> int:
+        return int(self.f.shape[0])
+
+    @classmethod
+    def from_arrays(cls, f, i, mask, tgt_idx, tgt_p, device) -> "DistillSet":
+        idx = torch.as_tensor(np.asarray(tgt_idx), dtype=torch.int64,
+                              device=device)
+        valid = idx >= 0
+        p = torch.as_tensor(np.asarray(tgt_p, dtype=np.float32),
+                            dtype=torch.float32, device=device)
+        return cls(
+            f=torch.as_tensor(np.asarray(f, dtype=np.float32),
+                              dtype=torch.float32, device=device),
+            i=torch.as_tensor(np.asarray(i), dtype=torch.int64, device=device),
+            mask=torch.as_tensor(np.asarray(mask), dtype=torch.bool,
+                                 device=device),
+            tgt_idx=idx.clamp_min(0),
+            tgt_valid=valid,
+            tgt_p=torch.where(valid, p, torch.zeros_like(p)),
+        )
+
+
+def check_distill_provenance(path, obs_schema, card_obs) -> dict:
+    """Validate the shard set's ``provenance.json`` against THIS run's obs
+    contract, and return it.
+
+    This is the half of the contract the array dims cannot carry.
+    ``search_worker.py``'s own docstring says the obs schema, card-obs mode
+    and action count "all go into the provenance file next to the shards and
+    the trainer is expected to check them" -- and its ``env_kwargs_for``
+    warns why: ``hybrid`` and ``features`` have IDENTICAL obs dims (4736/1533
+    at schema 13), so a shard set written under the other card encoding is
+    dimensionally invisible. It would load, train, and produce a perfectly
+    plausible falling loss curve while distilling toward targets computed on
+    differently-encoded observations.
+
+    Every failure is fatal, missing file included: the producer always writes
+    `provenance.json`, so its absence means the directory is not a shard set
+    this trainer can vouch for -- and an unverifiable shard set is exactly
+    the thing this check exists to refuse. (Same for an unstamped file: a
+    stamp that isn't there cannot be compared.)
+    """
+    import json
+
+    prov_path = os.path.join(str(path), "provenance.json")
+    if not os.path.isfile(prov_path):
+        raise SystemExit(
+            f"--distill {path}: no provenance.json beside the shards. "
+            f"tools/search_worker.py always writes one; without it the shard "
+            f"set's obs schema and card-obs mode cannot be checked, and a "
+            f"mismatch there is dimensionally invisible.")
+    try:
+        # utf-8-sig, not utf-8: the producer writes plain UTF-8 (which this
+        # decodes unchanged), but a hand-edited file round-tripped through a
+        # Windows editor picks up a BOM, and refusing a shard set over a byte
+        # order mark would be a maddening false alarm.
+        prov = json.loads(open(prov_path, encoding="utf-8-sig").read())
+    except ValueError as exc:
+        raise SystemExit(f"--distill {path}: provenance.json is not valid "
+                         f"JSON ({exc})")
+    for key, want in (("obs_schema", obs_schema), ("card_obs", card_obs)):
+        got = prov.get(key)
+        if got is None:
+            raise SystemExit(
+                f"--distill {path}: provenance.json carries no {key!r} -- an "
+                f"unstamped shard set cannot be checked against this run's "
+                f"{key} ({want!r}); regenerate it with tools/search_worker.py")
+        if got != want:
+            raise SystemExit(
+                f"--distill {path}: shard set was written at {key}={got!r} but "
+                f"this run is {key}={want!r}. The obs encodings differ, so the "
+                f"searched targets do not describe these observations "
+                f"(hybrid/features share f/i dims, so no dim check can catch "
+                f"this); regenerate the shards under {want!r}.")
+    return prov
+
+
+def load_distill_set(path, device, obs_dim=None, n_actions=None,
+                     obs_schema=None, card_obs=None) -> DistillSet:
+    """Read every shard of a shard set and materialize it on ``device``.
+
+    Called ONCE at startup: the shards are float16/int32 on disk and become
+    float32/int64 device tensors here, so the per-minibatch cost is a gather,
+    not a decode. ``obs_dim``/``n_actions``, when given, are checked against
+    the shards -- a shard set is only meaningful against the obs contract it
+    was written under, and the dims are the part of that contract the trainer
+    can verify for free. A mismatch is fatal rather than a warning: training
+    on mis-aligned obs would poison the policy silently.
+
+    ``obs_schema``/``card_obs`` are the part the dims CANNOT carry; passing
+    either turns on the ``provenance.json`` check (see
+    ``check_distill_provenance``). The trainer always passes both. They are
+    optional only so a hand-built shard set (the tests') can be loaded
+    without a provenance file -- there is no config for it to disagree with.
+    """
+    from tools.search_worker import iter_shards   # lazy: tools/ pulls forksim
+
+    if obs_schema is not None or card_obs is not None:
+        check_distill_provenance(path, obs_schema, card_obs)
+
+    parts = {k: [] for k in ("f", "i", "mask", "tgt_idx", "tgt_p")}
+    for shard in iter_shards(path):
+        for k in parts:
+            parts[k].append(shard[k])
+    if not parts["f"]:
+        raise SystemExit(f"--distill {path}: no .npz shards found there")
+    arrays = {k: np.concatenate(v, axis=0) for k, v in parts.items()}
+    if arrays["f"].shape[0] == 0:
+        raise SystemExit(f"--distill {path}: the shard set holds 0 records")
+
+    got = (int(arrays["f"].shape[1]), int(arrays["i"].shape[1]))
+    if obs_dim is not None and got != (int(obs_dim[0]), int(obs_dim[1])):
+        raise SystemExit(
+            f"--distill {path}: shards carry obs dims {got} but this run's "
+            f"obs layout is {(int(obs_dim[0]), int(obs_dim[1]))} -- the shard "
+            f"set was written under a different obs schema/card-obs mode; "
+            f"regenerate it with tools/search_worker.py")
+    if n_actions is not None and int(arrays["mask"].shape[1]) != int(n_actions):
+        raise SystemExit(
+            f"--distill {path}: shards carry {int(arrays['mask'].shape[1])} "
+            f"actions but this run's action space is {int(n_actions)}")
+    return DistillSet.from_arrays(arrays["f"], arrays["i"], arrays["mask"],
+                                  arrays["tgt_idx"], arrays["tgt_p"],
+                                  device=device)
+
+
+def sample_distill_rows(n: int, mb_size: int, device, generator=None):
+    """``min(mb_size, DISTILL_MAX_ROWS)`` row indices, uniform WITH
+    replacement over the whole set."""
+    k = min(int(mb_size), DISTILL_MAX_ROWS)
+    return torch.randint(0, int(n), (k,), device=device, generator=generator)
+
+
+def distill_loss(agent, dset: DistillSet, rows) -> "torch.Tensor":
+    """Masked cross-entropy from the policy toward the search distribution:
+
+        -(tgt_p * log_softmax(action_logits(obs, mask)))[tgt_idx].sum(-1).mean()
+
+    Two things make this the right gradient rather than merely the right
+    number:
+
+    * the log-softmax is taken over the logits masked by the SHARD's OWN
+      legality vector -- the record's state, not any live env's -- so the
+      normalizer matches the distribution the search actually chose within;
+    * ``action_logits`` is the same actor path ``get_action_and_value`` builds
+      its ``Categorical`` from, so the gradient lands on the very parameters
+      the policy-gradient term trains. Nothing here touches the critic or the
+      aux heads, so their grads stay ``None``.
+
+    Padded columns contribute EXACTLY zero: the gathered value is replaced by
+    a constant zero via ``torch.where`` (whose backward routes no gradient
+    into the discarded branch at all), and ``tgt_p`` is already 0 there.
+    """
+    obs = TensorObs(dset.f[rows], dset.i[rows])
+    mask = dset.mask[rows]
+    logp = torch.log_softmax(agent.action_logits(obs, mask), dim=-1)
+    gathered = logp.gather(-1, dset.tgt_idx[rows])
+    gathered = torch.where(dset.tgt_valid[rows], gathered,
+                           torch.zeros_like(gathered))
+    return -(dset.tgt_p[rows] * gathered).sum(-1).mean()
+
 
 # --lr's default lives here rather than in add_argument so the flag can stay
 # None when unset: on a resume that difference decides whether we keep the
@@ -181,7 +387,12 @@ CSV_FIELDS = ["iter", "global_step", "wall_seconds", "sps", "ep_ret", "win",
               # v24 (plan Task 5): mean entropy of the legal-choice
               # distribution on event steps only (NaN when
               # --event-ent-coef is 0).
-              "event_ent"]
+              "event_ent",
+              # v26 search distillation (plan Task 11): mean masked cross-
+              # entropy toward the searched action distribution per iteration
+              # (NaN when --distill is off, and NaN for a critic-warmup
+              # iteration, where the term is not applied at all).
+              "distill"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -390,6 +601,15 @@ def parse_args() -> argparse.Namespace:
                          "estimates trained by the quantile-Huber (QR) loss; "
                          "the reported value is their mean (0 = off; entset "
                          "only). No value clipping is applied in this mode.")
+    ap.add_argument("--distill", default=None, metavar="DIR",
+                    help="v26: directory of search-distillation .npz shards "
+                         "(tools/search_worker.py output). The whole set is "
+                         "preloaded to the training device at startup; each "
+                         "PPO minibatch distils a bounded sample of it into "
+                         "the policy head (run env + entset only)")
+    ap.add_argument("--distill-coef", type=float, default=0.0,
+                    help="v26: weight of the search-distillation cross-entropy "
+                         "term (0 = off; requires --distill)")
     ap.add_argument("--potion-ent-coef", type=float, default=0.0,
                     help="v16: extra entropy bonus on the total legal-potion-"
                          "action probability mass (binary entropy of q), "
@@ -626,6 +846,25 @@ def parse_args() -> argparse.Namespace:
         raise SystemExit("--quantile-critic needs --arch entset (the "
                          "distributional critic_q head lives on "
                          "EntitySetActorCritic)")
+    # v26 search distillation: the shards are RUN-obs records and the loss
+    # runs through entset's tied action heads, so it shares the aux heads'
+    # environment/arch requirements. Both halves of the knob are refused
+    # without the other: a coef with no shards and shards with no coef are
+    # both silently-inert runs, the failure mode this file's guards exist for.
+    if args.distill_coef < 0:
+        raise SystemExit("--distill-coef must be >= 0 (0 = off)")
+    if args.distill_coef and not args.distill:
+        raise SystemExit("--distill-coef needs --distill DIR (the shard set to "
+                         "distil from)")
+    if args.distill and not args.distill_coef:
+        raise SystemExit("--distill needs a positive --distill-coef, otherwise "
+                         "the shards are loaded and never applied")
+    if args.distill and args.env != "run":
+        raise SystemExit("--distill applies to --env run only (the shards are "
+                         "run-obs records)")
+    if args.distill and args.arch != "entset":
+        raise SystemExit("--distill needs --arch entset (the distillation loss "
+                         "runs through EntitySetActorCritic.action_logits)")
     if args.potion_ent_coef and args.env != "run":
         raise SystemExit("--potion-ent-coef applies to the run-scale env only")
     if args.potion_ent_coef and args.arch != "entset":
@@ -949,7 +1188,11 @@ def main() -> None:
     best_score = -math.inf
     if resume_path:
         check_checkpoint(ckpt, args, obs_dim, n_actions)
-        checkpoints.check_ascension(ckpt, args.ascension)
+        checkpoints.check_ascension(
+            ckpt, args.ascension,
+            ascension_sample=(tuple(args.ascension_random)
+                              if getattr(args, "ascension_random", None)
+                              else None))
         n_fresh_aux = checkpoints.load_model_state_lenient(agent, ckpt["model"])
         if n_fresh_aux:
             print(f"aux heads fresh-initialized ({n_fresh_aux} params not in checkpoint)")
@@ -1011,6 +1254,20 @@ def main() -> None:
         from sts2_rl.run_env import run_obs_layout
         _l = run_obs_layout(args.card_obs)
         EVENT_PRESENT_COL = _l.f_slices["event.present"].start
+
+    # v26 search distillation (plan Task 11): the whole shard set is loaded
+    # ONCE, here, as device tensors — the per-minibatch cost is then a gather
+    # rather than a decode. Loaded AFTER the resume so a mis-matched shard set
+    # is refused against this run's real obs contract.
+    DISTILL = None
+    if args.distill and args.distill_coef > 0:
+        DISTILL = load_distill_set(args.distill, device, obs_dim=obs_dim,
+                                   n_actions=n_actions,
+                                   obs_schema=env_obs_schema(args),
+                                   card_obs=args.card_obs)
+        print(f"Distilling from {args.distill}: {len(DISTILL)} searched "
+              f"decisions (k={DISTILL.tgt_idx.shape[1]}), coef "
+              f"{args.distill_coef:g}, up to {DISTILL_MAX_ROWS} rows/minibatch")
 
     # ── rollout buffers: [n_steps, n_envs, ...] ─────────────────────────────
     N, E = args.n_steps, args.n_envs
@@ -1218,6 +1475,7 @@ def main() -> None:
             turn_losses: list[float] = []
             potion_ent_losses: list[float] = []
             event_ent_losses: list[float] = []
+            distill_losses: list[float] = []
             # A stale critic's advantages are mis-signed, so spend the first
             # --critic-warmup iterations fitting the value head alone. The
             # actor's parameters are disjoint from the critic's (separate
@@ -1323,6 +1581,19 @@ def main() -> None:
                         event_ent_loss = event_entropy_bonus(
                             dist.probs, b_mask[mb], b_obs[mb].f, EVENT_PRESENT_COL)
                         event_ent_losses.append(float(event_ent_loss.item()))
+                    # v26: distillation is an ACTOR term, so unlike the aux
+                    # heads it is skipped during the critic warm-up — applying
+                    # it there would move the policy in exactly the iterations
+                    # the warm-up exists to hold it still (and would put the
+                    # actor back in the graph, undoing the "policy comes out
+                    # bit-identical" property above).
+                    distill_l = torch.zeros((), device=device)
+                    if DISTILL is not None and not critic_only:
+                        distill_l = distill_loss(
+                            agent, DISTILL,
+                            sample_distill_rows(len(DISTILL), mb_size,
+                                                device=device))
+                        distill_losses.append(float(distill_l.item()))
                     if critic_only:
                         loss = (args.vf_coef * v_loss
                                 + args.aux_hp_coef * aux_loss
@@ -1335,7 +1606,8 @@ def main() -> None:
                                 + args.vf_coef * v_loss
                                 + args.aux_hp_coef * aux_loss
                                 + args.aux_win_coef * win_loss
-                                + args.aux_hpturn_coef * turn_loss)
+                                + args.aux_hpturn_coef * turn_loss
+                                + args.distill_coef * distill_l)
 
                     optimizer.zero_grad()
                     loss.backward()
@@ -1389,6 +1661,8 @@ def main() -> None:
                                 if potion_ent_losses else float("nan"))
             event_ent_mean = (float(np.mean(event_ent_losses))
                                if event_ent_losses else float("nan"))
+            distill_mean = (float(np.mean(distill_losses))
+                            if distill_losses else float("nan"))
             print(
                 f"iter {iteration:4d}  step {global_step:>9d}  sps {sps:>5d}  "
                 f"ep_ret {ret:7.3f}  win {wr:5.2f}  ep_len {eplen:6.1f}  "
@@ -1401,6 +1675,7 @@ def main() -> None:
                 + (f"  aux_turn={aux_turn_mean:.4f}" if args.aux_hpturn_coef > 0 else "")
                 + (f"  pot_ent={potion_ent_mean:.4f}" if args.potion_ent_coef > 0 else "")
                 + (f"  ev_ent={event_ent_mean:.4f}" if args.event_ent_coef > 0 else "")
+                + (f"  distill={distill_mean:.4f}" if DISTILL is not None else "")
                 # pg/ent are still reported during the warm-up (they say how
                 # stale the advantages are) but were not applied — mark it so
                 # a flat ep_ret here doesn't read as a stalled run.
@@ -1431,6 +1706,7 @@ def main() -> None:
                     potion_ent=potion_ent_mean,
                     potions_discarded=discard_mean,
                     event_ent=event_ent_mean,
+                    distill=distill_mean,
                 ))
 
             # ── checkpointing ───────────────────────────────────────────────────

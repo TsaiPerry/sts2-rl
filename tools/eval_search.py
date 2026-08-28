@@ -228,7 +228,7 @@ ARMS = ("policy", "greedy", "search")
 
 def play_fight(fork: CombatFork, policy, fight: int, *, mode: str,
                k: int, m: int, rollout_steps: int, gamma: float,
-               device: str) -> ArmResult:
+               device: str, mass_cap: "float | None" = None) -> ArmResult:
     """Play one fight from `fork` to its resolution and report the outcome.
     `mode` is one of `ARMS`.
 
@@ -255,7 +255,7 @@ def play_fight(fork: CombatFork, policy, fight: int, *, mode: str,
                 fork, actions, policy, k, m, env=env,
                 salt_base=_salt_base(fight, d, m),
                 rollout_seed_base=_rollout_seed_base(fight, d, m),
-                max_steps=rollout_steps, gamma=gamma)
+                max_steps=rollout_steps, gamma=gamma, mass_cap=mass_cap)
             result.search_seconds += time.perf_counter() - t0
             action = found.action
             result.rollouts += found.n_rollouts
@@ -429,7 +429,9 @@ def run_measurement(args) -> int:
           f"{f', {len(undrillable)} event-launched dropped' if undrillable else ''}"
           f"  rooms {dict(sorted(room_hist.items()))}"
           f"  filter {sorted(rooms) if rooms else 'none'}")
-    print(f"asc {args.asc}  k {args.k}  m {args.m}  gamma {args.gamma}  "
+    print(f"asc {args.asc}  k {args.k}  m {args.m}  "
+          f"mass-cap {args.mass_cap if args.mass_cap is not None else 'off'}  "
+          f"gamma {args.gamma}  "
           f"rollout-steps {args.rollout_steps}  seed {args.seed}")
     print(f"fights {args.fights} total, shard {shard_i}/{shard_n} -> "
           f"{len(mine)} this process")
@@ -446,7 +448,7 @@ def run_measurement(args) -> int:
         # same env_kwargs. They differ only in how each decision is chosen.
         run = {arm: play_fight(fork, policy, fight, mode=arm, k=args.k, m=args.m,
                                rollout_steps=args.rollout_steps, gamma=args.gamma,
-                               device=args.device)
+                               device=args.device, mass_cap=args.mass_cap)
                for arm in ARMS}
         for arm in ARMS:
             totals[arm].add(run[arm])
@@ -461,7 +463,8 @@ def run_measurement(args) -> int:
 
     config = {
         "ckpt": args.ckpt, "bank": args.bank, "fights": args.fights,
-        "k": args.k, "m": args.m, "asc": args.asc, "room": args.room,
+        "k": args.k, "m": args.m, "mass_cap": args.mass_cap,
+        "asc": args.asc, "room": args.room,
         "seed": args.seed, "gamma": args.gamma,
         "rollout_steps": args.rollout_steps, "device": args.device,
         "shard": f"{shard_i}/{shard_n}", "bank_usable": len(snaps),
@@ -576,8 +579,11 @@ def merge_json(paths: "list[str]") -> "tuple[dict[str, ArmTotals], dict]":
     shards: list[str] = []
     seen: dict[int, str] = {}
     shard_ns: set[int] = set()
-    must_match = ("ckpt", "bank", "fights", "k", "m", "asc", "room", "seed",
-                  "gamma", "rollout_steps", "device")
+    # mass_cap is absent from pre-cap shard files; .get() reads that as None,
+    # which equals a new default-run shard's explicit None — correct, both
+    # measured fixed-k search.
+    must_match = ("ckpt", "bank", "fights", "k", "m", "mass_cap", "asc",
+                  "room", "seed", "gamma", "rollout_steps", "device")
     for path in paths:
         payload = json.loads(Path(path).read_text(encoding="utf-8"))
         schema = payload.get("eval_search_schema")
@@ -665,6 +671,10 @@ def main(argv=None) -> int:
     ap.add_argument("--fights", type=int, default=150)
     ap.add_argument("--k", type=int, default=5, help="candidate actions per decision")
     ap.add_argument("--m", type=int, default=8, help="branches (salts) per candidate")
+    ap.add_argument("--mass-cap", type=float, default=None,
+                    help="adaptive breadth: shrink the top-k candidate set to "
+                         "the smallest prefix covering this prior mass "
+                         "(clamped to [2, k]); default off = fixed k")
     ap.add_argument("--asc", type=int, default=10, help="ascension the drill env runs at")
     ap.add_argument("--room", default=None,
                     help="comma-separated room types to keep, e.g. elite,boss "
