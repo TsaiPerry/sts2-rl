@@ -1180,6 +1180,63 @@ def apply_zero_segments(agent: nn.Module, spans: list[tuple[int, int]]) -> None:
             agent.critic[0].weight[:, start:stop].zero_()
 
 
+def set_warmup_freeze(agent: nn.Module, frozen: bool) -> list:
+    """Toggle ``requires_grad`` on every actor-path parameter, for
+    ``--critic-warmup``.
+
+    The actor path is the (shared or not) actor encoder plus the actor
+    trunk and every action head: ``actor_encoder``, ``actor``,
+    ``end_turn_head``, ``play_head``, ``potion_head``, ``positional_heads``,
+    ``pointer_heads``, ``choice_row_overlay_heads``,
+    ``choice_float_overlay_heads`` (models.py's ``EntitySetActorCritic`` /
+    ``EntityActorCritic``; missing attributes are skipped, so this is a
+    harmless no-op on ``--arch flat``, where actor/critic really are
+    disjoint). Everything else -- ``critic``, ``critic_q`` (v26 quantile
+    head, when present), ``aux_hp3_head``, ``aux_win_head``,
+    ``aux_hpturn_head`` -- is left alone, so warmup's value + aux losses
+    can still train.
+
+    With ``--arch entset --shared-encoder``, ``critic_encoder`` IS
+    ``actor_encoder`` (models.py ~1097's ``object.__setattr__`` aliasing,
+    same module object) -- freezing ``actor_encoder``'s parameters freezes
+    those SAME parameter tensors under the ``critic_encoder`` name too, so
+    the critic head trains on frozen shared features instead of
+    backpropping into (and moving) the encoder the actor also reads.
+    Without ``shared_encoder``, ``critic_encoder`` is a separate module
+    this function never touches, so it keeps training normally during
+    warmup.
+
+    Adam-state safety: this only flips ``Tensor.requires_grad``, never a
+    param group's membership or ``agent.parameters()``'s iteration order --
+    a frozen param's ``.grad`` stays ``None`` (autograd skips it,
+    ``zero_grad()`` never sets it), so ``optimizer.step()`` skips it
+    entirely, momentum included, while every parameter keeps its POSITION
+    in ``state_dict()``/the optimizer's param list untouched either way --
+    the positional Adam-state contract ([[obs-v4-map-boss]]) is safe.
+
+    Returns the list of parameters it touched, for restoring/inspecting.
+    """
+    actor_path_modules = [
+        getattr(agent, "actor_encoder", None),
+        getattr(agent, "actor", None),
+        getattr(agent, "end_turn_head", None),
+        getattr(agent, "play_head", None),
+        getattr(agent, "potion_head", None),
+        getattr(agent, "positional_heads", None),
+        getattr(agent, "pointer_heads", None),
+        getattr(agent, "choice_row_overlay_heads", None),
+        getattr(agent, "choice_float_overlay_heads", None),
+    ]
+    touched: list = []
+    for module in actor_path_modules:
+        if module is None:
+            continue
+        for p in module.parameters():
+            p.requires_grad = not frozen
+            touched.append(p)
+    return touched
+
+
 def make_model(args: argparse.Namespace, obs_dim: int, n_actions: int) -> nn.Module:
     """Build the --arch-selected model for this run's env."""
     return checkpoints.make_model(model_spec(args), obs_dim, n_actions)
@@ -1398,6 +1455,10 @@ def main() -> None:
     n_iters = args.timesteps // batch_size
     global_step = start_step
     t0 = time.time()
+    # Tracks whether set_warmup_freeze(agent, True) is currently in effect,
+    # so the toggle below fires once on warmup entry/exit rather than every
+    # minibatch (cheap, and avoids redundant requires_grad writes).
+    warmup_frozen = False
 
     # Workers are daemons, but close them explicitly so a Ctrl-C or a
     # crash mid-run tears them down now rather than at interpreter exit.
@@ -1541,13 +1602,26 @@ def main() -> None:
             event_ent_losses: list["torch.Tensor"] = []
             distill_losses: list["torch.Tensor"] = []
             # A stale critic's advantages are mis-signed, so spend the first
-            # --critic-warmup iterations fitting the value head alone. The
-            # actor's parameters are disjoint from the critic's (separate
-            # trunks, and separate encoders for --arch entity), so dropping
-            # the policy and entropy terms leaves the actor out of the graph
-            # entirely: zero_grad() sets its grads to None and Adam skips it,
-            # momentum included. The policy comes out bit-identical.
+            # --critic-warmup iterations fitting the value head (+ aux
+            # tails) alone. Dropping the policy and entropy terms is NOT
+            # enough on its own to protect the actor: under
+            # --arch entset --shared-encoder (every live checkpoint since
+            # v23), critic_encoder IS actor_encoder (models.py's
+            # EntitySetActorCritic.__init__ aliases them to the same module
+            # object), so the value/aux backward pass here still backprops
+            # through -- and silently moves -- the encoder the actor also
+            # reads (the v26 seed-CE drift this was traced to). The actor's
+            # bit-identity is instead an explicit guarantee from
+            # set_warmup_freeze below: its requires_grad=False leaves those
+            # params out of the graph entirely, so zero_grad() sets their
+            # grads to None and Adam skips them, momentum included.
             critic_only = iteration < start_iter + args.critic_warmup
+            if critic_only and not warmup_frozen:
+                set_warmup_freeze(agent, True)
+                warmup_frozen = True
+            elif not critic_only and warmup_frozen:
+                set_warmup_freeze(agent, False)
+                warmup_frozen = False
             stop_epochs = False
             for _ in range(args.epochs):
                 if stop_epochs:
