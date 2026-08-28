@@ -508,6 +508,22 @@ def evaluate_run_scale(
         for line in s7_gate_lines(report):
             print(line)
 
+    # The winning seeds themselves (2026-08-27): the aggregate win% says how
+    # often, not *which* runs -- and a win is rare enough that naming its seed
+    # makes it replayable (`--seed <s> --episodes 1`, or the same seed handed
+    # to the replay exporter) instead of merely counted.
+    print("\nwins (seed: floor / hp left):")
+    for name, report in rows:
+        won = [(report.seeds[i] if i < len(report.seeds) else None,
+                report.floors[i], report.hp_left[i])
+               for i, v in enumerate(report.victories) if v]
+        if not won:
+            print(f"  {name:<{LABEL_WIDTH}} no wins")
+            continue
+        detail = "  ".join(f"{'?' if s is None else s}:f{floor}/hp{hp}"
+                           for s, floor, hp in won)
+        print(f"  {name:<{LABEL_WIDTH}} n={len(won):<4} {detail}")
+
     print("\ndeaths (floor reached, losses only):")
     for name, report in rows:
         deaths = report.death_floors

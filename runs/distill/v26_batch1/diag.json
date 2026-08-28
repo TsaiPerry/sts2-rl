@@ -1,0 +1,28 @@
+{
+  "distill_dir": "runs\\distill\\v26_batch1",
+  "reference": "runs\\sts2_run_torch_v24_s27.pt",
+  "records": 5004,
+  "provenance": {
+    "obs_schema": 13,
+    "card_obs": "hybrid",
+    "ckpt": "runs\\sts2_run_torch_v24_s27.pt"
+  },
+  "results": {
+    "runs\\sts2_run_torch_v24_s27.pt": {
+      "n": 5004,
+      "n_flip": 1984,
+      "ce": 1.8705395460128784,
+      "agree": 0.6035171862509991,
+      "ce_flip": 2.052706480026245,
+      "agree_flip": 0.0
+    },
+    "runs\\sts2_run_torch_v26_s28.pt": {
+      "n": 5004,
+      "n_flip": 1984,
+      "ce": 1.1047438383102417,
+      "agree": 0.6250999200639489,
+      "ce_flip": 1.2561759948730469,
+      "agree_flip": 0.3810483870967742
+    }
+  }
+}

@@ -310,3 +310,56 @@ def test_resume_with_anneal_lr_restarts_the_schedule(tmp_path, monkeypatch):
     with open(train_torch.csv_path(save), newline="") as fh:
         lrs = [float(r["lr"]) for r in csv.DictReader(fh)]
     assert lrs == pytest.approx([1e-3, 5e-4, 1e-3, 5e-4])
+
+
+# ── logged_mean: the deferred-sync logging path (2026-08-27) ──────────────
+# The per-minibatch `.item()` calls that used to fill these lists were
+# `cudaStreamSynchronize` calls the update loop never read -- ~384 pipeline
+# drains an iteration under v26's aux + distill terms. They now stash
+# detached device tensors and cross to the CPU once. These pin the property
+# that made the swap safe: the logged NUMBER is unchanged.
+
+def test_logged_mean_matches_the_numpy_mean_it_replaced():
+    import numpy as np
+    import torch
+
+    vals = [0.5, 0.25, 0.125, 3.0, -1.5, 0.0]
+    tensors = [torch.tensor(v, dtype=torch.float32) for v in vals]
+    assert train_torch.logged_mean(tensors) == pytest.approx(float(np.mean(vals)))
+
+
+def test_logged_mean_is_nan_on_an_empty_list():
+    # The old form was `float(np.mean(xs)) if xs else float("nan")` -- an
+    # unused loss term must still log nan, not 0.0 and not a numpy warning.
+    import math
+
+    assert math.isnan(train_torch.logged_mean([]))
+
+
+def test_logged_mean_accumulates_in_float64():
+    # float32 summation over many minibatches would drift the CSV column
+    # away from every earlier generation's; the CSVs are compared across
+    # generations, so the widening is load-bearing.
+    import numpy as np
+    import torch
+
+    tensors = [torch.tensor(0.1, dtype=torch.float32) for _ in range(64)]
+    # The OLD path exactly: `.item()` widened each float32 scalar to a Python
+    # float, then np.mean summed those in float64.
+    was = float(np.mean([float(t) for t in tensors]))
+    got = train_torch.logged_mean(tensors)
+    assert got == was
+    # ...and that is NOT what a float32 accumulation gives, so the widening
+    # in logged_mean is doing real work rather than being decoration.
+    assert float(torch.stack(tensors).mean()) != was
+
+
+def test_logged_mean_does_not_retain_the_autograd_graph():
+    # `.detach()` at the append site is what keeps 64 minibatches of graph
+    # from being pinned; logged_mean must not need grad to read them.
+    import torch
+
+    x = torch.tensor(2.0, requires_grad=True)
+    kept = (x * 3).detach()
+    assert kept.requires_grad is False
+    assert train_torch.logged_mean([kept]) == pytest.approx(6.0)

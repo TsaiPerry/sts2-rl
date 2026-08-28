@@ -1,0 +1,93 @@
+{
+  "distill_schema": 1,
+  "ckpt": "runs\\sts2_run_torch_v24_s27.pt",
+  "bank": "runs/snapshots/v24s27_bank_asc10.holdout.p{0,1}.jsonl (2-way)",
+  "k": 5,
+  "m": 8,
+  "date": "2026-08-28T21:48:25+00:00",
+  "obs_schema": 13,
+  "arch": "entset",
+  "card_obs": "hybrid",
+  "f_dim": 4736,
+  "i_dim": 1533,
+  "n_actions": 253,
+  "asc": 10,
+  "room": null,
+  "seed": 0,
+  "gamma": 0.999,
+  "rollout_steps": 120,
+  "mass_cap": 0.92,
+  "device": "cuda",
+  "decisions_requested": 250,
+  "shard_size": 256,
+  "shards": [
+    "p0-shard-00000.npz",
+    "p1-shard-00000.npz"
+  ],
+  "records": 500,
+  "stats": {
+    "fights": 50,
+    "decisions": 847,
+    "forced": 164,
+    "collected": 683,
+    "selected": 507,
+    "searched": 500,
+    "flips": 252,
+    "rollouts": 13240,
+    "unsearched_at_score": 0,
+    "collect_seconds": 24.85,
+    "search_seconds": 4866.22,
+    "room_hist": {
+      "ELITE": 13,
+      "MONSTER": 35,
+      "BOSS": 2
+    }
+  },
+  "merged_from": [
+    {
+      "part": "v26_holdout_p0",
+      "bank": "runs\\snapshots\\v24s27_bank_asc10.holdout.p0.jsonl",
+      "seed": 0,
+      "stats": {
+        "fights": 24,
+        "decisions": 421,
+        "forced": 86,
+        "collected": 335,
+        "selected": 255,
+        "searched": 250,
+        "flips": 123,
+        "rollouts": 6688,
+        "unsearched_at_score": 0,
+        "collect_seconds": 11.797,
+        "search_seconds": 2372.411,
+        "room_hist": {
+          "ELITE": 5,
+          "MONSTER": 17,
+          "BOSS": 2
+        }
+      }
+    },
+    {
+      "part": "v26_holdout_p1",
+      "bank": "runs\\snapshots\\v24s27_bank_asc10.holdout.p1.jsonl",
+      "seed": 0,
+      "stats": {
+        "fights": 26,
+        "decisions": 426,
+        "forced": 78,
+        "collected": 348,
+        "selected": 252,
+        "searched": 250,
+        "flips": 129,
+        "rollouts": 6552,
+        "unsearched_at_score": 0,
+        "collect_seconds": 13.053,
+        "search_seconds": 2493.809,
+        "room_hist": {
+          "MONSTER": 18,
+          "ELITE": 8
+        }
+      }
+    }
+  ]
+}

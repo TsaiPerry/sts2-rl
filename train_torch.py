@@ -929,6 +929,70 @@ def kl_exceeded(kls: list[float], epoch_start: int, target_kl: float | None,
     return float(np.mean(seen)) > target_kl
 
 
+def cuda_mem_note(device) -> str:
+    """``  vram <alloc>/<reserved>G`` for the iteration log, plus a RETRY
+    count when the caching allocator has had to fall back.
+
+    ``num_alloc_retries`` is the number the header comment about "GPU at 100%
+    but 86 W" turned out to need: when a process is close to the card's
+    capacity the allocator answers a failed block request by freeing cached
+    blocks and re-trying ``cudaMalloc``, and that path SYNCHRONIZES the whole
+    device. A run that starts retrying does not fail -- it silently drops to
+    a fraction of its speed, which is indistinguishable from "the model got
+    more expensive" in the sps column alone. Measured on this box 2026-08-27:
+    v26 ran 96-107 s/iter through the critic warm-up and then 452-926 s/iter
+    on the first three distillation iterations, at 7717/8192 MiB.
+
+    Host-side bookkeeping only -- ``memory_stats`` reads counters the
+    allocator already keeps, so this costs no sync and cannot itself perturb
+    what it measures.
+    """
+    if device.type != "cuda":
+        return ""
+    st = torch.cuda.memory_stats(device)
+    gb = 1024 ** 3
+    note = (f"  vram {torch.cuda.memory_allocated(device) / gb:.2f}"
+            f"/{torch.cuda.memory_reserved(device) / gb:.2f}G")
+    retries = int(st.get("num_alloc_retries", 0))
+    if retries:
+        note += f"  ALLOC-RETRIES {retries}"
+    return note
+
+
+def logged_mean(values: "list[torch.Tensor]") -> float:
+    """Mean of per-minibatch log values that were kept on the DEVICE.
+
+    These lists used to hold Python floats, which meant a ``.item()`` -- a
+    full ``cudaStreamSynchronize`` -- inside the minibatch loop for every
+    logged quantity. At 4 epochs x 16 minibatches that is 64 drains of the
+    CUDA queue per iteration *per quantity*, and with the v25 aux heads and
+    the v26 distillation term live there were six such quantities: ~384
+    stalls an iteration, none of which any training decision reads. The
+    stall is the cost, not the arithmetic -- while the CPU is blocked it
+    cannot run ahead and queue the next minibatch's kernels, so the GPU
+    drains to one-kernel-at-a-time (measured 2026-08-27 mid-v26: 100% duty
+    cycle at 86 W of ~220 W and 7% memory bandwidth, main thread pinned at
+    98.8% of one core busy-waiting).
+
+    So the appends now stash DETACHED device tensors and the crossing to the
+    CPU happens once, here, at logging time. The number is unchanged -- the
+    mean of the same per-minibatch scalars -- and so is every gradient:
+    nothing in the update loop reads these. ``.detach()`` at the append site
+    is what keeps this from pinning 64 minibatches' autograd graphs.
+
+    ``kl_exceeded``'s input is deliberately NOT routed through here: that one
+    IS read every minibatch, to decide whether to break the epoch, so its
+    sync is load-bearing and stays.
+    """
+    if not values:
+        return float("nan")
+    # float64 accumulation, matching the np.mean this replaced: the CSV
+    # columns are compared across generations, and a float32 sum over 64
+    # minibatches would shift them by a hair for no reason. 64 elements, so
+    # the widening costs nothing.
+    return float(torch.stack(values).double().mean())
+
+
 def resolve_device(requested: str) -> torch.device:
     """Map ``--device`` onto a real device, and say out loud what we picked.
 
@@ -1469,13 +1533,13 @@ def main() -> None:
 
             idx = np.arange(batch_size)
             kls: list[float] = []
-            clipfracs: list[float] = []
-            aux_losses: list[float] = []
-            win_losses: list[float] = []
-            turn_losses: list[float] = []
-            potion_ent_losses: list[float] = []
-            event_ent_losses: list[float] = []
-            distill_losses: list[float] = []
+            clipfracs: list["torch.Tensor"] = []
+            aux_losses: list["torch.Tensor"] = []
+            win_losses: list["torch.Tensor"] = []
+            turn_losses: list["torch.Tensor"] = []
+            potion_ent_losses: list["torch.Tensor"] = []
+            event_ent_losses: list["torch.Tensor"] = []
+            distill_losses: list["torch.Tensor"] = []
             # A stale critic's advantages are mis-signed, so spend the first
             # --critic-warmup iterations fitting the value head alone. The
             # actor's parameters are disjoint from the critic's (separate
@@ -1519,7 +1583,8 @@ def main() -> None:
                     ratio = logratio.exp()
                     with torch.no_grad():
                         kls.append(float(((ratio - 1) - logratio).mean()))
-                        clipfracs.append(((ratio - 1.0).abs() > args.clip).float().mean().item())
+                        clipfracs.append(
+                            ((ratio - 1.0).abs() > args.clip).float().mean().detach())
 
                     mb_adv = b_adv[mb]
                     mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
@@ -1558,29 +1623,29 @@ def main() -> None:
                     if args.aux_hp_coef > 0:
                         m = b_auxv[mb]
                         aux_loss = ((aux_pred - b_auxt[mb]).pow(2) * m).sum() / m.sum().clamp(min=1.0)
-                        aux_losses.append(float(aux_loss.item()))
+                        aux_losses.append(aux_loss.detach())
                     win_loss = torch.zeros((), device=device)
                     if args.aux_win_coef > 0:
                         m = b_winv[mb]
                         win_loss = (nn.functional.binary_cross_entropy_with_logits(
                             win_pred, b_wint[mb], reduction="none") * m
                         ).sum() / m.sum().clamp(min=1.0)
-                        win_losses.append(float(win_loss.item()))
+                        win_losses.append(win_loss.detach())
                     turn_loss = torch.zeros((), device=device)
                     if args.aux_hpturn_coef > 0:
                         m = b_turnv[mb]
                         turn_loss = ((turn_pred - b_turnt[mb]).pow(2) * m
                                      ).sum() / m.sum().clamp(min=1.0)
-                        turn_losses.append(float(turn_loss.item()))
+                        turn_losses.append(turn_loss.detach())
                     potion_ent_loss = torch.zeros((), device=device)
                     if args.potion_ent_coef > 0:
                         potion_ent_loss = potion_entropy_bonus(dist.probs, b_mask[mb])
-                        potion_ent_losses.append(float(potion_ent_loss.item()))
+                        potion_ent_losses.append(potion_ent_loss.detach())
                     event_ent_loss = torch.zeros((), device=device)
                     if args.event_ent_coef > 0:
                         event_ent_loss = event_entropy_bonus(
                             dist.probs, b_mask[mb], b_obs[mb].f, EVENT_PRESENT_COL)
-                        event_ent_losses.append(float(event_ent_loss.item()))
+                        event_ent_losses.append(event_ent_loss.detach())
                     # v26: distillation is an ACTOR term, so unlike the aux
                     # heads it is skipped during the critic warm-up — applying
                     # it there would move the policy in exactly the iterations
@@ -1593,7 +1658,7 @@ def main() -> None:
                             agent, DISTILL,
                             sample_distill_rows(len(DISTILL), mb_size,
                                                 device=device))
-                        distill_losses.append(float(distill_l.item()))
+                        distill_losses.append(distill_l.detach())
                     if critic_only:
                         loss = (args.vf_coef * v_loss
                                 + args.aux_hp_coef * aux_loss
@@ -1652,23 +1717,19 @@ def main() -> None:
             discard_mean = (
                 float(np.mean(discard_hist)) if discard_hist else float("nan"))
             lr = optimizer.param_groups[0]["lr"]
-            aux_mean = float(np.mean(aux_losses)) if aux_losses else float("nan")
-            aux_win_mean = (float(np.mean(win_losses))
-                            if win_losses else float("nan"))
-            aux_turn_mean = (float(np.mean(turn_losses))
-                             if turn_losses else float("nan"))
-            potion_ent_mean = (float(np.mean(potion_ent_losses))
-                                if potion_ent_losses else float("nan"))
-            event_ent_mean = (float(np.mean(event_ent_losses))
-                               if event_ent_losses else float("nan"))
-            distill_mean = (float(np.mean(distill_losses))
-                            if distill_losses else float("nan"))
+            aux_mean = logged_mean(aux_losses)
+            aux_win_mean = logged_mean(win_losses)
+            aux_turn_mean = logged_mean(turn_losses)
+            potion_ent_mean = logged_mean(potion_ent_losses)
+            event_ent_mean = logged_mean(event_ent_losses)
+            distill_mean = logged_mean(distill_losses)
+            clipfrac_mean = logged_mean(clipfracs)
             print(
                 f"iter {iteration:4d}  step {global_step:>9d}  sps {sps:>5d}  "
                 f"ep_ret {ret:7.3f}  win {wr:5.2f}  ep_len {eplen:6.1f}  "
                 f"pg {pg_loss.item():+.3f}  v {v_loss.item():.3f}  "
                 f"ent {ent_loss.item():.3f}  kl {approx_kl:.4f}  "
-                f"clipfrac {np.mean(clipfracs):.3f}  "
+                f"clipfrac {clipfrac_mean:.3f}  "
                 f"e_unspent {energy_unspent:4.2f}  take {card_take:4.2f}"
                 + (f"  aux={aux_mean:.4f}" if args.aux_hp_coef > 0 else "")
                 + (f"  aux_win={aux_win_mean:.4f}" if args.aux_win_coef > 0 else "")
@@ -1679,7 +1740,8 @@ def main() -> None:
                 # pg/ent are still reported during the warm-up (they say how
                 # stale the advantages are) but were not applied — mark it so
                 # a flat ep_ret here doesn't read as a stalled run.
-                + ("  [critic-warmup]" if critic_only else ""),
+                + ("  [critic-warmup]" if critic_only else "")
+                + cuda_mem_note(device),
                 flush=True,
             )
             if args.save:
@@ -1688,7 +1750,7 @@ def main() -> None:
                     wall_seconds=round(elapsed, 3), sps=sps,
                     ep_ret=ret, win=wr, ep_len=eplen,
                     pg=pg_loss.item(), v=v_loss.item(), ent=ent_loss.item(),
-                    kl=approx_kl, clipfrac=float(np.mean(clipfracs)), lr=lr,
+                    kl=approx_kl, clipfrac=clipfrac_mean, lr=lr,
                     energy_unspent=energy_unspent, card_take=card_take,
                     upgrades=float(v7_means[0]), removes=float(v7_means[1]),
                     elites=float(v7_means[2]), potions_got=float(v7_means[3]),
