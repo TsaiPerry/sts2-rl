@@ -82,6 +82,52 @@ def target_argmax(dset: "train_torch.DistillSet") -> "torch.Tensor":
     return dset.tgt_idx.gather(-1, slot.unsqueeze(-1)).squeeze(-1)
 
 
+def target_stats(tgt_idx, tgt_p) -> dict:
+    """Per-record SHARPNESS of the searched targets — no checkpoint involved.
+
+    Reads the raw `(n, k)` shard arrays (search_worker's `tgt_idx`/`tgt_p`,
+    float16 with the −1 pad on BOTH), not a DistillSet, so `--targets-only`
+    can measure a shard set without loading a model. `tgt_idx >= 0` is the
+    validity mask; pads carry −1 in `tgt_p`, which would be nonsense mass and
+    a nan under `log`, so they are dropped before either statistic.
+
+      * ``gap``     top1 − top2 target mass. A record with a single candidate
+                    (mass-cap collapse) has no second and scores 1.0.
+      * ``entropy`` Shannon entropy (nats) over the valid candidate mass only
+                    — the ~3-candidate neighbourhood the v26 diagnosis
+                    measured at ~0.958 nats under T=1.0.
+    """
+    idx = np.asarray(tgt_idx)
+    p = np.asarray(tgt_p, dtype=np.float64)
+    if idx.shape != p.shape:
+        raise ValueError(f"target_stats: tgt_idx {idx.shape} and tgt_p "
+                         f"{p.shape} must have the same (n, k) shape")
+    valid = idx >= 0
+    p = np.where(valid, p, 0.0)
+    n_valid = valid.sum(axis=1)
+
+    srt = np.sort(p, axis=1)[:, ::-1]          # descending, pads now 0.0
+    top1 = srt[:, 0]
+    top2 = srt[:, 1] if srt.shape[1] > 1 else np.zeros_like(top1)
+    gap = top1 - top2
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        terms = np.where(p > 0.0, -p * np.log(np.where(p > 0.0, p, 1.0)), 0.0)
+    return {"gap": gap, "entropy": terms.sum(axis=1), "n_valid": n_valid}
+
+
+def target_stats_from_dir(distill_dir) -> dict:
+    """`target_stats` over every shard of a shard set, concatenated in the
+    contract's shard order (`search_worker.shard_paths`)."""
+    from tools import search_worker
+
+    parts = [target_stats(s["tgt_idx"], s["tgt_p"])
+             for s in search_worker.iter_shards(distill_dir)]
+    if not parts:
+        raise ValueError(f"target_stats_from_dir: no shards under {distill_dir}")
+    return {k: np.concatenate([p[k] for p in parts]) for k in parts[0]}
+
+
 def evaluate(model, dset: "train_torch.DistillSet", device: str,
              chunk: int = 1024) -> dict:
     """Full-set per-record CE + prior argmax, chunked, no_grad."""
@@ -116,11 +162,51 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("distill_dir")
-    ap.add_argument("ckpts", nargs="+",
-                    help="checkpoints; the FIRST is the flip reference")
+    ap.add_argument("ckpts", nargs="*",
+                    help="checkpoints; the FIRST is the flip reference "
+                         "(not used, and not required, with --targets-only)")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--json", dest="json_out", default=None)
+    ap.add_argument("--targets-only", action="store_true",
+                    help="measure the TARGETS' sharpness (median top1-top2 "
+                         "mass gap, median entropy) and exit — no checkpoint "
+                         "is loaded. Used by the v27 temperature calibration.")
     args = ap.parse_args()
+
+    if args.targets_only:
+        st = target_stats_from_dir(args.distill_dir)
+        prov = {}
+        prov_path = os.path.join(args.distill_dir, "provenance.json")
+        if os.path.exists(prov_path):
+            prov = json.loads(open(prov_path, encoding="utf-8-sig").read())
+        summary = {
+            "distill_dir": args.distill_dir,
+            "temperature": prov.get("temperature"),
+            "records": int(len(st["gap"])),
+            "provenance_records": prov.get("records"),
+            "median_gap": float(np.median(st["gap"])),
+            "median_entropy": float(np.median(st["entropy"])),
+            "mean_gap": float(st["gap"].mean()),
+            "mean_entropy": float(st["entropy"].mean()),
+            "median_n_valid": float(np.median(st["n_valid"])),
+            "n_single_candidate": int((st["n_valid"] == 1).sum()),
+        }
+        multi = st["n_valid"] > 1
+        if multi.any():
+            summary["median_gap_multi"] = float(np.median(st["gap"][multi]))
+            summary["median_entropy_multi"] = float(
+                np.median(st["entropy"][multi]))
+        for key, val in summary.items():
+            print(f"{key:<24} {val}")
+        if args.json_out:
+            with open(args.json_out, "w", encoding="utf-8") as fh:
+                json.dump(summary, fh, indent=2)
+            print(f"\nwrote {args.json_out}")
+        return
+
+    if not args.ckpts:
+        raise SystemExit("distill_diag: at least one checkpoint is required "
+                         "(or pass --targets-only)")
 
     prov_path = os.path.join(args.distill_dir, "provenance.json")
     prov = json.loads(open(prov_path, encoding="utf-8-sig").read())

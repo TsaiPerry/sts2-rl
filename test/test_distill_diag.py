@@ -49,6 +49,50 @@ def _stub():
                                [0.5, 0.5, 9.0, 9.0]], dtype=np.float32))
 
 
+def test_target_stats_gap_and_entropy_on_a_padded_shard():
+    """--targets-only reads the RAW shard arrays (not a DistillSet), so it must
+    decode the -1 pad itself: pads contribute neither mass to the gap nor a
+    term to the entropy."""
+    tgt_idx = np.array([[0, 2, -1],        # 2 candidates
+                        [3, 1, 4],         # 3 candidates, near-uniform
+                        [1, -1, -1]],      # 1 candidate (mass-cap collapse)
+                       dtype=np.int32)
+    tgt_p = np.array([[0.75, 0.25, -1.0],
+                      [0.34, 0.33, 0.33],
+                      [1.00, -1.0, -1.0]], dtype=np.float16)
+    st = distill_diag.target_stats(tgt_idx, tgt_p)
+    assert st["n_valid"].tolist() == [2, 3, 1]
+    # gap = top1 - top2 over the VALID mass; a lone candidate has no second.
+    assert st["gap"] == pytest.approx([0.5, 0.01, 1.0], abs=2e-3)
+    # entropy over the valid entries only: the -1 pads must not appear as
+    # log of a negative (nan) nor as extra mass.
+    assert np.isfinite(st["entropy"]).all()
+    assert st["entropy"] == pytest.approx(
+        [-(0.75 * np.log(0.75) + 0.25 * np.log(0.25)), np.log(3.0), 0.0],
+        abs=2e-3)
+    # A pad-blind implementation would read 3 candidates everywhere.
+    assert st["entropy"][2] == pytest.approx(0.0, abs=1e-6)
+
+
+def test_target_stats_matches_a_written_shard(tmp_path):
+    """End-to-end over the real writer: what search_worker.write_shard stores
+    (float16, -1 pads) is what target_stats must read back."""
+    from tools import search_worker
+
+    idx, prob = search_worker.targets_from_scores(
+        [7, 9], np.array([1.0, 0.0]), k=3, temperature=1.0)
+    search_worker.write_shard(
+        tmp_path / "shard-00000.npz",
+        f=np.zeros((1, 2), dtype=np.float32),
+        i=np.zeros((1, 2), dtype=np.int32),
+        mask=np.ones((1, 4), dtype=bool),
+        tgt_idx=idx[None, :], tgt_p=prob[None, :])
+    st = distill_diag.target_stats_from_dir(tmp_path)
+    assert st["n_valid"].tolist() == [2]
+    p1 = float(np.exp(0.0) / (np.exp(0.0) + np.exp(-1.0)))
+    assert st["gap"][0] == pytest.approx(p1 - (1.0 - p1), abs=2e-3)
+
+
 def test_per_record_ce_mean_equals_distill_loss():
     dset, agent = _tiny_set(), _stub()
     rows = torch.arange(3)

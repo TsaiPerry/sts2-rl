@@ -18,7 +18,8 @@ One record = one combat decision the search actually scored:
     mask     bool    (n, n_actions)  the env's legality vector
     tgt_idx  int32   (n, k)          the searched action ids, −1 padded
     tgt_p    float16 (n, k)          softmax(mean rollout score) over those
-                                     ids at temperature 1.0, −1 padded
+                                     ids at `--temperature` (default 1.0,
+                                     the pre-flag behaviour), −1 padded
 
 `f`/`i` are stored VERBATIM from `env._build_obs()` (float16 is the storage
 dtype; the trainer casts back to float32), so a shard set is only meaningful
@@ -45,7 +46,10 @@ the shard set never encodes "these particular fights are the hard ones":
 
 The median split is over the WHOLE batch, elite/boss decisions included —
 "the batch" is the pool of decisions this run walked. That makes selection a
-pure function of the pool, which is why the tool runs in two passes:
+pure function of the pool, which is why the tool works in ROUNDS, each round a
+collect phase followed by a score phase over the pool that round collected
+(`run_worker` repeats rounds until the kept-record budget or `--max-fights` is
+reached — see the termination note there):
 
   1. **collect** — play fights under the deployed (sampling) policy, one
      forward per decision, recording obs/mask/entropy/room and the action
@@ -60,6 +64,37 @@ pure function of the pool, which is why the tool runs in two passes:
 
 Forced decisions (one legal action) are never recorded: there is nothing to
 distil, and `expectimax` declines them anyway.
+
+## `--min-score-gap G` — the decisiveness filter (2026-08-28, v27 Task 4b)
+
+A third gate sits AFTER the search, on its result rather than on the state:
+let δ = top1 − top2 of the raw mean rollout scores over the candidates the
+search actually scored (δ = +∞ when there is only one). If `G > 0` and
+δ <= G the decision is DROPPED — no record written, and it does not count
+against `--decisions`, which therefore counts KEPT records. The search itself
+already happened, so its cost is real and is counted separately in
+`stats.decisions_searched` / `stats.skipped_indecisive`. `G = 0.0` is the
+default and means NO FILTER AT ALL (exact ties included), so every pre-flag
+shard set stays reproducible.
+
+Why it exists: the v27 temperature calibration (`docs/superpowers/plans/
+v27-run-log.md`, 08-28 entry) ran a one-variable T sweep over a fixed
+200-decision slice and MISSED the pre-registered "median top1−top2 target-mass
+gap ≥ 0.25" bar at every temperature — best 0.054 at T = 0.1. The cause is not
+the softmax but its input: the median raw score gap is ≈ 0.016 return units,
+and **19.5% of records have every candidate scored exactly equal**, where a
+softmax is literally temperature-invariant. Sharpening cannot separate scores
+that are not separated. Filtering can: on the same measured scores, keeping
+δ > 0.05 retains **41%** of records and lifts the median target gap to
+**0.317 at T = 0.25** — over the bar. Hence v27's pinned pair,
+`--min-score-gap 0.05 --temperature 0.25`.
+
+Consequence for the driver: because a rejection is only known after the
+rollouts are paid for, `run_worker` can no longer fill its budget in one
+collect-then-score pass. It runs ROUNDS instead — see the termination note
+there. `--max-fights` remains the hard bound, so a bank of purely indecisive
+decisions costs at most that many fights and then stops short of `--decisions`
+rather than looping.
 
 ## Determinism
 
@@ -89,7 +124,8 @@ explicit per-decision seed.
 Usage:
     search_worker.py CKPT --bank runs/snapshots/BANK.jsonl \\
         --out runs/distill/v26_batch1/ --decisions 5000 --k 5 --m 8 \\
-        --shard-size 4096 [--asc 10] [--room elite,boss] [--mass-cap 0.9]
+        --shard-size 4096 [--asc 10] [--room elite,boss] [--mass-cap 0.9] \\
+        [--temperature 0.25] [--min-score-gap 0.05]
 """
 from __future__ import annotations
 
@@ -215,14 +251,24 @@ def iter_shards(path):
 # ════════════════════════════════════════════════════════════════════════════
 
 
-def targets_from_scores(candidates, scores, k: int):
+def targets_from_scores(candidates, scores, k: int, temperature: float = 1.0):
     """`(tgt_idx, tgt_p)` for one decision: `(k,)` int32 and `(k,)` float16.
 
-    `tgt_p` is the temperature-1.0 softmax of the candidates' MEAN rollout
+    `tgt_p` is the `--temperature` softmax of the candidates' MEAN rollout
     scores, renormalized over the candidates present — i.e. the search's own
     preference ordering kept as a distribution rather than collapsed to its
     argmax, so the distillation loss can learn "these two were nearly equal"
     instead of a hard label the search's m samples do not actually support.
+
+    Temperature defaults to 1.0, which is what every pre-flag shard set was
+    written at — and v26 is the argument for turning it down. Its rollout
+    scores sat close enough together that T=1.0 produced near-uniform targets,
+    a distribution carrying almost no preference to distil; the run learned
+    its 5,004 shards and generalized negatively (the 08-28 diagnosis entry in
+    `docs/superpowers/plans/v26-run-log.md`). T<1 divides the score gaps up
+    before the exponential and sharpens the target toward the search's actual
+    pick; T must be > 0 (T=0 is the argmax, not a softmax, and would divide by
+    zero).
 
     The softmax is the max-subtracted one: rollout scores are returns plus a
     critic bootstrap and can be hundreds of points, whose bare `exp` overflows
@@ -230,6 +276,9 @@ def targets_from_scores(candidates, scores, k: int):
 
     Both arrays are padded to `k` with `PAD` (−1) — see the module docstring.
     """
+    if not (float(temperature) > 0.0):
+        raise ValueError(f"targets_from_scores: temperature must be > 0, "
+                         f"got {temperature!r}")
     cand = [int(a) for a in candidates]
     s = np.asarray(scores, dtype=np.float64)
     if len(cand) != s.size:
@@ -243,7 +292,7 @@ def targets_from_scores(candidates, scores, k: int):
     if not np.all(np.isfinite(s)):
         raise ValueError(f"targets_from_scores: non-finite scores {scores!r} "
                          f"(an unsearched decision must not be recorded)")
-    e = np.exp(s - s.max())
+    e = np.exp((s - s.max()) / temperature)
     p = e / e.sum()
 
     idx = np.full(k, PAD, dtype=np.int32)
@@ -251,6 +300,48 @@ def targets_from_scores(candidates, scores, k: int):
     idx[: len(cand)] = np.asarray(cand, dtype=np.int32)
     prob[: len(cand)] = p.astype(np.float16)
     return idx, prob
+
+
+def score_gap(scores) -> float:
+    """δ = top1 − top2 of the RAW mean rollout scores; `inf` for one candidate.
+
+    Measured BEFORE any temperature, deliberately: this is the quantity the
+    08-28 calibration showed to be the real blocker (median ≈ 0.016 return
+    units, a fifth of records exactly tied), and it is invariant to whatever T
+    the shard set is later written at, so two runs at different temperatures
+    report the same decisiveness for the same decision.
+
+    A lone candidate has no runner-up to be tied with — nothing for the filter
+    to reject — so its gap is `inf` rather than 0. (In practice `expectimax`
+    declines forced decisions upstream, but the boundary is worth pinning.)
+
+    `np.partition` rather than a full sort: only the top two matter, and the
+    tail can be arbitrarily spread without changing the answer.
+    """
+    s = np.asarray(scores, dtype=np.float64).ravel()
+    if s.size == 0:
+        raise ValueError("score_gap: no scores")
+    if s.size == 1:
+        return float("inf")
+    top2 = np.partition(s, s.size - 2)[-2:]
+    return float(abs(top2[1] - top2[0]))
+
+
+def is_decisive(scores, min_gap: float) -> bool:
+    """Does this searched decision clear `--min-score-gap`?
+
+    `min_gap <= 0` disables the filter outright — including for EXACTLY tied
+    scores, whose gap is 0. That asymmetry is the backward-compatibility
+    contract: every shard set written before this flag existed kept its ties,
+    and the default `G = 0.0` has to mean "unfiltered", not "drop the ties".
+
+    Above zero the test is `δ > G`, strictly: δ == G is SKIPPED. v27's pinned
+    rule reads "raw score gap > 0.05", and a boundary that quietly kept the
+    equality case would admit exactly the records the filter is aimed at.
+    """
+    if not (float(min_gap) > 0.0):
+        return True
+    return bool(score_gap(scores) > float(min_gap))
 
 
 def masked_entropy(probs, mask) -> float:
@@ -326,6 +417,14 @@ class Stats:
     decisions: int = 0
     forced: int = 0
     collected: int = 0
+    #: Decisions `expectimax` actually searched — the GPU bill. Equals
+    #: `searched + skipped_indecisive`; the difference between the two is what
+    #: `--min-score-gap` costs.
+    decisions_searched: int = 0
+    #: Searched, then dropped by `--min-score-gap` (0 when the filter is off).
+    skipped_indecisive: int = 0
+    #: Records WRITTEN. The name predates the filter and is kept because
+    #: `provenance["records"]` reads it.
     searched: int = 0
     flips: int = 0
     rollouts: int = 0
@@ -478,54 +577,15 @@ def run_worker(args) -> int:
           f"mass-cap {args.mass_cap if args.mass_cap is not None else 'off'}  "
           f"gamma {args.gamma}  rollout-steps {args.rollout_steps}  "
           f"seed {args.seed}")
-    print(f"target {args.decisions} records  shard-size {args.shard_size}  "
+    print(f"temperature {args.temperature}  min-score-gap "
+          f"{args.min_score_gap if args.min_score_gap > 0 else 'off'}")
+    print(f"target {args.decisions} KEPT records  shard-size {args.shard_size}  "
           f"out {out_dir}")
     print()
 
-    # ── pass 1: collect ────────────────────────────────────────────────────
-    pool: list[Candidate] = []
-    t0 = time.perf_counter()
-    forks: dict[int, CombatFork] = {}
-    fight = 0
-    while fight < args.max_fights:
-        snap_idx = fight % len(snaps)
-        snap = snaps[snap_idx]
-        fork = CombatFork(snap, seed=eval_search._fight_seed(args.seed, fight),
-                          env_kwargs=kwargs)
-        forks[fight] = fork
-        got = collect_fight(fork, policy, fight, snap_idx,
-                            snap.room_type, device=args.device, stats=stats)
-        pool.extend(got)
-        stats.fights += 1
-        stats.room_hist[snap.room_type] = stats.room_hist.get(snap.room_type, 0) + 1
-        fight += 1
-        n_selected = sum(select_decisions([c.room for c in pool],
-                                          [c.entropy for c in pool]))
-        print(f"collect fight {fight - 1:>4} snap {snap_idx:>3} "
-              f"{snap.room_type:<7} {snap.encounter_id:<26} "
-              f"+{len(got):>3} decisions -> pool {len(pool)}, "
-              f"selected {n_selected}/{args.decisions}")
-        if n_selected >= args.decisions:
-            break
-    stats.collect_seconds = time.perf_counter() - t0
-    stats.collected = len(pool)
-    if not pool:
-        print("search_worker: collected no non-forced decisions — nothing to do")
-        return 2
-
-    keep = select_decisions([c.room for c in pool], [c.entropy for c in pool])
-    chosen = [c for c, k_ in zip(pool, keep) if k_][: args.decisions]
-    entropies = np.asarray([c.entropy for c in pool])
-    print()
-    print(f"pool {len(pool)} decisions over {stats.fights} fights "
-          f"({stats.forced} forced skipped); entropy median "
-          f"{float(np.median(entropies)):.4f}, mean {float(entropies.mean()):.4f}")
-    print(f"selected {sum(keep)} -> scoring {len(chosen)}")
-    print()
-
-    # ── pass 2: score + write ──────────────────────────────────────────────
-    buf: list[tuple] = []
-    shard_files: list[str] = []
+    # ── the shard writer ───────────────────────────────────────────────────
+    buf: "list[tuple]" = []
+    shard_files: "list[str]" = []
     shard_index = 0
 
     def flush() -> None:
@@ -542,36 +602,137 @@ def run_worker(args) -> int:
         shard_index += 1
         buf = []
 
-    t0 = time.perf_counter()
-    for n, cand in enumerate(chosen):
-        fork = forks[cand.fight]
-        res = forksim.expectimax(
-            fork, list(cand.prefix), policy, args.k, args.m,
-            salt_base=eval_search._salt_base(cand.fight, cand.d, args.m),
-            rollout_seed_base=eval_search._rollout_seed_base(
-                cand.fight, cand.d, args.m),
-            max_steps=args.rollout_steps, gamma=args.gamma,
-            mass_cap=args.mass_cap)
-        stats.rollouts += res.n_rollouts
-        if not res.searched:
-            # Only reachable if the replayed state disagrees with the
-            # collected one about legality — a determinism break, worth
-            # counting rather than silently writing a degenerate target.
-            stats.unsearched_at_score += 1
-            continue
-        stats.searched += 1
-        stats.flips += int(res.flipped)
-        idx, prob = targets_from_scores(res.candidates, res.scores, args.k)
-        buf.append((cand.f, cand.i, cand.mask, idx, prob))
-        if len(buf) >= args.shard_size:
-            flush()
-        if (n + 1) % 25 == 0 or n + 1 == len(chosen):
-            elapsed = time.perf_counter() - t0
-            print(f"scored {n + 1}/{len(chosen)}  flips {stats.flips}  "
-                  f"rollouts {stats.rollouts}  "
-                  f"{elapsed / (n + 1):.2f}s/decision")
+    # ── the collect/score rounds ───────────────────────────────────────────
+    # `--decisions` counts KEPT records, and `--min-score-gap` can reject a
+    # decision only AFTER its rollouts are paid for, so one collect-then-score
+    # pass no longer fills the budget. The driver runs ROUNDS: collect fights
+    # until there are enough not-yet-scored SELECTED candidates to cover what
+    # is still missing, score exactly those, and go round again if the filter
+    # ate into the yield. With the filter off (G = 0.0) the first round covers
+    # the whole budget and this degenerates to the original two passes.
+    #
+    # The selection median stays "over the WHOLE batch this invocation
+    # collected": `pool` accumulates across rounds and `select_decisions` is
+    # re-applied to all of it each time, so a later round's larger batch can
+    # promote an earlier candidate that the then-median had excluded. `scored`
+    # is what keeps a promoted-again candidate from being searched twice.
+    #
+    # TERMINATION (the thing the filter could plausibly break). `fight` is
+    # monotonically increasing and is never rewound. The inner collect loop is
+    # entered only while `fight < args.max_fights` and advances it by exactly
+    # one per iteration, so it cannot spin; the outer loop carries the SAME
+    # bound, so it can run at most `--max-fights` rounds. Every candidate the
+    # score pass touches is added to `scored` BEFORE it is searched, so no
+    # candidate can be re-offered whether it was kept, filtered out, or found
+    # unsearchable. A bank whose every decision is indecisive therefore costs
+    # `--max-fights` fights and then stops, short of `--decisions`, with a
+    # provenance that says so (`skipped_indecisive`) — it does not loop.
+    pool: "list[Candidate]" = []
+    scored: "set[int]" = set()              # indices into `pool`
+    forks: "dict[int, CombatFork]" = {}
+    keep: "list[bool]" = []
+    fight = 0
+    round_no = 0
+
+    while stats.searched < args.decisions and fight < args.max_fights:
+        need = args.decisions - stats.searched
+        round_no += 1
+
+        # ── collect ────────────────────────────────────────────────────────
+        t0 = time.perf_counter()
+        pending: "list[int]" = []
+        while fight < args.max_fights:
+            snap_idx = fight % len(snaps)
+            snap = snaps[snap_idx]
+            fork = CombatFork(snap,
+                              seed=eval_search._fight_seed(args.seed, fight),
+                              env_kwargs=kwargs)
+            forks[fight] = fork
+            got = collect_fight(fork, policy, fight, snap_idx,
+                                snap.room_type, device=args.device, stats=stats)
+            pool.extend(got)
+            stats.fights += 1
+            stats.room_hist[snap.room_type] = \
+                stats.room_hist.get(snap.room_type, 0) + 1
+            fight += 1
+            keep = select_decisions([c.room for c in pool],
+                                    [c.entropy for c in pool])
+            pending = [j for j, k_ in enumerate(keep)
+                       if k_ and j not in scored]
+            print(f"collect fight {fight - 1:>4} snap {snap_idx:>3} "
+                  f"{snap.room_type:<7} {snap.encounter_id:<26} "
+                  f"+{len(got):>3} decisions -> pool {len(pool)}, "
+                  f"pending {len(pending)}/{need} "
+                  f"(kept {stats.searched}/{args.decisions})")
+            if len(pending) >= need:
+                break
+        stats.collect_seconds += time.perf_counter() - t0
+        stats.collected = len(pool)
+        if not pending:
+            # Only reachable with `--max-fights` exhausted (the inner loop has
+            # no other exit that leaves `pending` short).
+            break
+
+        chosen = [pool[j] for j in pending[:need]]
+        scored.update(pending[:need])
+        entropies = np.asarray([c.entropy for c in pool])
+        print()
+        print(f"round {round_no}: pool {len(pool)} decisions over "
+              f"{stats.fights} fights ({stats.forced} forced skipped); "
+              f"entropy median {float(np.median(entropies)):.4f}, "
+              f"mean {float(entropies.mean()):.4f}")
+        print(f"selected {sum(keep)} of the pool -> scoring {len(chosen)} new")
+        print()
+
+        # ── score + write ──────────────────────────────────────────────────
+        t0 = time.perf_counter()
+        for n, cand in enumerate(chosen):
+            fork = forks[cand.fight]
+            res = forksim.expectimax(
+                fork, list(cand.prefix), policy, args.k, args.m,
+                salt_base=eval_search._salt_base(cand.fight, cand.d, args.m),
+                rollout_seed_base=eval_search._rollout_seed_base(
+                    cand.fight, cand.d, args.m),
+                max_steps=args.rollout_steps, gamma=args.gamma,
+                mass_cap=args.mass_cap)
+            stats.rollouts += res.n_rollouts
+            if not res.searched:
+                # Only reachable if the replayed state disagrees with the
+                # collected one about legality — a determinism break, worth
+                # counting rather than silently writing a degenerate target.
+                stats.unsearched_at_score += 1
+                continue
+            stats.decisions_searched += 1
+            if not is_decisive(res.scores, args.min_score_gap):
+                # The rollouts are already paid for; what the filter saves is
+                # not GPU but the DILUTION of the target set. See the module
+                # docstring's calibration numbers.
+                stats.skipped_indecisive += 1
+                continue
+            stats.searched += 1
+            # Flips are counted on KEPT records only, so `flips / records`
+            # stays a rate over the shard set that was actually written.
+            stats.flips += int(res.flipped)
+            idx, prob = targets_from_scores(res.candidates, res.scores, args.k,
+                                            temperature=args.temperature)
+            buf.append((cand.f, cand.i, cand.mask, idx, prob))
+            if len(buf) >= args.shard_size:
+                flush()
+            if (n + 1) % 25 == 0 or n + 1 == len(chosen):
+                elapsed = time.perf_counter() - t0
+                print(f"scored {n + 1}/{len(chosen)}  "
+                      f"kept {stats.searched}/{args.decisions}  "
+                      f"skipped {stats.skipped_indecisive}  "
+                      f"flips {stats.flips}  rollouts {stats.rollouts}  "
+                      f"{elapsed / (n + 1):.2f}s/decision")
+            if stats.searched >= args.decisions:
+                break
+        stats.search_seconds += time.perf_counter() - t0
+
     flush()
-    stats.search_seconds = time.perf_counter() - t0
+    if not pool:
+        print("search_worker: collected no non-forced decisions — nothing to do")
+        return 2
 
     provenance = {
         "distill_schema": SHARD_SCHEMA,
@@ -592,7 +753,9 @@ def run_worker(args) -> int:
         "f_dim": int(f_dim), "i_dim": int(i_dim), "n_actions": n_actions,
         "asc": args.asc, "room": args.room, "seed": args.seed,
         "gamma": args.gamma, "rollout_steps": args.rollout_steps,
-        "mass_cap": args.mass_cap, "device": args.device,
+        "mass_cap": args.mass_cap, "temperature": args.temperature,
+        "min_score_gap": args.min_score_gap,
+        "device": args.device,
         "decisions_requested": args.decisions,
         "shard_size": args.shard_size,
         "shards": shard_files,
@@ -600,7 +763,10 @@ def run_worker(args) -> int:
         "stats": {
             "fights": stats.fights, "decisions": stats.decisions,
             "forced": stats.forced, "collected": stats.collected,
-            "selected": int(sum(keep)), "searched": stats.searched,
+            "selected": int(sum(keep)), "rounds": round_no,
+            "decisions_searched": stats.decisions_searched,
+            "skipped_indecisive": stats.skipped_indecisive,
+            "searched": stats.searched,
             "flips": stats.flips, "rollouts": stats.rollouts,
             "unsearched_at_score": stats.unsearched_at_score,
             "collect_seconds": round(stats.collect_seconds, 3),
@@ -615,9 +781,20 @@ def run_worker(args) -> int:
     print("=" * 72)
     print(f"wrote {stats.searched} records in {len(shard_files)} shard(s) "
           f"to {out_dir}")
+    if stats.searched < args.decisions:
+        print(f"SHORT of the {args.decisions}-record budget after "
+              f"{stats.fights} fights (--max-fights {args.max_fights}). "
+              f"A bank whose decisions the search cannot separate cannot "
+              f"fill a --min-score-gap {args.min_score_gap} budget; harvest "
+              f"more snapshots or lower the gap.")
     print(f"flip rate {stats.flips}/{stats.searched} "
           f"({100.0 * stats.flips / stats.searched if stats.searched else float('nan'):.1f}%)"
           f"   rollouts {stats.rollouts}")
+    print(f"decisiveness: searched {stats.decisions_searched}, "
+          f"skipped {stats.skipped_indecisive} "
+          f"(keep rate "
+          f"{stats.searched / stats.decisions_searched if stats.decisions_searched else float('nan'):.3f}"
+          f" at --min-score-gap {args.min_score_gap})")
     print(f"[timing] collect {stats.collect_seconds:.1f}s   "
           f"search {stats.search_seconds:.1f}s "
           f"({stats.search_seconds / stats.searched if stats.searched else float('nan'):.2f}s/decision)")
@@ -634,7 +811,8 @@ def main(argv=None) -> int:
     ap.add_argument("--out", required=True, metavar="DIR",
                     help="output directory for the .npz shards + provenance.json")
     ap.add_argument("--decisions", type=int, default=5000,
-                    help="how many searched decisions to write (default 5000)")
+                    help="how many searched decisions to WRITE, i.e. records "
+                         "kept after --min-score-gap (default 5000)")
     ap.add_argument("--k", type=int, default=5, help="candidate actions per decision")
     ap.add_argument("--m", type=int, default=8, help="branches (salts) per candidate")
     ap.add_argument("--shard-size", type=int, default=4096,
@@ -643,6 +821,19 @@ def main(argv=None) -> int:
                     help="adaptive breadth: shrink the candidate set to the "
                          "smallest prefix covering this prior mass "
                          "(clamped to [2, k]); default off = fixed k")
+    ap.add_argument("--temperature", type=float, default=1.0,
+                    help="softmax temperature for the searched targets "
+                         "(default 1.0 = the historical, pre-flag targets); "
+                         "T<1 sharpens them toward the search's pick")
+    ap.add_argument("--min-score-gap", type=float, default=0.0, metavar="G",
+                    help="DECISIVENESS FILTER: drop a searched decision whose "
+                         "raw top1-top2 rollout-score gap is <= G (default 0.0 "
+                         "= no filter, exact ties kept = pre-flag behaviour). "
+                         "--decisions then counts KEPT records. v27 uses 0.05: "
+                         "temperature alone could not sharpen near-tied scores "
+                         "(19.5%% exactly equal); G=0.05 keeps ~41%% and lifts "
+                         "the median target gap to 0.317 at T=0.25 (see "
+                         "docs/superpowers/plans/v27-run-log.md, 08-28)")
     ap.add_argument("--asc", type=int, default=10, help="ascension the drill env runs at")
     ap.add_argument("--room", default=None,
                     help="comma-separated room types to keep from the BANK, e.g. "
@@ -666,6 +857,11 @@ def main(argv=None) -> int:
         ap.error("--decisions must be >= 1")
     if args.shard_size < 1:
         ap.error("--shard-size must be >= 1")
+    if args.min_score_gap < 0.0:
+        # A negative gap is not "even less filtering" — 0.0 is already the
+        # off switch — so it can only be a typo (or a lost minus sign) worth
+        # refusing before hours of GPU go into a set nobody meant to ask for.
+        ap.error("--min-score-gap must be >= 0 (0 = no filter)")
     return run_worker(args)
 
 
