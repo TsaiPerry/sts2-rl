@@ -54,7 +54,7 @@ docs/OBS_PLAN.md
 # of blobs into unpushed history. The deployed policy reaches SpireBot as an
 # ONNX export (above), not as a .pt.
 runs/*.pt
-
+runs/distill
 # Per-iteration training logs (train_torch.csv_path) and eval sidecars —
 # bulky, regenerable, one row per iteration of every run ever trained.
 runs/run_logs/

@@ -403,6 +403,16 @@ function Invoke-Waves {
         Write-Host "[$(Get-Date -Format s)] $Label wave $($w + 1)/$nWaves : $($wave.Count) worker(s)" -ForegroundColor Cyan
         $procs = @()
         foreach ($job in $wave) {
+            # Re-check completion at LAUNCH time, not just when $todo was built
+            # at function entry. $todo is a snapshot; a multi-day run can have a
+            # worker dir finish (its own resume, or a hand-launched worker)
+            # AFTER that snapshot, and relaunching over it overwrites shards
+            # that cannot be recovered. This closes the 08-30 v27_batch1 race
+            # where wave 6 relaunched w15/w16/w17 hours after they had finished.
+            if (Test-Path (Join-Path $job.Dir "provenance.json")) {
+                Write-Host "    $($job.Name) became complete since scheduling (provenance.json present) - skipping." -ForegroundColor DarkGray
+                continue
+            }
             if (-not (Test-Path $job.Dir)) { New-Item -ItemType Directory $job.Dir -Force | Out-Null }
             # -u first: without it the worker's stdout is block-buffered into
             # the redirected file and w*.log sits at 0 bytes until exit, which

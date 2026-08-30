@@ -66,8 +66,10 @@ MUST_MATCH = ("obs_schema", "card_obs", "k", "temperature", "min_score_gap",
 #: what the merged stamp describes.
 MUST_MATCH_DEFAULTS = {"min_score_gap": 0.0}
 
-#: The per-part fields kept in `merged_from`.
-PART_FIELDS = ("bank", "seed", "stats")
+#: The per-part fields kept in `merged_from`. `run_id` is here so each source
+#: run stays identifiable after the merge, even though the merged directory as
+#: a whole no longer has a single run_id (its shards come from many runs).
+PART_FIELDS = ("run_id", "bank", "seed", "stats")
 
 #: The arrays every shard carries. An intentional DUPLICATE of
 #: `search_worker.SHARD_KEYS`, kept local so that importing merge_distill never
@@ -126,6 +128,78 @@ def _shard_rows(path: Path) -> int:
     if len(set(rows.values())) != 1:
         raise SystemExit(f"{path}: shard arrays disagree on row count {rows}")
     return next(iter(rows.values()))
+
+
+def _shard_run_id(path: Path):
+    """The `run_id` stamped in a shard by search_worker, or None if absent.
+
+    Shards written before the stamp existed (and the current in-flight
+    v27_batch1 parts) carry no `run_id`; those fall back to the mtime check.
+    """
+    with np.load(path) as data:
+        if "run_id" not in data:
+            return None
+        arr = data["run_id"]
+        return str(arr.reshape(-1)[0]) if arr.size else None
+
+
+#: A shard's mtime may exceed its provenance's by at most this, in seconds.
+#: A clean part writes every shard THEN the provenance, so the provenance is
+#: always the newest file (observed delta 0.0s across all 15 clean v27_batch1
+#: parts). A larger positive gap means a shard was written AFTER the run that
+#: stamped the provenance "finished" — i.e. a re-run is overwriting the part in
+#: place (the 08-30 clobber, +36000..58000s) — so the shards no longer all
+#: belong to the run the provenance describes. The tolerance only absorbs
+#: filesystem timestamp granularity.
+_MTIME_TOL_S = 2.0
+
+
+def _check_part_consistency(part: Path, prov: dict, shards: "list[Path]") -> None:
+    """Refuse a part whose shards do not all belong to ONE run.
+
+    Two independent signals, because the authoritative one (run_id) is absent
+    on legacy and in-flight parts:
+
+    * **run_id** (authoritative when present): every shard must carry the same
+      run_id as the provenance. A shard from a different run — a hybrid left by
+      an interrupted regeneration — is caught even if its mtime was touched.
+    * **mtime** (the fallback that covers run_id-less parts): no shard may be
+      newer than the provenance (see `_MTIME_TOL_S`). This is what catches the
+      current, un-stamped v27_batch1 parts if one is ever merged mid-clobber.
+
+    Neither is a heuristic that a clean part can trip: a clean part has one
+    run_id everywhere and a provenance newer than every shard.
+    """
+    prov_id = prov.get("run_id")
+    if prov_id is not None:
+        for sh in shards:
+            sid = _shard_run_id(sh)
+            if sid is None:
+                raise SystemExit(
+                    f"{part}: provenance.json has run_id {prov_id!r} but shard "
+                    f"{sh.name} carries none — it was not written by that run. "
+                    f"This directory mixes shards from different runs; refusing "
+                    f"to merge a part whose shards do not all belong together.")
+            if sid != prov_id:
+                raise SystemExit(
+                    f"{part}: shard {sh.name} has run_id {sid!r} but "
+                    f"provenance.json has {prov_id!r}. The directory holds "
+                    f"shards from two different runs under one provenance (an "
+                    f"interrupted regeneration); refusing to merge a hybrid.")
+
+    prov_mtime = (part / "provenance.json").stat().st_mtime
+    late = [(sh.name, sh.stat().st_mtime - prov_mtime) for sh in shards
+            if sh.stat().st_mtime - prov_mtime > _MTIME_TOL_S]
+    if late:
+        worst = max(late, key=lambda t: t[1])
+        raise SystemExit(
+            f"{part}: shard {worst[0]} is {worst[1]:.0f}s NEWER than "
+            f"provenance.json, which a completed run writes last. A shard "
+            f"written after the run finished means the part is being "
+            f"overwritten in place (a re-run is clobbering it) — its shards no "
+            f"longer all belong to the run the provenance describes. Refusing "
+            f"to merge a directory mid-regeneration; let it finish or "
+            f"regenerate it into a fresh dir. ({len(late)} shard(s) affected.)")
 
 
 def _part_shards(part: Path, prov: dict) -> "list[Path]":
@@ -240,6 +314,7 @@ def merge_distill(part_dirs: "list[str]", out_dir: str) -> dict:
         shards = _part_shards(part, prov)
         if not shards:
             raise SystemExit(f"{part}: no .npz shards found there")
+        _check_part_consistency(part, prov, shards)
         actual = sum(_shard_rows(p) for p in shards)
         claimed = prov.get("records")
         if claimed is not None and int(claimed) != actual:
@@ -278,6 +353,11 @@ def merge_distill(part_dirs: "list[str]", out_dir: str) -> dict:
     # the key instead of re-deriving the default.
     for key in MUST_MATCH_DEFAULTS:
         merged[key] = _match_value(provs[0], key)
+    # The merged directory legitimately holds shards from every part, so it has
+    # no single run_id; carrying part 0's forward would make a re-merge of this
+    # directory refuse itself (its shards' ids would disagree with the stamp).
+    # Each source id is preserved per-part in merged_from instead.
+    merged["run_id"] = None
     merged["shards"] = merged_names
     merged["records"] = sum(counts)
     merged["stats"] = _sum_stats([p.get("stats", {}) for p in provs])

@@ -133,6 +133,7 @@ import argparse
 import json
 import sys
 import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -178,7 +179,7 @@ HARD_ROOMS = ("ELITE", "BOSS")
 # ════════════════════════════════════════════════════════════════════════════
 
 
-def write_shard(path, f, i, mask, tgt_idx, tgt_p) -> Path:
+def write_shard(path, f, i, mask, tgt_idx, tgt_p, run_id=None) -> Path:
     """Write one shard of `n` records to `path` (an `.npz`).
 
     Every array is cast to its declared `SHARD_DTYPES` entry, so a caller may
@@ -186,6 +187,13 @@ def write_shard(path, f, i, mask, tgt_idx, tgt_p) -> Path:
     format. Shapes are checked against each other: a ragged shard would read
     back as records whose obs and targets belong to different decisions,
     which no consumer could detect.
+
+    `run_id`, if given, is stamped into the archive as an extra `run_id` array
+    (NOT one of `SHARD_KEYS`, so every reader that pulls the five record arrays
+    ignores it). It ties the shard to the exact worker invocation that wrote
+    it, so `merge_distill.py` can refuse a directory holding shards from two
+    different runs under one provenance — the silent-hybrid failure the 08-30
+    v27_batch1 clobber would otherwise have produced.
 
     Uncompressed `savez` on purpose: shards are written once and streamed
     many times, and the budget the plan sized (100k records ≈ 1.2 GB at
@@ -209,6 +217,10 @@ def write_shard(path, f, i, mask, tgt_idx, tgt_p) -> Path:
         raise ValueError(
             f"write_shard: tgt_idx {arrays['tgt_idx'].shape} and tgt_p "
             f"{arrays['tgt_p'].shape} must have the same (n, k) shape")
+    if run_id is not None:
+        # An extra key, deliberately outside SHARD_KEYS so no record reader
+        # touches it; merge_distill reads it back for the hybrid check.
+        arrays["run_id"] = np.asarray([str(run_id)])
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("wb") as fh:
@@ -524,6 +536,32 @@ def load_policy(args, env):
 
 
 def run_worker(args) -> int:
+    # ── refuse to clobber a finished run ─────────────────────────────────────
+    # A directory that already holds a provenance.json is a COMPLETE part: the
+    # provenance is written last (after every shard), so its presence means the
+    # shards under it are a self-consistent single run. Regenerating over it
+    # would overwrite those shards in place — the original bytes are gone, with
+    # no filesystem remnant to recover — and, worse, a run interrupted partway
+    # leaves shard-0..n from two different runs under one stale provenance that
+    # merge_distill.py silently accepts (equal record counts, identical flags).
+    # The driver already skips such dirs on resume; this guard is the same rule
+    # one layer down, where it also catches a worker launched BY HAND into a
+    # directory the driver still owns (the 08-30 v27_batch1 w15/w16/w17
+    # incident). --force is the deliberate escape hatch for an intended redo.
+    out_dir = Path(args.out)
+    if (out_dir / "provenance.json").exists() and not args.force:
+        print(f"search_worker: {out_dir} already holds a completed run "
+              f"(provenance.json present) -- refusing to overwrite it. "
+              f"Pass --force to regenerate, or point --out at a fresh dir.")
+        return 3
+
+    # A per-invocation identity stamped into every shard AND the provenance, so
+    # a later merge can prove all the shards under a provenance came from the
+    # run that wrote it (see write_shard). Unique per run even under identical
+    # flags -- that is the whole point: two same-flag runs must NOT collide, or
+    # a hybrid of them would look self-consistent.
+    run_id = uuid.uuid4().hex
+
     rooms = None
     if args.room:
         rooms = {r.strip().upper() for r in args.room.split(",") if r.strip()}
@@ -562,7 +600,6 @@ def run_worker(args) -> int:
             f"disagrees with run_obs_layout({card_obs!r}) {(f_dim, i_dim)}")
     n_actions = int(env0.action_space.n)
 
-    out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     stats = Stats()
@@ -596,7 +633,7 @@ def run_worker(args) -> int:
             out_dir / f"shard-{shard_index:05d}.npz",
             np.stack([r[0] for r in buf]), np.stack([r[1] for r in buf]),
             np.stack([r[2] for r in buf]), np.stack([r[3] for r in buf]),
-            np.stack([r[4] for r in buf]))
+            np.stack([r[4] for r in buf]), run_id=run_id)
         shard_files.append(path.name)
         print(f"  wrote {path.name}  ({len(buf)} records)")
         shard_index += 1
@@ -736,6 +773,7 @@ def run_worker(args) -> int:
 
     provenance = {
         "distill_schema": SHARD_SCHEMA,
+        "run_id": run_id,
         "ckpt": str(args.ckpt),
         "bank": str(args.bank),
         "k": args.k,
@@ -852,6 +890,11 @@ def main(argv=None) -> int:
                          "both modes share the same obs dims, so a mismatch is "
                          "dimensionally invisible — it is threaded, not asserted")
     ap.add_argument("--device", default="cpu")
+    ap.add_argument("--force", action="store_true",
+                    help="regenerate even if --out already holds a completed "
+                         "run (a provenance.json). Off by default: a finished "
+                         "part is refused rather than overwritten, since the "
+                         "original shards cannot be recovered once clobbered")
     args = ap.parse_args(argv)
     if args.decisions < 1:
         ap.error("--decisions must be >= 1")
