@@ -727,9 +727,9 @@ def run_worker(args) -> int:
             fork = forks[cand.fight]
             res = forksim.expectimax(
                 fork, list(cand.prefix), policy, args.k, args.m,
-                salt_base=eval_search._salt_base(cand.fight, cand.d, args.m),
+                salt_base=eval_search._salt_base(cand.fight, cand.d, args.m, args.search_seed),
                 rollout_seed_base=eval_search._rollout_seed_base(
-                    cand.fight, cand.d, args.m),
+                    cand.fight, cand.d, args.m, args.search_seed),
                 max_steps=args.rollout_steps, gamma=args.gamma,
                 mass_cap=args.mass_cap)
             stats.rollouts += res.n_rollouts
@@ -790,6 +790,7 @@ def run_worker(args) -> int:
         "card_obs": card_obs,
         "f_dim": int(f_dim), "i_dim": int(i_dim), "n_actions": n_actions,
         "asc": args.asc, "room": args.room, "seed": args.seed,
+        "search_seed": args.search_seed,
         "gamma": args.gamma, "rollout_steps": args.rollout_steps,
         "mass_cap": args.mass_cap, "temperature": args.temperature,
         "min_score_gap": args.min_score_gap,
@@ -882,6 +883,10 @@ def main(argv=None) -> int:
                     help="hard cap on collection fights, so a bank that yields "
                          "few decisions cannot loop forever")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--search-seed", type=int, default=0,
+                    help="salts the rollout draws WITHOUT changing the decision "
+                         "walk (--seed fixes the walk); give the R independent "
+                         "gold runs of the consensus truth distinct values")
     ap.add_argument("--rollout-steps", type=int, default=120,
                     help="max steps in a search rollout (forksim default 120)")
     ap.add_argument("--gamma", type=float, default=0.999)

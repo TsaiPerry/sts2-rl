@@ -127,6 +127,14 @@ ACT_BASE = 0x51DE0000
 ROLLOUT_BASE = 0x201F0000
 FIGHT_STRIDE = 1_000_003
 
+#: Search-noise seed separator. Added to the branch-salt and rollout-seed
+#: bases so an independent --search-seed lands each gold run in a DISJOINT band
+#: of salts (same decisions, independent rollouts) for the R-run consensus
+#: truth (plan 2026-08-31-critic-value-fit). 1<<44 is far above any
+#: _decision_index(fight,d)*m a real run reaches, so search_seed=0 is
+#: byte-identical to the pre-search-seed derivations (backward compat).
+SEARCH_SEED_STRIDE = 1 << 44
+
 
 # ── seed derivations (see the module docstring) ─────────────────────────────
 
@@ -137,12 +145,12 @@ def _decision_index(fight: int, d: int) -> int:
     return fight * MAX_DECISIONS + d
 
 
-def _salt_base(fight: int, d: int, m: int) -> int:
-    return _decision_index(fight, d) * m
+def _salt_base(fight: int, d: int, m: int, search_seed: int = 0) -> int:
+    return _decision_index(fight, d) * m + search_seed * SEARCH_SEED_STRIDE
 
 
-def _rollout_seed_base(fight: int, d: int, m: int) -> int:
-    return ROLLOUT_BASE + _decision_index(fight, d) * m
+def _rollout_seed_base(fight: int, d: int, m: int, search_seed: int = 0) -> int:
+    return ROLLOUT_BASE + _decision_index(fight, d) * m + search_seed * SEARCH_SEED_STRIDE
 
 
 def _act_seed(fight: int, d: int) -> int:

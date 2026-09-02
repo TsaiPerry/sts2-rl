@@ -513,6 +513,12 @@ def parse_args() -> argparse.Namespace:
                     help="v8 plan Task 1: concave HP-potential shaping weight "
                          "(0 = off, the old behavior). knee stays at the "
                          "env's own default")
+    ap.add_argument("--progress-potential-scale", type=float, default=0.0,
+                    help="sub-project A: potential-based progress shaping weight "
+                         "c. reward gets c*(progress(s') - progress(s)) with "
+                         "progress in [0,1] and progress(terminal)=0, so it is a "
+                         "dense per-floor bump that telescopes to ~0 over an "
+                         "episode (win is the only non-cancelling term). 0 = off")
     ap.add_argument("--hp-potential-low-share", type=float, default=0.7,
                     help="v10: share of the HP-potential value below the "
                          "knee (env default 0.7; the s11-lowshare "
@@ -722,6 +728,15 @@ def parse_args() -> argparse.Namespace:
                          "term, an env rule like a per-act heal): the critic "
                          "is stale, its advantages are mis-signed, and a "
                          "full-LR resume spends them wrecking a good policy")
+    ap.add_argument("--anneal-reward", action="store_true",
+                    help="sub-project A: linearly remove the elite/boss reward "
+                         "terms (info['reward_anneal']) over this invocation -- "
+                         "held at full weight through --critic-warmup, then "
+                         "1 -> --reward-anneal-final. Off = terms stay at full "
+                         "weight (current behavior).")
+    ap.add_argument("--reward-anneal-final", type=float, default=0.0,
+                    help="sub-project A: endpoint weight for --anneal-reward "
+                         "(0.0 = terms fully removed by the last iteration)")
     ap.add_argument("--zero-segments", nargs="+", default=[], metavar="SEGMENT",
                     help="hold the first-layer columns fed by these obs "
                          "segments at zero in BOTH heads, so the model behaves "
@@ -904,6 +919,23 @@ def anneal(start_value: float, end_value: float, fraction: float) -> float:
     return start_value + (end_value - start_value) * fraction
 
 
+def reward_anneal_weight(iteration: int, start_iter: int, n_iters: int,
+                         critic_warmup: int, final: float) -> float:
+    """Sub-project A: weight on the annealable elite/boss reward terms. 1.0 for
+    the whole `critic_warmup` block (so the critic re-fit and the first policy
+    step see the terms at full strength -- no stale jump at unfreeze), then
+    linearly 1.0 -> `final` over the remaining iterations of THIS invocation.
+    The loop applies `reward -= (1 - w) * reward_anneal`, so w=1 keeps the terms
+    and w=`final` (0 by default) removes them."""
+    warm_end = start_iter + max(0, critic_warmup)
+    if iteration < warm_end:
+        return 1.0
+    last_iter = start_iter + n_iters - 1
+    span = max(1, last_iter - warm_end)
+    frac = min(1.0, max(0.0, (iteration - warm_end) / span))
+    return anneal(1.0, final, frac)
+
+
 def kl_exceeded(kls: list[float], epoch_start: int, target_kl: float | None,
                 min_samples: int = 2) -> bool:
     """Should the epoch loop stop? True when the MEAN of the current epoch's
@@ -1080,6 +1112,7 @@ def env_spec(args: argparse.Namespace) -> EnvSpec:
         reward_elite_escalator=getattr(args, "reward_elite_escalator", 0.0),
         rest_heal_mask_above=getattr(args, "rest_heal_mask_above", None),
         hp_potential_scale=getattr(args, "hp_potential_scale", 0.0),
+        progress_potential_scale=getattr(args, "progress_potential_scale", 0.0),
         potion_potential_scale=getattr(args, "potion_potential_scale", 0.0),
         deck_random_prob=getattr(args, "deck_random_prob", 0.0),
         deck_inject=getattr(args, "deck_inject", None),
@@ -1495,6 +1528,15 @@ def main() -> None:
                 ep_len_running += 1
 
                 rewards = batch.rewards.astype(np.float32).copy()
+                # Sub-project A: remove the annealable elite/boss subtotal on a
+                # schedule. w=1 (through critic warmup) keeps them; w->final drops
+                # them. `reward_anneal` is already part of `rewards`, so we
+                # subtract the fraction being annealed away.
+                if args.anneal_reward:
+                    w = reward_anneal_weight(iteration, start_iter, n_iters,
+                                             args.critic_warmup,
+                                             args.reward_anneal_final)
+                    rewards -= (1.0 - w) * batch.reward_anneal
                 # Time-limit bootstrap: fold gamma*V(terminal obs) into the reward
                 # and mark done, so GAE treats truncation correctly without a
                 # separate terminal-value path (a natural termination bootstraps 0).
