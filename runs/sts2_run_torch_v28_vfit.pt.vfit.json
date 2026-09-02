@@ -1,0 +1,31 @@
+{
+  "ckpt": "runs\\sts2_run_torch_v24_s27.pt",
+  "targets": "runs\\distill\\v28_vt_train",
+  "holdout": "runs\\distill\\v28_vt_holdout",
+  "trainable": [
+    "critic.0.weight",
+    "critic.0.bias",
+    "critic.2.weight",
+    "critic.2.bias",
+    "critic.4.weight",
+    "critic.4.bias"
+  ],
+  "epochs": 10,
+  "lr": 0.001,
+  "batch": 4096,
+  "combat_only": true,
+  "best_holdout_huber": 4.031741086866229,
+  "holdout_curve": [
+    4.27557929562714,
+    4.031741086866229,
+    4.080667586932986,
+    4.108779017608165,
+    4.189990107648921,
+    4.299173004751074,
+    4.394929275023438,
+    4.441498896681255,
+    4.478680819627978,
+    4.518180546661341
+  ],
+  "train_encoder": false
+}

@@ -104,6 +104,11 @@ class EnvSpec:
     # Both default OFF (0.0) so a default spec builds a bit-identical env,
     # same as the other v7/v8 reward knobs above.
     hp_potential_scale: float = 0.0
+    # Sub-project A (win-centric reward): potential-based progress shaping weight
+    # c. 0.0 = OFF = bit-identical env, like every reward knob above. Passed via
+    # build_env's shared v7_kwargs, so both run-scale env kinds receive it (the
+    # column env forwards it through STS2RunEnv **kwargs); inert at 0.0.
+    progress_potential_scale: float = 0.0
     potion_potential_scale: float = 0.0
     deck_random_prob: float = 0.0
     # v9 reward fixes (plan 2026-08-12-v9-rest-potion-fix), both default OFF.
@@ -175,6 +180,7 @@ def build_env(spec: EnvSpec):
         elite_attempt_rewards_by_act=spec.elite_attempt_rewards_by_act,
         reward_elite_escalator=spec.reward_elite_escalator,
         hp_potential_scale=spec.hp_potential_scale,
+        progress_potential_scale=spec.progress_potential_scale,
         hp_potential_low_share=spec.hp_potential_low_share,
         potion_potential_scale=spec.potion_potential_scale,
         potion_death_penalty=spec.potion_death_penalty,
@@ -291,6 +297,8 @@ class StepBatch(NamedTuple):
                                        # except done envs that reported them
                                        # (the combat env reports none)
     final_obs: dict[int, TensorObs]    # truncated envs only (see module docs)
+    reward_anneal: np.ndarray          # (E,) float32, info["reward_anneal"] each
+                                       # step (0 where unconfigured; sub-project A)
 
 
 # ── the shared implementation ─────────────────────────────────────────────
@@ -323,6 +331,7 @@ class _EnvGroup:
         i = np.empty((n, self.i_dim), np.int32)
         masks = np.empty((n, self.n_actions), bool)
         rewards = np.empty(n, np.float32)
+        reward_anneal = np.zeros(n, np.float32)
         terminated = np.zeros(n, bool)
         truncated = np.zeros(n, bool)
         successes = np.zeros(n, bool)
@@ -331,6 +340,7 @@ class _EnvGroup:
         for idx, env in enumerate(self.envs):
             o, r, term, trunc, info = env.step(int(actions[idx]))
             rewards[idx] = r
+            reward_anneal[idx] = float(info.get("reward_anneal", 0.0))
             terminated[idx] = term
             truncated[idx] = trunc
             if trunc and not term:
@@ -348,7 +358,7 @@ class _EnvGroup:
             i[idx] = o["i"]
             masks[idx] = env.action_masks()
         return StepBatch(TensorObs(f, i), rewards, terminated, truncated, masks,
-                         successes, metrics, final_obs)
+                         successes, metrics, final_obs, reward_anneal)
 
     def close(self) -> None:
         for env in self.envs:
@@ -501,6 +511,7 @@ class SubprocVecEnv:
             successes=np.concatenate([b.successes for b in batches]),
             metrics=np.concatenate([b.metrics for b in batches]),
             final_obs=final_obs,
+            reward_anneal=np.concatenate([b.reward_anneal for b in batches]),
         )
 
     def close(self) -> None:

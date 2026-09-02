@@ -734,6 +734,22 @@ def potion_option_value(run) -> float:
     return min(1.0, (elites_ahead(run) + boss_ahead) / POTION_OPTION_V_REF)
 
 
+# ── Sub-project A (win-centric reward): the progress potential ────────────
+# Phi(s) for potential-based progress shaping. Any monotone, bounded "how far
+# through the run" works; run.total_floor over the full-run floor count is the
+# simplest. `_FULL_RUN_FLOORS` is derived from the act-map configs (sum of every
+# act's room count) so it tracks content rather than a hardcoded literal; the
+# exact value is non-critical because run_progress CLAMPS to [0,1] and the shaping
+# scale `c` (plus advantage normalization) absorbs the per-floor magnitude.
+_FULL_RUN_FLOORS = float(sum(c.num_rooms for c in ACT_MAP_CONFIGS.values()))
+
+
+def run_progress(run) -> float:
+    """Phi's argument: run depth in [0, 1] (run.total_floor / full-run floors),
+    monotone non-decreasing over a run, 0 at the start, clamped at 1."""
+    return min(1.0, max(0.0, run.total_floor / _FULL_RUN_FLOORS))
+
+
 class STS2RunEnv(gym.Env):
     metadata = {"render_modes": ["human"]}
 
@@ -754,6 +770,7 @@ class STS2RunEnv(gym.Env):
         hp_potential_low_share: float = 0.7,
         rest_heal_shaping_knee_cap: bool = False,
         floor_reward: float = 1.0,
+        progress_potential_scale: float = 0.0,
         act_reward: float = 0.0,
         floor_rewards_by_act: "tuple[float, ...] | None" = None,
         reward_upgrade: float = 0.0,
@@ -823,6 +840,11 @@ class STS2RunEnv(gym.Env):
         # mechanism.
         self._rest_heal_shaping_knee_cap = bool(rest_heal_shaping_knee_cap)
         self._floor_reward = floor_reward
+        # Sub-project A: potential-based progress shaping weight c. 0.0 = OFF =
+        # bit-identical env. Phi(s) = c*run_progress(s); the per-step term is
+        # c*(Phi(s') - Phi(s)), undiscounted (the hp_potential convention), with
+        # Phi(terminal)=0 so a run's floor bumps are clawed back at episode end.
+        self._progress_potential_scale = float(progress_potential_scale)
         self._act_reward = act_reward
         # All default OFF. Accepted wrinkles, by design: an upgraded card
         # taken from a reward counts as +upgrade_level upgrades (it IS
@@ -1450,6 +1472,10 @@ class STS2RunEnv(gym.Env):
         request = self._request
         self._steps += 1
         reward = 0.0
+        # Sub-project A: subtotal of the annealable elite/boss terms, tapped into
+        # info so the trainer can remove them on a schedule (w: 1->0). Always a
+        # sub-part of `reward`; 0.0 when those terms are unconfigured.
+        reward_anneal = 0.0
         drink_potion = None
         drink_hp_before = None
         drink_block_wasted = False
@@ -1459,11 +1485,14 @@ class STS2RunEnv(gym.Env):
             answer = self._translate(int(action), request)
             if answer is None:
                 # Illegal action: a no-op step (mirrors full_env semantics).
-                return self._build_obs(), 0.0, False, self._steps >= self._max_steps, self._info()
+                info = self._info()
+                info["reward_anneal"] = 0.0
+                return self._build_obs(), 0.0, False, self._steps >= self._max_steps, info
             hp_before = run.hp
             max_hp_before = run.max_hp
             floor_before = run.total_floor
             act_before = run.act_index
+            progress_before = run_progress(run)
             elites_before = self._ep_elites_won
             fought_before = self._ep_elites_fought
             energy_before = self._ep_energy_unspent
@@ -1536,6 +1565,7 @@ class STS2RunEnv(gym.Env):
             _boss_combat = None
             hp_before, floor_before, act_before = run.hp, run.total_floor, run.act_index
             max_hp_before = run.max_hp
+            progress_before = run_progress(run)
             elites_before = self._ep_elites_won
             fought_before = self._ep_elites_fought
             energy_before = self._ep_energy_unspent
@@ -1616,32 +1646,49 @@ class STS2RunEnv(gym.Env):
             rate = self._elite_pay(self._reward_elite,
                                    self._elite_rewards_by_act, run.act_index)
             mult = 1.0 + self._reward_elite_escalator * self._elites_won_this_act
-            reward += rate * mult * elite_delta
+            _elite_kill = rate * mult * elite_delta
+            reward += _elite_kill
+            reward_anneal += _elite_kill
             self._elites_won_this_act += elite_delta
         if run.act_index != act_before:
             self._elites_won_this_act = 0
         # v11.1: pay the elite-entry credit the step the attempt is tallied
         # (`_count_behavior` above), decoupled from the win-only term.
-        reward += self._elite_pay(
+        _elite_attempt = self._elite_pay(
             self._reward_elite_attempt, self._elite_attempt_rewards_by_act,
             run.act_index) * (self._ep_elites_fought - fought_before)
+        reward += _elite_attempt
+        reward_anneal += _elite_attempt
         # v16: charge stranded energy the step its END_TURN is tallied
         # (`_count_behavior` above) — per-turn, never terminal-gated.
         reward -= self._energy_waste_penalty * (self._ep_energy_unspent - energy_before)
         # v11: an act-boss kill IS the act_index advance (act entry lands on
         # the next act's Ancient node in the same transition); the final
         # boss pays via the win branch below — exactly once per boss.
-        reward += self._reward_boss * (run.act_index - act_before)
+        _boss = self._reward_boss * (run.act_index - act_before)
+        reward += _boss
+        reward_anneal += _boss
 
         terminated = self._result is not None
         if terminated:
             if self._result.victory:
-                reward += self._reward_win + self._reward_boss + self._win_hp_bonus * (
+                reward += self._reward_win + self._win_hp_bonus * (
                     self._result.hp / max(1, self._result.max_hp)
                 )
+                _boss_win = self._reward_boss
+                reward += _boss_win
+                reward_anneal += _boss_win
             else:
                 reward += self._reward_loss
         truncated = (not terminated) and self._steps >= self._max_steps
+
+        # Sub-project A: progress shaping. Phi(terminal)=0 on a real terminal
+        # (win OR death) so the run's accumulated per-floor bumps are reversed;
+        # a TRUNCATION is a harness artifact (the trainer bootstraps it via
+        # gamma*V(final_obs)), so it keeps the real progress and is not clawed
+        # back. Undiscounted DeltaPhi (no gamma) matches the hp_potential term.
+        progress_after = 0.0 if terminated else run_progress(run)
+        reward += self._progress_potential_scale * (progress_after - progress_before)
 
         # Deck/belt deltas — measured only between decisions with no live
         # combat (in-combat temporary upgrades and mid-combat deck adds are
@@ -1754,7 +1801,9 @@ class STS2RunEnv(gym.Env):
             # v21: hoard-and-die pays what drinking each potion here would have.
             reward -= self._potion_option_value * potion_option_value(run) * belt_now
 
-        return self._build_obs(), float(reward), terminated, truncated, self._info()
+        info = self._info()
+        info["reward_anneal"] = float(reward_anneal)
+        return self._build_obs(), float(reward), terminated, truncated, info
 
     def _drink_slot(self, request: DecisionRequest | None, answer: int) -> int | None:
         """Belt slot this answer drinks from, or None when it is not a drink.
